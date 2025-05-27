@@ -288,14 +288,38 @@ class AudioRecorder:
         return processed_mic
 
     def create_ogg_bytes(self, segments: list) -> bytes:
-        # Concatenate audio data from segments
-        combined = np.concatenate([seg["data"] for seg in segments])
+        # Filter out segments with empty or invalid data arrays and then concatenate
+        combined_data_list = []
+        for seg in segments:
+            data = seg.get("data")
+            if isinstance(data, np.ndarray) and data.size > 0:
+                combined_data_list.append(data)
+
+        if not combined_data_list:
+            logging.warning("No valid audio data in segments to create OGG. Returning empty bytes.")
+            return b""
+        
+        combined = np.concatenate(combined_data_list)
+
+        if combined.size == 0: # Minimal check for empty array after concatenation
+            logging.warning("Concatenated audio data is empty. Returning empty bytes.")
+            return b""
+
+        # Minimal fix for NaN/Inf before clipping and conversion
+        combined = np.nan_to_num(combined, nan=0.0, posinf=1.0, neginf=-1.0) 
+
         # Convert to int16 format
         chunk_int16 = (np.clip(combined, -1.0, 1.0) * 32767).astype(np.int16)
+        
         # Write to an in-memory OGG buffer
         buf = io.BytesIO()
-        audio_data = chunk_int16.reshape(-1, CHANNELS)
-        sf.write(buf, audio_data, SAMPLE_RATE, format='OGG', subtype='VORBIS')
+        # Ensure C-contiguous array and correct shape for sf.write
+        audio_data = np.ascontiguousarray(chunk_int16.reshape(-1, CHANNELS))
+        try:
+            sf.write(buf, audio_data, SAMPLE_RATE, format='OGG', subtype='VORBIS')
+        except Exception as e:
+            logging.error(f"Error during sf.write: {e}. Audio data shape: {audio_data.shape}, dtype: {audio_data.dtype}")
+            return b""
         return buf.getvalue()
 
     def process_segments_and_transcribe(self, segments, suffix=None):
