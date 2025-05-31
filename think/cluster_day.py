@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 
 
-from typing import Optional
+from typing import Optional, Tuple
 
 
-def cluster_day(folder_path: str, date_str: Optional[str] = None) -> str:
-    """Return Markdown summary for one day's JSON files.
+def cluster_day(folder_path: str, date_str: Optional[str] = None) -> Tuple[str, int]:
+    """Return Markdown summary for one day's JSON files and the number processed.
 
     ``folder_path`` may point directly at the ``YYYYMMDD`` folder or at the
     parent directory containing day folders. If ``date_str`` is omitted it will
@@ -86,7 +86,7 @@ def cluster_day(folder_path: str, date_str: Optional[str] = None) -> str:
     sorted_interval_keys = sorted(grouped_files.keys())
 
     if not sorted_interval_keys:
-        return f"No JSON files found for date {date_str} in {day_dir}."
+        return f"No JSON files found for date {date_str} in {day_dir}.", 0
 
     for interval_start in sorted_interval_keys:
         interval_end = interval_start + timedelta(minutes=5)
@@ -101,7 +101,7 @@ def cluster_day(folder_path: str, date_str: Optional[str] = None) -> str:
             lines.append("```")
             lines.append("")
 
-    return "\n".join(lines)
+    return "\n".join(lines), len(collected_files_data)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -128,7 +128,7 @@ def main():
         print("Error: Date argument format must be YYYYMMDD (e.g., 20250524).", file=sys.stderr)
         sys.exit(1)
 
-    markdown = cluster_day(args.folder_path, args.date)
+    markdown, _ = cluster_day(args.folder_path, args.date)
     print(markdown)
 
 if __name__ == "__main__":
