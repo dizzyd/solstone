@@ -1,0 +1,1 @@
+Summarize the provided day's observations. Highlight recurring themes, notable events, and any action items that should be followed up. Format the response as Markdown.
