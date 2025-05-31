@@ -9,31 +9,21 @@ from collections import defaultdict
 from typing import Optional, Tuple
 
 
-def cluster_day(folder_path: str, date_str: Optional[str] = None) -> Tuple[str, int]:
+def cluster_day(folder_path: str) -> Tuple[str, int]:
     """Return Markdown summary for one day's JSON files and the number processed.
 
-    ``folder_path`` may point directly at the ``YYYYMMDD`` folder or at the
-    parent directory containing day folders. If ``date_str`` is omitted it will
-    be derived from the trailing path component when it looks like ``YYYYMMDD``.
-
-    The function understands the new file layout used by the ``hear`` and
-    ``see`` packages where files are organised under ``<base>/<YYYYMMDD>`` and
-    named ``<HHMMSS>[_suffix]_<prefix>.json``.
+    ``folder_path`` must point directly at the ``YYYYMMDD`` folder.
     """
 
     # Determine which directory actually holds the day's files.
-    if date_str is None:
-        base = os.path.basename(os.path.normpath(folder_path))
-        if re.fullmatch(r"\d{8}", base):
-            date_str = base
-            day_dir = folder_path
-        else:
-            raise ValueError(
-                "date_str must be provided when folder_path does not end with YYYYMMDD"
-            )
+    base = os.path.basename(os.path.normpath(folder_path))
+    if re.fullmatch(r"\d{8}", base):
+        date_str = base
+        day_dir = folder_path
     else:
-        candidate = os.path.join(folder_path, date_str)
-        day_dir = candidate if os.path.isdir(candidate) else folder_path
+        raise ValueError(
+            "folder_path must end with YYYYMMDD"
+        )
 
     # Capture the optional time suffix (e.g. ``_mic``) and the trailing prefix
     # such as ``audio`` or ``monitor_1_diff``.
@@ -109,12 +99,7 @@ def main():
     )
     parser.add_argument(
         "folder_path",
-        help="Directory containing the day's files or its parent directory",
-    )
-    parser.add_argument(
-        "date",
-        nargs="?",
-        help="Day folder (YYYYMMDD). If omitted, derived from folder_path",
+        help="Directory containing the day's files (YYYYMMDD format)",
     )
 
     args = parser.parse_args()
@@ -124,11 +109,12 @@ def main():
         print(f"Error: Folder not found at specified path: {args.folder_path}", file=sys.stderr)
         sys.exit(1)
 
-    if args.date and not re.fullmatch(r"\d{8}", args.date):
-        print("Error: Date argument format must be YYYYMMDD (e.g., 20250524).", file=sys.stderr)
+    base = os.path.basename(os.path.normpath(args.folder_path))
+    if not re.fullmatch(r"\d{8}", base):
+        print("Error: Folder name must be in YYYYMMDD format (e.g., 20250524).", file=sys.stderr)
         sys.exit(1)
 
-    markdown, _ = cluster_day(args.folder_path, args.date)
+    markdown, _ = cluster_day(args.folder_path)
     print(markdown)
 
 if __name__ == "__main__":
