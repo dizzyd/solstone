@@ -3,7 +3,8 @@ from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 import gi
 gi.require_version('Gdk', '4.0')
-from gi.repository import Gdk
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gdk, Gtk
 from PIL import Image
 
 # Global timestamp for the last screenshot (in seconds)
@@ -42,6 +43,9 @@ def idle_time_ms():
     return asyncio.run(_idle_time_ms_async())
 
 def get_monitor_geometries():
+    # Initialize GTK before using GDK functions
+    Gtk.init()
+    
     # Get the default display. If it is None, try opening one from the environment.
     display = Gdk.Display.get_default()
     if display is None:
