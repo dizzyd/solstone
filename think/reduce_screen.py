@@ -14,6 +14,27 @@ DEFAULT_PROMPT_PATH = os.path.join(os.path.dirname(__file__), "reduce_screen.txt
 FLASH_MODEL = "gemini-2.5-flash-preview-05-20"
 
 
+class TokenTracker:
+    def __init__(self):
+        self.total_prompt_tokens = 0
+        self.total_candidates_tokens = 0
+    
+    def add_usage(self, usage_metadata):
+        self.total_prompt_tokens += usage_metadata.prompt_token_count
+        self.total_candidates_tokens += usage_metadata.candidates_token_count
+    
+    def get_compression_percent(self):
+        if self.total_prompt_tokens == 0:
+            return 0.0
+        return (1 - self.total_candidates_tokens / self.total_prompt_tokens) * 100
+    
+    def print_summary(self):
+        print(f"\n=== Summary ===")
+        print(f"Total tokens in: {self.total_prompt_tokens}")
+        print(f"Total tokens out: {self.total_candidates_tokens}")
+        print(f"Total compression: {self.get_compression_percent():.2f}%")
+
+
 def parse_monitor_files(day_dir):
     pattern = re.compile(r"^(\d{6})_monitor_(\d+)_diff\.json$")
     entries = []
@@ -78,14 +99,13 @@ def call_gemini(markdown, prompt, api_key):
                 system_instruction=prompt,
             ),
         )
-        print(response.usage_metadata)
-        return response.text
+        return response.text, response.usage_metadata
     finally:
         done.set()
         t.join()
 
 
-def process_group(monitor, start, files, prompt, api_key, force, day_dir):
+def process_group(monitor, start, files, prompt, api_key, force, day_dir, token_tracker):
     out_name = f"{start.strftime('%H%M%S')}_monitor_{monitor}.md"
     out_path = os.path.join(day_dir, out_name)
     if os.path.exists(out_path) and not force:
@@ -107,7 +127,15 @@ def process_group(monitor, start, files, prompt, api_key, force, day_dir):
     markdown = "\n".join(lines)
     print(f"Processing monitor {monitor} starting {start.strftime('%H:%M')} ({len(files)} files)")
     try:
-        result = call_gemini(markdown, prompt, api_key)
+        result, usage_metadata = call_gemini(markdown, prompt, api_key)
+        token_tracker.add_usage(usage_metadata)
+        
+        # Calculate compression for this file
+        prompt_tokens = usage_metadata.prompt_token_count
+        candidates_tokens = usage_metadata.candidates_token_count
+        compression = (1 - candidates_tokens / prompt_tokens) * 100 if prompt_tokens > 0 else 0
+        
+        print(f"Tokens: ({prompt_tokens}) -> ({candidates_tokens}) compression: {compression:.2f}%")
     except Exception as e:
         print(f"Gemini call failed: {e}", file=sys.stderr)
         sys.exit(1)
@@ -142,8 +170,12 @@ def main():
 
     prompt = load_prompt(args.prompt)
 
+    token_tracker = TokenTracker()
+
     for (monitor, start), files in sorted(groups.items(), key=lambda x: (x[0][0], x[0][1])):
-        process_group(monitor, start, files, prompt, api_key, args.force, day_dir)
+        process_group(monitor, start, files, prompt, api_key, args.force, day_dir, token_tracker)
+
+    token_tracker.print_summary()
 
 
 if __name__ == "__main__":
