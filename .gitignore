@@ -3,4 +3,5 @@
 *.pyc
 logs/
 *.ogg
+*.mp3
 

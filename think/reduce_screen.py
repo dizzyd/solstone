@@ -20,8 +20,10 @@ class TokenTracker:
         self.total_candidates_tokens = 0
     
     def add_usage(self, usage_metadata):
-        self.total_prompt_tokens += usage_metadata.prompt_token_count
-        self.total_candidates_tokens += usage_metadata.candidates_token_count
+        prompt_tokens = getattr(usage_metadata, 'prompt_token_count', None) or 0
+        candidates_tokens = getattr(usage_metadata, 'candidates_token_count', None) or 0
+        self.total_prompt_tokens += prompt_tokens
+        self.total_candidates_tokens += candidates_tokens
     
     def get_compression_percent(self):
         if self.total_prompt_tokens == 0:
