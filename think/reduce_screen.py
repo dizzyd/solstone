@@ -74,10 +74,11 @@ def call_gemini(markdown, prompt, api_key):
             contents=[markdown],
             config=types.GenerateContentConfig(
                 temperature=0.3,
-                max_output_tokens=1024,
+                max_output_tokens=1024*8,
                 system_instruction=prompt,
             ),
         )
+        print(response.usage_metadata)
         return response.text
     finally:
         done.set()
@@ -111,6 +112,7 @@ def process_group(monitor, start, files, prompt, api_key, force, day_dir):
         print(f"Gemini call failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+    print(f"Writing {out_name} ({len(result)})")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(result)
     print(f"Saved {out_name}")

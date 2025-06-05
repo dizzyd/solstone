@@ -1,10 +1,11 @@
 # Screen Diff Summarization Prompt
 
-You will be given a Markdown list of JSON snippets, each describing a change detected on a single monitor during a five minute window. Summarize the user's on-screen activity for that period.
+You will be given a Markdown list of JSON snippets, each describing a change detected on a single monitor during a five minute window. Your job is to fully capture the user's on-screen activity for that whole period as a markdown formatted report.
 
 - Focus on applications, websites or documents that are visible.
 - Note any clear actions or context (editing code, messaging, watching video, etc.).
-- Ignore trivial cursor movements or minor UI updates.
-- Keep the summary concise and combine repetitive information.
+- Ignore idle game playing, such as mahjongg, it's not important.
+- Be comprehensive but combine repetitive information.
+- Always capture all relevant or essential information from the screen transcripts (but deduplicated)
 
-Respond with 2–3 short bullet points.
+Provide a complete and extremely detailed nicely formatted report with all relevant transcript excerpts.
