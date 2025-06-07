@@ -137,8 +137,8 @@ class AudioRecorder:
             buffer_seconds = len(buffer_data) / SAMPLE_RATE
             logging.info(f"Detected {len(speech_segments)} speech segments in {label} of {buffer_seconds:.1f} seconds.")
             if self.debug:
-                debug_filename = f"test_{label}.ogg"
-                debug_data = self.create_ogg_bytes([{"data": buffer_data}])
+                debug_filename = f"test_{label}.flac"
+                debug_data = self.create_flac_bytes([{"data": buffer_data}])
                 with open(debug_filename, "wb") as f:
                     f.write(debug_data)
                 logging.debug(f"Saved debug file: {debug_filename}")
@@ -166,8 +166,8 @@ class AudioRecorder:
             # Reset state by returning empty results
             return [], np.array([], dtype=np.float32)
 
-    def transcribe(self, ogg_bytes):
-        size_mb = len(ogg_bytes) / (1024 * 1024)
+    def transcribe(self, flac_bytes):
+        size_mb = len(flac_bytes) / (1024 * 1024)
         logging.info(f"Transcribing chunk: {size_mb:.2f}MB")
         
         if not self.prompt_text:
@@ -179,7 +179,7 @@ class AudioRecorder:
                 model="gemini-2.5-flash-preview-05-20",#"gemini-2.0-flash",
                 contents=[
                     "Process the provided audio now and output your professional accurate transcription in the specified JSON format.",
-                    types.Part.from_bytes(data=ogg_bytes, mime_type="audio/ogg")
+                    types.Part.from_bytes(data=flac_bytes, mime_type="audio/flac")
                 ],
                 config=types.GenerateContentConfig(
                     temperature=0.3,
@@ -287,7 +287,7 @@ class AudioRecorder:
         
         return processed_mic
 
-    def create_ogg_bytes(self, segments: list) -> bytes:
+    def create_flac_bytes(self, segments: list) -> bytes:
         # Filter out segments with empty or invalid data arrays and then concatenate
         combined_data_list = []
         for seg in segments:
@@ -296,7 +296,7 @@ class AudioRecorder:
                 combined_data_list.append(data)
 
         if not combined_data_list:
-            logging.warning("No valid audio data in segments to create OGG. Returning empty bytes.")
+            logging.warning("No valid audio data in segments to create FLAC. Returning empty bytes.")
             return b""
         
         combined = np.concatenate(combined_data_list)
@@ -311,7 +311,7 @@ class AudioRecorder:
         # Convert to int16 format
         chunk_int16 = (np.clip(combined, -1.0, 1.0) * 32767).astype(np.int16)
         
-        # Write to an in-memory OGG buffer
+        # Write to an in-memory FLAC buffer
         buf = io.BytesIO()
         # Ensure C-contiguous array and correct shape for sf.write
         audio_data = np.ascontiguousarray(chunk_int16.reshape(-1, CHANNELS))
@@ -320,7 +320,7 @@ class AudioRecorder:
                   f"max: {np.max(audio_data) if audio_data.size > 0 else 'N/A'}, "
                   f"is_contiguous: {audio_data.flags.c_contiguous}")
         try:
-            sf.write(buf, audio_data, SAMPLE_RATE, format='OGG', subtype='VORBIS')
+            sf.write(buf, audio_data, SAMPLE_RATE, format='FLAC')
         except Exception as e:
             logging.error(f"Error during sf.write: {e}. Audio data shape: {audio_data.shape}, dtype: {audio_data.dtype}")
             return b""
@@ -333,12 +333,12 @@ class AudioRecorder:
         if total_seconds < 3:
             logging.info(f"Skipping processing of {total_seconds:.1f} seconds of audio.")
             return
-        ogg_bytes = self.create_ogg_bytes(segments)
-        transcription = self.transcribe(ogg_bytes)
+        flac_bytes = self.create_flac_bytes(segments)
+        transcription = self.transcribe(flac_bytes)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if suffix:
             timestamp += suffix
-        self.save_results(timestamp, ogg_bytes, transcription)
+        self.save_results(timestamp, flac_bytes, transcription)
 
     def process_buffer(self, buffer, new_data, label):
         merged = np.concatenate((buffer, new_data)) if buffer.size > 0 else new_data
@@ -371,20 +371,20 @@ class AudioRecorder:
                     self.process_segments_and_transcribe(segments_all)
             logging.info(f"Found {len(mic_segments)} microphone and {len(sys_segments)} system segments.")
 
-    def save_results(self, timestamp, ogg_bytes, response_json):
+    def save_results(self, timestamp, flac_bytes, response_json):
         """Save the audio and transcription using date-based directories."""
         date_part, time_part = timestamp.split("_", 1)
         day_dir = os.path.join(self.save_dir, date_part)
         os.makedirs(day_dir, exist_ok=True)
 
-        ogg_filepath = os.path.join(day_dir, f"{time_part}_audio.ogg")
+        flac_filepath = os.path.join(day_dir, f"{time_part}_audio.flac")
         json_filepath = os.path.join(day_dir, f"{time_part}_audio.json")
 
-        with open(ogg_filepath, "wb") as f:
-            f.write(ogg_bytes)
+        with open(flac_filepath, "wb") as f:
+            f.write(flac_bytes)
         with open(json_filepath, "w") as f:
             json.dump({"text": response_json}, f)
-        logging.info(f"Saved to {ogg_filepath}: {json.dumps(response_json)}")
+        logging.info(f"Saved to {flac_filepath}: {json.dumps(response_json)}")
 
     def start(self):
         threads = [
