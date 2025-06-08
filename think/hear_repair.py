@@ -11,32 +11,45 @@ from google.genai import types
 PROMPT_PATH = os.path.join(os.path.dirname(__file__), "..", "hear", "gemini_mic.txt")
 
 
-def find_missing(folder, day):
-    day_dir = os.path.join(folder, day)
+def find_missing(day_dir):
     if not os.path.isdir(day_dir):
         raise FileNotFoundError(f"Day directory not found: {day_dir}")
     missing = []
     for name in sorted(os.listdir(day_dir)):
-        if name.endswith("_audio.ogg"):
-            base = name[:-4]
-            json_path = os.path.join(day_dir, base + "json")
+        if name.endswith(".ogg") or name.endswith(".flac"):
+            if name.endswith(".ogg"):
+                base = name[:-4]  # Remove ".ogg"
+            else:  # name.endswith(".flac")
+                base = name[:-5]  # Remove ".flac"
+            json_path = os.path.join(day_dir, base + ".json")
             if not os.path.exists(json_path):
-                ogg_path = os.path.join(day_dir, name)
-                missing.append((ogg_path, json_path))
+                audio_path = os.path.join(day_dir, name)
+                missing.append((audio_path, json_path))
     return missing
 
 
-def transcribe_file(client, prompt_text, ogg_path):
-    with open(ogg_path, "rb") as f:
-        ogg_bytes = f.read()
-    size_mb = len(ogg_bytes) / (1024 * 1024)
-    logging.info(f"Transcribing {ogg_path} ({size_mb:.2f}MB)")
+def transcribe_file(client, prompt_text, audio_path):
+    with open(audio_path, "rb") as f:
+        audio_bytes = f.read()
+    
+    # Determine MIME type based on file extension
+    if audio_path.endswith('.ogg'):
+        mime_type = "audio/ogg"
+        format_name = "OGG"
+    elif audio_path.endswith('.flac'):
+        mime_type = "audio/flac"
+        format_name = "FLAC"
+    else:
+        raise ValueError(f"Unsupported audio format: {audio_path}")
+    
+    size_mb = len(audio_bytes) / (1024 * 1024)
+    logging.info(f"Transcribing {audio_path} ({format_name}, {size_mb:.2f}MB)")
     try:
         response = client.models.generate_content(
             model="gemini-2.5-flash-preview-05-20",
             contents=[
                 "Process the provided audio now and output your professional accurate transcription in the specified JSON format.",
-                types.Part.from_bytes(data=ogg_bytes, mime_type="audio/ogg"),
+                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
             ],
             config=types.GenerateContentConfig(
                 temperature=0.3,
@@ -52,25 +65,25 @@ def transcribe_file(client, prompt_text, ogg_path):
 
 
 def process_files(files, delay, client, prompt_text):
-    for ogg_path, json_path in files:
-        result = transcribe_file(client, prompt_text, ogg_path)
+    for audio_path, json_path in files:
+        result = transcribe_file(client, prompt_text, audio_path)
         if result:
             with open(json_path, "w") as f:
-                json.dump({"text": result}, f)
+                json.dump(result, f)
             print(f"Saved {json_path}")
         else:
-            print(f"Gemini returned no result for {ogg_path}")
+            print(f"Gemini returned no result for {audio_path}")
         time.sleep(delay)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Repair missing Gemini JSON for audio files")
-    parser.add_argument("folder", help="Base directory containing day folders")
-    parser.add_argument("day", help="Day folder (YYYYMMDD)")
+    parser.add_argument("day_dir", help="Day directory path containing audio files")
+    parser.add_argument("--wait", type=float, default=0, help="Seconds to wait between API calls (default: 0)")
     args = parser.parse_args()
 
     try:
-        missing = find_missing(args.folder, args.day)
+        missing = find_missing(args.day_dir)
     except FileNotFoundError as e:
         print(str(e))
         return
@@ -80,14 +93,6 @@ def main():
         return
 
     print(f"Found {len(missing)} missing JSON files.")
-    try:
-        delay = float(input("Seconds to wait between API calls (0 to cancel): "))
-    except ValueError:
-        print("Invalid input; aborting")
-        return
-    if delay <= 0:
-        print("Aborted")
-        return
 
     load_dotenv()
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -100,7 +105,7 @@ def main():
         prompt_text = f.read().strip()
 
     logging.basicConfig(level=logging.INFO)
-    process_files(missing, delay, client, prompt_text)
+    process_files(missing, args.wait, client, prompt_text)
 
 
 if __name__ == "__main__":

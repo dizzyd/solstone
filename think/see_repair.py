@@ -4,6 +4,8 @@ import time
 import json
 from PIL import Image
 import numpy as np
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from see import gemini_look
 
 
@@ -19,8 +21,7 @@ def detect_red_box(image):
     return [int(y_min), int(x_min), int(y_max), int(x_max)]
 
 
-def find_missing(folder, day):
-    day_dir = os.path.join(folder, day)
+def find_missing(day_dir):
     if not os.path.isdir(day_dir):
         raise FileNotFoundError(f"Day directory not found: {day_dir}")
     missing = []
@@ -60,12 +61,12 @@ def process_files(files, delay):
 
 def main():
     parser = argparse.ArgumentParser(description="Repair missing Gemini JSON for screenshot diffs")
-    parser.add_argument("folder", help="Base directory containing day folders")
-    parser.add_argument("day", help="Day folder (YYYYMMDD)")
+    parser.add_argument("day_dir", help="Day directory path containing screenshot files")
+    parser.add_argument("--wait", type=float, default=0, help="Seconds to wait between API calls (default: 0)")
     args = parser.parse_args()
 
     try:
-        missing = find_missing(args.folder, args.day)
+        missing = find_missing(args.day_dir)
     except FileNotFoundError as e:
         print(str(e))
         return
@@ -75,16 +76,8 @@ def main():
         return
 
     print(f"Found {len(missing)} missing JSON files.")
-    try:
-        delay = float(input("Seconds to wait between API calls (0 to cancel): "))
-    except ValueError:
-        print("Invalid input; aborting")
-        return
-    if delay <= 0:
-        print("Aborted")
-        return
 
-    process_files(missing, delay)
+    process_files(missing, args.wait)
 
 
 if __name__ == "__main__":
