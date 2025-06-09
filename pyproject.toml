@@ -1,0 +1,113 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sunstone"
+version = "0.1.0"
+description = "Navigate Intelligently - A collection of utilities for multimodal navigation and analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["audio", "transcription", "screenshot", "multimodal", "ai", "gemini"]
+
+dependencies = [
+    # Core dependencies
+    "python-dotenv",
+    "google-genai",
+    
+    # Audio processing dependencies
+    "soundcard",
+    "soundfile", 
+    "silero-vad",
+    "noisereduce",
+    "pyaec",
+    "scipy",
+    "numpy",
+    
+    # Image processing dependencies
+    "Pillow",
+    "opencv-python",
+    "scikit-image",
+    
+    # Linux desktop integration
+    "dbus-next",
+    "PyGObject",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "isort",
+    "mypy",
+]
+
+[project.scripts]
+# Audio utilities
+gemini-mic = "hear.gemini_mic:main"
+
+# Visual utilities  
+screen-watch = "see.screen_watch:main"
+
+# Analysis utilities
+ponder-day = "think.ponder_day:main"
+cluster-day = "think.cluster_day:main"
+reduce-screen = "think.reduce_screen:main"
+repair-audio-json = "think.repair_audio_json:main"
+see-repair = "think.see_repair:main"
+hear-repair = "think.hear_repair:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/sunstone"
+Repository = "https://github.com/yourusername/sunstone"
+Documentation = "https://github.com/yourusername/sunstone/blob/main/README.md"
+"Bug Tracker" = "https://github.com/yourusername/sunstone/issues"
+
+[tool.setuptools.packages.find]
+include = ["hear*", "see*", "think*"]
+
+[tool.setuptools.package-data]
+hear = ["*.txt"]
+see = ["*.txt"]
+think = ["*.txt"]
+
+# Development tools configuration
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

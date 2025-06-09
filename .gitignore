@@ -1,5 +1,7 @@
 .env
 .venv
+sunstone.egg-info/
+__pycache__/
 *.pyc
 logs/
 *.ogg

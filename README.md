@@ -1,12 +1,16 @@
 # sunstone
-Navigate Intelligently
+Navigate Work Intelligently
 
-This repository contains a collection of utilities for multimodal navigation.
-The `see` package provides screenshot capture and comparison via the
-`screen-watch` command. Screenshots and metadata are cached under
-`~/.cache/sunstone/see` between runs. See `see/README.md` for details.
+A comprehensive collection of multimodal AI utilities for workplace audio, visual, and cognitive processing.
 
-The `think` package includes helpers for analysing captured data. The
-`ponder-day` command clusters a day's JSON files into Markdown and sends the
-result to Gemini. Use `-f` to specify a custom prompt file and `-p` to switch
-from the default flash model to the pro model.
+## Features
+
+- **See** 👁️ - Screenshot capture and visual comparison with the `screen-watch` command
+- **Hear** 👂 - Audio processing and voice activity detection with the `mic-watch` command  
+- **Think** 🧠 - Data analysis and AI-powered insights with the `ponder-day` command
+
+## Quick Start
+
+```bash
+pip install -e .
+```
