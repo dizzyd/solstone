@@ -173,7 +173,7 @@ def process_group(start, files, prompt, api_key, force, day_dir, token_tracker, 
     print(f"Writing {out_name} ({len(result)})")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(result)
-    print(f"Saved {out_name}")
+    print(f"Saved {out_path}")
 
 
 def main():
@@ -187,6 +187,7 @@ def main():
     day_dir = args.folder
     if not os.path.isdir(day_dir):
         parser.error(f"Folder not found: {day_dir}")
+    print(f"Processing folder: {day_dir}")
 
     entries = parse_monitor_files(day_dir)
     if not entries:

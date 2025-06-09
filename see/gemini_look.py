@@ -37,7 +37,7 @@ def initialize():
     _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
     return _gemini_client is not None
 
-def gemini_describe_region(image, box):
+def gemini_describe_region(image, box, models=None):
     """
     Crops the image using native pixel coordinates from box,
     computes normalized coordinates once for the Gemini call, and then
@@ -60,7 +60,7 @@ def gemini_describe_region(image, box):
         "Here is the latest screenshot with the cropped region of interest, please return the complete JSON as instructed."
     )
     
-    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
+    models_to_try = models if models is not None else ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
     
     for model_name in models_to_try:
         try:

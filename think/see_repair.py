@@ -11,7 +11,11 @@ from see import gemini_look
 
 def detect_red_box(image):
     """Return [y_min, x_min, y_max, x_max] of the red rectangle in image."""
-    arr = np.array(image.convert("RGB"))
+    try:
+        arr = np.array(image.convert("RGB"))
+    except (OSError, Exception) as e:
+        print(f"Error processing image data: {e}")
+        return None
     mask = (arr[:, :, 0] > 200) & (arr[:, :, 1] < 80) & (arr[:, :, 2] < 80)
     coords = np.argwhere(mask)
     if coords.size == 0:
@@ -35,21 +39,21 @@ def find_missing(day_dir):
     return missing
 
 
-def process_files(files, delay):
+def process_files(files, delay, models=None):
     if not gemini_look.initialize():
         print("Failed to initialize Gemini API")
         return
     for png_path, json_path in files:
         try:
             image = Image.open(png_path)
-        except Exception as e:
-            print(f"Could not open {png_path}: {e}")
+        except (OSError, Exception) as e:
+            print(f"Could not open {png_path} (corrupted/truncated image): {e}")
             continue
         box_coords = detect_red_box(image)
         if not box_coords:
             print(f"No red box found in {png_path}; skipping")
             continue
-        result = gemini_look.gemini_describe_region(image, {"box_2d": box_coords})
+        result = gemini_look.gemini_describe_region(image, {"box_2d": box_coords}, models)
         if result:
             with open(json_path, "w") as f:
                 json.dump(result, f, indent=2)
@@ -63,6 +67,7 @@ def main():
     parser = argparse.ArgumentParser(description="Repair missing Gemini JSON for screenshot diffs")
     parser.add_argument("day_dir", help="Day directory path containing screenshot files")
     parser.add_argument("--wait", type=float, default=0, help="Seconds to wait between API calls (default: 0)")
+    parser.add_argument("-p", "--pro", action="store_true", help="Use pro models instead of default models")
     args = parser.parse_args()
 
     try:
@@ -72,12 +77,13 @@ def main():
         return
 
     if not missing:
-        print("No missing JSON files found.")
+        print(f"No missing JSON files found in {args.day_dir}.")
         return
 
     print(f"Found {len(missing)} missing JSON files.")
 
-    process_files(missing, args.wait)
+    models = ["gemini-2.5-pro-preview-06-05", "gemini-2.5-flash-preview-05-20"] if args.pro else None
+    process_files(missing, args.wait, models)
 
 
 if __name__ == "__main__":

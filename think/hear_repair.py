@@ -28,7 +28,7 @@ def find_missing(day_dir):
     return missing
 
 
-def transcribe_file(client, prompt_text, audio_path):
+def transcribe_file(client, prompt_text, audio_path, model="gemini-2.5-flash-preview-05-20"):
     with open(audio_path, "rb") as f:
         audio_bytes = f.read()
     
@@ -46,7 +46,7 @@ def transcribe_file(client, prompt_text, audio_path):
     logging.info(f"Transcribing {audio_path} ({format_name}, {size_mb:.2f}MB)")
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-preview-05-20",
+            model=model,
             contents=[
                 "Process the provided audio now and output your professional accurate transcription in the specified JSON format.",
                 types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
@@ -64,9 +64,9 @@ def transcribe_file(client, prompt_text, audio_path):
         return ""
 
 
-def process_files(files, delay, client, prompt_text):
+def process_files(files, delay, client, prompt_text, model="gemini-2.5-flash-preview-05-20"):
     for audio_path, json_path in files:
-        result = transcribe_file(client, prompt_text, audio_path)
+        result = transcribe_file(client, prompt_text, audio_path, model)
         if result:
             with open(json_path, "w") as f:
                 json.dump(result, f)
@@ -80,6 +80,7 @@ def main():
     parser = argparse.ArgumentParser(description="Repair missing Gemini JSON for audio files")
     parser.add_argument("day_dir", help="Day directory path containing audio files")
     parser.add_argument("--wait", type=float, default=0, help="Seconds to wait between API calls (default: 0)")
+    parser.add_argument("-p", "--pro", action="store_true", help="Use gemini-2.5-pro-preview-06-05 instead of flash model")
     args = parser.parse_args()
 
     try:
@@ -89,7 +90,7 @@ def main():
         return
 
     if not missing:
-        print("No missing JSON files found.")
+        print(f"No missing JSON files found in {args.day_dir}.")
         return
 
     print(f"Found {len(missing)} missing JSON files.")
@@ -104,8 +105,10 @@ def main():
     with open(PROMPT_PATH, "r") as f:
         prompt_text = f.read().strip()
 
+    model = "gemini-2.5-pro-preview-06-05" if args.pro else "gemini-2.5-flash-preview-05-20"
+
     logging.basicConfig(level=logging.INFO)
-    process_files(missing, args.wait, client, prompt_text)
+    process_files(missing, args.wait, client, prompt_text, model)
 
 
 if __name__ == "__main__":
