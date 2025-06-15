@@ -1,0 +1,93 @@
+import argparse
+import os
+import re
+from datetime import datetime, timedelta
+from typing import Dict, List
+
+from dotenv import load_dotenv
+
+from think.cluster_glob import PRO_MODEL, cluster_glob, send_to_gemini
+
+DATE_RE = re.compile(r"\d{8}")
+PROMPT_PATH = os.path.join(os.path.dirname(__file__), "merge_kg.txt")
+
+
+def find_day_dirs(parent: str) -> Dict[str, str]:
+    """Return mapping of YYYYMMDD string to full path."""
+    days = {}
+    for name in os.listdir(parent):
+        if DATE_RE.fullmatch(name):
+            path = os.path.join(parent, name)
+            if os.path.isdir(path):
+                days[name] = path
+    return days
+
+
+def gather_files(day: datetime, day_dirs: Dict[str, str]) -> List[str]:
+    files = []
+    for i in range(8):
+        d = day - timedelta(days=i)
+        key = d.strftime("%Y%m%d")
+        dir_path = day_dirs.get(key)
+        if not dir_path:
+            continue
+        kg_path = os.path.join(dir_path, "ponder_kg.md")
+        if os.path.isfile(kg_path):
+            files.append(kg_path)
+    return files
+
+
+def process_day(day_str: str, day_dirs: Dict[str, str], force: bool) -> None:
+    out_path = os.path.join(day_dirs[day_str], "entities.md")
+    if os.path.exists(out_path) and not force:
+        print(f"Skipping {day_str}: entities.md exists")
+        return
+
+    day = datetime.strptime(day_str, "%Y%m%d")
+    files = gather_files(day, day_dirs)
+    if not files:
+        print(f"No ponder_kg.md files for {day_str}")
+        return
+
+    markdown = cluster_glob(files)
+
+    load_dotenv()
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        print("GOOGLE_API_KEY not found in environment")
+        return
+
+    with open(PROMPT_PATH, "r", encoding="utf-8") as f:
+        prompt = f.read().strip()
+
+    result, _ = send_to_gemini(markdown, prompt, api_key, PRO_MODEL, False)
+    if not result:
+        print(f"Gemini returned no result for {day_str}")
+        return
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(result)
+    print(f"Wrote {out_path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Merge ponder_kg files from a rolling 8-day window and generate entities.md"
+    )
+    parser.add_argument("parent", help="Directory containing YYYYMMDD folders")
+    parser.add_argument("--force", action="store_true", help="Overwrite existing files")
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.parent):
+        parser.error(f"Parent directory not found: {args.parent}")
+
+    day_dirs = find_day_dirs(args.parent)
+    if not day_dirs:
+        parser.error("No YYYYMMDD directories found")
+
+    for day_str in sorted(day_dirs.keys()):
+        process_day(day_str, day_dirs, args.force)
+
+
+if __name__ == "__main__":
+    main()
