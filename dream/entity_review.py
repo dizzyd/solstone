@@ -183,6 +183,7 @@ class EntityHandler(SimpleHTTPRequestHandler):
                         {
                             "name": name,
                             "dates": [format_date(date) for date in sorted(info["dates"])],
+                            "raw_dates": sorted(info["dates"]),
                             "desc": desc,
                             "descriptions": formatted_descriptions,
                         }
