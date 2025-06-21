@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from functools import partial
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 DATE_RE = re.compile(r"\d{8}")
 ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
@@ -38,6 +38,32 @@ def find_day_dirs(parent: str) -> Dict[str, str]:
     return days
 
 
+def parse_entity_line(line: str) -> Optional[Tuple[str, str, str]]:
+    """Parse a single bullet line from ``entities.md``.
+
+    Returns a tuple of (type, name, description) or ``None`` if the line does not
+    represent an entity in the expected format.
+    """
+
+    cleaned = line.replace("**", "")
+    match = ITEM_RE.match(cleaned)
+    if not match:
+        return None
+
+    text = match.group(1).strip()
+    if ":" not in text:
+        return None
+
+    etype, rest = text.split(":", 1)
+    rest = rest.strip()
+    if " - " in rest:
+        name, desc = rest.split(" - ", 1)
+    else:
+        name, desc = rest, ""
+
+    return etype.strip(), name.strip(), desc.strip()
+
+
 def parse_entities(path: str) -> tuple[List[tuple[str, str, str]], int, int]:
     items: List[tuple[str, str, str]] = []
     bullet_count = 0
@@ -50,37 +76,21 @@ def parse_entities(path: str) -> tuple[List[tuple[str, str, str]], int, int]:
 
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
-            # Remove all bold formatting first
-            line = line.replace("**", "").strip()
-            if not line:
+            if not ITEM_RE.match(line.replace("**", "")):
                 continue
-
-            # Only process lines that start with "*" bullet
-            if not line.startswith("*"):
-                continue
-
             bullet_count += 1
 
-            # Remove the bullet and get the text
-            text = line[1:].strip()
-
-            if ":" not in text:
+            parsed = parse_entity_line(line)
+            if not parsed:
                 skipped_count += 1
                 continue
-            etype, rest = text.split(":", 1)
-            etype = etype.strip()
 
-            # Skip if entity type is not in valid types
+            etype, name, desc = parsed
             if etype not in valid_types:
                 skipped_count += 1
                 continue
 
-            rest = rest.strip()
-            if " - " in rest:
-                name, desc = rest.split(" - ", 1)
-            else:
-                name, desc = rest, ""
-            items.append((etype, name.strip(), desc.strip()))
+            items.append((etype, name, desc))
 
     return items, bullet_count, skipped_count
 
@@ -101,16 +111,61 @@ def build_index(parent: str) -> Dict[str, Dict[str, dict]]:
     return index
 
 
+def modify_entity_file(
+    parent: str, day: str, etype: str, name: str, new_name: Optional[str] = None
+) -> None:
+    """Remove or rename an entity entry in a day's ``entities.md`` file."""
+
+    file_path = os.path.join(parent, day, "entities.md")
+    if not os.path.isfile(file_path):
+        raise ValueError(f"entities.md not found for {day}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    matches: List[tuple[int, str]] = []
+    for idx, line in enumerate(lines):
+        parsed = parse_entity_line(line)
+        if not parsed:
+            continue
+        t, n, desc = parsed
+        if t == etype and n == name:
+            matches.append((idx, desc))
+
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected 1 match for '{etype}: {name}' in {file_path}, found {len(matches)}"
+        )
+
+    idx, desc = matches[0]
+    newline = "\n" if lines[idx].endswith("\n") else ""
+    if new_name is None:
+        del lines[idx]
+    else:
+        new_line = f"* {etype}: {new_name}"
+        if desc:
+            new_line += f" - {desc}"
+        lines[idx] = new_line + newline
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
 class EntityHandler(SimpleHTTPRequestHandler):
     def __init__(
         self,
         *args: Any,
         index: Optional[Dict[str, Dict[str, dict]]] = None,
         directory: Optional[str] = None,
+        root: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         self.index: Dict[str, Dict[str, dict]] = index or {}
+        self.root = root or os.getcwd()
         super().__init__(*args, directory=directory, **kwargs)
+
+    def reload_index(self) -> None:
+        self.index = build_index(self.root)
 
     def do_GET(self) -> None:
         if self.path == "/api/data":
@@ -141,6 +196,48 @@ class EntityHandler(SimpleHTTPRequestHandler):
                 self.path = "index.html"
             super().do_GET()
 
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Invalid JSON")
+            return
+
+        action = None
+        if self.path == "/api/remove":
+            action = "remove"
+        elif self.path == "/api/rename":
+            action = "rename"
+        else:
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        days = payload.get("days", [])
+        etype = payload.get("type")
+        name = payload.get("name")
+        new_name = payload.get("new_name") if action == "rename" else None
+
+        try:
+            for day in days:
+                modify_entity_file(self.root, day, etype, name, new_name)
+            self.reload_index()
+        except Exception as e:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Review entities from daily folders")
@@ -151,7 +248,7 @@ def main() -> None:
     index = build_index(args.parent)
 
     directory = os.path.join(os.path.dirname(__file__), "entity_review")
-    handler = partial(EntityHandler, index=index, directory=directory)
+    handler = partial(EntityHandler, index=index, directory=directory, root=args.parent)
     httpd = HTTPServer(("", args.port), handler)
     print(f"Serving on http://localhost:{args.port}")
     httpd.serve_forever()
