@@ -160,20 +160,30 @@ tr:hover { background: #f8f9fa; }
 let data = {};
 let activeType = null;
 
-fetch('api/data').then(r => r.json()).then(d => {
-  data = d;
-  const tabsDiv = document.getElementById('tabs');
-  Object.keys(data).forEach(type => {
-    const tab = document.createElement('div');
-    tab.className = 'tab';
-    const count = data[type] ? data[type].length : 0;
-    tab.textContent = `${type} (${count})`;
-    tab.onclick = () => showType(type);
-    tabsDiv.appendChild(tab);
+function reloadData() {
+  const currentType = activeType;
+  fetch('api/data').then(r => r.json()).then(d => {
+    data = d;
+    const tabsDiv = document.getElementById('tabs');
+    tabsDiv.innerHTML = '';
+    Object.keys(data).forEach(type => {
+      const tab = document.createElement('div');
+      tab.className = 'tab';
+      const count = data[type] ? data[type].length : 0;
+      tab.textContent = `${type} (${count})`;
+      tab.onclick = () => showType(type);
+      tabsDiv.appendChild(tab);
+    });
+    const first = Object.keys(data)[0];
+    if (currentType && data[currentType]) {
+      showType(currentType);
+    } else if (first) {
+      showType(first);
+    }
   });
-  const first = Object.keys(data)[0];
-  if (first) showType(first);
-});
+}
+
+reloadData();
 
 function showType(type) {
   // Update active tab
@@ -186,7 +196,7 @@ function showType(type) {
   tbody.innerHTML = '';
   const items = data[type] || [];
   items.sort((a, b) => b.dates.length - a.dates.length);
-  
+
   items.forEach(item => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -194,8 +204,58 @@ function showType(type) {
       <td class="name">${item.name}</td>
       <td class="desc">${item.desc}</td>
     `;
+    const nameTd = tr.querySelector('.name');
+    nameTd.ondblclick = () => editName(tr, item);
     tbody.appendChild(tr);
   });
+}
+
+function editName(tr, item) {
+  const nameTd = tr.querySelector('.name');
+  const original = item.name;
+  nameTd.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = original;
+  input.style.width = '150px';
+  nameTd.appendChild(input);
+
+  const actions = document.createElement('span');
+  actions.style.marginLeft = '8px';
+  actions.innerHTML = `
+    <span style="cursor:pointer;color:green;">&#10003;</span>
+    <span style="cursor:pointer;color:red;margin-left:6px;">&#10005;</span>
+    <span style="cursor:pointer;color:#555;margin-left:6px;">&#128465;</span>
+  `;
+  const [ok, cancel, del] = actions.children;
+  nameTd.appendChild(actions);
+
+  const reset = () => {
+    nameTd.innerHTML = original;
+  };
+
+  ok.onclick = () => {
+    const newName = input.value.trim();
+    if (!newName || newName === original) { reset(); return; }
+    tr.style.opacity = '0.5';
+    fetch('api/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name: original, new_name: newName, days: item.raw_dates })
+    }).then(() => reloadData());
+  };
+
+  cancel.onclick = reset;
+
+  del.onclick = () => {
+    if (!confirm(`Delete ${original}?`)) return;
+    tr.style.opacity = '0.5';
+    fetch('api/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name: original, days: item.raw_dates })
+    }).then(() => reloadData());
+  };
 }
 
 function showEntityDetails(name) {
