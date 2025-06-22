@@ -2,7 +2,6 @@
   "generator": "think.ponder_day",
   "output": "20250610/ponder_day.md",
   "generated_at": "2025-06-10T12:00:01Z",
-  "args": {"--pro": true},
   "dependencies": [
     {
       "type": "file",
@@ -17,7 +16,6 @@
         "20250610/102000_monitor_2_diff.json": 1717999057
       }
     },
-    {"type": "model", "name": "gemini-2.5-pro-preview-06-05"},
-    {"type": "code", "path": "think/ponder_day.py", "commit": "abc123d"}
+    {"type": "model", "name": "gemini-2.5-pro-preview-06-05"}
   ]
 }
