@@ -210,7 +210,7 @@ function showType(type) {
     tr.innerHTML = `
       <td class="count" onclick="showEntityDetails('${item.name}')">${count}</td>
       <td class="name">${item.name}</td>
-      <td class="desc">${item.primary}</td>
+      <td class="desc">${item.desc}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -232,11 +232,9 @@ function editName(nameElement, item) {
   const actions = document.createElement('span');
   actions.style.marginLeft = '8px';
   actions.innerHTML = `
-    <span style="cursor:pointer;color:green;">&#10003;</span>
-    <span style="cursor:pointer;color:red;margin-left:6px;">&#10005;</span>
     <span style="cursor:pointer;color:#555;margin-left:6px;">&#128465;</span>
   `;
-  const [ok, cancel, del] = actions.children;
+  const [del] = actions.children;
   nameElement.appendChild(actions);
 
   const reset = () => {
@@ -244,7 +242,7 @@ function editName(nameElement, item) {
     nameElement.onclick = () => editName(nameElement, item);
   };
 
-  ok.onclick = () => {
+  const save = () => {
     const newName = input.value.trim();
     if (!newName || newName === original) { reset(); return; }
     
@@ -260,8 +258,6 @@ function editName(nameElement, item) {
     });
   };
 
-  cancel.onclick = reset;
-
   del.onclick = () => {
     if (!confirm(`Delete ${original}?`)) return;
     
@@ -275,6 +271,17 @@ function editName(nameElement, item) {
       document.getElementById('entityModal').style.display = 'none';
       reloadData();
     });
+  };
+
+  // Handle keyboard events
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      reset();
+    }
   };
 
   // Focus and select the input text

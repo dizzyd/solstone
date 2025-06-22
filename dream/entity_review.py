@@ -129,7 +129,6 @@ class EntityHandler(SimpleHTTPRequestHandler):
                             "dates": [format_date(date) for date in sorted(info.get("dates", []))],
                             "raw_dates": sorted(info.get("dates", [])),
                             "desc": primary,
-                            "primary": primary,
                             "master": info.get("master", False),
                             "descriptions": formatted_descriptions,
                         }
