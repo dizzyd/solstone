@@ -9,21 +9,39 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from see import gemini_look
 
 
-def detect_red_box(image):
-    """Return [y_min, x_min, y_max, x_max] of the red rectangle in image."""
-    try:
-        arr = np.array(image.convert("RGB"))
-    except (OSError, Exception) as e:
-        print(f"Error processing image data: {e}")
-        return None
-    mask = (arr[:, :, 0] > 200) & (arr[:, :, 1] < 80) & (arr[:, :, 2] < 80)
-    coords = np.argwhere(mask)
-    if coords.size == 0:
-        return None
-    y_min, x_min = coords.min(axis=0)
-    y_max, x_max = coords.max(axis=0)
-    return [int(y_min), int(x_min), int(y_max), int(x_max)]
+import numpy as np
+from PIL import Image
 
+def detect_red_box(im: Image.Image,
+                   *,                       # keyword‑only for clarity
+                   min_length: int = 100,    # shortest expected side
+                   border: int = 3,         # thickness used when drawing
+                  ) -> tuple[int, int, int, int]:
+    a = np.asarray(im)
+    red = (a[..., 0] > 250) & (a[..., 1] < 5) & (a[..., 2] < 5)
+
+    # Count red pixels per column / row
+    col_hits = red.sum(0)                 # shape (W,)
+    row_hits = red.sum(1)                 # shape (H,)
+
+    # Columns/rows that plausibly belong to a straight border side
+    cols = np.where(col_hits >= min_length)[0]
+    rows = np.where(row_hits >= min_length)[0]
+    if cols.size == 0 or rows.size == 0:
+        raise ValueError("No red box detected")
+
+    # Compress contiguous runs (e.g. the 3‑pixel‑thick border)
+    def first_last(groups, thickness):
+        groups = np.split(groups, np.where(np.diff(groups) != 1)[0] + 1)
+        groups = [g for g in groups if g.size >= thickness]
+        if not groups:
+            raise ValueError("Red border not thick enough")
+        return groups[0][0], groups[-1][-1]
+
+    x_min, x_max = first_last(cols, border)
+    y_min, y_max = first_last(rows, border)
+
+    return [int(y_min), int(x_min), int(y_max), int(x_max)]
 
 def find_missing(day_dir):
     if not os.path.isdir(day_dir):
@@ -32,10 +50,14 @@ def find_missing(day_dir):
     for name in sorted(os.listdir(day_dir)):
         if name.endswith("_diff.png"):
             base = name[:-4]
-            json_path = os.path.join(day_dir, base + ".json")
-            if not os.path.exists(json_path):
+            # Check for existing box JSON (from screen_watch) and result JSON
+            box_json_path = os.path.join(day_dir, base + "_box.json")
+            result_json_path = os.path.join(day_dir, base + ".json")
+            
+            # Process if box JSON or result JSON doesn't exist
+            if not os.path.exists(box_json_path) or not os.path.exists(result_json_path):
                 png_path = os.path.join(day_dir, name)
-                missing.append((png_path, json_path))
+                missing.append((png_path, box_json_path, result_json_path))
     return missing
 
 
@@ -43,21 +65,49 @@ def process_files(files, delay, models=None):
     if not gemini_look.initialize():
         print("Failed to initialize Gemini API")
         return
-    for png_path, json_path in files:
+    for png_path, box_json_path, result_json_path in files:
         try:
             image = Image.open(png_path)
         except (OSError, Exception) as e:
             print(f"Could not open {png_path} (corrupted/truncated image): {e}")
             continue
-        box_coords = detect_red_box(image)
+        
+        # Check if box JSON exists and use it, otherwise detect red box
+        if os.path.exists(box_json_path):
+            try:
+                with open(box_json_path, "r") as f:
+                    box_data = json.load(f)
+                    box_coords = box_data.get("box_2d")
+                print(f"Using existing box coordinates from {box_json_path}")
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Could not load box JSON {box_json_path}: {e}, detecting box")
+                box_coords = None
+        else:
+            box_coords = None
+        
+        # If no box coords from JSON, detect red box
         if not box_coords:
-            print(f"No red box found in {png_path}; skipping")
+            try:
+                box_coords = detect_red_box(image)
+                # Save the detected box for future use
+                box_data = {"box_2d": box_coords}
+                with open(box_json_path, "w") as f:
+                    json.dump(box_data, f, indent=2)
+                print(f"Detected and saved box coordinates to {box_json_path}")
+            except (ValueError, OSError) as e:
+                print(f"Could not detect red box in {png_path}: {e}")
+                continue
+        
+        # Only call Gemini API if result JSON doesn't exist
+        if os.path.exists(result_json_path):
+            print(f"Result JSON already exists: {result_json_path}")
             continue
+            
         result = gemini_look.gemini_describe_region(image, {"box_2d": box_coords}, models)
         if result:
-            with open(json_path, "w") as f:
+            with open(result_json_path, "w") as f:
                 json.dump(result, f, indent=2)
-            print(f"Saved {json_path}")
+            print(f"Saved {result_json_path}")
         else:
             print(f"Gemini returned no result for {png_path}")
         time.sleep(delay)

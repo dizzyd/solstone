@@ -77,7 +77,7 @@ def gemini_describe_region(image, box, models=None, entities=None):
     models_to_try = (
         models
         if models is not None
-        else ["gemini-2.5-flash-lite-preview-06-17", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
+        else ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite-preview-06-17","gemini-2.0-flash-lite"]
     )
 
     for model_name in models_to_try:
@@ -92,6 +92,8 @@ def gemini_describe_region(image, box, models=None, entities=None):
                     system_instruction=_system_instruction,
                 ),
             )
+            if not response.text:
+                print(f"Bad response from Gemini API with model {model_name}: {repr(response)}")
             print(response.text)
             return json.loads(response.text)
         except Exception as e:
