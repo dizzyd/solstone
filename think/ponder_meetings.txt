@@ -19,6 +19,7 @@
         * Closing remarks (e.g., "Great, thanks everyone," "Let's wrap up," "Talk to you all later").
         * A clear shift to a prolonged period of silence or non-conversational audio (e.g., only keyboard sounds).
     * **Use Screen Activity for Confirmation:** While Jeremie's screen activity can be distracting due to multitasking, it can be a helpful secondary indicator. Look for the launch or presence of meeting software (e.g., Google Meet, Zoom, Microsoft Teams) to help confirm the start of a meeting. There may be meetings in the audio transcript only with no clues on the screen.
+    * **Audio Required:** Meetings must have an audio component, if only visual/screen references exist without the audio transcript than it probably wasn't a meeting.
 
 3.  **Extract Key Meeting Details:** For each identified meeting, extract the following information, prioritizing the audio transcript as the primary source of truth:
 
