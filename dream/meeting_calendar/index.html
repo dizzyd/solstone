@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Meeting Calendar</title>
+<style>
+body { font-family: sans-serif; margin: 0; }
+.container { max-width: 1000px; margin: 0 auto; padding: 1em; }
+h1 { margin-bottom: 0.5em; }
+#controls { display: flex; align-items: center; margin-bottom: 1em; }
+#controls button { background:#007bff; color:white; border:none; padding:6px 12px; margin:0 6px; border-radius:4px; cursor:pointer; }
+#controls span { font-size:1.2em; font-weight:bold; }
+#calendar { width:100%; border-collapse:collapse; }
+#calendar th, #calendar td { width:14.28%; border:1px solid #e0e0e0; vertical-align:top; height:80px; padding:4px; }
+#calendar th { background:#f8f9fa; }
+.day-number { font-weight:bold; }
+.count { margin-top:4px; font-size:0.9em; color:#007bff; cursor:pointer; }
+.modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5); }
+.modal-content { background:white; margin:10% auto; border-radius:8px; width:80%; max-width:500px; padding:20px; }
+.close { float:right; font-size:24px; cursor:pointer; }
+.meeting { margin-bottom:12px; }
+.meeting h3 { margin:0 0 4px 0; }
+.meeting p { margin:0 0 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Meeting Calendar</h1>
+  <div id="controls">
+    <button id="prevMonth">&#8592;</button>
+    <span id="monthLabel"></span>
+    <button id="nextMonth">&#8594;</button>
+  </div>
+  <table id="calendar">
+    <thead>
+      <tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div id="meetingModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+let meetings = {};
+let months = [];
+let currentIndex = 0;
+
+function loadData() {
+  fetch('api/meetings').then(r => r.json()).then(d => {
+    meetings = d;
+    months = Array.from(new Set(Object.keys(meetings).map(d => d.slice(0,6)))).sort();
+    if(months.length===0){ months=[new Date().toISOString().slice(0,7).replace('-','')]; }
+    currentIndex = months.length-1;
+    showMonth(months[currentIndex]);
+  });
+}
+
+function showMonth(ym) {
+  const year = parseInt(ym.slice(0,4));
+  const month = parseInt(ym.slice(4)) - 1;
+  const first = new Date(year, month, 1);
+  document.getElementById('monthLabel').textContent = first.toLocaleString('default',{month:'long', year:'numeric'});
+  const tbody = document.querySelector('#calendar tbody');
+  tbody.innerHTML='';
+  const startDay = first.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  let row = document.createElement('tr');
+  for(let i=0;i<startDay;i++){ row.appendChild(document.createElement('td')); }
+  for(let day=1; day<=daysInMonth; day++){
+    if((startDay+day-1)%7===0 && day!==1){ tbody.appendChild(row); row=document.createElement('tr'); }
+    const td=document.createElement('td');
+    const dateStr = ym + String(day).padStart(2,'0');
+    const count = (meetings[dateStr] || []).length;
+    td.innerHTML = `<div class='day-number'>${day}</div>`;
+    if(count){
+      const div = document.createElement('div');
+      div.className='count';
+      div.textContent=`${count} meeting${count>1?'s':''}`;
+      div.onclick=()=>openDay(dateStr);
+      td.appendChild(div);
+    }
+    row.appendChild(td);
+  }
+  while(row.children.length<7){ row.appendChild(document.createElement('td')); }
+  tbody.appendChild(row);
+}
+
+function openDay(dateStr){
+  const list = meetings[dateStr] || [];
+  if(!list.length) return;
+  const modal = document.getElementById('meetingModal');
+  const content = document.getElementById('modalContent');
+  let html='';
+  list.forEach(m => {
+    html += `<div class='meeting'><h3>${m.title || 'Meeting'}</h3>`;
+    if(m.topicsDiscussed){ html += `<p>${m.topicsDiscussed}</p>`; }
+    if(m.slidesPresented && m.slidesDescription){ html += `<p><em>${m.slidesDescription}</em></p>`; }
+    html += `</div>`;
+  });
+  content.innerHTML = html;
+  modal.style.display='block';
+}
+
+document.querySelector('.close').onclick = () => { document.getElementById('meetingModal').style.display='none'; };
+window.onclick = event => { if(event.target==document.getElementById('meetingModal')){ document.getElementById('meetingModal').style.display='none'; } };
+
+document.getElementById('prevMonth').onclick = () => { if(currentIndex>0){ currentIndex--; showMonth(months[currentIndex]); } };
+document.getElementById('nextMonth').onclick = () => { if(currentIndex<months.length-1){ currentIndex++; showMonth(months[currentIndex]); } };
+
+loadData();
+</script>
+</body>
+</html>
