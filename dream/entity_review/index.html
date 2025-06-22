@@ -76,8 +76,8 @@ tr:hover { background: #f8f9fa; }
   background-color: white;
   margin: 10% auto;
   border-radius: 8px;
-  width: 80%;
-  max-width: 500px;
+  width: 90%;
+  max-width: 1000px;
   max-height: 70vh;
   position: relative;
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -176,6 +176,9 @@ let data = {};
 let activeType = null;
 let currentItem = null;
 
+// Track ongoing master generations
+let generatingMasters = new Set();
+
 function reloadData() {
   const currentType = activeType;
   fetch('api/data').then(r => r.json()).then(d => {
@@ -215,9 +218,9 @@ function showType(type) {
 
   items.forEach(item => {
     const tr = document.createElement('tr');
-    const count = item.master ? '<span style="color:gold">&#9733;</span>' : item.dates.length;
+    const count = item.master ? `<span style="color:gold" title="${item.dates.length} entries">&#9733;</span>` : item.dates.length;
     tr.innerHTML = `
-      <td class="count" onclick="showEntityDetails('${item.name}')">${count}</td>
+      <td class="count" onclick="handleCountClick(event, '${item.name}')">${count}</td>
       <td class="name">${item.name}</td>
       <td class="desc">${item.desc}</td>
     `;
@@ -238,14 +241,6 @@ function editName(nameElement, item) {
   input.style.padding = '4px';
   nameElement.appendChild(input);
 
-  const actions = document.createElement('span');
-  actions.style.marginLeft = '8px';
-  actions.innerHTML = `
-    <span style="cursor:pointer;color:#555;margin-left:6px;">&#128465;</span>
-  `;
-  const [del] = actions.children;
-  nameElement.appendChild(actions);
-
   const reset = () => {
     nameElement.innerHTML = original;
     nameElement.onclick = () => editName(nameElement, item);
@@ -261,21 +256,6 @@ function editName(nameElement, item) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: activeType, name: original, new_name: newName, days: item.raw_dates })
-    }).then(() => {
-      document.getElementById('entityModal').style.display = 'none';
-      reloadData();
-    });
-  };
-
-  del.onclick = () => {
-    if (!confirm(`Delete ${original}?`)) return;
-    
-    nameElement.style.opacity = '0.5';
-    
-    fetch('api/remove', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: activeType, name: original, days: item.raw_dates })
     }).then(() => {
       document.getElementById('entityModal').style.display = 'none';
       reloadData();
@@ -304,14 +284,42 @@ function showMasterEditor(item, text) {
     <div class="modal-header">
       <span id="modalStar" style="cursor:pointer;margin-right:8px;color:gold">&#9733;</span>
       <h3 id="modalEntityName">${item.name}</h3>
+      <span id="modalDelete" style="cursor:pointer;color:#555;margin-left:8px;" title="Delete entity">&#128465;</span>
     </div>
     <div class="modal-body">
       <textarea id="masterDesc" style="width:100%;height:150px;">${text}</textarea>
       <div style="text-align:right;margin-top:10px;">
+        <button id="regenerateBtn" style="margin-right:10px;">Regenerate</button>
         <button id="saveMasterBtn">Save</button>
       </div>
     </div>`;
   content.innerHTML = html;
+  document.getElementById('regenerateBtn').onclick = () => {
+    const btn = document.getElementById('regenerateBtn');
+    const textarea = document.getElementById('masterDesc');
+    const originalText = btn.textContent;
+    
+    btn.textContent = 'Regenerating...';
+    btn.disabled = true;
+    
+    fetch('api/master_generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name: item.name })
+    }).then(r => r.json()).then(res => {
+      if (res.error) {
+        alert('Error regenerating description: ' + res.error);
+      } else {
+        textarea.value = res.desc;
+      }
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }).catch(err => {
+      alert('Network error: ' + err.message);
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
+  };
   document.getElementById('saveMasterBtn').onclick = () => {
     const desc = document.getElementById('masterDesc').value.trim();
     fetch('api/master_update', {
@@ -326,6 +334,19 @@ function showMasterEditor(item, text) {
   document.getElementById('modalEntityName').onclick = () => {
     editName(document.getElementById('modalEntityName'), item);
   };
+  document.getElementById('modalDelete').onclick = () => {
+    if (!confirm(`Delete ${item.name}?`)) return;
+    
+    document.getElementById('entityModal').style.display = 'none';
+    
+    fetch('api/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name: item.name, days: item.raw_dates })
+    }).then(() => {
+      reloadData();
+    });
+  };
 }
 
 function handleStarClick(item) {
@@ -333,9 +354,7 @@ function handleStarClick(item) {
     showMasterEditor(item, item.desc);
   } else {
     const starEl = document.getElementById('modalStar');
-    const originalHtml = starEl.innerHTML;
-    starEl.innerHTML = '⟳';
-    starEl.style.cursor = 'default';
+    starEl.style.cursor = 'wait';
     starEl.onclick = null;
     
     fetch('api/master_generate', {
@@ -345,7 +364,6 @@ function handleStarClick(item) {
     }).then(r => r.json()).then(res => {
       if (res.error) {
         alert('Error generating summary: ' + res.error);
-        starEl.innerHTML = originalHtml;
         starEl.style.cursor = 'pointer';
         starEl.onclick = () => handleStarClick(item);
         return;
@@ -355,7 +373,6 @@ function handleStarClick(item) {
       }
     }).catch(err => {
       alert('Network error: ' + err.message);
-      starEl.innerHTML = originalHtml;
       starEl.style.cursor = 'pointer';
       starEl.onclick = () => handleStarClick(item);
     });
@@ -375,6 +392,7 @@ function showEntityDetails(name) {
     <div class="modal-header">
       <span id="modalStar" style="cursor:pointer;margin-right:8px;color:gold">${star}</span>
       <h3 id="modalEntityName">${name}</h3>
+      <span id="modalDelete" style="cursor:pointer;color:#555;margin-left:8px;" title="Delete entity">&#128465;</span>
     </div>
     <div class="modal-body">`;
   
@@ -397,6 +415,19 @@ function showEntityDetails(name) {
   document.getElementById('modalStar').onclick = () => {
     handleStarClick(item);
   };
+  document.getElementById('modalDelete').onclick = () => {
+    if (!confirm(`Delete ${name}?`)) return;
+    
+    modal.style.display = 'none';
+    
+    fetch('api/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name: name, days: item.raw_dates })
+    }).then(() => {
+      reloadData();
+    });
+  };
 
   modal.style.display = 'block';
 }
@@ -412,6 +443,67 @@ window.onclick = function(event) {
     modal.style.display = 'none';
   }
 };
+
+// Handle count click with control-click support for background master generation
+function handleCountClick(event, name) {
+  if (event.ctrlKey) {
+    // Control-click: generate master in background
+    const item = data[activeType].find(item => item.name === name);
+    if (!item || item.master || generatingMasters.has(name)) return;
+    
+    // Mark as generating and update UI
+    generatingMasters.add(name);
+    const countCell = event.target;
+    const originalContent = countCell.innerHTML;
+    countCell.innerHTML = '<span style="color:#888">⏳</span>';
+    countCell.style.opacity = '0.7';
+    
+    // Generate master description in parallel - don't await, let it run independently
+    (async () => {
+      try {
+        const generateResponse = await fetch('api/master_generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: activeType, name: name })
+        });
+        
+        const res = await generateResponse.json();
+        
+        if (res.error) {
+          console.error('Error generating master for', name, ':', res.error);
+          // Restore original state
+          countCell.innerHTML = originalContent;
+          countCell.style.opacity = '1';
+          generatingMasters.delete(name);
+          return;
+        }
+        
+        // Auto-submit the generated description
+        await fetch('api/master_update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: activeType, name: name, desc: res.desc })
+        });
+        
+        // Success - update UI
+        countCell.innerHTML = '<span style="color:gold">&#9733;</span>';
+        countCell.style.opacity = '1';
+        generatingMasters.delete(name);
+        reloadData();
+        
+      } catch (err) {
+        console.error('Network error for', name, ':', err);
+        // Restore original state
+        countCell.innerHTML = originalContent;
+        countCell.style.opacity = '1';
+        generatingMasters.delete(name);
+      }
+    })();
+  } else {
+    // Normal click: show details
+    showEntityDetails(name);
+  }
+}
 </script>
 </body>
 </html>

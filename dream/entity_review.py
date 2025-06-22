@@ -47,19 +47,22 @@ def log_entity_operation(
         f.write(log_entry)
 
 
-def modify_entity_file(
-    parent: str,
-    day: str,
+def modify_entity_in_file(
+    file_path: str,
     etype: str,
     name: str,
     new_name: Optional[str] = None,
     operation: str = "remove",
-) -> None:
-    """Remove or rename an entity entry in a day's ``entities.md`` file."""
-
-    file_path = os.path.join(parent, day, "entities.md")
+    require_match: bool = True,
+) -> bool:
+    """Remove or rename an entity entry in an entities.md file.
+    
+    Returns True if a match was found and modified, False otherwise.
+    """
     if not os.path.isfile(file_path):
-        raise ValueError(f"entities.md not found for {day}")
+        if require_match:
+            raise ValueError(f"entities.md not found at {file_path}")
+        return False
 
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -73,16 +76,19 @@ def modify_entity_file(
         if t == etype and n == name:
             matches.append((idx, desc))
 
-    if len(matches) != 1:
-        raise ValueError(
-            f"Expected 1 match for '{etype}: {name}' in {file_path}, found {len(matches)}"
-        )
+    if len(matches) == 0:
+        if require_match:
+            raise ValueError(f"No match found for '{etype}: {name}' in {file_path}")
+        return False
+    
+    if len(matches) > 1:
+        raise ValueError(f"Multiple matches found for '{etype}: {name}' in {file_path}")
 
     idx, desc = matches[0]
     newline = "\n" if lines[idx].endswith("\n") else ""
-    if new_name is None:
+    if operation == "remove":
         del lines[idx]
-    else:
+    elif operation == "rename" and new_name:
         new_line = f"* {etype}: {new_name}"
         if desc:
             new_line += f" - {desc}"
@@ -90,7 +96,22 @@ def modify_entity_file(
 
     with open(file_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
+    
+    return True
 
+
+def modify_entity_file(
+    parent: str,
+    day: str,
+    etype: str,
+    name: str,
+    new_name: Optional[str] = None,
+    operation: str = "remove",
+) -> None:
+    """Remove or rename an entity entry in a day's ``entities.md`` file."""
+    file_path = os.path.join(parent, day, "entities.md")
+    modify_entity_in_file(file_path, etype, name, new_name, operation, require_match=True)
+    
     # Log the operation
     log_entity_operation(parent, operation, day, etype, name, new_name)
 
@@ -142,7 +163,7 @@ def generate_master_summary(info: Dict[str, Any], api_key: str) -> str:
         contents=[joined],
         config=types.GenerateContentConfig(
             temperature=0.3,
-            max_output_tokens=4096,
+            max_output_tokens=8192,
             system_instruction=prompt,
         ),
     )
@@ -264,6 +285,12 @@ class EntityHandler(SimpleHTTPRequestHandler):
         try:
             for day in days:
                 modify_entity_file(self.root, day, etype, name, new_name, action)
+            
+            # If renaming, also update the master entities.md file
+            if action == "rename" and new_name:
+                master_file_path = os.path.join(self.root, "entities.md")
+                modify_entity_in_file(master_file_path, etype, name, new_name, "rename", require_match=False)
+            
             self.reload_index()
         except Exception as e:
             self.send_response(400)
