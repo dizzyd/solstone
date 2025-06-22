@@ -206,10 +206,11 @@ function showType(type) {
 
   items.forEach(item => {
     const tr = document.createElement('tr');
+    const count = item.master ? '<span style="color:gold">&#9733;</span>' : item.dates.length;
     tr.innerHTML = `
-      <td class="count" onclick="showEntityDetails('${item.name}')">${item.dates.length}</td>
+      <td class="count" onclick="showEntityDetails('${item.name}')">${count}</td>
       <td class="name">${item.name}</td>
-      <td class="desc">${item.desc}</td>
+      <td class="desc">${item.primary}</td>
     `;
     tbody.appendChild(tr);
   });
