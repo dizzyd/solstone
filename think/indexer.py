@@ -3,6 +3,8 @@ import os
 import re
 from typing import Dict, List, Optional, Tuple
 
+MASTER_KEY = "__master__"
+
 DATE_RE = re.compile(r"\d{8}")
 ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
 
@@ -79,14 +81,32 @@ def save_cache(parent: str, cache: Dict[str, dict]) -> None:
 
 def build_index(cache: Dict[str, dict]) -> Dict[str, Dict[str, dict]]:
     index: Dict[str, Dict[str, dict]] = {}
-    for day, info in cache.items():
+    for key, info in cache.items():
+        is_master = info.get("master", False)
         for etype, name, desc in info.get("entries", []):
             type_map = index.setdefault(etype, {})
-            entry = type_map.setdefault(name, {"dates": [], "descriptions": {}})
-            if day not in entry["dates"]:
-                entry["dates"].append(day)
-            if desc:
-                entry["descriptions"][day] = desc
+            entry = type_map.setdefault(name, {"dates": [], "descriptions": {}, "master": False})
+            if is_master:
+                entry["master"] = True
+                if desc:
+                    entry["master_desc"] = desc
+            else:
+                if key not in entry["dates"]:
+                    entry["dates"].append(key)
+                if desc:
+                    entry["descriptions"][key] = desc
+
+    for type_map in index.values():
+        for info in type_map.values():
+            if info.get("master"):
+                info["primary"] = info.get("master_desc", "")
+            elif info["descriptions"]:
+                latest = max(info["descriptions"].keys())
+                info["primary"] = info["descriptions"].get(latest, "")
+            else:
+                info["primary"] = ""
+            info.pop("master_desc", None)
+
     return index
 
 
@@ -95,8 +115,27 @@ def get_entities(parent: str) -> Dict[str, Dict[str, dict]]:
     days = find_day_dirs(parent)
     changed = False
 
-    # remove days no longer present
+    # handle master file in parent directory
+    master_path = os.path.join(parent, "entities.md")
+    if os.path.isfile(master_path):
+        mtime = int(os.path.getmtime(master_path))
+        info = cache.get(MASTER_KEY)
+        if info is None or info.get("mtime") != mtime:
+            cache[MASTER_KEY] = {
+                "file": os.path.relpath(master_path, parent),
+                "mtime": mtime,
+                "entries": parse_entities(parent),
+                "master": True,
+            }
+            changed = True
+    elif MASTER_KEY in cache:
+        del cache[MASTER_KEY]
+        changed = True
+
+    # remove days no longer present (ignore master key)
     for day in list(cache.keys()):
+        if day == MASTER_KEY:
+            continue
         if day not in days:
             del cache[day]
             changed = True

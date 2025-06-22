@@ -118,18 +118,19 @@ class EntityHandler(SimpleHTTPRequestHandler):
             for etype, names in self.index.items():
                 data[etype] = []
                 for name, info in names.items():
-                    desc = info["descriptions"].get(info["dates"][0], "")
-                    # Format dates and descriptions with friendly dates
+                    primary = info.get("primary", "")
                     formatted_descriptions = {}
-                    for date, desc_text in info["descriptions"].items():
+                    for date, desc_text in info.get("descriptions", {}).items():
                         formatted_descriptions[format_date(date)] = desc_text
 
                     data[etype].append(
                         {
                             "name": name,
-                            "dates": [format_date(date) for date in sorted(info["dates"])],
-                            "raw_dates": sorted(info["dates"]),
-                            "desc": desc,
+                            "dates": [format_date(date) for date in sorted(info.get("dates", []))],
+                            "raw_dates": sorted(info.get("dates", [])),
+                            "desc": primary,
+                            "primary": primary,
+                            "master": info.get("master", False),
                             "descriptions": formatted_descriptions,
                         }
                     )
