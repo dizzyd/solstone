@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image
 
-from . import gemini_look
+import gemini_look
 
 
 class Describer:
@@ -25,13 +25,22 @@ class Describer:
             img_path = box_path.with_name(prefix + ".png")
             json_path = box_path.with_name(prefix + ".json")
             if not img_path.exists():
+                logging.info(f"Skipping {box_path}: no corresponding image file {img_path}")
                 continue
             if json_path.name in self.processed:
+                logging.info(f"Skipping {box_path}: already processed")
                 continue
             files.append((img_path, box_path, json_path))
+        
+        if files:
+            logging.info(f"Found {len(files)} files to process")
+        else:
+            logging.info("No new files found to process")
+        
         return files
 
     def describe(self, img_path: Path, box_path: Path) -> dict | None:
+        logging.info(f"Processing {img_path} with box {box_path}")
         box = json.loads(box_path.read_text())
         with Image.open(img_path) as im:
             return gemini_look.gemini_describe_region(
@@ -61,9 +70,10 @@ def main() -> None:
     parser.add_argument("watch_dir", type=Path, help="Directory containing screenshot diffs")
     parser.add_argument("-e", "--entities", type=Path, default=None, help="Optional entities file")
     parser.add_argument("-i", "--interval", type=int, default=5, help="Polling interval in seconds")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
     faulthandler.enable()
 
     gemini_look.initialize()
