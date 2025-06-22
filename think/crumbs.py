@@ -5,16 +5,17 @@ from __future__ import annotations
 import glob
 import json
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 
 class CrumbBuilder:
     """Builder for collecting metadata and writing `.crumbs` files."""
 
-    def __init__(self, generator: str, output: str) -> None:
-        self.generator = generator
-        self.output = output
+    def __init__(self, generator: str | None = None) -> None:
+        self.generator = generator or sys.argv[0] or "unknown"
         self._deps: List[Dict[str, Any]] = []
 
     def add_file(self, path: str) -> "CrumbBuilder":
@@ -39,15 +40,13 @@ class CrumbBuilder:
         self._deps.append({"type": "model", "name": name})
         return self
 
-    def commit(self, crumb_path: str | None = None) -> str:
-        if crumb_path is None:
-            base, _ = os.path.splitext(self.output)
-            crumb_path = base + ".crumbs"
+    def commit(self, output: str) -> str:
+        crumb_path = output + ".crumb"
 
         crumb = {
             "generator": self.generator,
-            "output": self.output,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "output": output,
+            "generated_at": datetime.now(datetime.timezone.utc).isoformat(),
             "dependencies": self._deps,
         }
 

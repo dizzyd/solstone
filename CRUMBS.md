@@ -6,7 +6,7 @@
 
 ```json
 {
-  "generator": "think.ponder_day",          // module or command that produced the file
+  "generator": "think/ponder_day.pl",          // module or command that produced the file
   "output": "20250524/ponder_day.md",       // path to the generated artifact
   "generated_at": "2025-05-24T12:00:01Z",   // ISO 8601 timestamp of generation
   "dependencies": [                          // list of inputs relied upon
