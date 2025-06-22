@@ -77,6 +77,7 @@ repair-audio-json = "think.repair_audio_json:main"
 see-repair = "think.see_repair:main"
 hear-repair = "think.hear_repair:main"
 entity-review = "dream.entity_review:main"
+meeting-calendar = "dream.meeting_calendar:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/sunstone"
@@ -91,7 +92,7 @@ include = ["hear*", "see*", "think*", "dream*"]
 hear = ["*.txt"]
 see = ["*.txt"]
 think = ["*.txt"]
-dream = ["entity_review/index.html"]
+dream = ["entity_review/index.html", "meeting_calendar/index.html"]
 
 # Development tools configuration
 [tool.black]
