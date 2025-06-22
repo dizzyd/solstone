@@ -33,7 +33,10 @@ def log_entity_operation(
     log_path = os.path.join(log_dir, "entity_review.log")
     timestamp = datetime.now().isoformat()
 
-    log_entry = f"{timestamp} {operation} {day} {etype}: {name}\n"
+    if new_name:
+        log_entry = f"{timestamp} {operation} {day} {etype}: {name} -> {new_name}\n"
+    else:
+        log_entry = f"{timestamp} {operation} {day} {etype}: {name}\n"
 
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(log_entry)
