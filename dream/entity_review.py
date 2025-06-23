@@ -118,6 +118,9 @@ def modify_entity_file(
 
 def update_master_entry(parent: str, etype: str, name: str, desc: str) -> None:
     """Add or update an entry in the master entities.md file."""
+    # Sanitize description to prevent newlines that would break formatting
+    desc = desc.replace('\n', ' ').replace('\r', ' ').strip()
+    
     file_path = os.path.join(parent, "entities.md")
     lines: List[str] = []
     if os.path.isfile(file_path):
@@ -260,6 +263,8 @@ class EntityHandler(SimpleHTTPRequestHandler):
             etype = payload.get("type")
             name = payload.get("name")
             desc = payload.get("desc", "")
+            # Sanitize description to prevent newlines that would break formatting
+            desc = desc.replace('\n', ' ').replace('\r', ' ').strip()
             update_master_entry(self.root, etype, name, desc)
             self.reload_index()
             self.send_response(200)
