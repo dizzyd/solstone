@@ -52,7 +52,7 @@ def find_missing(day_dir):
     for name in sorted(os.listdir(day_dir)):
         if name.endswith("_diff.png"):
             base = name[:-4]
-            # Check for existing box JSON (from screen_watch) and result JSON
+            # Check for existing box JSON (from scan) and result JSON
             box_json_path = os.path.join(day_dir, base + "_box.json")
             result_json_path = os.path.join(day_dir, base + ".json")
 

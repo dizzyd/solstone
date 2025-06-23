@@ -13,10 +13,10 @@ OUT_DIR=$1
 shift
 
 # designed to run in a loop based on given interval
-run_watch() {
+run_scan() {
   while true; do
     start_ts=$(date +%Y%m%d_%H%M%S)
-    python3 "$(dirname "$0")/see/screen_watch.py" "$OUT_DIR" --min 250 "$@"
+    python3 "$(dirname "$0")/see/scan.py" "$OUT_DIR" --min 250 "$@"
     sleep "$INTERVAL"
   done
 }
@@ -31,22 +31,22 @@ run_describe() {
   done
 }
 
-run_watch "$@" &
-WATCH_PID=$!
+run_scan "$@" &
+SCAN_PID=$!
 
 run_describe "$@" &
 DESCRIBE_PID=$!
 
 cleanup() {
   echo "Stopping processes..."
-  kill $WATCH_PID $DESCRIBE_PID 2>/dev/null
+  kill $SCAN_PID $DESCRIBE_PID 2>/dev/null
   wait
   exit 0
 }
 
 trap cleanup SIGINT SIGTERM
 
-echo "Started screen_watch.py (PID: $WATCH_PID) and describe.py (PID: $DESCRIBE_PID)"
+echo "Started scan.py (PID: $SCAN_PID) and describe.py (PID: $DESCRIBE_PID)"
 echo "Press Ctrl+C to stop both processes"
 
 wait

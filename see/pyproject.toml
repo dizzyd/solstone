@@ -16,5 +16,5 @@ dependencies = [
 ]
 
 [project.scripts]
-screen-watch = "see.screen_watch:main"
+screen-watch = "see.scan:main"
 screen-describe = "see.describe:main"
