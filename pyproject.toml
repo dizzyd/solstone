@@ -50,6 +50,7 @@ dependencies = [
     # Linux desktop integration
     "dbus-next",
     "PyGObject",
+    "watchdog",
 ]
 
 [project.optional-dependencies]
