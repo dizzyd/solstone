@@ -29,7 +29,7 @@ class Describer:
                 logging.info(f"Skipping {box_path}: no corresponding image file {img_path}")
                 continue
             if json_path.name in self.processed:
-                logging.info(f"Skipping {box_path}: already processed")
+                #logging.info(f"Skipping {box_path}: already processed")
                 continue
             files.append((img_path, box_path, json_path))
 

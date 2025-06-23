@@ -87,7 +87,7 @@ def gemini_describe_region(image, box, models=None, entities=None):
                 contents=[prompt, im_with_box, cropped],
                 config=types.GenerateContentConfig(
                     temperature=0.5,
-                    max_output_tokens=8192 * 2,
+                    max_output_tokens=8192 * 4,
                     response_mime_type="application/json",
                     system_instruction=_system_instruction,
                 ),
