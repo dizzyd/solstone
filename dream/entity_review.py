@@ -163,7 +163,7 @@ def generate_master_summary(info: Dict[str, Any], api_key: str) -> str:
         contents=[joined],
         config=types.GenerateContentConfig(
             temperature=0.3,
-            max_output_tokens=8192,
+            max_output_tokens=8192 * 2,
             system_instruction=prompt,
         ),
     )

@@ -18,13 +18,14 @@ class CrumbBuilder:
         self.generator = generator or sys.argv[0] or "unknown"
         self._deps: List[Dict[str, Any]] = []
 
-    def add_file(self, path: str) -> "CrumbBuilder":
+    def add_file(self, path: str | Path) -> "CrumbBuilder":
         """Record a single file dependency."""
-        mtime = int(os.path.getmtime(path))
-        self._deps.append({"type": "file", "path": path, "mtime": mtime})
+        path_str = str(path)
+        mtime = int(os.path.getmtime(path_str))
+        self._deps.append({"type": "file", "path": path_str, "mtime": mtime})
         return self
 
-    def add_files(self, paths: Iterable[str]) -> "CrumbBuilder":
+    def add_files(self, paths: Iterable[str | Path]) -> "CrumbBuilder":
         for p in paths:
             self.add_file(p)
         return self

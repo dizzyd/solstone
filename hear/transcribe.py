@@ -54,7 +54,7 @@ class Transcriber:
             ],
             config=types.GenerateContentConfig(
                 temperature=0.3,
-                max_output_tokens=8192,
+                max_output_tokens=8192  * 2,
                 response_mime_type="application/json",
                 system_instruction=self.prompt_text,
             ),
