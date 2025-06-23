@@ -446,7 +446,7 @@ window.onclick = function(event) {
 
 // Handle count click with control-click support for background master generation
 function handleCountClick(event, name) {
-  if (event.ctrlKey) {
+  if (event.ctrlKey || event.metaKey || event.altKey) {
     // Control-click: generate master in background
     const item = data[activeType].find(item => item.name === name);
     if (!item || item.master || generatingMasters.has(name)) return;
