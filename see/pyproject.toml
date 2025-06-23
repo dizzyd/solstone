@@ -13,6 +13,7 @@ dependencies = [
     "scikit-image",
     "dbus-next",
     "PyGObject",
+    "watchdog",
 ]
 
 [project.scripts]
