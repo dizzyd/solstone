@@ -8,7 +8,7 @@ def detect_border(
     *,
     min_length: int = 100,
     border: int = 3,
-    tolerance: int = 5,
+    tolerance: int = 0,
 ) -> tuple[int, int, int, int]:
     """Detect a coloured border and return the bounding box coordinates.
 
@@ -23,7 +23,7 @@ def detect_border(
     border : int, optional
         Expected thickness of the border in pixels, by default 3.
     tolerance : int, optional
-        Allowed deviation per channel for colour matching, by default 5.
+        Allowed deviation per channel for colour matching, by default 0.
 
     Returns
     -------
@@ -48,7 +48,7 @@ def detect_border(
 
     def first_last(groups):
         groups = np.split(groups, np.where(np.diff(groups) != 1)[0] + 1)
-        groups = [g for g in groups if g.size >= border]
+        groups = [g for g in groups if g.size == border]
         if not groups:
             raise ValueError("Border not thick enough")
         return groups[0][0], groups[-1][-1]

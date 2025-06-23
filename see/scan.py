@@ -63,8 +63,14 @@ def censor_border(img: Image.Image) -> Image.Image:
     """Black out the region inside a detected blue border."""
     try:
         y_min, x_min, y_max, x_max = detect_border(img, BLUE_BORDER)
-    except Exception:
+    except ValueError as e:
+        # Silently ignore when no border is detected or border not thick enough
         return img
+    except Exception as e:
+        # Log unexpected errors
+        log(f"Unexpected error detecting border: {e}", force=True)
+        return img
+    log(f"Detected border at: {y_min}, {x_min}, {y_max}, {x_max}")
     censored = img.copy()
     draw = ImageDraw.Draw(censored)
     draw.rectangle(((x_min, y_min), (x_max, y_max)), fill="black")
