@@ -18,13 +18,13 @@ from think.crumbs import CrumbBuilder
 
 
 class Describer:
-    def __init__(self, journal_dir: Path, poll_interval: int = 5, entities: Optional[Path] = None):
+    def __init__(self, journal_dir: Path, entities: Path, poll_interval: int = 5):
         """Watch the journal and describe new screenshot diffs for the current day."""
 
         self.journal_dir = journal_dir
         self.watch_dir: Optional[Path] = None
-        self.poll_interval = poll_interval
         self.entities = entities
+        self.poll_interval = poll_interval
         self.processed: set[str] = set()
         self.observer: Optional[Observer] = None
         self.executor = ThreadPoolExecutor()
@@ -36,9 +36,7 @@ class Describer:
             raise RuntimeError("Gemini API returned no result")
         json_path.write_text(json.dumps(result["result"], indent=2))
         logging.info(f"Described {img_path} -> {json_path}")
-        crumb_builder = CrumbBuilder().add_file(img_path).add_file(box_path)
-        if self.entities:
-            crumb_builder.add_file(self.entities)
+        crumb_builder = CrumbBuilder().add_file(img_path).add_file(box_path).add_file(self.entities)
         crumb_builder.add_model(result["model_used"])
         crumb_path = crumb_builder.commit(str(json_path))
         logging.info(f"Crumb saved to {crumb_path}")
@@ -64,9 +62,7 @@ class Describer:
         logging.info(f"Processing {img_path} with box {box_path}")
         box = json.loads(box_path.read_text())
         with Image.open(img_path) as im:
-            return gemini_look.gemini_describe_region(
-                im, box, entities=str(self.entities) if self.entities else None
-            )
+            return gemini_look.gemini_describe_region(im, box, entities=str(self.entities))
 
     def start(self):
         handler = PatternMatchingEventHandler("*_diff.png", ignore_directories=True)
@@ -128,7 +124,11 @@ def main() -> None:
 
     gemini_look.initialize()
 
-    describer = Describer(args.journal, args.interval, args.entities)
+    ent_path = args.entities or args.journal / "entities.md"
+    if not ent_path.is_file():
+        parser.error(f"entities file not found: {ent_path}")
+
+    describer = Describer(args.journal, ent_path, args.interval)
     describer.start()
 
 
