@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import faulthandler
 import json
 import logging
@@ -17,8 +18,11 @@ from think.crumbs import CrumbBuilder
 
 
 class Describer:
-    def __init__(self, day_dir: Path, poll_interval: int = 5, entities: Optional[Path] = None):
-        self.watch_dir = day_dir
+    def __init__(self, journal_dir: Path, poll_interval: int = 5, entities: Optional[Path] = None):
+        """Watch the journal and describe new screenshot diffs for the current day."""
+
+        self.journal_dir = journal_dir
+        self.watch_dir: Optional[Path] = None
         self.poll_interval = poll_interval
         self.entities = entities
         self.processed: set[str] = set()
@@ -79,24 +83,41 @@ class Describer:
 
         handler.on_created = on_created
 
-        self.observer = Observer()
-        self.observer.schedule(handler, str(self.watch_dir), recursive=True)
-        self.observer.start()
+        self.observer = None
+        current_day: Optional[str] = None
         try:
             while True:
+                today_str = datetime.datetime.now().strftime("%Y%m%d")
+                day_dir = self.journal_dir / today_str
+                if day_dir.exists() and (current_day != today_str):
+                    if self.observer:
+                        self.observer.stop()
+                        self.observer.join()
+                    self.observer = Observer()
+                    self.observer.schedule(handler, str(day_dir), recursive=True)
+                    self.observer.start()
+                    self.watch_dir = day_dir
+                    self.processed.clear()
+                    current_day = today_str
+                    logging.info(f"Watching {day_dir}")
                 time.sleep(self.poll_interval)
         except KeyboardInterrupt:
             pass
         finally:
-            self.observer.stop()
-            self.observer.join()
+            if self.observer:
+                self.observer.stop()
+                self.observer.join()
             self.executor.shutdown(wait=True)
 
 
 def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser(description="Describe screenshot diffs using Gemini")
-    parser.add_argument("day_dir", type=Path, help="Day directory containing screenshot diffs")
+    parser.add_argument(
+        "journal",
+        type=Path,
+        help="Journal directory containing daily screenshot folders",
+    )
     parser.add_argument("-e", "--entities", type=Path, default=None, help="Optional entities file")
     parser.add_argument("-i", "--interval", type=int, default=5, help="Polling interval in seconds")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
@@ -107,7 +128,7 @@ def main() -> None:
 
     gemini_look.initialize()
 
-    describer = Describer(args.day_dir, args.interval, args.entities)
+    describer = Describer(args.journal, args.interval, args.entities)
     describer.start()
 
 
