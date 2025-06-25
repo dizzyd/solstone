@@ -24,6 +24,8 @@ from silero_vad import get_speech_timestamps, load_silero_vad
 CHUNK_DURATION = 5
 SAMPLE_RATE = 16000
 CHANNELS = 1
+SYS_DELAY_MS = 100  # System audio delay in milliseconds to align with microphone
+MIN_SPEECH_SECONDS = 1.0  # Minimum speech duration to process/save audio
 
 
 class AudioRecorder:
@@ -55,8 +57,7 @@ class AudioRecorder:
         if len(audio) == 0:
             return audio
 
-        # clean edges
-        audio = np.nan_to_num(audio, nan=0.0, posinf=1e10, neginf=-1e10)
+        # Avoid division by zero in FFT processing
         audio = np.where(audio == 0, 1e-10, audio)
 
         # Apply noise reduction
@@ -129,7 +130,7 @@ class AudioRecorder:
             )
             if self.debug:
                 debug_filename = f"test_{label}.flac"
-                debug_data = self.create_flac_bytes([{"data": buffer_data}])
+                debug_data = self.create_flac_bytes(buffer_data)
                 with open(debug_filename, "wb") as f:
                     f.write(debug_data)
                 logging.debug(f"Saved debug file: {debug_filename}")
@@ -205,6 +206,11 @@ class AudioRecorder:
             else:
                 chunk_mono = chunk.flatten()
             buffer = np.concatenate((buffer, chunk_mono))
+        
+        # Clean up any NaN/Inf values
+        if buffer.size > 0:
+            buffer = np.nan_to_num(buffer, nan=0.0, posinf=1e10, neginf=-1e10)
+        
         return buffer
 
     def apply_echo_cancellation(self, mic_buffer, sys_buffer):
@@ -252,8 +258,49 @@ class AudioRecorder:
 
         return processed_mic
 
-    def create_flac_bytes(self, segments: list) -> bytes:
-        # Filter out segments with empty or invalid data arrays and then concatenate
+    def create_flac_bytes(self, left_data: np.ndarray, right_data: np.ndarray = None) -> bytes:
+        """Create FLAC bytes from audio data. If right_data is provided, creates stereo output with right channel delay alignment."""
+        if (left_data is None or left_data.size == 0) and (right_data is None or right_data.size == 0):
+            logging.warning("Audio data is empty. Returning empty bytes.")
+            return b""
+
+        if right_data is None or right_data.size == 0:
+            audio_data = (np.clip(left_data, -1.0, 1.0) * 32767).astype(np.int16)
+        else:
+            # Stereo output with system delay alignment
+            delay_samples = int(SYS_DELAY_MS * SAMPLE_RATE / 1000)
+            max_length = max(len(left_data), len(right_data) + delay_samples) if right_data.size > 0 else len(left_data)
+
+            left_channel = np.zeros(max_length, dtype=np.float32)
+            right_channel = np.zeros(max_length, dtype=np.float32)
+
+            left_channel[:len(left_data)] = left_data
+            right_channel[delay_samples:delay_samples + len(right_data)] = right_data
+
+            left_int16 = (np.clip(left_channel, -1.0, 1.0) * 32767).astype(np.int16)
+            right_int16 = (np.clip(right_channel, -1.0, 1.0) * 32767).astype(np.int16)
+
+            # Interleave channels for stereo output
+            audio_data = np.column_stack((left_int16, right_int16))
+
+        buf = io.BytesIO()
+        try:
+            sf.write(buf, audio_data, SAMPLE_RATE, format="FLAC")
+        except Exception as e:
+            logging.error(f"Error creating FLAC: {e}. Audio data shape: {audio_data.shape}, dtype: {audio_data.dtype}")
+            return b""
+
+        return buf.getvalue()
+
+    def process_segments_and_save(self, segments, suffix="audio"):
+        if not segments:
+            return 0
+        total_seconds = sum([len(seg["data"]) / SAMPLE_RATE for seg in segments])
+        if total_seconds < MIN_SPEECH_SECONDS:
+            logging.info(f"Skipping processing of {total_seconds:.1f} seconds of audio.")
+            return total_seconds
+        
+        # Consolidate segments into a single audio array
         combined_data_list = []
         for seg in segments:
             data = seg.get("data")
@@ -261,54 +308,17 @@ class AudioRecorder:
                 combined_data_list.append(data)
 
         if not combined_data_list:
-            logging.warning(
-                "No valid audio data in segments to create FLAC. Returning empty bytes."
-            )
-            return b""
+            logging.warning("No valid audio data in segments to save.")
+            return 0
 
-        combined = np.concatenate(combined_data_list)
+        combined_audio = np.concatenate(combined_data_list)
+        if combined_audio.size == 0:
+            logging.warning("Concatenated audio data is empty.")
+            return 0
 
-        if combined.size == 0:  # Minimal check for empty array after concatenation
-            logging.warning("Concatenated audio data is empty. Returning empty bytes.")
-            return b""
-
-        # Minimal fix for NaN/Inf before clipping and conversion
-        combined = np.nan_to_num(combined, nan=0.0, posinf=1.0, neginf=-1.0)
-
-        # Convert to int16 format
-        chunk_int16 = (np.clip(combined, -1.0, 1.0) * 32767).astype(np.int16)
-
-        # Write to an in-memory FLAC buffer
-        buf = io.BytesIO()
-        # Ensure C-contiguous array and correct shape for sf.write
-        audio_data = np.ascontiguousarray(chunk_int16.reshape(-1, CHANNELS))
-        logging.debug(
-            f"Attempting sf.write. audio_data shape: {audio_data.shape}, dtype: {audio_data.dtype}, "
-            f"min: {np.min(audio_data) if audio_data.size > 0 else 'N/A'}, "
-            f"max: {np.max(audio_data) if audio_data.size > 0 else 'N/A'}, "
-            f"is_contiguous: {audio_data.flags.c_contiguous}"
-        )
-        try:
-            sf.write(buf, audio_data, SAMPLE_RATE, format="FLAC")
-        except Exception as e:
-            logging.error(
-                f"Error during sf.write: {e}. Audio data shape: {audio_data.shape}, dtype: {audio_data.dtype}"
-            )
-            return b""
-        return buf.getvalue()
-
-    def process_segments_and_save(self, segments, suffix=None):
-        if not segments:
-            return
-        total_seconds = sum([len(seg["data"]) / SAMPLE_RATE for seg in segments])
-        if total_seconds < 3:
-            logging.info(f"Skipping processing of {total_seconds:.1f} seconds of audio.")
-            return
-        flac_bytes = self.create_flac_bytes(segments)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        if suffix:
-            timestamp += suffix
-        self.save_flac(timestamp, flac_bytes)
+        flac_bytes = self.create_flac_bytes(combined_audio)
+        self.save_flac(flac_bytes, suffix)
+        return total_seconds
 
     def process_buffer(self, buffer, new_data, label):
         merged = np.concatenate((buffer, new_data)) if buffer.size > 0 else new_data
@@ -322,34 +332,40 @@ class AudioRecorder:
             time.sleep(self.timer_interval)
 
             sys_new = self.get_buffer(self.sys_queue)
-            sys_segments, sys_stash = self.process_buffer(sys_stash, sys_new, "sys")
             mic_new = self.get_buffer(self.mic_queue)
+
+            sys_segments, sys_stash = self.process_buffer(sys_stash, sys_new, "sys")
 
             system_muted = self.is_system_muted(sys_new)
             logging.info(f"System audio mute status: {'Muted' if system_muted else 'Not muted'}")
 
             if system_muted:
                 mic_segments, mic_stash = self.process_buffer(mic_stash, mic_new, "mic")
-                self.process_segments_and_save(mic_segments, suffix="_mic")
-                self.process_segments_and_save(sys_segments, suffix="_sys")
+                if self.process_segments_and_save(mic_segments, "mic_audio") > MIN_SPEECH_SECONDS:
+                    self.save_flac(self.create_flac_bytes(mic_new), suffix="mic_raw")
+                if self.process_segments_and_save(sys_segments, "sys_audio") > MIN_SPEECH_SECONDS:
+                    self.save_flac(self.create_flac_bytes(sys_new), suffix="sys_raw")
             else:
                 mic_processed = self.apply_echo_cancellation(mic_new, sys_new)
                 mic_segments, mic_stash = self.process_buffer(mic_stash, mic_processed, "mic")
                 segments_all = mic_segments + sys_segments
                 if segments_all:
                     segments_all.sort(key=lambda seg: seg["offset"])  # weave together in time
-                    self.process_segments_and_save(segments_all)
+                    if self.process_segments_and_save(segments_all) > MIN_SPEECH_SECONDS:
+                        self.save_flac(self.create_flac_bytes(mic_new, sys_new), suffix="raw")
             logging.info(
                 f"Found {len(mic_segments)} microphone and {len(sys_segments)} system segments."
             )
 
-    def save_flac(self, timestamp, flac_bytes):
+    def save_flac(self, flac_bytes, suffix="_audio"):
         """Save the audio to a dated directory."""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
         date_part, time_part = timestamp.split("_", 1)
         day_dir = os.path.join(self.save_dir, date_part)
         os.makedirs(day_dir, exist_ok=True)
 
-        flac_filepath = os.path.join(day_dir, f"{time_part}_audio.flac")
+        flac_filepath = os.path.join(day_dir, f"{time_part}_{suffix}.flac")
         with open(flac_filepath, "wb") as f:
             f.write(flac_bytes)
         logging.info(f"Saved audio to {flac_filepath}")
