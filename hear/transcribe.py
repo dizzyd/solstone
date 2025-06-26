@@ -5,7 +5,6 @@ import io
 import json
 import logging
 import os
-import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -16,19 +15,17 @@ import soundfile as sf
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from noisereduce import reduce_noise
-from pyaec import Aec
-from scipy.fft import irfft, rfft
 from silero_vad import get_speech_timestamps, load_silero_vad
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from think.crumbs import CrumbBuilder
 
+from .merge_best import merge_best
+
 # Constants
 MODEL = "gemini-2.5-pro"
 SAMPLE_RATE = 16000
-SYS_DELAY_MS = 100
 MIN_SPEECH_SECONDS = 1.0
 
 
@@ -56,31 +53,11 @@ class Transcriber:
             except Exception as e:  # pragma: no cover - best effort
                 logging.warning(f"Failed to load voice sample: {e}")
         self.model = load_silero_vad()
-        self.min_freq = 300
-        self.max_freq = 3400
-        self.boost_factor = 2
-        self.frame_size = int(0.02 * SAMPLE_RATE)
-        self.filter_length = int(SAMPLE_RATE * 0.2)
-        self.aec = Aec(self.frame_size, self.filter_length, SAMPLE_RATE, True)
-        self.mic_stash = np.array([], dtype=np.float32)
-        self.sys_stash = np.array([], dtype=np.float32)
+        self.merged_stash = np.array([], dtype=np.float32)
         self.processed: set[str] = set()
         self.observer: Optional[Observer] = None
         self.executor = ThreadPoolExecutor()
         self.attempts: dict[str, int] = {}
-
-    def enhance_voice(self, audio: np.ndarray) -> np.ndarray:
-        if len(audio) == 0:
-            return audio
-        audio = np.nan_to_num(audio, nan=0.0, posinf=1e10, neginf=-1e10)
-        audio = np.where(audio == 0, 1e-10, audio)
-        audio = reduce_noise(y=audio, sr=SAMPLE_RATE)
-        X = rfft(audio)
-        freqs = np.fft.rfftfreq(len(audio), d=1 / SAMPLE_RATE)
-        vocal_mask = (freqs >= self.min_freq) & (freqs <= self.max_freq)
-        X[vocal_mask] *= self.boost_factor
-        enhanced = irfft(X)
-        return enhanced.astype(np.float32)
 
     def detect_speech(self, label: str, buffer_data: np.ndarray):
         if buffer_data is None or len(buffer_data) == 0:
@@ -118,63 +95,6 @@ class Transcriber:
             logging.error(f"Error in detect_speech for {label}: {e}")
             return [], np.array([], dtype=np.float32)
 
-    @staticmethod
-    def calculate_rms(audio_buffer: np.ndarray) -> float:
-        if len(audio_buffer) == 0:
-            return 0.0
-        return float(np.sqrt(np.mean(np.square(audio_buffer))))
-
-    @staticmethod
-    def normalize_audio(audio: np.ndarray, target_rms: float) -> np.ndarray:
-        if len(audio) == 0 or target_rms == 0:
-            return audio
-        current_rms = Transcriber.calculate_rms(audio)
-        if current_rms == 0:
-            return audio
-        gain_factor = target_rms / current_rms
-        return audio * gain_factor
-
-    def is_system_muted(self, audio_buffer: np.ndarray | None = None) -> bool:
-        try:
-            result = subprocess.run(
-                ["pactl", "get-sink-mute", "@DEFAULT_SINK@"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            pactl_muted = "Mute: yes" in result.stdout
-        except subprocess.SubprocessError as e:
-            logging.error(f"Error checking system mute status: {e}")
-            pactl_muted = False
-
-        silent = False
-        if audio_buffer is not None and len(audio_buffer) > 0:
-            rms = self.calculate_rms(audio_buffer)
-            silent = rms < 0.0001
-            if silent:
-                logging.info(f"System audio silent (RMS: {rms:.6f})")
-
-        return pactl_muted or silent
-
-    def apply_echo_cancellation(self, mic_buffer: np.ndarray, sys_buffer: np.ndarray) -> np.ndarray:
-        min_length = min(len(mic_buffer), len(sys_buffer))
-        if min_length == 0:
-            return mic_buffer
-        mic_int16 = (mic_buffer * 32767).astype(np.int16)
-        sys_int16 = (sys_buffer * 32767).astype(np.int16)
-        processed_chunks = []
-        for i in range(0, min_length, self.frame_size):
-            mic_frame = mic_int16[i : i + self.frame_size]
-            sys_frame = sys_int16[i : i + self.frame_size]
-            if min(len(mic_frame), len(sys_frame)) < self.frame_size:
-                processed_chunks.append(mic_frame)
-            else:
-                processed_frame = self.aec.cancel_echo(mic_frame, sys_frame)
-                processed_chunks.append(processed_frame)
-        processed_mic = np.concatenate(processed_chunks).astype(np.float32) / 32767.0
-        processed_mic = self.enhance_voice(processed_mic)
-        return processed_mic
-
     def create_flac_bytes(self, left_data: np.ndarray) -> bytes:
         if left_data is None or left_data.size == 0:
             return b""
@@ -210,26 +130,17 @@ class Transcriber:
         data, sr = sf.read(raw_path, dtype="float32")
         if sr != SAMPLE_RATE:
             logging.warning(f"Unexpected sample rate {sr} in {raw_path}")
+
         if data.ndim == 1:
-            mic_new = data
-            sys_new = np.array([], dtype=np.float32)
+            merged = data
         else:
             mic_new = data[:, 0]
             sys_new = data[:, 1]
+            merged = merge_best(sys_new, mic_new, SAMPLE_RATE)
 
-        sys_segments, self.sys_stash = self.process_buffer(self.sys_stash, sys_new, "sys")
-        system_muted = self.is_system_muted(sys_new)
-        if system_muted:
-            mic_segments, self.mic_stash = self.process_buffer(self.mic_stash, mic_new, "mic")
-            segments_all = mic_segments + sys_segments
-        else:
-            mic_processed = self.apply_echo_cancellation(mic_new, sys_new)
-            mic_segments, self.mic_stash = self.process_buffer(self.mic_stash, mic_processed, "mic")
-            segments_all = mic_segments + sys_segments
-        if segments_all:
-            segments_all.sort(key=lambda seg: seg["offset"])
+        segments, self.merged_stash = self.process_buffer(self.merged_stash, merged, "mix")
         audio_path = raw_path.with_name(raw_path.name.replace("_raw.flac", "_audio.flac"))
-        seconds = self.process_segments_and_save(segments_all, audio_path)
+        seconds = self.process_segments_and_save(segments, audio_path)
         if seconds > 0:
             return audio_path
         raw_path.unlink(missing_ok=True)
