@@ -22,7 +22,7 @@ from watchdog.observers import Observer
 from think.crumbs import CrumbBuilder
 
 # Constants
-MODEL = "gemini-2.5-pro"
+MODEL = "gemini-2.5-flash"
 SAMPLE_RATE = 16000
 MIN_SPEECH_SECONDS = 1.0
 
@@ -223,7 +223,7 @@ class Transcriber:
         contents = [entities_text]
         if self.voice_sample_bytes:
             contents.append(
-                "Here's a voice sample for Jeremie in case you hear him, but you must be very confident that the voice you hear matches him (there's often many other speakers, and some sound like him), then only if you are sure, you can tag his sections with his name as the speaker."
+                "Here's a voice sample for Jeremie to help identify him if he is speaking, but you must be VERY confident that the voice you hear matches him (there's often many other speakers, and some sound like him), then only if you are absolutely sure you can tag his sections with his name as the speaker."
             )
             contents.append(
                 types.Part.from_bytes(data=self.voice_sample_bytes, mime_type="audio/flac")
@@ -370,14 +370,6 @@ def main():
         transcriber.repair_day(args.repair)
     else:
         transcriber.start()
-
-
-if __name__ == "__main__":
-    main()
-        transcriber.repair_day(args.repair)
-    else:
-        transcriber.start()
-
 
 if __name__ == "__main__":
     main()
