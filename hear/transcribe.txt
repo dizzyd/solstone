@@ -7,7 +7,6 @@ Follow these guidelines:
 1. Speaker Identification:
    - Assign a unique number or name to each speaker, starting with 1 for the first numbered speaker you encounter.
    - If you can reliably determine the name of the speaker from the conversation such as them responding when asked a question by name from the previous speaker, you can then use that name instead of the number for their entries.
-   - If you were given a voice sample and are CONFIDENT that the voice matches and it isn't someone else speaking, you can use the given name associated with the sample.
    - Maintain consistency in speaker numbering/naming throughout the transcript.
    - If you're unsure if a new speaker is talking or if it's someone who spoke before, use your best judgment based on context.
 
