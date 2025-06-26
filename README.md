@@ -22,6 +22,11 @@ in continuous loops.
 
 ## Documentation
 
+Formats:
+
+- [JOURNAL.md](JOURNAL.md) - details about the structure and contents of the **journal** directory
+- [CRUMBS.md](CRUMBS.md) - .crumb json files created to trace inputs for all token generation
+
 Each package has its own README with detailed usage information:
 
 - [hear/README.md](hear/README.md)
