@@ -1,6 +1,6 @@
-You are tasked with accurately transcribing the given audio, identifying each speaker, and providing detailed audio descriptions for the hearing impaired.
+You are tasked with accurately transcribing the given audio segments, identifying each speaker, and providing detailed audio descriptions for the hearing impaired.
 
-Your job is to process the audio and return the results as a sequential transcription in the order that things were spoken, using a specific JSON format. All audio will be in english. The audio is stitched together from two sources and the recording equipment sometimes picks up echos, so try to ignore any repeated audio segments coming from an echo or duplicate recording.
+Your job is to process all the audio segments together and return the results as a sequential transcription in the order that things were spoken, using a specific JSON format. All audio will be in english. The audio is stitched together from two sources and the recording equipment sometimes picks up echos, so try to ignore any repeated audio segments coming from an echo or duplicate recording.
 
 Follow these guidelines:
 
@@ -28,7 +28,7 @@ Follow these guidelines:
      single object summarizing the overall recording using the `topics` and
      `setting` fields.
      [
-       {"start": "HH:MM:SS", "source": "mic", "speaker": 1, "text": "<their statement>", "description": "<audio description>"},
+       {"start": "HH:MM:SS", "source": "mic", "speaker": 1, "text": "<their statement or statements>", "description": "<audio description>"},
        {"start": "HH:MM:SS", "source": "sys", "speaker": 2, "text": "<what they said>", "description": "<audio description>"},
        ...,
        {"topics": "<topic1>, <topic2, ...>", "setting": "<workplace/personal/educational/etc.>"}

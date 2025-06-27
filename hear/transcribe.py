@@ -316,18 +316,24 @@ class Transcriber:
 
         logging.info(f"Repairing day {date_str} in {day_dir}")
 
-        raw_files = list(day_dir.glob("*_raw.flac"))
+        repair_files = []
+        repair_files.extend(day_dir.glob("*_raw.flac"))
+        repair_files.extend(day_dir.glob("*_audio.flac"))
+        repair_files.extend(day_dir.glob("*_audio.ogg"))
+        
         missing = []
-        for raw_path in raw_files:
-            json_path = raw_path.with_name(raw_path.name.replace("_raw.flac", "_audio.json"))
+        for audio_path in repair_files:
+            # Generate JSON path: change extension to .json and replace _raw with _audio
+            json_name = audio_path.stem.replace("_raw", "_audio") + ".json"
+            json_path = audio_path.with_name(json_name)
             if not json_path.exists():
-                missing.append(raw_path)
+                missing.append(audio_path)
 
-        logging.info(f"Found {len(missing)} raw files missing transcripts")
+        logging.info(f"Found {len(missing)} audio files missing transcripts")
 
-        for raw_path in missing:
-            logging.info(f"Processing raw file: {raw_path}")
-            self._handle_raw(raw_path)
+        for audio_path in missing:
+            logging.info(f"Processing audio file: {audio_path}")
+            self._handle_raw(audio_path)
 
     def start(self):
         handler = PatternMatchingEventHandler(patterns=["*_raw.flac"], ignore_directories=True)
