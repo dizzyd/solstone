@@ -55,40 +55,50 @@ async def watch_windows() -> None:
     titles = [props.get("title") for props in windows.values()]
     print("[shell] Existing windows:", titles)
 
-    if "WindowAdded" in intro._signals:
+    # Try to subscribe to individual window events, fall back to general changes
+    try:
         intro.on_window_added(lambda wid, props: print("[shell] Window added", props.get("title")))
         intro.on_window_removed(lambda wid: print("[shell] Window removed", wid))
         intro.on_window_changed(
             lambda wid, props: print("[shell] Window changed", props.get("title"))
         )
-    else:
+        print("[shell] Watching individual window events")
+    except:
         intro.on_windows_changed(lambda: print("[shell] Windows list changed"))
+        print("[shell] Watching general window changes")
 
     await bus.wait_for_disconnect()
 
 
 async def watch_notifications() -> None:
     bus = await MessageBus().connect()
-    await bus.call(
-        Message(
-            destination="org.freedesktop.DBus",
-            path="/org/freedesktop/DBus",
-            interface="org.freedesktop.DBus",
-            member="AddMatch",
-            signature="s",
-            body=["type='method_call',interface='org.freedesktop.Notifications',member='Notify'"],
-        )
-    )
 
-    while True:
-        msg = await bus._messages.get()
-        if (
-            msg.message_type is MessageType.METHOD_CALL
-            and msg.interface == "org.freedesktop.Notifications"
-            and msg.member == "Notify"
-        ):
-            app, _nid, _icon, summary, body, *_ = msg.body
-            print(f"[notify] {app}: {summary} -- {body}")
+    try:
+        introspection = await bus.introspect("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+        proxy_obj = bus.get_proxy_object("org.freedesktop.Notifications", "/org/freedesktop/Notifications", introspection)
+        notifications = proxy_obj.get_interface("org.freedesktop.Notifications")
+
+        # Try to subscribe to available notification signals
+        try:
+            notifications.on_notification_closed(
+                lambda nid, reason: print(f"[notify] Notification {nid} closed (reason: {reason})")
+            )
+        except:
+            pass
+
+        try:
+            notifications.on_action_invoked(
+                lambda nid, action: print(f"[notify] Action {action} invoked on notification {nid}")
+            )
+        except:
+            pass
+
+        print("[notify] Watching for notifications...")
+        await bus.wait_for_disconnect()
+
+    except Exception as e:
+        print(f"[notify] Could not watch notifications: {e}")
+        await bus.wait_for_disconnect()
 
 
 async def main() -> None:
