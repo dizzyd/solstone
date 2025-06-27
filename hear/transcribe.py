@@ -281,8 +281,8 @@ class Transcriber:
 
     def _transcribe(self, segments: List[Dict[str, object]]) -> dict:
         user_prompt = (
-            "Process the provided audio now and output your professional "
-            "accurate transcription in the specified JSON format."
+            "Process the provided audio clips now and output your professional "
+            "accurate transcription in the specified JSON format, each clip may contain one or more speakers."
         )
         entities_text = self.entities_path.read_text().strip()
         contents = [entities_text, user_prompt]
