@@ -3,7 +3,11 @@ import os
 import re
 from typing import Dict, List, Optional, Tuple
 
+from chromadb import PersistentClient
+from chromadb.utils import embedding_functions
+
 TOP_KEY = "__top__"
+CHROMA_DIR = "chroma"
 
 DATE_RE = re.compile(r"\d{8}")
 ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
@@ -160,9 +164,111 @@ def scan_entities(journal: str, cache) -> Dict[str, Dict[str, dict]]:
 
     return changed
 
+
 def get_entities(journal: str) -> Dict[str, Dict[str, dict]]:
     cache = load_cache(journal)
     if scan_entities(journal, cache):
         save_cache(journal, cache)
 
     return build_entities(cache)
+
+
+def get_ponder_collection(journal: str):
+    """Return the Chroma collection for ponder files."""
+    db_path = os.path.join(journal, CHROMA_DIR)
+    os.makedirs(db_path, exist_ok=True)
+    embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+    client = PersistentClient(path=db_path)
+    return client.get_or_create_collection("ponders", embedding_function=embed)
+
+
+def find_ponder_files(journal: str) -> Dict[str, str]:
+    """Map relative ponder file path to full path."""
+    files: Dict[str, str] = {}
+    for day, day_path in find_day_dirs(journal).items():
+        for name in os.listdir(day_path):
+            if name.startswith("ponder_") and name.endswith(".md"):
+                rel = os.path.join(day, name)
+                files[rel] = os.path.join(day_path, name)
+    return files
+
+
+def scan_ponders(journal: str, cache: Dict[str, dict]) -> bool:
+    """Index ponder markdown files into Chroma if they changed."""
+    collection = get_ponder_collection(journal)
+    p_cache = cache.setdefault("ponders", {})
+    files = find_ponder_files(journal)
+    changed = False
+
+    for rel, path in files.items():
+        mtime = int(os.path.getmtime(path))
+        if p_cache.get(rel) != mtime:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+            day = os.path.basename(os.path.dirname(path))
+            collection.upsert(
+                documents=[text],
+                ids=[rel],
+                metadatas=[{"day": day, "ponder": os.path.basename(path)}],
+            )
+            p_cache[rel] = mtime
+            changed = True
+
+    for rel in list(p_cache.keys()):
+        if rel not in files:
+            collection.delete(ids=[rel])
+            del p_cache[rel]
+            changed = True
+
+    return changed
+
+
+def search_ponders(journal: str, query: str, n_results: int = 5) -> List[Dict[str, str]]:
+    """Search the ponder collection and return results."""
+    collection = get_ponder_collection(journal)
+    res = collection.query(query_texts=[query], n_results=n_results)
+    ids = res.get("ids", [[]])[0]
+    docs = res.get("documents", [[]])[0]
+    metas = res.get("metadatas", [[]])[0]
+    dists = res.get("distances", [[]])[0]
+    results = []
+    for i, doc, meta, dist in zip(ids, docs, metas, dists):
+        results.append({"id": i, "text": doc, "metadata": meta, "distance": dist})
+    return results
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Index ponder markdown files")
+    parser.add_argument("journal", help="Path to the journal directory")
+    parser.add_argument(
+        "--rescan",
+        action="store_true",
+        help="Scan journal and update the index before searching",
+    )
+    args = parser.parse_args()
+
+    cache = load_cache(args.journal)
+    if args.rescan:
+        changed = scan_entities(args.journal, cache)
+        changed |= scan_ponders(args.journal, cache)
+        if changed:
+            save_cache(args.journal, cache)
+
+    while True:
+        try:
+            query = input("search> ").strip()
+        except EOFError:
+            break
+        if not query:
+            break
+        results = search_ponders(args.journal, query, 5)
+        for idx, r in enumerate(results, 1):
+            meta = r.get("metadata", {})
+            snippet = r["text"].splitlines()[0][:80]
+            print(f"{idx}. {meta.get('day')} {meta.get('ponder')}: {snippet}")
+
+
+if __name__ == "__main__":
+    main()
