@@ -51,6 +51,7 @@ dependencies = [
     "dbus-next",
     "PyGObject",
     "watchdog",
+    "chromadb",
 ]
 
 [project.optional-dependencies]
