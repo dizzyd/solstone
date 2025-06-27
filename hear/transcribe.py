@@ -297,7 +297,7 @@ class Transcriber:
             model=MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
-                temperature=0.2,
+                temperature=0.1,
                 max_output_tokens=8192 * 2,
                 response_mime_type="application/json",
                 system_instruction=self.prompt_text,

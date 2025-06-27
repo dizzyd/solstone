@@ -5,20 +5,19 @@ Your job is to process all the audio segments together and return the results as
 Follow these guidelines:
 
 1. Speaker Identification:
-   - Assign a unique number or name to each speaker, starting with 1 for the first numbered speaker you encounter.
-   - If you can reliably determine the name of the speaker from the conversation such as them responding when asked a question by name from the previous speaker, you can then use that name instead of the number for their entries.
-   - Maintain consistency in speaker numbering/naming throughout the transcript.
-   - If you're unsure if a new speaker is talking or if it's someone who spoke before, use your best judgment based on context.
+   - Assign a unique number to EACH speaker, starting with 1 for the first speaker you encounter based on their voice, and always increment whenever you hear a new voice/speaker.
+   - Maintain consistency in speaker numbering throughout the transcript.
+   - If you're unsure if it's a new speaker is talking or if it's someone who spoke before, use your best judgment based on context.
 
 2. Audio Descriptions:
-   - For each statement, provide detailed descriptions of the speaker's tone, vocal qualities, and any background sounds.
-   - Include descriptions that would help hearing impaired individuals understand the audio context, such as "[speaking softly]", "[voice trembling]", "[background music intensifies]", etc.
-   - Describe emotional tones with specific terms like "[angry tone]", "[excited voice]", "[sarcastic delivery]", etc.
-   - Include any sound descriptions from the speaker inline in the transcript using brackets, such as "[laughing]", "[sigh]", "[door slams]", "[phone rings]"
-   - Upper case any words that the speaker said with emphasis, like "I said YOU do it"
+   - For each statement, provide short descriptions of the speaker's tone or any notable vocal qualities.
+   - Include brief descriptions that would help hearing impaired individuals understand the audio context, such as "speaking softly", "voice trembling", "music playing", etc.
+   - Describe emotional tones with specific terms like "angry tone", "excited voice", "sarcastic delivery", etc.
+   - Include any sound descriptions from the speaker inline in the transcripted text where they occur using brackets, such as "[laughing]", "[sigh]", "[sound effect]"
+   - Upper case any words that the speaker said with emphasis in the text, like "I said YOU do it"
 
-3. Audio Source Identification:
-   - Identify the most likely source of the audio (e.g., podcast, interview, meeting, lecture, conversation, TV show, movie, etc.)
+3. Audio Setting:
+   - Identify the most likely setting of the audio (e.g., workplace, podcast, interview, meeting, lecture, personal, news, etc.)
    - Consider the format, context, and audio quality to make your determination
 
 4. Output Format:
@@ -28,8 +27,8 @@ Follow these guidelines:
      single object summarizing the overall recording using the `topics` and
      `setting` fields.
      [
-       {"start": "HH:MM:SS", "source": "mic", "speaker": 1, "text": "<their statement or statements>", "description": "<audio description>"},
-       {"start": "HH:MM:SS", "source": "sys", "speaker": 2, "text": "<what they said>", "description": "<audio description>"},
+       {"start": "HH:MM:SS", "source": "mic", "speaker": 1, "text": "<their statement or statements>", "description": "<short audio description>"},
+       {"start": "HH:MM:SS", "source": "sys", "speaker": 2, "text": "<what they said>", "description": "<short audio description>"},
        ...,
        {"topics": "<topic1>, <topic2, ...>", "setting": "<workplace/personal/educational/etc.>"}
      ]
@@ -37,28 +36,26 @@ Follow these guidelines:
 
 5. Processing:
    - Go through the transcript sequentially, identifying speakers and their statements.
-   - Group consecutive statements by the same speaker into a single JSON object.
-   - Start a new JSON object when there's a change in speaker.
+   - Group consecutive statements by the same speaker into a single text string.
+   - Only start a new JSON object when there's a change in speaker or long delay between the last statement.
    - Add a final object with the `topics` and `setting` fields to summarize the recording.
 
 Here are two examples of correct output format:
 
 Example 1:
 [
-  {"start": "00:00:02", "source": "mic", "speaker": 1, "text": "Hello, how are you today John?", "description": "[clear throat] [friendly tone] [speaking at normal volume]"},
-  {"start": "00:00:05", "source": "sys", "speaker": "John", "text": "I'm doing well, thanks for asking. How about you?", "description": "[calm voice] [slight echo in room]"},
-  {"start": "00:00:09", "source": "mic", "speaker": 1, "text": "I'm great! The weather is beautiful.", "description": "[laughs] [excited voice] [birds chirping in background]"},
+  {"start": "00:00:02", "source": "mic", "speaker": 1, "text": "Hello [clears throat], how are you today John?", "description": "friendly tone"},
+  {"start": "00:00:05", "source": "sys", "speaker": 2, "text": "I'm doing well, thanks for asking. How about you?", "description": "calm voice, inquisitive sounding"},
+  {"start": "00:00:09", "source": "mic", "speaker": 1, "text": "I'm great! [laughs] The weather is beautiful.", "description": "excited voice, birds chirping"},
   {"topics": ["greetings", "weather", "small talk"], "setting": "personal"}
 ]
 
 Example 2:
 [
-  {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "I can't believe you forgot to buy milk again!", "description": "[frustrated tone] [voice raised] [dishes clattering in background]"},
-  {"start": "00:00:05", "source": "sys", "speaker": 2, "text": "I'm sorry, I'll go get some now. Is there anything else we need?", "description": "[sigh] [apologetic tone] [keys jingling]"},
-  {"start": "00:00:10", "source": "mic", "speaker": 1, "text": "No, just the milk. PLEASE don't forget this time.", "description": "[stern voice] [emphasis on 'please'] [door closing]"},
+  {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "I can't believe you forgot to buy milk again!", "description": "frustrated tone, voice raised"},
+  {"start": "00:00:05", "source": "sys", "speaker": 2, "text": "I'm sorry, [sigh] I'll go get some now. Is there anything else we need?", "description": "apologetic tone, keys jingling"},
+  {"start": "00:00:10", "source": "mic", "speaker": 1, "text": "No, just the milk. PLEASE don't forget this time.", "description": "stern voice"},
   {"topics": ["groceries", "household responsibilities", "reminders"], "setting": "personal"}
 ]
-
-Remember to maintain consistency in speaker naming or numbering throughout the entire transcript. If Speaker 2 is identified as John by context in the beginning, ensure that all of John's statements are attributed to them throughout the transcription.
 
 Focus on high quality transcription and audio descriptions that would help hearing impaired individuals understand the full context, including tones, background sounds, and other audio cues. Review and re-check your text against the audio carefully, remove duplications from echos or double-pickups, and sometimes the audio may be very short or a single word or clip and that's ok!
