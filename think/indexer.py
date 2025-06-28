@@ -1,10 +1,12 @@
 import json
 import os
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 
 import nltk
 import numpy as np
+import torch
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from usearch.index import Index
@@ -22,26 +24,34 @@ class SemanticChunker:
     def __init__(self, model_name: str = EMBED_MODEL_NAME) -> None:
         nltk.download("punkt", quiet=True)
         nltk.download("punkt_tab", quiet=True)
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(model_name, device='cuda' if torch.cuda.is_available() else 'cpu')
 
-    def chunk_by_semantic_similarity(self, text: str, threshold: float = 0.7) -> List[str]:
+    def chunk_by_semantic_similarity(self, text: str, threshold: float = 0.7, verbose: bool = False) -> List[str]:
+        start_time = time.time()
+
+        # Tokenize sentences
+        tokenize_start = time.time()
         sentences = nltk.sent_tokenize(text)
+        tokenize_time = time.time() - tokenize_start
 
-        sentence_groups = []
-        for i, _ in enumerate(sentences):
-            context = sentences[max(0, i - 1) : min(len(sentences), i + 2)]
-            sentence_groups.append(" ".join(context))
-
-        if not sentence_groups:
+        if not sentences:
             return []
 
-        embeddings = self.model.encode(sentence_groups)
+        # Generate embeddings for individual sentences
+        embed_start = time.time()
+        embeddings = self.model.encode(sentences)
+        embed_time = time.time() - embed_start
 
+        # Calculate similarities and distances
+        similarity_start = time.time()
         distances: List[float] = []
         for i in range(len(embeddings) - 1):
             similarity = cosine_similarity([embeddings[i]], [embeddings[i + 1]])[0][0]
             distances.append(1 - similarity)
+        similarity_time = time.time() - similarity_start
 
+        # Find breakpoints
+        breakpoint_start = time.time()
         breakpoints = [0]
         if distances:
             breakpoint_percentile = np.percentile(distances, 95)
@@ -49,11 +59,26 @@ class SemanticChunker:
                 if dist > breakpoint_percentile:
                     breakpoints.append(i + 1)
         breakpoints.append(len(sentences))
+        breakpoint_time = time.time() - breakpoint_start
 
+        # Create chunks
+        chunk_start = time.time()
         chunks = []
         for i in range(len(breakpoints) - 1):
             chunk = " ".join(sentences[breakpoints[i] : breakpoints[i + 1]])
             chunks.append(chunk)
+        chunk_time = time.time() - chunk_start
+
+        total_time = time.time() - start_time
+
+        if verbose:
+            print(f"    Chunking timing breakdown:")
+            print(f"      Tokenization: {tokenize_time:.3f}s")
+            print(f"      Embedding: {embed_time:.3f}s")
+            print(f"      Similarity calc: {similarity_time:.3f}s")
+            print(f"      Breakpoint finding: {breakpoint_time:.3f}s")
+            print(f"      Chunk creation: {chunk_time:.3f}s")
+            print(f"      Total: {total_time:.3f}s")
 
         return chunks
 
@@ -256,7 +281,7 @@ def find_ponder_files(journal: str) -> Dict[str, str]:
     return files
 
 
-def scan_ponders(journal: str, cache: Dict[str, dict]) -> bool:
+def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) -> bool:
     """Index ponder markdown files into USearch in semantic chunks if they changed."""
     index, meta, index_path, meta_path = get_ponder_index(journal)
     p_cache = cache.setdefault("ponders", {})
@@ -284,7 +309,7 @@ def scan_ponders(journal: str, cache: Dict[str, dict]) -> bool:
                 index.remove(k)
                 info_map.pop(str(k), None)
 
-            chunks = _CHUNKER.chunk_by_semantic_similarity(text)
+            chunks = _CHUNKER.chunk_by_semantic_similarity(text, verbose=verbose)
             print(f"  chunked into {len(chunks)} segments")
             embeddings = _EMBEDDER.encode(chunks)
             keys = []
@@ -364,7 +389,7 @@ def main() -> None:
     cache = load_cache(args.journal)
     if args.rescan:
         changed = scan_entities(args.journal, cache)
-        changed |= scan_ponders(args.journal, cache)
+        changed |= scan_ponders(args.journal, cache, verbose=True)
         if changed:
             save_cache(args.journal, cache)
 
