@@ -14,17 +14,17 @@ from usearch.index import Index
 TOP_KEY = "__top__"
 INDEX_DIR = "index"
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
-_EMBEDDER = SentenceTransformer(EMBED_MODEL_NAME)
-_EMBED_DIM = _EMBEDDER.get_sentence_embedding_dimension()
+EMBEDDER = SentenceTransformer(EMBED_MODEL_NAME, device="cuda" if torch.cuda.is_available() else "cpu")
+EMBED_DIM = EMBEDDER.get_sentence_embedding_dimension()
 
 
 class SemanticChunker:
     """Chunk text based on semantic similarity between sentence groups."""
 
-    def __init__(self, model_name: str = EMBED_MODEL_NAME) -> None:
+    def __init__(self) -> None:
         nltk.download("punkt", quiet=True)
         nltk.download("punkt_tab", quiet=True)
-        self.model = SentenceTransformer(model_name)
+        self.model = EMBEDDER
 
     def chunk_by_semantic_similarity(self, text: str, threshold: float = 0.7, verbose: bool = False) -> List[str]:
         start_time = time.time()
@@ -83,7 +83,7 @@ class SemanticChunker:
         return chunks
 
 
-_CHUNKER = SemanticChunker(EMBED_MODEL_NAME)
+CHUNKER = SemanticChunker()
 
 DATE_RE = re.compile(r"\d{8}")
 ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
@@ -259,7 +259,7 @@ def get_ponder_index(journal: str) -> Tuple[Index, dict, str, str]:
     if os.path.isfile(index_path):
         index = Index.restore(index_path, view=False)
     else:
-        index = Index(ndim=_EMBED_DIM, metric="cos", dtype="f32")
+        index = Index(ndim=EMBED_DIM, metric="cos", dtype="f32")
 
     if os.path.isfile(meta_path):
         with open(meta_path, "r", encoding="utf-8") as f:
@@ -309,9 +309,9 @@ def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) ->
                 index.remove(k)
                 info_map.pop(str(k), None)
 
-            chunks = _CHUNKER.chunk_by_semantic_similarity(text, verbose=verbose)
+            chunks = CHUNKER.chunk_by_semantic_similarity(text, verbose=verbose)
             print(f"  chunked into {len(chunks)} segments")
-            embeddings = _EMBEDDER.encode(chunks)
+            embeddings = EMBEDDER.encode(chunks)
             keys = []
             for i, emb in enumerate(embeddings):
                 key = next_id
@@ -351,7 +351,7 @@ def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) ->
 def search_ponders(journal: str, query: str, n_results: int = 5) -> List[Dict[str, str]]:
     """Search the ponder chunk index and return results."""
     index, meta, _, _ = get_ponder_index(journal)
-    embedding = _EMBEDDER.encode(query)
+    embedding = EMBEDDER.encode(query)
     matches = index.search(embedding, n_results)
     info_map = meta.get("info", {})
     results = []
@@ -403,7 +403,7 @@ def main() -> None:
         results = search_ponders(args.journal, query, 5)
         for idx, r in enumerate(results, 1):
             meta = r.get("metadata", {})
-            snippet = r["text"].splitlines()[0][:80]
+            snippet = r["text"]
             print(f"{idx}. {meta.get('day')} {meta.get('ponder')}: {snippet}")
 
 
