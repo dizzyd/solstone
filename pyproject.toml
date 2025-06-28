@@ -32,6 +32,8 @@ dependencies = [
     # Core dependencies
     "python-dotenv",
     "google-genai",
+    "mcp",
+    "Flask",
     
     # Audio processing dependencies
     "soundcard",
@@ -88,6 +90,7 @@ meeting-calendar = "dream.meeting_calendar:main"
 journal-stats = "think.journal_stats:main"
 dream-extract = "dream.extract:main"
 process-day = "think.process_day:main"
+ponder-mcp = "think.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/sunstone"
@@ -102,7 +105,12 @@ include = ["hear*", "see*", "think*", "dream*"]
 hear = ["*.txt"]
 see = ["*.txt"]
 think = ["*.txt"]
-dream = ["entity_review/index.html", "meeting_calendar/index.html"]
+dream = [
+    "entity_review/index.html",
+    "meeting_calendar/index.html",
+    "review/templates/*.html",
+    "review/static/*",
+]
 
 # Development tools configuration
 [tool.black]
