@@ -1,89 +1,23 @@
 import json
 import os
 import re
-import time
+import sqlite3
 from typing import Dict, List, Optional, Tuple
 
 import nltk
-import numpy as np
-import torch
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-from usearch.index import Index
 
 TOP_KEY = "__top__"
 INDEX_DIR = "index"
-EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
-EMBEDDER = SentenceTransformer(EMBED_MODEL_NAME, device="cuda" if torch.cuda.is_available() else "cpu")
-EMBED_DIM = EMBEDDER.get_sentence_embedding_dimension()
+
+nltk.download("punkt", quiet=True)
 
 
-class SemanticChunker:
-    """Chunk text based on semantic similarity between sentence groups."""
+def split_sentences(text: str) -> List[str]:
+    """Return a list of cleaned sentences from markdown text."""
+    cleaned = re.sub(r"^[*-]\s*", "", text, flags=re.MULTILINE)
+    sentences = [s.strip() for s in nltk.sent_tokenize(cleaned) if s.strip()]
+    return sentences
 
-    def __init__(self) -> None:
-        nltk.download("punkt", quiet=True)
-        nltk.download("punkt_tab", quiet=True)
-        self.model = EMBEDDER
-
-    def chunk_by_semantic_similarity(self, text: str, threshold: float = 0.7, verbose: bool = False) -> List[str]:
-        start_time = time.time()
-
-        # Tokenize sentences
-        tokenize_start = time.time()
-        sentences = nltk.sent_tokenize(text)
-        tokenize_time = time.time() - tokenize_start
-
-        if not sentences:
-            return []
-
-        # Generate embeddings for individual sentences
-        embed_start = time.time()
-        embeddings = self.model.encode(sentences)
-        embed_time = time.time() - embed_start
-
-        # Calculate similarities and distances
-        similarity_start = time.time()
-        distances: List[float] = []
-        for i in range(len(embeddings) - 1):
-            similarity = cosine_similarity([embeddings[i]], [embeddings[i + 1]])[0][0]
-            distances.append(1 - similarity)
-        similarity_time = time.time() - similarity_start
-
-        # Find breakpoints
-        breakpoint_start = time.time()
-        breakpoints = [0]
-        if distances:
-            breakpoint_percentile = np.percentile(distances, 95)
-            for i, dist in enumerate(distances):
-                if dist > breakpoint_percentile:
-                    breakpoints.append(i + 1)
-        breakpoints.append(len(sentences))
-        breakpoint_time = time.time() - breakpoint_start
-
-        # Create chunks
-        chunk_start = time.time()
-        chunks = []
-        for i in range(len(breakpoints) - 1):
-            chunk = " ".join(sentences[breakpoints[i] : breakpoints[i + 1]])
-            chunks.append(chunk)
-        chunk_time = time.time() - chunk_start
-
-        total_time = time.time() - start_time
-
-        if verbose:
-            print(f"    Chunking timing breakdown:")
-            print(f"      Tokenization: {tokenize_time:.3f}s")
-            print(f"      Embedding: {embed_time:.3f}s")
-            print(f"      Similarity calc: {similarity_time:.3f}s")
-            print(f"      Breakpoint finding: {breakpoint_time:.3f}s")
-            print(f"      Chunk creation: {chunk_time:.3f}s")
-            print(f"      Total: {total_time:.3f}s")
-
-        return chunks
-
-
-CHUNKER = SemanticChunker()
 
 DATE_RE = re.compile(r"\d{8}")
 ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
@@ -249,25 +183,23 @@ def get_entities(journal: str) -> Dict[str, Dict[str, dict]]:
     return build_entities(cache)
 
 
-def get_ponder_index(journal: str) -> Tuple[Index, dict, str, str]:
-    """Return the USearch index and metadata for ponder files."""
-    db_path = os.path.join(journal, INDEX_DIR)
-    os.makedirs(db_path, exist_ok=True)
-    index_path = os.path.join(db_path, "ponders.usearch")
-    meta_path = os.path.join(db_path, "ponders_meta.json")
-
-    if os.path.isfile(index_path):
-        index = Index.restore(index_path, view=False)
-    else:
-        index = Index(ndim=EMBED_DIM, metric="cos", dtype="f32")
-
-    if os.path.isfile(meta_path):
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-    else:
-        meta = {"paths": {}, "info": {}, "next_id": 1}
-
-    return index, meta, index_path, meta_path
+def get_ponder_index(journal: str) -> Tuple[sqlite3.Connection, str]:
+    """Return SQLite connection for the ponder sentence index."""
+    db_dir = os.path.join(journal, INDEX_DIR)
+    os.makedirs(db_dir, exist_ok=True)
+    db_path = os.path.join(db_dir, "ponders.sqlite")
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, mtime INTEGER)")
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS sentences USING fts5(
+            sentence, path UNINDEXED, day UNINDEXED, ponder UNINDEXED, position UNINDEXED
+        )
+        """
+    )
+    return conn, db_path
 
 
 def find_ponder_files(journal: str) -> Dict[str, str]:
@@ -282,18 +214,14 @@ def find_ponder_files(journal: str) -> Dict[str, str]:
 
 
 def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) -> bool:
-    """Index ponder markdown files into USearch in semantic chunks if they changed."""
-    index, meta, index_path, meta_path = get_ponder_index(journal)
+    """Index sentences from ponder markdown files into SQLite."""
+    conn, _ = get_ponder_index(journal)
     p_cache = cache.setdefault("ponders", {})
     files = find_ponder_files(journal)
     total = len(files)
     if total:
         print(f"\nIndexing {total} ponder files...")
     changed = False
-
-    next_id = meta.get("next_id", 1)
-    path_map = meta.setdefault("paths", {})
-    info_map = meta.setdefault("info", {})
 
     for idx, (rel, path) in enumerate(files.items(), 1):
         if total:
@@ -303,74 +231,57 @@ def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) ->
             with open(path, "r", encoding="utf-8") as f:
                 text = f.read()
 
-            # remove old entries for this file
-            keys = path_map.get(rel, [])
-            for k in keys:
-                index.remove(k)
-                info_map.pop(str(k), None)
-
-            chunks = CHUNKER.chunk_by_semantic_similarity(text, verbose=verbose)
-            print(f"  chunked into {len(chunks)} segments")
-            embeddings = EMBEDDER.encode(chunks)
-            keys = []
-            for i, emb in enumerate(embeddings):
-                key = next_id
-                next_id += 1
-                index.add(key, emb)
-                info_map[str(key)] = {
-                    "rel": rel,
-                    "day": os.path.basename(os.path.dirname(path)),
-                    "ponder": os.path.basename(path),
-                    "chunk": i,
-                    "text": chunks[i],
-                }
-                keys.append(key)
-            path_map[rel] = keys
+            conn.execute("DELETE FROM sentences WHERE path=?", (rel,))
+            sentences = split_sentences(text)
+            if verbose:
+                print(f"  indexed {len(sentences)} sentences")
+            day, ponder = rel.split(os.sep, 1)
+            for pos, sentence in enumerate(sentences):
+                conn.execute(
+                    (
+                        "INSERT INTO sentences(sentence, path, day, ponder, position) "
+                        "VALUES (?, ?, ?, ?, ?)"
+                    ),
+                    (sentence, rel, day, ponder, pos),
+                )
+            conn.execute("REPLACE INTO files(path, mtime) VALUES (?, ?)", (rel, mtime))
             p_cache[rel] = mtime
             changed = True
 
     for rel in list(p_cache.keys()):
         if rel not in files:
-            keys = path_map.pop(rel, [])
-            for k in keys:
-                index.remove(k)
-                info_map.pop(str(k), None)
+            conn.execute("DELETE FROM sentences WHERE path=?", (rel,))
+            conn.execute("DELETE FROM files WHERE path=?", (rel,))
             del p_cache[rel]
             changed = True
 
-    meta["next_id"] = next_id
     if changed:
-        print("Saving updated index...")
-        index.save(index_path)
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2)
-
+        conn.commit()
+    conn.close()
     return changed
 
 
 def search_ponders(journal: str, query: str, n_results: int = 5) -> List[Dict[str, str]]:
-    """Search the ponder chunk index and return results."""
-    index, meta, _, _ = get_ponder_index(journal)
-    embedding = EMBEDDER.encode(query)
-    matches = index.search(embedding, n_results)
-    info_map = meta.get("info", {})
+    """Search the ponder sentence index and return results."""
+    conn, _ = get_ponder_index(journal)
+    cursor = conn.execute(
+        """
+        SELECT sentence, path, day, ponder, position, bm25(sentences) as rank
+        FROM sentences WHERE sentences MATCH ? ORDER BY rank LIMIT ?
+        """,
+        (query, n_results),
+    )
     results = []
-    for key, dist in zip(matches.keys, matches.distances):
-        entry = info_map.get(str(int(key)))
-        if not entry:
-            continue
+    for sentence, path, day, ponder, pos, rank in cursor.fetchall():
         results.append(
             {
-                "id": entry["rel"],
-                "text": entry.get("text", ""),
-                "metadata": {
-                    "day": entry["day"],
-                    "ponder": entry["ponder"],
-                    "chunk": entry.get("chunk", 0),
-                },
-                "distance": float(dist),
+                "id": path,
+                "text": sentence,
+                "metadata": {"day": day, "ponder": ponder, "index": pos},
+                "score": rank,
             }
         )
+    conn.close()
     return results
 
 
