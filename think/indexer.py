@@ -24,7 +24,6 @@ class SemanticChunker:
     def __init__(self, model_name: str = EMBED_MODEL_NAME) -> None:
         nltk.download("punkt", quiet=True)
         nltk.download("punkt_tab", quiet=True)
-        self.model = SentenceTransformer(model_name, device='cuda' if torch.cuda.is_available() else 'cpu')
 
     def chunk_by_semantic_similarity(self, text: str, threshold: float = 0.7, verbose: bool = False) -> List[str]:
         start_time = time.time()
