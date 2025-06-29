@@ -62,7 +62,7 @@ class JournalStats:
                 stats["screen_md"] += 1
             elif name == "entities.md":
                 stats_bool["entities"] = True
-            elif name.startswith("ponder_day"):
+            elif name.startswith("ponder_day") or name in {"day.md", "day.json"}:
                 stats_bool["ponder"] = True
 
         stats["entities"] = int(stats_bool["entities"])
