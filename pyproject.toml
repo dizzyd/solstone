@@ -80,7 +80,7 @@ screen-watch = "see.scan:main"
 screen-describe = "see.describe:main"
 
 # Analysis utilities
-ponder-day = "think.ponder_day:main"
+ponder-day = "think.ponder:main"
 cluster-day = "think.cluster_day:main"
 reduce-screen = "think.reduce_screen:main"
 repair-audio-json = "think.repair_audio_json:main"
