@@ -304,7 +304,9 @@ function navigateMonth(direction) {
 
 // Event listeners
 document.querySelector('.close').onclick = hideModal;
-window.onclick = e => e.target === document.getElementById('meetingModal') && hideModal();
+window.onclick = e => {
+  if (e.target === document.getElementById('meetingModal')) hideModal();
+};
 document.addEventListener('keydown', e => e.key === 'Escape' && document.getElementById('meetingModal').style.display === 'block' && hideModal());
 
 document.getElementById('prevMonth').onclick = () => navigateMonth(-1);
