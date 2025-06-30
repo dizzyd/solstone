@@ -33,19 +33,14 @@ DF_SR = 48_000
 model, df_state, _ = init_df(post_filter=True)  # loads DeepFilterNet3 with post-filter
 
 
-def denoise(audio_16k: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
-    """Return denoised PCM, preserving the caller's sample-rate."""
+def denoise(audio: np.ndarray, sr: int) -> np.ndarray:
+    """Return 16 kHz PCM after DeepFilterNet denoising."""
     import torch
 
-    # (1) resample to model rate using librosa
-    audio_48k_np = librosa.resample(audio_16k, orig_sr=sr, target_sr=DF_SR)
-    audio_48k = torch.from_numpy(audio_48k_np).unsqueeze(0)  # [C=1, T]
-    # (2) run the model (pad=True compensates model latency)
-    enhanced_48k = enhance(model, df_state, audio_48k, pad=True)
-    # (3) back to numpy & original SR using librosa
-    enhanced_48k_np = enhanced_48k.squeeze(0).numpy()
-    enhanced = librosa.resample(enhanced_48k_np, orig_sr=DF_SR, target_sr=sr)
-    return enhanced
+    audio_48k = librosa.resample(audio, orig_sr=sr, target_sr=DF_SR)
+    enhanced = enhance(model, df_state, torch.from_numpy(audio_48k).unsqueeze(0), pad=True)
+    enhanced_np = enhanced.squeeze(0).numpy()
+    return librosa.resample(enhanced_np, orig_sr=DF_SR, target_sr=SAMPLE_RATE)
 
 
 def merge_streams(
@@ -210,15 +205,15 @@ class Transcriber:
     def _process_raw(self, raw_path: Path) -> List[Dict[str, object]] | None:
         try:
             data, sr = sf.read(raw_path, dtype="float32")
-            # Remove the streamer reset call as enhance() is stateless
-            if sr != SAMPLE_RATE:
-                logging.warning(f"Unexpected sample rate {sr} in {raw_path}")
+            if sr not in (SAMPLE_RATE, DF_SR):
+                raise ValueError(f"Unsupported sample rate {sr} in {raw_path}")
 
             if data.ndim == 1:
                 data = denoise(data, sr)
             else:
                 data[:, 0] = denoise(data[:, 0], sr)
                 data[:, 1] = denoise(data[:, 1], sr)
+            sr = SAMPLE_RATE
 
             mic_ranges: List[Tuple[float, float]] = []
             if data.ndim == 1:
