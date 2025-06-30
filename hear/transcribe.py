@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import librosa
-import numpy as np
 import noisereduce as nr
+import numpy as np
 import soundfile as sf
 from dotenv import load_dotenv
 from google import genai
@@ -211,17 +211,17 @@ class Transcriber:
     def _process_raw(self, raw_path: Path) -> List[Dict[str, object]] | None:
         try:
             data, sr = sf.read(raw_path, dtype="float32")
-            
+
             mic_ranges: List[Tuple[float, float]] = []
             if data.ndim == 1:
                 merged = data
             else:
                 mic_new = denoise_audio(data[:, 0], sr)
                 sys_new = data[:, 1]
-                
+
                 # when testing, save denoised mic audio for validation
                 # sf.write("./mic_denoise.flac", mic_new, sr)
-                
+
                 merged, mic_ranges = merge_streams(sys_new, mic_new, sr)
 
             if sr != SAMPLE_RATE:

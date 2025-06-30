@@ -1,8 +1,9 @@
 """Utilities for screen capture and Gemini-based vision processing."""
 
-from .screen_dbus import screen_snap
+from .gemini_look import gemini_describe_region
+from .gemini_look import initialize as gemini_initialize
 from .screen_compare import compare_images
-from .gemini_look import initialize as gemini_initialize, gemini_describe_region
+from .screen_dbus import screen_snap
 
 __all__ = [
     "screen_snap",
