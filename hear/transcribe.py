@@ -13,9 +13,6 @@ from typing import Dict, List, Optional, Tuple
 import librosa
 import numpy as np
 import soundfile as sf
-import torch
-from df.enhance import enhance, init_df
-from df.io import resample as df_resample
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -115,13 +112,21 @@ class Transcriber:
         self.observer: Optional[Observer] = None
         self.executor = ThreadPoolExecutor()
         self.attempts: dict[str, int] = {}
+        from df.enhance import init_df
+
         self._df_model, self._df_state, *_ = init_df(post_filter=True)
         self._df_sr = self._df_state.sr()
 
-    def _resample_audio(self, audio_data: np.ndarray, in_sr: int, out_sr: int, denoise: bool = False) -> np.ndarray:
+    def _resample_audio(
+        self, audio_data: np.ndarray, in_sr: int, out_sr: int, denoise: bool = False
+    ) -> np.ndarray:
         """Resample audio and optionally denoise using DeepFilterNet."""
+        import torch
+        from df.enhance import enhance
+        from df.io import resample as df_resample
+
         audio_tensor = torch.from_numpy(audio_data).unsqueeze(0)
-        
+
         # Apply denoising if requested
         if denoise:
             if in_sr != self._df_sr:
@@ -133,7 +138,9 @@ class Transcriber:
 
         # Resample to target output sample rate if needed
         if in_sr != out_sr:
-            audio_tensor = df_resample(audio_tensor.unsqueeze(0), in_sr, out_sr, method="kaiser_best")
+            audio_tensor = df_resample(
+                audio_tensor.unsqueeze(0), in_sr, out_sr, method="kaiser_best"
+            )
 
         return audio_tensor.squeeze().cpu().numpy()
 
@@ -176,7 +183,7 @@ class Transcriber:
                 speech_pad_ms=70,
                 min_silence_duration_ms=100,
                 min_speech_duration_ms=200,
-                threshold=0.2
+                threshold=0.2,
             )
             buffer_seconds = len(buffer_data) / SAMPLE_RATE
             segments = []
@@ -230,7 +237,9 @@ class Transcriber:
                 merged = self._resample_audio(data, sr, SAMPLE_RATE)
                 logging.info(f"Single channel audio detected in {raw_path} {sr}, no mic data.")
             else:
-                logging.info(f"Dual channel audio detected in {raw_path} {sr}, denoising mic channel.")
+                logging.info(
+                    f"Dual channel audio detected in {raw_path} {sr}, denoising mic channel."
+                )
                 mic_new = self._resample_audio(data[:, 0], sr, SAMPLE_RATE, denoise=True)
                 sys_new = self._resample_audio(data[:, 1], sr, SAMPLE_RATE)
 
@@ -300,7 +309,7 @@ class Transcriber:
         else:
             # Fallback for other extensions
             json_name = audio_path.stem + "_audio.json"
-        
+
         return audio_path.with_name(json_name)
 
     def _transcribe_segments(self, raw_path: Path, segments: List[Dict[str, object]]) -> bool:
@@ -332,7 +341,7 @@ class Transcriber:
         segments = self._process_raw(raw_path)
         if segments is None:
             return
-        
+
         json_path = self._get_json_path(raw_path)
         if json_path.exists() or json_path.name in self.processed:
             self.processed.add(json_path.name)
@@ -394,7 +403,7 @@ class Transcriber:
             # Extract HHMMSS from filename like "HHMMSS_raw.flac" or "HHMMSS_audio.flac"
             stem = path.stem.replace("_raw", "").replace("_audio", "")
             return stem
-        
+
         missing.sort(key=extract_timestamp)
 
         logging.info(f"Found {len(missing)} audio files missing transcripts")
