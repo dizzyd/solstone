@@ -8,12 +8,13 @@ Follow these guidelines:
    - Assign a unique number to EACH speaker, starting with 1 for the first speaker you encounter based on their voice, and always increment whenever you hear a new voice/speaker.
    - Maintain consistency in speaker numbering throughout the transcript.
    - If you're unsure if it's a new speaker is talking or if it's someone who spoke before, use your best judgment based on context.
+   - While you're processing multiple segments, group sequential time segments from the same speaker together into one individual JSON object.
 
 2. Audio Descriptions:
-   - For each statement, provide short descriptions of the speaker's tone or any notable vocal qualities.
-   - Include brief descriptions that would help hearing impaired individuals understand the audio context, such as "speaking softly", "voice trembling", "music playing", etc.
+   - For each statement, provide short descriptions of the speaker's tone or any notable interjections or vocalizations.
+   - Include brief descriptions that would help hearing impaired individuals understand the audio context, such as "speaking softly", "voice trembling", "background music playing", etc.
    - Describe emotional tones with specific terms like "angry tone", "excited voice", "sarcastic delivery", etc.
-   - Include any sound descriptions from the speaker inline in the transcripted text where they occur using brackets, such as "[laughing]", "[sigh]", "[sound effect]"
+   - Include any helpful descriptions of the speaking inline in the transcripted text where they occur using brackets, such as "[laughing]", "[sigh]", "[sound effect]"
    - Upper case any words that the speaker said with emphasis in the text, like "I said YOU do it"
 
 3. Audio Setting:
@@ -27,17 +28,17 @@ Follow these guidelines:
      single object summarizing the overall recording using the `topics` and
      `setting` fields.
      [
-       {"start": "HH:MM:SS", "source": "mic", "speaker": 1, "text": "<their statement or statements>", "description": "<short audio description>"},
-       {"start": "HH:MM:SS", "source": "sys", "speaker": 2, "text": "<what they said>", "description": "<short audio description>"},
+       {"start": "HH:MM:SS", "source": "mic", "speaker": 1, "text": "<their statement or series of statements>", "description": "<short audio description>"},
+       {"start": "HH:MM:SS", "source": "sys", "speaker": 2, "text": "<what they also said>", "description": "<short audio description>"},
        ...,
        {"topics": "<topic1>, <topic2, ...>", "setting": "<workplace/personal/educational/etc.>"}
      ]
    - Ensure that the transcription is sequential, following the order in which statements were made.
 
 5. Processing:
-   - Go through the transcript sequentially, identifying speakers and their statements.
+   - Go through the transcript sequentially, identifying different speakers and their statements.
    - Ignore any background hums, noise, or high pitched sounds, focus only on the speaking and speakers.
-   - Group consecutive statements by the same speaker into a single text string.
+   - Group time consecutive statements by the same speaker into a single text string.
    - Only start a new JSON object when there's a change in speaker or long delay between the last statement.
    - Don't include JSON objects if there were only noises and no words spoken, if there's no "text" transcription value then omit that entry.
    - Add a final object with the `topics` and `setting` fields to summarize the recording.
