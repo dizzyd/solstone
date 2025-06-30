@@ -12,8 +12,8 @@ from typing import Dict, List, Optional, Tuple
 
 import librosa
 import numpy as np
+import noisereduce as nr
 import soundfile as sf
-from df.enhance import enhance, init_df
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -28,19 +28,16 @@ MODEL = "gemini-2.5-flash"
 SAMPLE_RATE = 16000
 MIN_SPEECH_SECONDS = 1.0
 
-# DeepFilterNet denoiser setup
-DF_SR = 48_000
-model, df_state, _ = init_df(post_filter=True)  # loads DeepFilterNet3 with post-filter
 
-
-def denoise(audio: np.ndarray, sr: int) -> np.ndarray:
-    """Return 16 kHz PCM after DeepFilterNet denoising."""
-    import torch
-
-    audio_48k = librosa.resample(audio, orig_sr=sr, target_sr=DF_SR)
-    enhanced = enhance(model, df_state, torch.from_numpy(audio_48k).unsqueeze(0), pad=True)
-    enhanced_np = enhanced.squeeze(0).numpy()
-    return librosa.resample(enhanced_np, orig_sr=DF_SR, target_sr=SAMPLE_RATE)
+def denoise_audio(audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Apply noise reduction optimized for voice."""
+    reduced_noise = nr.reduce_noise(
+        y=audio_data,
+        sr=sample_rate,
+        stationary=True,  # Good for consistent background noise
+        prop_decrease=1,  # How much to reduce noise (0-1)
+    )
+    return reduced_noise
 
 
 def merge_streams(
@@ -214,23 +211,21 @@ class Transcriber:
     def _process_raw(self, raw_path: Path) -> List[Dict[str, object]] | None:
         try:
             data, sr = sf.read(raw_path, dtype="float32")
-            if sr not in (SAMPLE_RATE, DF_SR):
-                raise ValueError(f"Unsupported sample rate {sr} in {raw_path}")
-
-            if data.ndim == 1:
-                data = denoise(data, sr)
-            else:
-                data[:, 0] = denoise(data[:, 0], sr)
-                data[:, 1] = denoise(data[:, 1], sr)
-            sr = SAMPLE_RATE
-
+            
             mic_ranges: List[Tuple[float, float]] = []
             if data.ndim == 1:
                 merged = data
             else:
-                mic_new = data[:, 0]
+                mic_new = denoise_audio(data[:, 0], sr)
                 sys_new = data[:, 1]
-                merged, mic_ranges = merge_streams(sys_new, mic_new, SAMPLE_RATE)
+                
+                # when testing, save denoised mic audio for validation
+                # sf.write("./mic_denoise.flac", mic_new, sr)
+                
+                merged, mic_ranges = merge_streams(sys_new, mic_new, sr)
+
+            if sr != SAMPLE_RATE:
+                merged = librosa.resample(merged, orig_sr=sr, target_sr=SAMPLE_RATE)
 
             offset_seconds = len(self.merged_stash) / SAMPLE_RATE
             adjusted_ranges = [(s + offset_seconds, e + offset_seconds) for s, e in mic_ranges]
@@ -446,7 +441,6 @@ def main():
     transcriber = Transcriber(args.journal, api_key, args.prompt)
 
     if args.repair:
-        # Validate date format
         try:
             datetime.datetime.strptime(args.repair, "%Y%m%d")
         except ValueError:
@@ -456,5 +450,10 @@ def main():
         transcriber.start()
 
 
+if __name__ == "__main__":
+    main()
+if __name__ == "__main__":
+    main()
+    main()
 if __name__ == "__main__":
     main()
