@@ -13,6 +13,9 @@ from typing import Dict, List, Optional, Tuple
 import librosa
 import numpy as np
 import soundfile as sf
+import torch
+from df.enhance import enhance, init_df
+from df.io import resample as df_resample
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -26,39 +29,6 @@ from think.crumbs import CrumbBuilder
 MODEL = "gemini-2.5-flash"
 SAMPLE_RATE = 16000
 MIN_SPEECH_SECONDS = 1.0
-
-
-_DF_MODEL = None
-_DF_STATE = None
-_DF_SR = None
-
-
-def denoise_audio(audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
-    """Denoise audio using DeepFilterNet."""
-
-    global _DF_MODEL, _DF_STATE, _DF_SR
-
-    if _DF_MODEL is None:
-        from df.enhance import init_df
-
-        _DF_MODEL, _DF_STATE, *_ = init_df()
-        _DF_SR = _DF_STATE.sr()
-
-    import torch
-    from df.enhance import enhance
-    from df.io import resample as df_resample
-
-    audio_tensor = torch.from_numpy(audio_data).unsqueeze(0)
-    if sample_rate != _DF_SR:
-        audio_tensor = df_resample(audio_tensor, sample_rate, _DF_SR)
-
-    with torch.no_grad():
-        clean = enhance(_DF_MODEL, _DF_STATE, audio_tensor)[0]
-
-    if sample_rate != _DF_SR:
-        clean = df_resample(clean.unsqueeze(0), _DF_SR, sample_rate)[0]
-
-    return clean.cpu().numpy()
 
 
 def merge_streams(
@@ -145,6 +115,22 @@ class Transcriber:
         self.observer: Optional[Observer] = None
         self.executor = ThreadPoolExecutor()
         self.attempts: dict[str, int] = {}
+        self._df_model, self._df_state, *_ = init_df(post_filter=True)
+        self._df_sr = self._df_state.sr()
+
+    def _denoise_audio(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Denoise audio using DeepFilterNet."""
+        audio_tensor = torch.from_numpy(audio_data).unsqueeze(0)
+        if sample_rate != self._df_sr:
+            audio_tensor = df_resample(audio_tensor, sample_rate, self._df_sr)
+
+        with torch.no_grad():
+            clean = enhance(self._df_model, self._df_state, audio_tensor)[0]
+
+        if sample_rate != self._df_sr:
+            clean = df_resample(clean.unsqueeze(0), self._df_sr, sample_rate)[0]
+
+        return clean.cpu().numpy()
 
     def _calculate_mic_overlap(
         self, seg_start: float, seg_end: float, mic_ranges: List[Tuple[float, float]]
@@ -237,11 +223,11 @@ class Transcriber:
             if data.ndim == 1:
                 merged = data
             else:
-                mic_new = denoise_audio(data[:, 0], sr)
+                mic_new = self._denoise_audio(data[:, 0], sr)
                 sys_new = data[:, 1]
 
                 # when testing, save denoised mic audio for validation
-                # sf.write("./mic_denoise.flac", mic_new, sr)
+                sf.write("./mic_denoise.flac", mic_new, sr)
 
                 merged, mic_ranges = merge_streams(sys_new, mic_new, sr)
 
@@ -471,10 +457,5 @@ def main():
         transcriber.start()
 
 
-if __name__ == "__main__":
-    main()
-if __name__ == "__main__":
-    main()
-    main()
 if __name__ == "__main__":
     main()
