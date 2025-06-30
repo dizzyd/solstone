@@ -36,7 +36,11 @@ TRANSCRIBE_PID=$!
 # Function to cleanup background processes
 cleanup() {
   echo "Stopping processes..."
-  kill $CAPTURE_PID $TRANSCRIBE_PID 2>/dev/null
+  # Kill the shell function processes and their entire process groups
+  kill -TERM -$CAPTURE_PID -$TRANSCRIBE_PID 2>/dev/null
+  sleep 2
+  # Force kill if still running
+  kill -KILL -$CAPTURE_PID -$TRANSCRIBE_PID 2>/dev/null
   wait
   exit 0
 }

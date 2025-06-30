@@ -61,4 +61,4 @@ Example 2:
   {"topics": ["groceries", "household responsibilities", "reminders"], "setting": "personal"}
 ]
 
-Focus on high quality transcription and audio descriptions that would help hearing impaired individuals understand the full context, including vocal tones, interjections, vocables, etc. Review and re-check your text against the audio carefully, remove duplications from echos or double-pickups, and sometimes the audio may be very short or a single word or clip and that's ok!
+Focus on high quality transcription and audio descriptions that would help hearing impaired individuals understand the full context, including vocal tones, interjections, vocables, etc. Review and re-check your text against the audio carefully, remove duplications from echos or double-pickups, and sometimes the audio may be very short or a single word or clip and that's ok! Make sure to think about speaker diarization and be thorough with recognizing different speakers!
