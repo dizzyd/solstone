@@ -1,19 +1,21 @@
-import numpy as np
-import cv2
 from math import ceil
+
+import cv2
+import numpy as np
 from skimage.metrics import structural_similarity as ssim
+
 
 def compare_images(img1, img2, block_size=50, ssim_threshold=0.90, margin=5):
     # Convert PIL images to numpy arrays and then to LAB. Use L-channel.
     arr1 = np.array(img1.convert("RGB"))
     arr2 = np.array(img2.convert("RGB"))
-    lab1 = cv2.cvtColor(arr1, cv2.COLOR_RGB2LAB)[:,:,0]
-    lab2 = cv2.cvtColor(arr2, cv2.COLOR_RGB2LAB)[:,:,0]
+    lab1 = cv2.cvtColor(arr1, cv2.COLOR_RGB2LAB)[:, :, 0]
+    lab2 = cv2.cvtColor(arr2, cv2.COLOR_RGB2LAB)[:, :, 0]
 
     height, width = lab1.shape
     grid_rows = ceil(height / block_size)
     grid_cols = ceil(width / block_size)
-    changed = [[False]*grid_cols for _ in range(grid_rows)]
+    changed = [[False] * grid_cols for _ in range(grid_rows)]
     # Compute SSIM for each block.
     for i in range(grid_rows):
         for j in range(grid_cols):
@@ -29,8 +31,8 @@ def compare_images(img1, img2, block_size=50, ssim_threshold=0.90, margin=5):
 
     # Group contiguous changed blocks using DFS.
     groups = []
-    visited = [[False]*grid_cols for _ in range(grid_rows)]
-    
+    visited = [[False] * grid_cols for _ in range(grid_rows)]
+
     # Replace recursive DFS with an iterative version.
     def dfs(i, j, group):
         stack = [(i, j)]
@@ -42,7 +44,7 @@ def compare_images(img1, img2, block_size=50, ssim_threshold=0.90, margin=5):
                 continue
             visited[ci][cj] = True
             group.append((ci, cj))
-            for ni, nj in [(ci-1, cj), (ci+1, cj), (ci, cj-1), (ci, cj+1)]:
+            for ni, nj in [(ci - 1, cj), (ci + 1, cj), (ci, cj - 1), (ci, cj + 1)]:
                 stack.append((ni, nj))
 
     for i in range(grid_rows):
@@ -59,7 +61,7 @@ def compare_images(img1, img2, block_size=50, ssim_threshold=0.90, margin=5):
         min_y = height
         max_x = 0
         max_y = 0
-        for (i, j) in group:
+        for i, j in group:
             x0 = j * block_size
             y0 = i * block_size
             x1 = min(x0 + block_size, width)
