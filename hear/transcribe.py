@@ -118,19 +118,24 @@ class Transcriber:
         self._df_model, self._df_state, *_ = init_df(post_filter=True)
         self._df_sr = self._df_state.sr()
 
-    def _denoise_audio(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
-        """Denoise audio using DeepFilterNet."""
+    def _resample_audio(self, audio_data: np.ndarray, in_sr: int, out_sr: int, denoise: bool = False) -> np.ndarray:
+        """Resample audio and optionally denoise using DeepFilterNet."""
         audio_tensor = torch.from_numpy(audio_data).unsqueeze(0)
-        if sample_rate != self._df_sr:
-            audio_tensor = df_resample(audio_tensor, sample_rate, self._df_sr)
+        
+        # Apply denoising if requested
+        if denoise:
+            if in_sr != self._df_sr:
+                # Resample to DeepFilterNet sample rate for denoising
+                audio_tensor = df_resample(audio_tensor, in_sr, self._df_sr, method="kaiser_best")
+                in_sr = self._df_sr
+            with torch.no_grad():
+                audio_tensor = enhance(self._df_model, self._df_state, audio_tensor)[0]
 
-        with torch.no_grad():
-            clean = enhance(self._df_model, self._df_state, audio_tensor)[0]
+        # Resample to target output sample rate if needed
+        if in_sr != out_sr:
+            audio_tensor = df_resample(audio_tensor.unsqueeze(0), in_sr, out_sr, method="kaiser_best")
 
-        if sample_rate != self._df_sr:
-            clean = df_resample(clean.unsqueeze(0), self._df_sr, sample_rate)[0]
-
-        return clean.cpu().numpy()
+        return audio_tensor.squeeze().cpu().numpy()
 
     def _calculate_mic_overlap(
         self, seg_start: float, seg_end: float, mic_ranges: List[Tuple[float, float]]
@@ -222,20 +227,17 @@ class Transcriber:
 
             mic_ranges: List[Tuple[float, float]] = []
             if data.ndim == 1:
-                merged = data
-                logging.info(f"Single channel audio detected in {raw_path}, no mic data.")
+                merged = self._resample_audio(data, sr, SAMPLE_RATE)
+                logging.info(f"Single channel audio detected in {raw_path} {sr}, no mic data.")
             else:
-                logging.info(f"Dual channel audio detected in {raw_path}, denoising mic channel.")
-                mic_new = self._denoise_audio(data[:, 0], sr)
-                sys_new = data[:, 1]
+                logging.info(f"Dual channel audio detected in {raw_path} {sr}, denoising mic channel.")
+                mic_new = self._resample_audio(data[:, 0], sr, SAMPLE_RATE, denoise=True)
+                sys_new = self._resample_audio(data[:, 1], sr, SAMPLE_RATE)
 
                 # when testing, save denoised mic audio for validation
-                sf.write("./mic_denoise.flac", mic_new, sr)
+                sf.write("./mic_denoise.flac", mic_new, SAMPLE_RATE)
 
                 merged, mic_ranges = merge_streams(sys_new, mic_new, sr)
-
-            if sr != SAMPLE_RATE:
-                merged = librosa.resample(merged, orig_sr=sr, target_sr=SAMPLE_RATE)
 
             offset_seconds = len(self.merged_stash) / SAMPLE_RATE
             adjusted_ranges = [(s + offset_seconds, e + offset_seconds) for s, e in mic_ranges]
@@ -341,7 +343,7 @@ class Transcriber:
 
     def _transcribe(self, segments: List[Dict[str, object]]) -> dict:
         user_prompt = (
-            "Process the provided audio clips now and output your professional "
+            "Process the provided audio clips and output your professional "
             "accurate transcription in the specified JSON format, each clip may contain one or more speakers."
         )
         entities_text = self.entities_path.read_text().strip()
@@ -349,7 +351,7 @@ class Transcriber:
 
         for seg in segments:
             contents.append(
-                f"This clip starts at {seg['start']} and the source is '{seg['source']}'."
+                f"This clip starts at {seg['start']} and the source is '{seg['source']}':"
             )
             contents.append(types.Part.from_bytes(data=seg["bytes"], mime_type="audio/flac"))
 

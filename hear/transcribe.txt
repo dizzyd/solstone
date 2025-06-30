@@ -49,7 +49,7 @@ Example 1:
 [
   {"start": "00:00:02", "source": "mic", "speaker": 1, "text": "Hello [clears throat], how are you today John?", "description": "friendly tone"},
   {"start": "00:00:05", "source": "sys", "speaker": 2, "text": "I'm doing well, thanks for asking. How about you?", "description": "calm voice, inquisitive sounding"},
-  {"start": "00:00:09", "source": "mic", "speaker": 1, "text": "I'm great! [laughs] The weather is beautiful.", "description": "excited voice, birds chirping"},
+  {"start": "00:00:09", "source": "mic", "speaker": 1, "text": "I'm great! [laughs] The weather is beautiful.", "description": "excited voice, eager"},
   {"topics": ["greetings", "weather", "small talk"], "setting": "personal"}
 ]
 
@@ -62,3 +62,5 @@ Example 2:
 ]
 
 Focus on high quality transcription and audio descriptions that would help hearing impaired individuals understand the full context, including vocal tones, interjections, vocables, etc. Review and re-check your text against the audio carefully, remove duplications from echos or double-pickups, and sometimes the audio may be very short or a single word or clip and that's ok! Make sure to think about speaker diarization and be thorough with recognizing different speakers!
+
+Of utmost importance, BE ACCURATE, review your work and doublecheck by listening again more carefully to be SURE before returning the JSON!
