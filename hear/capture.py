@@ -17,6 +17,7 @@ from input_detect import input_detect
 # Constants
 SAMPLE_RATE = 48000
 CHANNELS = 1
+BLOCK_SIZE = 1024
 SYS_DELAY_MS = 100  # System audio delay in milliseconds to align with microphone
 
 
@@ -45,23 +46,26 @@ class AudioRecorder:
         self.sys_device = loopback
         return True
 
-    def record_device(self, device, queue, label):
+    def record_both(self):
         try:
-            with device.recorder(samplerate=SAMPLE_RATE, channels=[-1]) as recorder:
+            with self.mic_device.recorder(samplerate=SAMPLE_RATE, channels=[-1], blocksize=BLOCK_SIZE) as mic_rec, self.sys_device.recorder(samplerate=SAMPLE_RATE, channels=[-1], blocksize=BLOCK_SIZE) as sys_rec:
                 while self._running:
                     try:
-                        recording = recorder.record(numframes=None)
-                        if recording is not None and recording.size > 0:
-                            queue.put(recording)
+                        mic_chunk = mic_rec.record(numframes=BLOCK_SIZE)
+                        sys_chunk = sys_rec.record(numframes=BLOCK_SIZE)
+                        if mic_chunk is not None and mic_chunk.size > 0:
+                            self.mic_queue.put(mic_chunk)
+                        if sys_chunk is not None and sys_chunk.size > 0:
+                            self.sys_queue.put(sys_chunk)
                     except Exception as e:
-                        logging.error(f"Error recording from {label}: {e}")
+                        logging.error(f"Error recording audio: {e}")
                         if not self._running:
                             break
                         time.sleep(0.5)
         except Exception as e:
-            logging.error(f"Error setting up recorder for {label}: {e}")
+            logging.error(f"Error setting up recorders: {e}")
             if self._running:
-                logging.error(f"Recording thread for {label} crashed: {e}")
+                logging.error(f"Recording thread crashed: {e}")
 
     def get_buffer(self, queue):
         buffer = np.array([], dtype=np.float32)
@@ -147,13 +151,7 @@ class AudioRecorder:
     def start(self):
         threads = [
             threading.Thread(
-                target=self.record_device,
-                args=(self.mic_device, self.mic_queue, "mic"),
-                daemon=True,
-            ),
-            threading.Thread(
-                target=self.record_device,
-                args=(self.sys_device, self.sys_queue, "sys"),
+                target=self.record_both,
                 daemon=True,
             ),
             threading.Thread(target=self.speech_processing_timer, daemon=True),
