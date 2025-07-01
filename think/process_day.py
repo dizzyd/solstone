@@ -30,7 +30,7 @@ def build_commands(journal: str, day: str, force: bool, repair: bool) -> list[li
     think_dir = os.path.dirname(__file__)
     prompt_paths = sorted(glob.glob(os.path.join(think_dir, "ponder", "*.txt")))
     for prompt in prompt_paths:
-        cmd = ["ponder-day", day_dir, "-f", prompt]
+        cmd = ["ponder-day", day_dir, "-f", prompt, "-p"]
         if force:
             cmd.append("--force")
         commands.append(cmd)
