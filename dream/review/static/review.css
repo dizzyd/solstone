@@ -8,6 +8,19 @@
   z-index: 10000;
 }
 
+html::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 3px solid #00f;
+  outline: 1px solid #000;
+  pointer-events: none;
+  z-index: 9999;
+}
+
 .nav-icons a {
   font-size: 28px;
   text-decoration: none;
