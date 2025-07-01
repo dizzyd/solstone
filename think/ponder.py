@@ -55,9 +55,9 @@ def send_markdown(
     try:
         gen_config_args = {
             "temperature": 0.3,
-            "max_output_tokens": 8192 * 2,
+            "max_output_tokens": 8192 * 6,
             "thinking_config": types.ThinkingConfig(
-                thinking_budget=8192 * 2,
+                thinking_budget=8192 * 4,
             ),
             "system_instruction": prompt,
         }
