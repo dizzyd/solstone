@@ -133,6 +133,7 @@ def detect_speech(
         logging.info(f"No audio data found in {label} buffer.")
         return [], np.array([], dtype=np.float32)
     try:
+        vad_model.reset_states()
         speech_segments = get_speech_timestamps(
             buffer_data,
             vad_model,
