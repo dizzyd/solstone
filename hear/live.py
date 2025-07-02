@@ -1,12 +1,8 @@
 import argparse
 import asyncio
 import io
-import json
 import logging
 import os
-import time
-from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 import soundfile as sf
@@ -18,7 +14,7 @@ from silero_vad import load_silero_vad
 
 from hear.audio_utils import SAMPLE_RATE, detect_speech
 
-MODEL = "gemini-2.5-flash-lite-preview-06-17"
+MODEL = "gemini-2.5-flash"#-lite-preview-06-17"
 
 from google.genai import types
 
@@ -66,32 +62,75 @@ def transcribe_whisper(audio_bytes: bytes) -> str:
     return text
 
 
+async def handle_audio_message(msg: bytes, vad, stash: np.ndarray, client) -> np.ndarray:
+    """Handle a single audio message from WebSocket."""
+    try:
+        chunk = np.frombuffer(msg, dtype=np.float32).reshape(-1, 2)
+        mono = chunk.mean(axis=1)
+        stash = np.concatenate((stash, mono))
+        segments, stash = detect_speech(vad, "live", stash)
+        for seg in segments:
+            audio_int16 = (np.clip(seg["data"], -1.0, 1.0) * 32767).astype(np.int16)
+            buf = io.BytesIO()
+            sf.write(buf, audio_int16, SAMPLE_RATE, format="FLAC")
+            try:
+                g_text = transcribe_light(
+                    client,
+                    MODEL,
+                    buf.getvalue(),
+                )
+                w_text = transcribe_whisper(buf.getvalue())
+                print(f"G: {g_text}\nW: {w_text}")
+            except Exception as e:
+                logging.error("Transcription error: %s", e)
+        return stash
+    except Exception as e:
+        logging.error("Error processing audio chunk: %s", e)
+        return stash
+
+
 async def live_loop(ws_url: str, client) -> None:
     vad = load_silero_vad()
     stash = np.array([], dtype=np.float32)
     processed_seconds = 0.0
+    max_retries = 5
+    retry_delay = 2.0
 
-    async with websockets.connect(ws_url) as ws:
-        async for msg in ws:
-            chunk = np.frombuffer(msg, dtype=np.float32).reshape(-1, 2)
-            mono = chunk.mean(axis=1)
-            stash = np.concatenate((stash, mono))
-            segments, stash = detect_speech(vad, "live", stash)
-            for seg in segments:
-                audio_int16 = (np.clip(seg["data"], -1.0, 1.0) * 32767).astype(np.int16)
-                buf = io.BytesIO()
-                sf.write(buf, audio_int16, SAMPLE_RATE, format="FLAC")
-                try:
-                    g_text = transcribe_light(
-                        client,
-                        MODEL,
-                        buf.getvalue(),
-                    )
-                    w_text = transcribe_whisper(buf.getvalue())
-                    print(f"G: {g_text}\nW: {w_text}")
-                except Exception as e:
-                    logging.error("Transcription error: %s", e)
-            processed_seconds += (len(mono) - len(stash)) / SAMPLE_RATE
+    for attempt in range(max_retries):
+        try:
+            logging.info(f"Connecting to WebSocket (attempt {attempt + 1}/{max_retries})")
+            async with websockets.connect(ws_url) as ws:
+                logging.info("WebSocket connected successfully")
+                async for msg in ws:
+                    stash = await handle_audio_message(msg, vad, stash, client)
+                    processed_seconds += (len(msg) // 8) / SAMPLE_RATE  # Approximate calculation
+                
+                # If we reach here, connection closed normally
+                logging.info("WebSocket connection closed normally")
+                break
+                
+        except (websockets.exceptions.ConnectionClosedError, 
+                websockets.exceptions.ConnectionClosedOK,
+                ConnectionError, 
+                BrokenPipeError) as e:
+            logging.warning(f"WebSocket connection error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                logging.info(f"Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5  # Exponential backoff
+            else:
+                logging.error("Max retries reached, giving up")
+                raise
+        except KeyboardInterrupt:
+            logging.info("Received keyboard interrupt, shutting down gracefully")
+            break
+        except Exception as e:
+            logging.error(f"Unexpected error: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5
+            else:
+                raise
 
 
 def main() -> None:
