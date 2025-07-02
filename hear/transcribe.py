@@ -21,8 +21,13 @@ from watchdog.observers import Observer
 
 from think.crumbs import CrumbBuilder
 
-from .audio_utils import SAMPLE_RATE, detect_speech, merge_streams, resample_audio
-from .gemini import transcribe_segments
+try:
+    from .audio_utils import SAMPLE_RATE, detect_speech, merge_streams, resample_audio
+    from .gemini import transcribe_segments
+except ImportError:
+    # Fallback for when running as script
+    from audio_utils import SAMPLE_RATE, detect_speech, merge_streams, resample_audio
+    from gemini import transcribe_segments
 
 # Constants
 MODEL = "gemini-2.5-flash"
