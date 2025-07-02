@@ -87,9 +87,8 @@ cluster-day = "think.cluster_day:main"
 reduce-screen = "think.reduce_screen:main"
 see-repair = "think.see_repair:main"
 hear-repair = "think.hear_repair:main"
-entity-review = "dream.entity_review:main"
+dream-review = "dream.review:main"
 entity-roll = "think.entity_roll:main"
-meeting-calendar = "dream.meeting_calendar:main"
 journal-stats = "think.journal_stats:main"
 dream-extract = "dream.extract:main"
 process-day = "think.process_day:main"
@@ -109,8 +108,6 @@ hear = ["*.txt"]
 see = ["*.txt"]
 think = ["*.txt"]
 dream = [
-    "entity_review/index.html",
-    "meeting_calendar/index.html",
     "review/templates/*.html",
     "review/static/*",
 ]

@@ -10,14 +10,10 @@ pip install -e .
 
 ## Usage
 
-Two commands are provided:
-
-- `entity-review` builds an index of entities mentioned in your recordings and serves it on a local web server.
-- `meeting-calendar` generates a calendar view of meetings pulled from daily folders.
+Run the combined review server with:
 
 ```bash
-entity-review <journal> [--port PORT]
-meeting-calendar <journal> [--port PORT]
+dream-review <journal> --password YOURPASSWORD
 ```
 
-Open the printed URL in your browser to explore the results.
+Open the printed URL in your browser to explore entities and meetings.
