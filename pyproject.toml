@@ -74,6 +74,7 @@ dev = [
 gemini-mic = "hear.capture:main"
 gemini-transcribe = "hear.transcribe:main"
 gemini-hear = "hear.runner:main"
+gemini-live = "hear.live:main"
 
 # Visual utilities  
 screen-watch = "see.scan:main"
