@@ -48,7 +48,8 @@ def main() -> None:
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    capture_thread = Thread(target=_run_loop, args=("capture.py", args))
+    capture_args = args + ["--ws-port", "9987"]
+    capture_thread = Thread(target=_run_loop, args=("capture.py", capture_args))
     transcribe_thread = Thread(target=_run_loop, args=("transcribe.py", args))
 
     capture_thread.start()
