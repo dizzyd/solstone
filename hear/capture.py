@@ -142,9 +142,12 @@ class AudioRecorder:
     def websocket_server(self):
         self.ws_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.ws_loop)
-        server = websockets.serve(self._ws_handler, "0.0.0.0", self.websocket_port)
-        self.ws_loop.run_until_complete(server)
-        self.ws_loop.run_forever()
+
+        async def start_server():
+            server = await websockets.serve(self._ws_handler, "0.0.0.0", self.websocket_port)
+            await server.wait_closed()
+
+        self.ws_loop.run_until_complete(start_server())
 
     def broadcast_audio(self, stereo_data: np.ndarray):
         if not (self.ws_loop and self.ws_clients and stereo_data.size > 0):
