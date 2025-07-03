@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8"/>
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='review.css') }}">
+  <link rel="stylesheet" href="{{ url_for('review.static', filename='review.css') }}">
   {% block head %}{% endblock %}
 </head>
 <body>
   <div class="nav-icons">
-    <a href="{{ url_for('home') }}" class="{% if active=='home' %}current{% endif %}">🏠</a>
-    <a href="{{ url_for('calendar') }}" class="{% if active=='calendar' %}current{% endif %}">📅</a>
-    <a href="{{ url_for('entities') }}" class="{% if active=='entities' %}current{% endif %}">📑</a>
-    <a href="{{ url_for('logout') }}" title="Logout">🔒</a>
+    <a href="{{ url_for('review.home') }}" class="{% if active=='home' %}current{% endif %}">🏠</a>
+    <a href="{{ url_for('review.calendar') }}" class="{% if active=='calendar' %}current{% endif %}">📅</a>
+    <a href="{{ url_for('review.entities') }}" class="{% if active=='entities' %}current{% endif %}">📑</a>
+    <a href="{{ url_for('review.logout') }}" title="Logout">🔒</a>
   </div>
   {% block body %}{% endblock %}
 </body>
