@@ -27,7 +27,7 @@ Screen capture utilities produce per monitor diff files:
 
 - `HHMMSS_screen.md` – Markdown summary for that interval.
 
--Post‑processing commands may generate additional analysis files:
+-Post‑processing commands may generate additional analysis files, for example:
 
 - `ponder_day.md` – high level summary of the day.
 - `ponder_knowledge_graph.md` – knowledge graph / network summary.
@@ -50,14 +50,15 @@ stored as `occurrences.json` inside each day folder.
   "day": "YYYYMMDD",
   "occurrences": [
     {
-      "kind": "meeting",
-      "start": "2025-06-10T09:00:00",
-      "end": "2025-06-10T09:30:00",
+      "type": "meeting",
+      "source": "ponder_meetings.md",
+      "start": "09:00:00",
+      "end": "09:30:00",
       "title": "Team stand-up",
       "summary": "Status update with the engineering team",
       "work": true,
       "participants": ["Jeremie Miller", "Alice", "Bob"],
-      "details": {"source": "ponder_meetings"}
+      "details": {...}
     }
   ]
 }
@@ -65,11 +66,11 @@ stored as `occurrences.json` inside each day folder.
 
 ### Common fields
 
-- **kind** – type of occurrence such as `meeting`, `message`, `file`,
-  `followup`, `documentation`, `research` or `media`.
-- **start** and **end** – ISO timestamps or the start of the 5‑minute block.
+- **type** – the kind of occurrence such as `meeting`, `message`, `file`, `followup`, `documentation`, `research`, `media`, etc.
+- **source** - the file the occurence was extracted from.
+- **start** and **end** – HH:MM:SS timestamps containing the occurence.
 - **title** and **summary** – short text for display and search.
-- **work** – boolean work vs. personal classification when known.
+- **work** – boolean, work vs. personal classification when known.
 - **participants** – optional list of people or entities involved.
 - **details** – free-form object for prompt specific fields.
 
