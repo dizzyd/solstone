@@ -13,7 +13,7 @@ from flask import Flask
 
 from . import state
 from .utils import (
-    build_index,
+    build_occurrence_index,
     format_date,
     generate_top_summary,
     modify_entity_file,
@@ -44,7 +44,7 @@ def create_app(journal: str = "", password: str = "") -> Flask:
     if journal:
         state.journal_root = journal
         entities.reload_entities()
-        state.meetings_index = build_index(journal)
+        state.occurrences_index = build_occurrence_index(journal)
     return app
 
 
@@ -66,7 +66,7 @@ entities_data = entities_view.entities_data
 api_top_generate = entities_view.api_top_generate
 api_top_update = entities_view.api_top_update
 api_modify_entity = entities_view.api_modify_entity
-calendar_meetings = calendar_view.calendar_meetings
+calendar_occurrences = calendar_view.calendar_occurrences
 login = home_view.login
 logout = home_view.logout
 
@@ -85,7 +85,7 @@ __all__ = [
     "api_top_generate",
     "api_top_update",
     "api_modify_entity",
-    "calendar_meetings",
+    "calendar_occurrences",
     "login",
     "logout",
     "format_date",
@@ -96,7 +96,7 @@ __all__ = [
     "reload_entities",
     "journal_root",
     "entities_index",
-    "meetings_index",
+    "occurrences_index",
 ]
 
 
@@ -105,8 +105,8 @@ def __getattr__(name: str):
         return state.journal_root
     if name == "entities_index":
         return state.entities_index
-    if name == "meetings_index":
-        return state.meetings_index
+    if name == "occurrences_index":
+        return state.occurrences_index
     raise AttributeError(name)
 
 
@@ -115,14 +115,14 @@ def __setattr__(name: str, value) -> None:
         state.journal_root = value
     elif name == "entities_index":
         state.entities_index = value
-    elif name == "meetings_index":
-        state.meetings_index = value
+    elif name == "occurrences_index":
+        state.occurrences_index = value
     globals()[name] = value
 
 
 class _Module(types.ModuleType):
     def __setattr__(self, key, value):
-        if key in {"journal_root", "entities_index", "meetings_index"}:
+        if key in {"journal_root", "entities_index", "occurrences_index"}:
             setattr(state, key, value)
         super().__setattr__(key, value)
 
