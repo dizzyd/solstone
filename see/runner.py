@@ -44,20 +44,24 @@ def _run_scan(interval: int, extra_args: list[str]) -> None:
                 os.killpg(proc.pid, signal.SIGKILL)
             return
 
-        # Opportunistically reduce the previous 5 minute window
+        # Opportunistically reduce the previous 5 minute window, but only once
+        # per interval. Wait one minute after the block ends so that describe
+        # tasks have completed. This runs at 6, 11, 16 ... minutes past the
+        # hour and covers the preceding 5 minute period.
         now = datetime.now()
         prev_minute = now - timedelta(minutes=1)
-        block_end = prev_minute.replace(
-            minute=(prev_minute.minute // 5) * 5,
-            second=0,
-            microsecond=0,
-        )
-        block_start = block_end - timedelta(minutes=5)
-        day_str = prev_minute.strftime("%Y%m%d")
-        try:
-            reduce_day(day_str, start=block_start, end=block_end)
-        except Exception as exc:
-            print(f"reduce_day failed: {exc}", flush=True)
+        if prev_minute.minute % 5 == 0:
+            block_end = prev_minute.replace(
+                minute=(prev_minute.minute // 5) * 5,
+                second=0,
+                microsecond=0,
+            )
+            block_start = block_end - timedelta(minutes=5)
+            day_str = prev_minute.strftime("%Y%m%d")
+            try:
+                reduce_day(day_str, start=block_start, end=block_end)
+            except Exception as exc:
+                print(f"reduce_day failed: {exc}", flush=True)
 
         time.sleep(interval)
 
@@ -89,7 +93,7 @@ def _run_describe(extra_args: list[str]) -> None:
 
 def main() -> None:
     load_dotenv()
-    
+
     if len(sys.argv) < 2:
         print("Usage: gemini-see <interval_seconds> [args...]", file=sys.stderr)
         sys.exit(1)
