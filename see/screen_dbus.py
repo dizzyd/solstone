@@ -8,10 +8,10 @@ import gi
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 
-gi.require_version("Gdk", "4.0")
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, Gtk
-from PIL import Image
+gi.require_version("Gdk", "4.0")  # noqa: E402
+gi.require_version("Gtk", "4.0")  # noqa: E402
+from gi.repository import Gdk, Gtk  # noqa: E402
+from PIL import Image  # noqa: E402
 
 # Global timestamp for the last screenshot (in seconds)
 last_screenshot_timestamp = 0

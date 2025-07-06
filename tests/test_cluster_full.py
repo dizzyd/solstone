@@ -14,7 +14,7 @@ def copy_day(tmp_path: Path) -> Path:
 
 def test_cluster_full(tmp_path, monkeypatch):
     mod = importlib.import_module("think.cluster")
-    day = copy_day(tmp_path)
+    copy_day(tmp_path)
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     md, count = mod.cluster("20240101")
     assert count == 2
@@ -24,7 +24,7 @@ def test_cluster_full(tmp_path, monkeypatch):
 
 def test_cluster_cli(tmp_path, monkeypatch, capsys):
     mod = importlib.import_module("think.cluster")
-    day = copy_day(tmp_path)
+    copy_day(tmp_path)
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.setattr("sys.argv", ["cluster", "20240101"])
     mod.main()

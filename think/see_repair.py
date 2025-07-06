@@ -1,15 +1,12 @@
 import argparse
 import json
 import os
-import sys
 import time
 
 from PIL import Image
 
-from think.border_detect import detect_border
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from see import gemini_look
+from think.border_detect import detect_border
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_FLASH, GEMINI_PRO
 from think.utils import day_path

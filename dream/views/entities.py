@@ -9,7 +9,6 @@ from think.entities import get_entities
 
 from .. import state
 from ..utils import (
-    DATE_RE,
     format_date,
     generate_top_summary,
     modify_entity_file,

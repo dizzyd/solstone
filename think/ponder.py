@@ -1,12 +1,8 @@
 import argparse
 import json
 import os
-import sys
 import threading
 import time
-
-# Add parent directory to path for module discovery
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 from google import genai
@@ -177,7 +173,7 @@ def main() -> None:
             result = f.read()
         usage_metadata = None
     elif md_exists and args.force:
-        print(f"Markdown file exists but --force specified. Regenerating.")
+        print("Markdown file exists but --force specified. Regenerating.")
         result, usage_metadata = send_markdown(markdown, prompt, api_key, model)
     else:
         result, usage_metadata = send_markdown(markdown, prompt, api_key, model)
@@ -229,7 +225,7 @@ def main() -> None:
         print(f"JSON file already exists: {occ_output_path}. Use --force to overwrite.")
         return
     elif json_exists and args.force:
-        print(f"JSON file exists but --force specified. Regenerating.")
+        print("JSON file exists but --force specified. Regenerating.")
 
     try:
         occurrences = send_occurrence(result, occ_prompt, api_key, model)

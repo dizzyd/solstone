@@ -1,5 +1,4 @@
 import threading
-import time
 
 import numpy as np
 import soundcard as sc
@@ -24,7 +23,7 @@ def input_detect(duration=0.4, sample_rate=44100):
         try:
             audio = mic.record(samplerate=sample_rate, numframes=int(sample_rate * duration))
             results[mic.name] = audio
-        except Exception as e:
+        except Exception:
             results[mic.name] = None
 
     def play_tone():
