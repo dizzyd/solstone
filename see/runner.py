@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Event, Thread
 
+from dotenv import load_dotenv
+
 from think.reduce_screen import reduce_day
 
 STOP_EVENT = Event()
@@ -20,9 +22,9 @@ def _signal_handler(signum: int, frame) -> None:  # type: ignore[unused-argument
     STOP_EVENT.set()
 
 
-def _run_scan(journal: str, interval: int, extra_args: list[str]) -> None:
+def _run_scan(interval: int, extra_args: list[str]) -> None:
     script_path = Path(__file__).with_name("scan.py")
-    cmd_base = [sys.executable, str(script_path), journal, "--min", "250", *extra_args]
+    cmd_base = [sys.executable, str(script_path), "--min", "250", *extra_args]
     while not STOP_EVENT.is_set():
         start_ts = time.strftime("%Y%m%d_%H%M%S")
         print(f"Running scan.py at {start_ts}", flush=True)
@@ -51,18 +53,18 @@ def _run_scan(journal: str, interval: int, extra_args: list[str]) -> None:
             microsecond=0,
         )
         block_start = block_end - timedelta(minutes=5)
-        day_dir = os.path.join(journal, prev_minute.strftime("%Y%m%d"))
+        day_str = prev_minute.strftime("%Y%m%d")
         try:
-            reduce_day(day_dir, start=block_start, end=block_end)
+            reduce_day(day_str, start=block_start, end=block_end)
         except Exception as exc:
             print(f"reduce_day failed: {exc}", flush=True)
 
         time.sleep(interval)
 
 
-def _run_describe(journal: str, extra_args: list[str]) -> None:
+def _run_describe(extra_args: list[str]) -> None:
     script_path = Path(__file__).with_name("describe.py")
-    cmd_base = [sys.executable, str(script_path), journal, *extra_args]
+    cmd_base = [sys.executable, str(script_path), *extra_args]
     while not STOP_EVENT.is_set():
         start_ts = time.strftime("%Y%m%d_%H%M%S")
         print(f"Starting describe.py at {start_ts}", flush=True)
@@ -86,21 +88,19 @@ def _run_describe(journal: str, extra_args: list[str]) -> None:
 
 
 def main() -> None:
+    load_dotenv()
+    
     if len(sys.argv) < 2:
         print("Usage: gemini-see <interval_seconds> [args...]", file=sys.stderr)
         sys.exit(1)
     interval = int(sys.argv[1])
     extra_args = sys.argv[2:]
 
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        sys.exit("JOURNAL_PATH not set")
-
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    scan_thread = Thread(target=_run_scan, args=(journal, interval, extra_args))
-    describe_thread = Thread(target=_run_describe, args=(journal, extra_args))
+    scan_thread = Thread(target=_run_scan, args=(interval, extra_args))
+    describe_thread = Thread(target=_run_describe, args=(extra_args,))
 
     scan_thread.start()
     describe_thread.start()
