@@ -46,14 +46,23 @@ def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--stdio",
+        action="store_true",
+        help="Run using STDIO transport instead of HTTP",
+    )
     args = parser.parse_args()
 
     journal = os.getenv("JOURNAL_PATH") or parser.error("JOURNAL_PATH not set")
-    create_server(journal).run(
-        "streamable-http",
-        host="0.0.0.0",
-        port=args.port,
-    )
+    server = create_server(journal)
+    if args.stdio:
+        server.run()
+    else:
+        server.run(
+            "streamable-http",
+            host="0.0.0.0",
+            port=args.port,
+        )
 
 
 if __name__ == "__main__":
