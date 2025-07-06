@@ -3,7 +3,6 @@ import argparse
 import datetime
 import json
 import os
-import sys
 import time
 
 from PIL import Image, ImageDraw
@@ -63,7 +62,7 @@ def censor_border(img: Image.Image) -> Image.Image:
     """Black out the region inside a detected blue border."""
     try:
         y_min, x_min, y_max, x_max = detect_border(img, BLUE_BORDER)
-    except ValueError as e:
+    except ValueError:
         # Silently ignore when no border is detected or border not thick enough
         return img
     except Exception as e:

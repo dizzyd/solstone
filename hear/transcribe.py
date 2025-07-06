@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import librosa
 import numpy as np
 import soundfile as sf
 from dotenv import load_dotenv
@@ -104,7 +103,7 @@ class Transcriber:
                 # Don't trash if there's unfinished speech in the stash
                 if len(self.merged_stash) > 0:
                     logging.info(
-                        f"No complete segments but {len(self.merged_stash)/SAMPLE_RATE:.1f}s in stash, keeping {raw_path}"
+                        f"No complete segments but {len(self.merged_stash) / SAMPLE_RATE:.1f}s in stash, keeping {raw_path}"
                     )
                     return None
                 logging.info(f"No speech segments detected, moving {raw_path} to trash")

@@ -211,7 +211,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scan a sunstone journal and print overall statistics"
     )
-    args = parser.parse_args()
+    parser.parse_args()
 
     load_dotenv()
     journal = os.getenv("JOURNAL_PATH")

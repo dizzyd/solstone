@@ -12,6 +12,7 @@ from dbus_next.constants import BusType
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
 from google import genai
+from google.genai import types
 from silero_vad import load_silero_vad
 
 from hear.audio_utils import SAMPLE_RATE, detect_speech
@@ -19,8 +20,6 @@ from see.screen_dbus import take_screenshot
 from think.models import GEMINI_FLASH
 
 MODEL = GEMINI_FLASH  # -lite-preview-06-17
-
-from google.genai import types
 
 USER_PROMPT = "Please transcribe any spoken words or utterances you hear in this audio clip, accuracy is important."
 

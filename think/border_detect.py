@@ -32,10 +32,12 @@ def detect_border(
     """
     arr = np.asarray(im)
     r, g, b = color
-    mask = (
-        (np.abs(arr[..., 0] - r) <= tolerance)
-        & (np.abs(arr[..., 1] - g) <= tolerance)
-        & (np.abs(arr[..., 2] - b) <= tolerance)
+    mask = np.logical_and.reduce(
+        [
+            np.abs(arr[..., 0] - r) <= tolerance,
+            np.abs(arr[..., 1] - g) <= tolerance,
+            np.abs(arr[..., 2] - b) <= tolerance,
+        ]
     )
 
     col_hits = mask.sum(0)

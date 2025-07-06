@@ -1,5 +1,4 @@
 import importlib
-from pathlib import Path
 
 
 def test_cluster(tmp_path, monkeypatch):

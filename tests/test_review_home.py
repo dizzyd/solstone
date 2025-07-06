@@ -1,5 +1,4 @@
 import importlib
-from pathlib import Path
 
 
 def test_home_renders_summary(tmp_path):

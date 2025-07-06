@@ -84,11 +84,12 @@ def process_video(path: str, out_dir: str, start: dt.datetime, sample_s: float) 
         if prev_img is not None:
             boxes = compare_images(prev_img, img)
             if boxes:
+                # fmt: off
                 largest = max(
                     boxes,
-                    key=lambda b: (b["box_2d"][3] - b["box_2d"][1])
-                    * (b["box_2d"][2] - b["box_2d"][0]),
+                    key=lambda b: (b["box_2d"][3] - b["box_2d"][1]) * (b["box_2d"][2] - b["box_2d"][0]),
                 )
+                # fmt: on
                 width = largest["box_2d"][3] - largest["box_2d"][1]
                 height = largest["box_2d"][2] - largest["box_2d"][0]
                 if width > MIN_THRESHOLD and height > MIN_THRESHOLD:

@@ -1,6 +1,5 @@
 import importlib
 
-import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
