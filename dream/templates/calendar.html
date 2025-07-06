@@ -73,7 +73,7 @@ h1 { margin-bottom: 0.5em; }
 
 .day-view {
   position:relative;
-  height:800px;
+  height:1067px;
   border-left:60px solid transparent;
 }
 .hour-line {
@@ -233,22 +233,33 @@ function openDay(dateStr){
 
   let html = `<div class="modal-header"><h3>${formattedDate}</h3></div><div class="modal-body"><div class='day-view'>`;
 
-  for(let h=0; h<=24; h++){
+  const startHour = 6;
+  const endHour = 22;
+  for(let h=startHour; h<=endHour; h++){
     const label = h===0? '12am' : h<12? h+'am' : h===12? '12pm' : (h-12)+'pm';
-    html += `<div class='hour-line' style='top:${(h/24)*100}%'><span>${label}</span></div>`;
+    html += `<div class='hour-line' style='top:${((h-startHour)/(endHour-startHour))*100}%'><span>${label}</span></div>`;
   }
+
+  const types = Array.from(new Set(list.map(o => o.type || 'other')));
+  const colWidth = 100 / types.length;
 
   list.forEach(o => {
     if(!o.startTime) return;
     const start = new Date(o.startTime);
     const end = o.endTime ? new Date(o.endTime) : new Date(start.getTime()+5*60000);
-    const s = start.getHours()*60 + start.getMinutes();
-    const e = end.getHours()*60 + end.getMinutes();
-    const top = (s/1440)*100;
-    const height = Math.max((e - s)/1440*100, 0.4);
+    let s = start.getHours()*60 + start.getMinutes();
+    let e = end.getHours()*60 + end.getMinutes();
+    s = Math.max(s, startHour*60);
+    e = Math.min(e, endHour*60);
+    if(e <= s) return;
+    const top = ((s - startHour*60)/((endHour-startHour)*60))*100;
+    const height = Math.max((e - s)/((endHour-startHour)*60)*100, 0.4);
     const type = o.type || 'other';
+    const col = types.indexOf(type);
     const title = escapeHtml(o.title || o.summary || type);
-    html += `<div class='occ ${type}' style='top:${top}%;height:${height}%' title='${title}'></div>`;
+    const left = `calc(${col*colWidth}% + 10px)`;
+    const width = `calc(${colWidth}% - 20px)`;
+    html += `<div class='occ ${type}' style='top:${top}%;height:${height}%;left:${left};width:${width};right:auto' title='${title}'></div>`;
   });
 
   html += "</div></div>";
