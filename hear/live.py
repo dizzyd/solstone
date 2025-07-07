@@ -17,7 +17,7 @@ from silero_vad import load_silero_vad
 
 from hear.audio_utils import SAMPLE_RATE, detect_speech
 from see.screen_dbus import take_screenshot
-from think.models import GEMINI_FLASH
+from think.models import GEMINI_FLASH, GEMINI_LITE
 
 MODEL = GEMINI_FLASH  # -lite-preview-06-17
 
@@ -77,14 +77,14 @@ async def identify_active_speaker(client) -> str:
             model=MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
-                temperature=0.0,
-                max_output_tokens=16,
+                temperature=0.1,
+                max_output_tokens=256+1024,
+                thinking_config=types.ThinkingConfig(thinking_budget=1024),
                 response_mime_type="text/plain",
             ),
         )
-        result = response.text.strip()
-        logging.info("Meeting result: %s", result)
-        return result
+        logging.info("Meeting Speaker: %s", response.text)
+        return response.text.strip()
     except Exception as e:
         logging.error("Gemini meeting request failed: %s", e)
         return ""
@@ -109,6 +109,7 @@ async def handle_audio_message(
     stash: np.ndarray,
     client,
     speaker_state: dict,
+    use_whisper: bool = False,
 ) -> np.ndarray:
     """Handle a single audio message from WebSocket."""
     try:
@@ -126,8 +127,8 @@ async def handle_audio_message(
                 speaker_state["name"] = ""
             speaker_state["task"] = None
 
-        # Trigger screenshot capture if stash grows beyond 5 seconds
-        if len(stash) / SAMPLE_RATE > 5 and speaker_state.get("task") is None:
+        # Trigger screenshot capture if stash grows beyond 3 seconds
+        if len(stash) / SAMPLE_RATE > 3 and speaker_state.get("task") is None:
             speaker_state["task"] = asyncio.create_task(identify_active_speaker(client))
 
         segments, stash = detect_speech(vad, "live", stash)
@@ -141,9 +142,13 @@ async def handle_audio_message(
                     MODEL,
                     buf.getvalue(),
                 )
-                w_text = transcribe_whisper(buf.getvalue())
-                prefix = f"{speaker_state.get('name', '')}: " if speaker_state.get("name") else ""
-                print(f"G: {prefix}{g_text}\nW: {w_text}")
+                if use_whisper:
+                    w_text = transcribe_whisper(buf.getvalue())
+                    prefix = f"{speaker_state.get('name', '')}: " if speaker_state.get("name") else ""
+                    print(f"G: {prefix}{g_text}\nW: {w_text}")
+                else:
+                    prefix = f"{speaker_state.get('name', '')}: " if speaker_state.get("name") else ""
+                    print(f"G: {prefix}{g_text}")
                 speaker_state["name"] = ""
                 speaker_state["task"] = None
             except Exception as e:
@@ -154,7 +159,7 @@ async def handle_audio_message(
         return stash
 
 
-async def live_loop(ws_url: str, client) -> None:
+async def live_loop(ws_url: str, client, use_whisper: bool = False) -> None:
     vad = load_silero_vad()
     stash = np.array([], dtype=np.float32)
     speaker_state = {"task": None, "name": ""}
@@ -168,7 +173,7 @@ async def live_loop(ws_url: str, client) -> None:
             async with websockets.connect(ws_url) as ws:
                 logging.info("WebSocket connected successfully")
                 async for msg in ws:
-                    stash = await handle_audio_message(msg, vad, stash, client, speaker_state)
+                    stash = await handle_audio_message(msg, vad, stash, client, speaker_state, use_whisper)
                     processed_seconds += (len(msg) // 8) / SAMPLE_RATE  # Approximate calculation
 
                 # If we reach here, connection closed normally
@@ -206,6 +211,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Live transcription from WebSocket")
     parser.add_argument("--ws-url", required=True, help="WebSocket URL from gemini-mic")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--whisper", action="store_true", help="Enable Whisper transcription (off by default)")
     args = parser.parse_args()
 
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -216,7 +222,7 @@ def main() -> None:
 
     client = genai.Client(api_key=api_key)
 
-    asyncio.run(live_loop(args.ws_url, client))
+    asyncio.run(live_loop(args.ws_url, client, args.whisper))
 
 
 if __name__ == "__main__":
