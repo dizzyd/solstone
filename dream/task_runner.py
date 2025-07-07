@@ -151,8 +151,14 @@ class TaskRunner:
     def _run_loop(self) -> None:
         assert self.loop is not None
         asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(websockets.serve(self._handler, self.host, self.port))
-        self.loop.run_forever()
+        
+        async def start_server():
+            server = await websockets.serve(
+                lambda ws: self._handler(ws, ""), self.host, self.port
+            )
+            await server.wait_closed()
+        
+        self.loop.run_until_complete(start_server())
 
     async def _handler(self, ws: websockets.WebSocketServerProtocol, path: str) -> None:
         try:
