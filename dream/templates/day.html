@@ -5,9 +5,10 @@
 <style>
 body{font-family:sans-serif;margin:0;}
 .container{max-width:800px;margin:0 auto;padding:1em;}
-.tabs{border-bottom:2px solid #e0e0e0;margin-bottom:1em;}
-.tab{display:inline-block;padding:8px 12px;margin-right:4px;background:#f5f5f5;border:1px solid #ddd;border-bottom:none;cursor:pointer;border-radius:4px 4px 0 0;}
+.tabs{border-bottom:2px solid #e0e0e0;margin-bottom:1em;display:flex;flex-wrap:nowrap;align-items:center;}
+.tab{display:block;padding:8px 12px;margin-right:4px;background:#f5f5f5;border:1px solid #ddd;border-bottom:none;cursor:pointer;border-radius:4px 4px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
 .tab.active{background:white;font-weight:bold;}
+.admin-link{margin-left:auto;font-size:20px;text-decoration:none;}
 .content{border:1px solid #ddd;padding:1em;}
 </style>
 {% endblock %}
@@ -20,7 +21,7 @@ body{font-family:sans-serif;margin:0;}
     {% for file in files %}
     <a class="tab{% if loop.first %} active{% endif %}" href="#{{ file.slug }}" data-target="{{ file.slug }}">{{ file.label }}</a>
     {% endfor %}
-    <a class="tab" href="{{ url_for('admin.admin_day_page', day=day) }}" title="Admin" aria-label="Admin" style="font-size:20px">⚙️</a>
+    <a class="admin-link" href="{{ url_for('admin.admin_day_page', day=day) }}" title="Admin" aria-label="Admin">⚙️</a>
   </div>
   {% for file in files %}
   <div class="content" id="{{ file.slug }}" style="{% if not loop.first %}display:none{% endif %}">
