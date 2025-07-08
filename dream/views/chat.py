@@ -53,5 +53,5 @@ def send_message() -> Any:
     message = payload.get("message", "")
     attachments = payload.get("attachments", [])
 
-    answer = loop.run_in_executor(None, ask_gemini, message, attachments, api_key).result()
+    answer = ask_gemini(message, attachments, api_key)
     return jsonify(text=answer)

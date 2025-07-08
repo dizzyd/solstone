@@ -15,3 +15,12 @@ def test_send_message_no_key(monkeypatch):
     with review.app.test_request_context("/chat/api/send", method="POST", json={"message": "hi"}):
         resp = review.send_message()
     assert resp[1] == 500
+
+
+def test_send_message_success(monkeypatch):
+    review = importlib.import_module("dream")
+    monkeypatch.setenv("GOOGLE_API_KEY", "x")
+    monkeypatch.setattr("dream.views.chat.ask_gemini", lambda *_, **__: "pong")
+    with review.app.test_request_context("/chat/api/send", method="POST", json={"message": "hi"}):
+        resp = review.send_message()
+    assert resp.json == {"text": "pong"}
