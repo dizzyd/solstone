@@ -16,7 +16,8 @@ The package exposes several commands:
 
 - `ponder` builds a Markdown summary of a day's recordings using a Gemini prompt.
 - `cluster` groups audio and screen JSON files into report sections.
-- `see-repair` and `hear-repair` fix partial outputs from the visual and audio tools.
+- `screen-describe` and `gemini-transcribe` include a `--repair` option to process
+  any missing screenshot or audio descriptions for a day.
 - `entity-roll` collects entities across days and writes a rollup file.
 - `process-day` runs the above tools for a single day.
  - `ponder-mcp` starts an OAuth-enabled server exposing search capabilities over MCP for both ponder text and structured occurrences.
@@ -24,8 +25,6 @@ The package exposes several commands:
 ```bash
 ponder YYYYMMDD [-f PROMPT] [-p MODEL]
 cluster YYYYMMDD
-see-repair YYYYMMDD
-hear-repair YYYYMMDD
 entity-roll
 process-day [--day YYYYMMDD] [--force] [--repair] [--rebuild]
  ponder-mcp [--port PORT]
