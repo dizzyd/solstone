@@ -1,10 +1,12 @@
 import argparse
+import json
 import os
 import re
 import sys
 import threading
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
@@ -73,6 +75,35 @@ def group_entries(entries):
     return groups
 
 
+def scan_day(day_dir: Path) -> dict[str, list[str]]:
+    """Return lists of reduced markdown files and unreduced diff JSON files."""
+    reduced = sorted(p.name for p in day_dir.glob("*_screen.md"))
+
+    unreduced: list[str] = []
+    for start, files in _iter_groups(str(day_dir), None, None):
+        md_path = day_dir / f"{start.strftime('%H%M%S')}_screen.md"
+        if not md_path.exists():
+            unreduced.extend(Path(e["path"]).name for e in files)
+            continue
+        crumb_path = md_path.with_suffix(md_path.suffix + ".crumb")
+        try:
+            with open(crumb_path, "r", encoding="utf-8") as f:
+                crumb = json.load(f)
+            deps = {
+                Path(d.get("path", "")).name
+                for d in crumb.get("dependencies", [])
+                if d.get("type") == "file"
+            }
+        except Exception:
+            unreduced.extend(Path(e["path"]).name for e in files)
+            continue
+        for e in files:
+            if Path(e["path"]).name not in deps:
+                unreduced.append(Path(e["path"]).name)
+
+    return {"reduced": reduced, "unreduced": sorted(set(unreduced))}
+
+
 def load_prompt(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -80,6 +111,14 @@ def load_prompt(path):
     except FileNotFoundError:
         print(f"Prompt file not found: {path}", file=sys.stderr)
         sys.exit(1)
+
+
+def _get_api_key() -> str:
+    load_dotenv()
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY not set in environment")
+    return api_key
 
 
 def call_gemini(markdown, prompt, api_key, debug=False):
@@ -216,6 +255,19 @@ def _ensure_described(day_dir: str, start: datetime | None, end: datetime | None
             raise RuntimeError(f"Missing description JSON for {name}")
 
 
+def _iter_groups(day_dir: str, start: datetime | None, end: datetime | None):
+    entries = parse_monitor_files(day_dir)
+    if not entries:
+        return
+    groups = group_entries(entries)
+    for group_start, files in sorted(groups.items()):
+        if start and group_start < start:
+            continue
+        if end and group_start >= end:
+            continue
+        yield group_start, files
+
+
 def reduce_day(
     day: str,
     prompt_path: str = DEFAULT_PROMPT_PATH,
@@ -243,27 +295,21 @@ def reduce_day(
     print(f"Processing folder: {day_dir}")
     _ensure_described(day_dir, start, end)
 
-    entries = parse_monitor_files(day_dir)
-    if not entries:
+    groups_iter = list(_iter_groups(day_dir, start, end))
+    if not groups_iter:
         print("No monitor diff JSON files found")
         return
 
-    groups = group_entries(entries)
-
-    load_dotenv()
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        print("GOOGLE_API_KEY not set in environment", file=sys.stderr)
+    try:
+        api_key = _get_api_key()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         return
 
     prompt = load_prompt(prompt_path)
     token_tracker = TokenTracker()
 
-    for group_start, files in sorted(groups.items()):
-        if start and group_start < start:
-            continue
-        if end and group_start >= end:
-            continue
+    for group_start, files in groups_iter:
         process_group(
             group_start,
             files,

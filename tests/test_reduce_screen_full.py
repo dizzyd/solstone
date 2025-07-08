@@ -44,3 +44,28 @@ def test_reduce_day(tmp_path, monkeypatch):
     crumb = Path(str(out) + ".crumb")
     assert out.read_text() == "summary"
     assert crumb.is_file()
+
+
+def test_scan_day(tmp_path, monkeypatch):
+    mod = importlib.import_module("see.reduce")
+    day_dir = copy_day(tmp_path)
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+
+    info = mod.scan_day(day_dir)
+    assert "123456_screen.md" in info["reduced"]
+    assert "123456_monitor_1_diff.json" in info["unreduced"]
+
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text("prompt")
+
+    def fake_call(md, prompt_text, api_key, debug=False):
+        return "summary", SimpleNamespace(prompt_token_count=1, candidates_token_count=1)
+
+    monkeypatch.setattr(mod, "call_gemini", fake_call)
+    monkeypatch.setattr(mod, "load_dotenv", lambda: True)
+    monkeypatch.setenv("GOOGLE_API_KEY", "x")
+    mod.reduce_day("20240101", str(prompt))
+
+    info_after = mod.scan_day(day_dir)
+    assert "123000_screen.md" in info_after["reduced"]
+    assert not info_after["unreduced"]
