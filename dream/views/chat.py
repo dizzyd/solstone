@@ -25,17 +25,19 @@ async def _get_toolset():
 
 
 def ask_gemini(prompt: str, attachments: List[str], api_key: str) -> str:
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
     toolset = loop.run_until_complete(_get_toolset())
-    model = genai.GenerativeModel(
-        model_name=GEMINI_FLASH,
-        tools=[toolset],
-        tool_config=types.ToolConfig(
-            function_calling_config=types.FunctionCallingConfig(mode="AUTO")
+    model = client.models.generate_content(
+        model=GEMINI_FLASH,
+        contents=[prompt] + attachments,
+        config=types.GenerateContentConfig(
+            tools=[toolset],
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode="AUTO")
+            ),
         ),
     )
-    chat = model.start_chat(history=[])
-    return chat.send_message([prompt] + attachments).text
+    return model.text
 
 
 @bp.route("/chat")
