@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from google.genai import types
 
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_PRO
+from think.utils import day_path
 
 
 def extract_date_from_filename(filename: str) -> Optional[datetime]:
@@ -163,6 +165,18 @@ def gather_files(day: datetime, day_dirs: Dict[str, str]) -> List[str]:
         graph_files = glob.glob(graph_pattern)
         files.extend(graph_files)
     return files
+
+
+def scan_day(day: str) -> Dict[str, List[str]]:
+    """Return lists of processed and missing entity markdown files."""
+    day_dir = Path(day_path(day))
+    processed: List[str] = []
+    repairable: List[str] = []
+    if (day_dir / "entities.md").exists():
+        processed.append("entities.md")
+    elif list(day_dir.glob("ponder_knowledge_graph*.md")):
+        repairable.append("entities.md")
+    return {"processed": processed, "repairable": repairable}
 
 
 def process_day(day_str: str, day_dirs: Dict[str, str], force: bool) -> None:
