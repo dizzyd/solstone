@@ -34,12 +34,14 @@ def test_build_entities_and_cache(tmp_path):
     assert loaded["20240101"]["entries"][0][0] == "Person"
 
 
-def test_get_entities(tmp_path):
+def test_entities_class(tmp_path):
     indexer = importlib.import_module("think.entities")
     day = tmp_path / "20240101"
     day.mkdir()
     (day / "entities.md").write_text("* Person: Jane\n")
-    result = indexer.get_entities(str(tmp_path))
+    ent = indexer.Entities(str(tmp_path))
+    ent.rescan()
+    result = ent.index()
     assert "Person" in result and "Jane" in result["Person"]
 
 

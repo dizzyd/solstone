@@ -172,13 +172,57 @@ def scan_entities(journal: str, cache: Dict[str, dict]) -> bool:
     return changed
 
 
-def get_entities(journal: str) -> Dict[str, Dict[str, dict]]:
-    """Return the entity index for ``journal``."""
-    cache = load_cache(journal)
-    if scan_entities(journal, cache):
-        save_cache(journal, cache)
+class Entities:
+    """Helper for working with ``entities.md`` files across a journal."""
 
-    return build_entities(cache)
+    def __init__(self, journal: str) -> None:
+        self.journal = journal
+        self.cache: Dict[str, dict] = load_cache(journal)
+
+    # ------------------------------------------------------------------
+    # Scan helpers
+    # ------------------------------------------------------------------
+    def scan_day(self, day: str) -> Dict[str, List[str]]:
+        """Return lists of processed and repairable files for ``day``."""
+
+        day_dir = os.path.join(self.journal, day)
+        md_path = os.path.join(day_dir, "entities.md")
+        if not os.path.isfile(md_path):
+            return {"processed": [], "repairable": []}
+
+        info = self.cache.get(day)
+        mtime = int(os.path.getmtime(md_path))
+        if info and info.get("mtime") == mtime:
+            return {"processed": ["entities.md"], "repairable": []}
+        return {"processed": [], "repairable": ["entities.md"]}
+
+    def scan(self) -> Dict[str, int]:
+        """Return totals of cached vs stale entity files for the journal."""
+
+        processed = 0
+        repairable = 0
+        for day, path in find_day_dirs(self.journal).items():
+            md_path = os.path.join(path, "entities.md")
+            if not os.path.isfile(md_path):
+                continue
+            info = self.cache.get(day)
+            mtime = int(os.path.getmtime(md_path))
+            if info and info.get("mtime") == mtime:
+                processed += 1
+            else:
+                repairable += 1
+        return {"processed": processed, "repairable": repairable}
+
+    def rescan(self) -> None:
+        """Update :attr:`cache` from disk and save if changed."""
+
+        if scan_entities(self.journal, self.cache):
+            save_cache(self.journal, self.cache)
+
+    def index(self) -> Dict[str, Dict[str, dict]]:
+        """Return the built entity index from the cached data."""
+
+        return build_entities(self.cache)
 
 
 def main() -> None:
@@ -197,18 +241,13 @@ def main() -> None:
         print(f"Error: Journal directory '{journal}' does not exist")
         return
 
-    cache = load_cache(journal)
-
+    ent = Entities(journal)
     if args.rescan:
         print("Rescanning entities...")
-        if scan_entities(journal, cache):
-            save_cache(journal, cache)
-            print("Cache updated")
-        else:
-            print("No changes found")
-        journal_log("entities rescan ok")
+        ent.rescan()
+        journal_log("entities rescanned")
 
-    entities = build_entities(cache)
+    entities = ent.index()
 
     print("Entity counts by category:")
     print("-" * 30)

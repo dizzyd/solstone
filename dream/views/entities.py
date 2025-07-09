@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 from flask import Blueprint, jsonify, render_template, request
 
-from think.entities import get_entities
+from think.entities import Entities
 
 from .. import state
 from ..utils import (
@@ -20,7 +20,9 @@ bp = Blueprint("entities", __name__, template_folder="../templates")
 
 
 def reload_entities() -> None:
-    state.entities_index = get_entities(state.journal_root)
+    ent = Entities(state.journal_root)
+    ent.rescan()
+    state.entities_index = ent.index()
 
 
 @bp.route("/entities")
