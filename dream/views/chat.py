@@ -23,13 +23,13 @@ async def ask_gemini(prompt: str, attachments: List[str], api_key: str) -> str:
     mcp_client = get_sunstone_client()
 
     past: List[types.Content] = [
-        types.Content(role=("user" if m["role"] == "user" else "model"), parts=[m["text"]])
+        types.Content(role=("user" if m["role"] == "user" else "model"), parts=[types.Part(text=m["text"])])
         for m in state.chat_history
     ]
 
-    past.append(types.Content(role="user", parts=[prompt]))
+    past.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
     for a in attachments:
-        past.append(types.Content(role="user", parts=[a]))
+        past.append(types.Content(role="user", parts=[types.Part(text=a)]))
 
     async with mcp_client:
         model = await client.aio.models.generate_content(
