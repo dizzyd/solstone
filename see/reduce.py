@@ -239,22 +239,6 @@ def _normalize_time(value: datetime | None) -> datetime | None:
     return datetime.combine(datetime.min, value.time())
 
 
-def _ensure_described(day_dir: str, start: datetime | None, end: datetime | None) -> None:
-    pattern = re.compile(r"^(\d{6})_monitor_\d+_diff_box\.json$")
-    for name in os.listdir(day_dir):
-        m = pattern.match(name)
-        if not m:
-            continue
-        ts = datetime.strptime(m.group(1), "%H%M%S")
-        if start and ts < start:
-            continue
-        if end and ts >= end:
-            continue
-        json_path = os.path.join(day_dir, name.replace("_box.json", ".json"))
-        if not os.path.exists(json_path):
-            raise RuntimeError(f"Missing description JSON for {name}")
-
-
 def _iter_groups(day_dir: str, start: datetime | None, end: datetime | None):
     entries = parse_monitor_files(day_dir)
     if not entries:
@@ -293,7 +277,6 @@ def reduce_day(
     end = _normalize_time(end)
 
     print(f"Processing folder: {day_dir}")
-    _ensure_described(day_dir, start, end)
 
     groups_iter = list(_iter_groups(day_dir, start, end))
     if not groups_iter:
