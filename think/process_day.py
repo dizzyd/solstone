@@ -19,13 +19,13 @@ def run_command(cmd: list[str]) -> bool:
     return True
 
 
-def build_commands(journal: str, day: str, force: bool, repair: bool) -> list[list[str]]:
+def build_commands(day: str, force: bool, repair: bool) -> list[list[str]]:
     commands: list[list[str]] = []
 
     if repair:
         print(f"Running repair routines for {day}")
-        commands.append(["gemini-transcribe", journal, "--repair", day])
-        commands.append(["screen-describe", journal, "--repair", day])
+        commands.append(["gemini-transcribe", "--repair", day])
+        commands.append(["screen-describe", "--repair", day])
 
     reduce_cmd = ["reduce-screen", day]
     if force:
@@ -40,7 +40,7 @@ def build_commands(journal: str, day: str, force: bool, repair: bool) -> list[li
             cmd.append("--force")
         commands.append(cmd)
 
-    entity_cmd = ["entity-roll", journal]
+    entity_cmd = ["entity-roll", "--day", day]
     if force:
         entity_cmd.append("--force")
     commands.append(entity_cmd)
@@ -96,7 +96,7 @@ def main() -> None:
                 if os.path.exists(crumb):
                     os.remove(crumb)
 
-    commands = build_commands(journal, day, args.force, repair)
+    commands = build_commands(day, args.force, repair)
     success_count = 0
     fail_count = 0
     for cmd in commands:
