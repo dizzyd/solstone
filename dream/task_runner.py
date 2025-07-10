@@ -67,7 +67,11 @@ class _LineLogger:
 
 
 def run_task(
-    name: str, day: Optional[str] = None, logger: Optional[Callable[[str, str], None]] = None
+    name: str,
+    day: Optional[str] = None,
+    logger: Optional[Callable[[str, str], None]] = None,
+    *,
+    force: bool = False,
 ) -> int:
     logger = logger or (lambda t, m: None)
     out_logger = _LineLogger("stdout", logger)
@@ -118,17 +122,17 @@ def run_task(
                 prompts = sorted(glob.glob(os.path.join(think_dir, "ponder", "*.txt")))
                 code = 0
                 for prompt in prompts:
-                    code = _run_command(
-                        [
-                            "ponder",
-                            day,
-                            "-f",
-                            prompt,
-                            "-p",
-                            "--verbose",
-                        ],
-                        logger,
-                    )
+                    cmd = [
+                        "ponder",
+                        day,
+                        "-f",
+                        prompt,
+                        "-p",
+                        "--verbose",
+                    ]
+                    if force:
+                        cmd.append("--force")
+                    code = _run_command(cmd, logger)
                     if code != 0:
                         break
             elif name == "entity":
@@ -147,20 +151,23 @@ def run_task(
             elif name == "reduce":
                 if not day:
                     raise ValueError("day required")
-                code = _run_command(["reduce-screen", day, "--verbose"], logger)
+                cmd = ["reduce-screen", day, "--verbose"]
+                if force:
+                    cmd.append("--force")
+                code = _run_command(cmd, logger)
             elif name == "process_day":
                 if not day:
                     raise ValueError("day required")
-                code = _run_command(
-                    [
-                        "process-day",
-                        "--day",
-                        day,
-                        "--repair",
-                        "--verbose",
-                    ],
-                    logger,
-                )
+                cmd = [
+                    "process-day",
+                    "--day",
+                    day,
+                    "--repair",
+                    "--verbose",
+                ]
+                if force:
+                    cmd.append("--force")
+                code = _run_command(cmd, logger)
             else:
                 logger("stderr", f"Unknown task: {name}")
                 code = 1
@@ -204,6 +211,7 @@ class TaskRunner:
             req = json.loads(msg)
             task = req.get("task")
             day = req.get("day")
+            force = bool(req.get("force"))
         except Exception as e:  # pragma: no cover - handshake errors
             await ws.send(json.dumps({"type": "stderr", "text": str(e)}))
             await ws.close()
@@ -217,7 +225,7 @@ class TaskRunner:
             )
 
         def _runner() -> None:
-            code = run_task(task, day, _log)
+            code = run_task(task, day, _log, force=force)
             if self.loop:
                 asyncio.run_coroutine_threadsafe(
                     ws.send(json.dumps({"type": "exit", "code": code})), self.loop

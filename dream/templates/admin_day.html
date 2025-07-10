@@ -43,6 +43,7 @@ function runTask(data){
   out.innerHTML='';
   modal.style.display='block';
   taskDone=false;
+  if(data.force) out.innerHTML='[using --force]\n';
   const spinner=document.createElement('span');
   spinner.className='spinner';
   out.appendChild(spinner);
@@ -63,10 +64,10 @@ function runTask(data){
 }
 document.getElementById('hearRepairBtn').onclick=()=>runTask({task:'hear_repair',day:'{{ day }}'});
 document.getElementById('seeRepairBtn').onclick=()=>runTask({task:'see_repair',day:'{{ day }}'});
-document.getElementById('ponderBtn').onclick=()=>runTask({task:'ponder',day:'{{ day }}'});
-document.getElementById('entityBtn').onclick=()=>runTask({task:'entity',day:'{{ day }}'});
-document.getElementById('reduceBtn').onclick=()=>runTask({task:'reduce',day:'{{ day }}'});
-document.getElementById('processBtn').onclick=()=>runTask({task:'process_day',day:'{{ day }}'});
+document.getElementById('ponderBtn').onclick=e=>runTask({task:'ponder',day:'{{ day }}',force:e.shiftKey});
+document.getElementById('entityBtn').onclick=e=>runTask({task:'entity',day:'{{ day }}'});
+document.getElementById('reduceBtn').onclick=e=>runTask({task:'reduce',day:'{{ day }}',force:e.shiftKey});
+document.getElementById('processBtn').onclick=e=>runTask({task:'process_day',day:'{{ day }}',force:e.shiftKey});
 function hideModal(){
   document.getElementById('taskModal').style.display='none';
   if(taskDone) location.reload();
