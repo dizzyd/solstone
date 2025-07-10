@@ -58,6 +58,24 @@ def save_cache(images):
         f.write(str(time.time()))
 
 
+def recent_audio_activity(journal: str, window: int = 120) -> bool:
+    """Return True if an *_audio.json file was modified in the last ``window`` seconds."""
+    day_dir = os.path.join(journal, datetime.datetime.now().strftime("%Y%m%d"))
+    if not os.path.isdir(day_dir):
+        return False
+    cutoff = time.time() - window
+    for name in os.listdir(day_dir):
+        if not name.endswith("_audio.json"):
+            continue
+        path = os.path.join(day_dir, name)
+        try:
+            if os.path.getmtime(path) >= cutoff:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def censor_border(img: Image.Image) -> Image.Image:
     """Black out the region inside a detected blue border."""
     try:
@@ -82,8 +100,9 @@ def process_once(journal, min_threshold):
 
     prev_images, last_ts = load_cache()
 
+    recent_audio = recent_audio_activity(journal)
     idle_ms = idle_time_ms()
-    if last_ts and idle_ms / 1000 >= (time.time() - last_ts):
+    if not recent_audio and last_ts and idle_ms / 1000 >= (time.time() - last_ts):
         log("Desktop still idle; nothing to do.")
         return
 

@@ -62,6 +62,7 @@ function runTask(data){
   out.innerHTML='';
   modal.style.display='block';
   taskDone=false;
+  if(data.force) out.innerHTML='[using --force]\n';
   const spinner=document.createElement('span');
   spinner.className='spinner';
   out.appendChild(spinner);
