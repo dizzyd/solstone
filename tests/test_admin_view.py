@@ -78,7 +78,6 @@ def test_admin_actions(monkeypatch, tmp_path):
         resp = review.reload_entities_view()
     assert resp.json["status"] == "ok"
     assert [sys.executable, "-m", "think.entities", "--rescan"] in called
-    assert called == {"reload": True}
 
 
 def test_task_log_api(monkeypatch, tmp_path):
