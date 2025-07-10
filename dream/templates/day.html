@@ -101,9 +101,10 @@ function renderEvents(list){
     html += `<div class='hour-line' style='top:${((h-startHour)/(endHour-startHour))*100}%'><span>${label}</span></div>`;
   }
 
+  // Process events and calculate overlapping groups
+  const processedEvents = [];
   const types = [];
-  list.forEach(o => { const t = o.type || 'other'; if(!types.includes(t)) types.push(t); });
-  const colWidth = 100 / (types.length || 1);
+  
   list.forEach(o => {
     if(!o.startTime) return;
     const start = new Date(o.startTime);
@@ -113,16 +114,79 @@ function renderEvents(list){
     s = Math.max(s, startHour*60);
     e = Math.min(e, endHour*60);
     if(e <= s) return;
-    const top = ((s - startHour*60)/((endHour-startHour)*60))*100;
-    const height = Math.max((e - s)/((endHour-startHour)*60)*100, 0.4);
+    
     const type = o.type || 'other';
-    const col = types.indexOf(type);
-    const title = escapeHtml(o.title || o.summary || type);
-    const left = `calc(${col*colWidth}% + 4px)`;
-    const width = `calc(${colWidth}% - 8px)`;
-    const slug = o.slug ? `#${o.slug}` : '';
-    const href = `${window.location.pathname}${slug}`;
-    html += `<a class='occ ${type}' href='${href}' style='top:${top}%;height:${height}%;left:${left};width:${width};right:auto' title='${title}'></a>`;
+    if(!types.includes(type)) types.push(type);
+    
+    processedEvents.push({
+      startMinutes: s,
+      endMinutes: e,
+      type: type,
+      title: escapeHtml(o.title || o.summary || type),
+      slug: o.slug ? `#${o.slug}` : '',
+      href: `${window.location.pathname}${o.slug ? '#' + o.slug : ''}`
+    });
+  });
+
+  // Group events by type
+  const eventsByType = {};
+  types.forEach(type => {
+    eventsByType[type] = processedEvents.filter(e => e.type === type);
+    // Sort events within each type by start time
+    eventsByType[type].sort((a, b) => a.startMinutes - b.startMinutes);
+  });
+
+  // Calculate columns needed for each type (based on overlaps within that type)
+  const typeColumnCounts = {};
+  types.forEach(type => {
+    const typeEvents = eventsByType[type];
+    const typeColumns = [];
+    
+    typeEvents.forEach(event => {
+      // Find first available column within this type
+      let columnIndex = 0;
+      while (columnIndex < typeColumns.length && 
+             typeColumns[columnIndex].some(existing => 
+               event.startMinutes < existing.endMinutes && 
+               event.endMinutes > existing.startMinutes)) {
+        columnIndex++;
+      }
+      
+      if (columnIndex === typeColumns.length) {
+        typeColumns.push([]);
+      }
+      
+      typeColumns[columnIndex].push(event);
+      event.typeColumn = columnIndex;
+    });
+    
+    typeColumnCounts[type] = typeColumns.length;
+  });
+
+  // Calculate global column positions for each type
+  let globalColumnOffset = 0;
+  const typeColumnOffsets = {};
+  types.forEach(type => {
+    typeColumnOffsets[type] = globalColumnOffset;
+    globalColumnOffset += typeColumnCounts[type];
+  });
+
+  const totalColumns = globalColumnOffset;
+  const columnWidth = totalColumns > 0 ? 100 / totalColumns : 100;
+
+  // Assign final column positions
+  processedEvents.forEach(event => {
+    event.column = typeColumnOffsets[event.type] + event.typeColumn;
+  });
+  
+  // Render events
+  processedEvents.forEach(event => {
+    const top = ((event.startMinutes - startHour*60)/((endHour-startHour)*60))*100;
+    const height = Math.max((event.endMinutes - event.startMinutes)/((endHour-startHour)*60)*100, 0.4);
+    const left = event.column * columnWidth;
+    const width = columnWidth * 0.95; // Leave small gap between columns
+    
+    html += `<a class='occ ${event.type}' href='${event.href}' style='top:${top}%;height:${height}%;left:${left}%;width:${width}%;right:auto' title='${event.title}'></a>`;
   });
   html += '</div>';
   div.innerHTML = html;
