@@ -92,7 +92,7 @@ def run_task(
     start = time.monotonic()
     info = f"{name} {day}" if day else name
     print(f"[task] start: {info}")
-
+    use_stop = stop is not None
     stop = stop or threading.Event()
 
     with contextlib.redirect_stdout(out_logger), contextlib.redirect_stderr(err_logger):
