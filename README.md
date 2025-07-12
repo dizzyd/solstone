@@ -8,7 +8,8 @@ Captured files are organised under a **journal** directory containing daily `YYY
 
 - **See** 👁️ - Screenshot capture and visual comparison with the `screen-watch` command
   and `screen-describe`. The `gemini-see` wrapper keeps both running in a loop. The
-  `reduce-screen` command condenses diff descriptions into shorter Markdown.
+  `reduce-screen` command condenses diff descriptions into shorter Markdown. These
+  tools run only on Linux with a GNOME desktop.
 - **Hear** 👂 - Audio recording and transcription with `gemini-mic` and `gemini-transcribe`.
   Use `gemini-hear` to run them together or `gemini-live` for real time transcripts.
 - **Think** 🧠 - Data analysis and AI-powered insights via commands like `ponder`,
@@ -23,7 +24,8 @@ pip install -e .
 ```
 
 Set `JOURNAL_PATH` to the folder where recordings should be stored and
-`GOOGLE_API_KEY` for Gemini access.
+`GOOGLE_API_KEY` for Gemini access. These variables can also be placed in a
+`.env` file which is loaded by most commands.
 
 Use `gemini-hear` together with `gemini-see` to run the audio and visual capture
 services in continuous loops. `gemini-hear` wraps `gemini-mic` and

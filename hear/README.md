@@ -12,11 +12,11 @@ All Python dependencies are declared in `pyproject.toml`. System packages for so
 
 ## Usage
 
-After setting the `GOOGLE_API_KEY` environment variable you can run the `gemini-mic` command to capture audio and `gemini-transcribe` to convert the recordings to text.  The journal location is taken from the `JOURNAL_PATH` environment variable.  The paths for a single day are called **days**.  These commands correspond to the `capture.py` and `transcribe.py` modules respectively:
+After setting the `GOOGLE_API_KEY` environment variable you can run the `gemini-mic` command to capture audio and `gemini-transcribe` to convert the recordings to text.  The journal location is taken from the `JOURNAL_PATH` environment variable.  These variables can also be stored in a `.env` file which is loaded automatically.  The paths for a single day are called **days**.  The commands correspond to the `capture.py` and `transcribe.py` modules respectively:
 
 ```bash
 gemini-mic [-d] [-t SECONDS]
-gemini-transcribe [-p PROMPT] [-i SECONDS]
+gemini-transcribe [-p PROMPT] [-v] [--repair DAY]
 ```
 
 The `gemini-hear` command runs both of the above tools in a loop so audio
@@ -24,8 +24,8 @@ capture and transcription continue until interrupted. For live text output
 from the recorder's WebSocket stream you can use `gemini-live`.
 
 Use `-d` to enable debug mode and `-t` to adjust the speech processing interval.
-The `gemini-transcribe` command accepts `-p` to specify a prompt file and `-i` to
-control the polling interval. Crash
+The `gemini-transcribe` command accepts `-p` to specify a prompt file, `-v` for
+verbose output and `--repair` to process a previous day. Crash
 tracebacks are logged to standard error by default.
 
 ## Architectural Overview
