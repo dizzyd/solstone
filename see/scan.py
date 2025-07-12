@@ -2,6 +2,7 @@
 import argparse
 import datetime
 import json
+import logging
 import os
 import time
 
@@ -11,13 +12,7 @@ from see.screen_compare import compare_images
 from see.screen_dbus import idle_time_ms, screen_snap
 from think.border_detect import detect_border
 
-GLOBAL_VERBOSE = False
 BLUE_BORDER = (0, 0, 255)
-
-
-def log(message, force=False):
-    if GLOBAL_VERBOSE or force:
-        print(message)
 
 
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "sunstone", "see")
@@ -85,9 +80,9 @@ def censor_border(img: Image.Image) -> Image.Image:
         return img
     except Exception as e:
         # Log unexpected errors
-        log(f"Unexpected error detecting border: {e}", force=True)
+        logging.error("Unexpected error detecting border: %s", e)
         return img
-    log(f"Detected border at: {y_min}, {x_min}, {y_max}, {x_max}")
+    logging.debug("Detected border at: %s, %s, %s, %s", y_min, x_min, y_max, x_max)
     censored = img.copy()
     draw = ImageDraw.Draw(censored)
     draw.rectangle(((x_min, y_min), (x_max, y_max)), fill="black")
@@ -103,13 +98,13 @@ def process_once(journal, min_threshold):
     recent_audio = recent_audio_activity(journal)
     idle_ms = idle_time_ms()
     if not recent_audio and last_ts and idle_ms / 1000 >= (time.time() - last_ts):
-        log("Desktop still idle; nothing to do.")
+        logging.debug("Desktop still idle; nothing to do.")
         return
 
     try:
         monitor_images = screen_snap()
     except Exception as e:
-        log(f"Error taking screenshot: {e}", force=True)
+        logging.error("Error taking screenshot: %s", e)
         return
 
     for idx, pil_img in enumerate(monitor_images, start=1):
@@ -129,7 +124,7 @@ def process_once(journal, min_threshold):
             box_width = x_max - x_min
             box_height = y_max - y_min
             if box_width > min_threshold and box_height > min_threshold:
-                log(f"[Monitor {idx}] Detected significant difference: {largest_box}")
+                logging.debug("[Monitor %s] Detected significant difference: %s", idx, largest_box)
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 date_part, time_part = timestamp.split("_", 1)
                 day_dir = os.path.join(journal, date_part)
@@ -137,24 +132,22 @@ def process_once(journal, min_threshold):
                 base = os.path.join(day_dir, f"{time_part}_monitor_{idx}_diff")
                 img_filename = base + ".png"
                 censored_img.save(img_filename)
-                log(
-                    f"[Monitor {idx}] Saved diff image: {img_filename}",
-                    force=True,
-                )
+                logging.info("[Monitor %s] Saved diff image: %s", idx, img_filename)
                 box_filename = base + "_box.json"
                 with open(box_filename, "w") as bf:
                     json.dump(largest_box, bf)
-                log(
-                    f"[Monitor {idx}] Saved bounding box JSON: {box_filename}",
-                    force=True,
-                )
+                logging.info("[Monitor %s] Saved bounding box JSON: %s", idx, box_filename)
                 prev_images[idx] = censored_img
             else:
-                log(
-                    f"[Monitor {idx}] Difference detected but largest box {box_width}x{box_height} is < {min_threshold}."
+                logging.debug(
+                    "[Monitor %s] Difference detected but largest box %s x %s is < %s.",
+                    idx,
+                    box_width,
+                    box_height,
+                    min_threshold,
                 )
         else:
-            log(f"[Monitor {idx}] No significant change detected.")
+            logging.debug("[Monitor %s] No significant change detected.", idx)
 
     save_cache(prev_images)
 
@@ -163,7 +156,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Capture screenshots once and compare with cached versions."
     )
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument(
         "--min", type=int, default=400, help="Minimum size threshold for a bounding box (pixels)"
     )
@@ -172,8 +165,8 @@ def main():
     journal = os.getenv("JOURNAL_PATH")
     if not journal:
         parser.error("JOURNAL_PATH not set")
-    global GLOBAL_VERBOSE
-    GLOBAL_VERBOSE = args.verbose
+
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     process_once(journal, args.min)
 

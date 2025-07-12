@@ -1,5 +1,6 @@
 import argparse
 import glob
+import logging
 import os
 import subprocess
 import sys
@@ -11,10 +12,10 @@ from think.utils import day_log
 
 
 def run_command(cmd: list[str]) -> bool:
-    print(f"==> {' '.join(cmd)}")
+    logging.info("==> %s", " ".join(cmd))
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        print(f"Command failed with exit code {result.returncode}: {' '.join(cmd)}")
+        logging.error("Command failed with exit code %s: %s", result.returncode, " ".join(cmd))
         return False
     return True
 
@@ -25,7 +26,7 @@ def build_commands(
     commands: list[list[str]] = []
 
     if repair:
-        print(f"Running repair routines for {day}")
+        logging.info("Running repair routines for %s", day)
         cmd = ["gemini-transcribe", "--repair", day]
         if verbose:
             cmd.append("-v")
@@ -62,7 +63,7 @@ def build_commands(
     return commands
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     parser = argparse.ArgumentParser(description="Run daily processing tasks on a journal day")
     parser.add_argument(
         "--day",
@@ -80,15 +81,16 @@ def parse_args() -> argparse.Namespace:
         help="Remove existing outputs before running repairs (implies --repair)",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
-    return parser.parse_args()
+    return parser, parser.parse_args()
 
 
 def main() -> None:
-    args = parse_args()
+    parser, args = parse_args()
     load_dotenv()
+    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
     journal = os.getenv("JOURNAL_PATH")
     if not journal:
-        sys.exit("JOURNAL_PATH not set")
+        parser.error("JOURNAL_PATH not set")
 
     day = args.day
     if day is None:
@@ -96,8 +98,7 @@ def main() -> None:
     day_dir = os.path.join(journal, day)
 
     if not os.path.isdir(day_dir):
-        print(f"Day folder not found: {day_dir}")
-        sys.exit(1)
+        parser.error(f"Day folder not found: {day_dir}")
 
     repair = args.repair or args.rebuild
     if args.rebuild:
