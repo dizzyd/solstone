@@ -1,56 +1,87 @@
-# Repository Guide for Agents
+## Project Overview
 
-Welcome to **sunstone**, a Python 3 project providing utilities for audio capture,
-screenshot processing and AI‑driven analysis. The code base is organised into
-four main packages:
+**Sunstone** is a Python‑based AI-driven desktop journaling toolkit that:
 
-- **`hear/`** – audio recording and transcription using the Gemini API.
-- **`see/`** – screenshot capture, comparison and image analysis via Gemini.
-- **`think/`** – post‑processing utilities for clustering and summarising data.
-- **`dream/`** - a web app for interacting with the journal data.
+* **hear/**: Captures system audio and transcribes it via an external AI API.
+* **see/**: Takes screenshots and analyzes them with AI vision models.
+* **think/**: Post‑processes and summarizes captured data (clustering, topic extraction).
+* **dream/**: A web interface for navigating and interacting with journaled content.
 
-Each of these packages contains a `README.md` that explains its usage and
-installation. Entry points are defined in `pyproject.toml` with interdependencies across packages.
-The following command installs all tools in editable mode:
+Entry points for each package are defined in `pyproject.toml` under `[tool.poetry.scripts]`. Each package has its own `README.md` with deeper usage examples.
 
-```bash
-pip install -e .
+---
+
+## Project Structure
+
+```
+sunstone/
+├── hear/           # Audio capture & transcription
+├── see/            # Screenshot capture & image analysis
+├── think/          # Data post‑processing & summarization
+├── dream/          # Web app frontend & backend
+├── tests/          # pytest test suites
+├── JOURNAL.md      # Domain model for journal directories
+├── README.md       # Helpful project overview
+├── CRUMBS.md       # Definition of the .crumb file format
+└── AGENTS.md       # AI & contributor guidance (this file)
 ```
 
-Refer to the top level `README.md` for a feature overview or individual package `README.md` for more specifics. Update these when helpful.
+* **Packages**: Each top‑level folder is a Python package with an `__init__.py`. Use absolute imports (e.g. `from sunstone.hear import recorder`).
+* **Journal**: Data is organized under a root `journal/` with the location always specified in a .env as `JOURNAL_PATH`, with subfolders per date (“day”) as `YYYYMMDD`. See `JOURNAL.md` for details.
 
-## Terminology
+---
 
-The directory containing all dated folders is called the **journal**.  A single
-`YYYYMMDD` folder inside the journal is referred to as a **day**. More details
-on these are available in the `JOURNAL.md` file.
+## Coding Standards & Style
 
-## Development guidelines
+* **Language**: Python 3.9+
+* **Formatter**: Black (`black .`) and isort (`isort .`) with settings in `pyproject.toml`.
+* **Linting**: flake8 (`flake8 .`), MyPy (`mypy .`). All new code must pass these checks.
+* **Naming Conventions**:
 
-- Use **Python 3.9+** and keep code formatted with `black` and
-  `isort`. The configuration resides in `pyproject.toml`.
-- Linting with `flake8` and type checking with `mypy` are recommended.
-- Tests are under `tests/`, run `pytest` before committing, install dependencies or use mocks if needed.
-- The dependencies declared in `pyproject.toml` include heavy optional
-  packages (for example `torch` and `PyGObject`).  If `pip install -e .[dev]`
-  fails you can install only the minimal set needed for the tests:
+  * **Modules & packages**: snake\_case
+  * **Classes**: PascalCase
+  * **Functions & variables**: snake\_case
+  * **Constants**: UPPER\_SNAKE\_CASE
+* **Docstrings**: Google style or NumPy style. Include parameter and return descriptions.
+* **Imports**: Absolute imports only, grouped in the order: standard library, third‑party, local.
 
-```bash
-pip install -e . --no-deps
-pip install numpy Pillow Flask Markdown pytest pytest-cov
-pytest
-```
-- Prompt .txt files in `hear/`, `see/` and `think/` provide system instructions
-  for Gemini. Modify them only when a task explicitly requires it.
-- Use absolute imports from the package root (for example,
-  `from hear.audio_utils import SAMPLE_RATE`) so that scripts can be run directly
-  as a cli or as a module, don't wrap imports in `try`/`except` blocks.
+---
 
-## Environment notes
+## Testing & CI
 
-The screenshot utilities depend on GNOME DBus and GObject; these only run on a Linux desktop environment.
+* **Test Framework**: pytest. Place tests under `tests/`, matching module structure.
+* **Coverage**: We include `pytest-cov` in dev dependencies. Aim to maintain or improve existing coverage.
+* **Commands**:
 
-## Contributing
+  ```bash
+  pip install -e .[dev]
+  pytest --cov=.
+  flake8 .
+  mypy .
+  ```
+* **Continuous Integration**: GitHub Actions runs Black, isort, flake8, mypy, and pytest on every pull request. Ensure local checks pass before pushing.
 
-Keep commits focused and descriptive, minimal comments. Ensure code is formatted and any available
-checks pass before submitting a pull request, fix failed checks if relevant to your changes.
+---
+
+## Security & Secrets
+
+* **No hard‑coded secrets**: All credentials must come from environment variables or arguments.
+* **Input Validation**: Sanitize and validate all external inputs (file paths, user data).
+* **Error Handling**: Raise exceptions for unexpected states; avoid silent failures.
+
+---
+
+## Dependencies Management
+
+* **Standard Library Preferred**: Avoid adding heavy dependencies for simple tasks.
+* **Adding New Dependencies**: Must update `pyproject.toml` under `[tool.poetry.dependencies]` and `[tool.poetry.dev-dependencies]` if for tests or tooling.
+* **Optional Heavy Packages**: Use extras (`.[full]`) to install GPU/torch if needed. Document any optional features.
+
+---
+
+## Shared Utilities
+
+* Check for shared function or common utilities:
+  * `think/utils.py` available for any script
+  * `dream/utils.py` for the dream app
+  * whenever you create a new shared utility anywhere else, add a note here to make it more visible
