@@ -22,16 +22,27 @@ The package exposes two commands driven by the `scan.py` and `describe.py` modul
  - `screen-describe` watches the journal's current day folder for these `_box.json`
   files and uses Gemini to produce a JSON description for each diff image. The
   region is highlighted with a red box before calling Gemini. Optional flags
-  control the polling interval and verbose logging.
+  enable verbose output or allow repair/scan modes for a given day.
 
 ```bash
 screen-watch [--verbose] [--min PIXELS]
-screen-describe [-i SECONDS] [-v]
+screen-describe [-v] [--scan DAY] [--repair DAY]
 ```
 
-The `gemini-see` command runs `screen-watch` and `screen-describe` together so
-new screenshots are captured and described continuously.
+The `gemini-see` command runs `screen-watch` and `screen-describe` together.
+It requires an interval in seconds which controls how often screenshots are
+captured and described continuously:
 
-Use `reduce-screen` to summarise diff descriptions into five minute Markdown blocks.
+```bash
+gemini-see <interval_seconds> [screen-watch/describe args]
+```
 
-Set the `GOOGLE_API_KEY` environment variable before running `screen-describe`.
+Use `reduce-screen` to summarise diff descriptions into five minute Markdown blocks. Example:
+
+```bash
+reduce-screen YYYYMMDD [--force] [--start HH:MM] [--end HH:MM]
+```
+
+Set the `GOOGLE_API_KEY` environment variable (or place it in a `.env` file)
+before running `screen-describe`. These utilities only run on Linux desktops
+with a GNOME environment as they rely on DBus and GObject.

@@ -23,14 +23,19 @@ The package exposes several commands:
  - `ponder-mcp` starts an OAuth-enabled server exposing search capabilities over MCP for both ponder text and structured occurrences.
 
 ```bash
-ponder YYYYMMDD [-f PROMPT] [-p MODEL]
+ponder YYYYMMDD [-f PROMPT] [-p] [-c] [--force] [-v]
 cluster YYYYMMDD
 entity-roll
 process-day [--day YYYYMMDD] [--force] [--repair] [--rebuild]
  ponder-mcp [--port PORT]
 ```
 
+`-p` is a switch enabling the Gemini Pro model. Use `-c` to count tokens only,
+`--force` to overwrite existing files and `-v` for verbose logs.
+
 Set `GOOGLE_API_KEY` before running any command that contacts Gemini.
+`JOURNAL_PATH` and `GOOGLE_API_KEY` can also be provided in a `.env` file which
+is loaded automatically by most commands.
 
 ## Automating daily processing
 
