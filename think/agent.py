@@ -14,8 +14,14 @@ import argparse
 import os
 from pathlib import Path
 
-import openai
-from openai_agents import Agent, ResponsesAPIConfig, function_tool
+from agents import (
+    Agent,
+    ModelSettings,
+    RunConfig,
+    Runner,
+    function_tool,
+    set_default_openai_key,
+)
 
 from think.indexer import search_occurrences, search_ponders
 
@@ -54,11 +60,18 @@ def tool_read_markdown(date: str, filename: str) -> str:
     return md_path.read_text(encoding="utf-8")
 
 
-def build_agent(model: str, max_tokens: int) -> Agent:
-    """Return configured OpenAI agent."""
+def build_agent(model: str, max_tokens: int) -> tuple[Agent, RunConfig]:
+    """Return configured OpenAI agent and run configuration."""
 
-    openai.api_key = os.getenv("OPENAI_API_KEY", "")
-    config = ResponsesAPIConfig(model=model, max_tokens=max_tokens, temperature=0.2)
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if api_key:
+        set_default_openai_key(api_key)
+
+    run_config = RunConfig(
+        model=model,
+        model_settings=ModelSettings(max_tokens=max_tokens, temperature=0.2),
+    )
+
     agent = Agent(
         name="SunstoneCLI",
         instructions=(
@@ -66,10 +79,9 @@ def build_agent(model: str, max_tokens: int) -> Agent:
             "to search ponder summaries, search occurrences, and read markdown files. "
             "When answering, always mention which tool was used."
         ),
-        config=config,
         tools=[tool_search_ponder, tool_search_occurrences, tool_read_markdown],
     )
-    return agent
+    return agent, run_config
 
 
 def main() -> None:
@@ -88,9 +100,9 @@ def main() -> None:
         parser.error(f"Task file not found: {args.task_file}")
 
     user_prompt = Path(args.task_file).read_text(encoding="utf-8")
-    agent = build_agent(args.model, args.max_tokens)
-    result = agent.run(user_prompt)
-    print(result)
+    agent, run_config = build_agent(args.model, args.max_tokens)
+    result = Runner.run_sync(agent, user_prompt, run_config=run_config)
+    print(result.final_output)
 
 
 if __name__ == "__main__":

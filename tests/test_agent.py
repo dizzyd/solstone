@@ -5,13 +5,15 @@ from types import SimpleNamespace
 
 
 def test_agent_run(monkeypatch):
-    agents_stub = types.ModuleType("openai_agents")
+    agents_stub = types.ModuleType("agents")
 
     class DummyAgent:
         def __init__(self, *a, **k):
             pass
 
-        def run(self, prompt):
+    class DummyRunner:
+        @staticmethod
+        def run_sync(*a, **k):
             return "done"
 
     def decorator(fn=None, **_):
@@ -20,9 +22,12 @@ def test_agent_run(monkeypatch):
         return fn
 
     agents_stub.Agent = DummyAgent
+    agents_stub.Runner = DummyRunner
     agents_stub.function_tool = decorator
-    agents_stub.ResponsesAPIConfig = lambda **k: SimpleNamespace()
-    sys.modules["openai_agents"] = agents_stub
+    agents_stub.RunConfig = lambda **k: SimpleNamespace()
+    agents_stub.ModelSettings = lambda **k: SimpleNamespace()
+    agents_stub.set_default_openai_key = lambda k: None
+    sys.modules["agents"] = agents_stub
 
     mod = importlib.import_module("think.agent")
 
@@ -34,8 +39,11 @@ def test_agent_run(monkeypatch):
     monkeypatch.setattr(mod, "tool_read_markdown", lambda d, f: "md")
 
     monkeypatch.setattr(mod, "Agent", DummyAgent)
-    monkeypatch.setattr(mod, "ResponsesAPIConfig", lambda **k: SimpleNamespace())
+    monkeypatch.setattr(mod, "Runner", DummyRunner)
+    monkeypatch.setattr(mod, "RunConfig", lambda **k: SimpleNamespace())
+    monkeypatch.setattr(mod, "ModelSettings", lambda **k: SimpleNamespace())
+    monkeypatch.setattr(mod, "set_default_openai_key", lambda k: None)
 
-    agent = mod.build_agent("gpt-4", 100)
-    result = agent.run("Hello")
+    agent, cfg = mod.build_agent("gpt-4", 100)
+    result = mod.Runner.run_sync(agent, "Hello", run_config=cfg)
     assert result == "done"
