@@ -14,8 +14,8 @@
 {% endblock %}
 {% block body %}
 <div class="container">
-  <form id="searchForm">
-    <input id="query" type="text" placeholder="Search" style="width:60%;padding:8px"/>
+  <form id="searchForm" class="input-area">
+    <input id="query" type="text" placeholder="Search" />
     <button type="submit">Search</button>
   </form>
   <table id="resultsTable" style="display:none">
@@ -38,11 +38,14 @@ let offset = 0;
 let total = 0;
 const limit = 20;
 
+const queryInput = document.getElementById('query');
+queryInput.focus();
+
 // Initialize from URL
 const params = new URLSearchParams(window.location.search);
 query = params.get('q') || '';
 if (query) {
-  document.getElementById('query').value = query;
+  queryInput.value = query;
   doSearch(true);
 }
 function getColor(slug){
@@ -90,7 +93,12 @@ function doSearch(reset=true){
       updateLoadMore();
     });
 }
-document.getElementById('searchForm').onsubmit = e => { e.preventDefault(); query = document.getElementById('query').value.trim(); if(!query) return; doSearch(true); };
+document.getElementById('searchForm').onsubmit = e => {
+  e.preventDefault();
+  query = queryInput.value.trim();
+  if (!query) return;
+  doSearch(true);
+};
 document.getElementById('loadMore').onclick = () => doSearch(false);
 </script>
 {% endblock %}
