@@ -10,13 +10,6 @@ body {height:100vh; overflow:hidden;}
 .from-user {background:#dcf8c6; align-self:flex-end;}
 .from-bot {background:#f1f0f0; align-self:flex-start;}
 #drawer {display:none; border-top:1px solid #ddd; padding:0.5em; background:#fafafa;}
-.input-tray {position:sticky; bottom:0; background:white; border-top:1px solid #ddd; padding:1em; box-shadow:0 -2px 10px rgba(0,0,0,0.1);}
-#inputArea {display:flex; gap:0.5em;}
-#inputArea textarea {flex:1; resize:none; padding:0.75em; border-radius:12px; border:1px solid #ccc; font-family:inherit; outline:none; box-sizing:border-box;}
-#inputArea textarea:focus {border-color:#007bff; box-shadow:0 0 0 2px rgba(0,123,255,0.25);}
-#inputArea button {padding:0.75em 1.5em; background:#007bff; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:500;}
-#inputArea button:hover {background:#0056b3;}
-#inputArea button:disabled {background:#ccc; cursor:not-allowed;}
 </style>
 {% endblock %}
 {% block body %}
@@ -24,7 +17,7 @@ body {height:100vh; overflow:hidden;}
   <div id="messages"></div>
   <div id="drawer">Attachments drawer</div>
   <div class="input-tray">
-    <form id="inputArea">
+    <form id="inputArea" class="input-area">
       <textarea id="messageInput" rows="1" placeholder="Send a message..."></textarea>
       <button type="submit">Send</button>
       <button type="button" id="clearBtn">Clear</button>

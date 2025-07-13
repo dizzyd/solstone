@@ -5,12 +5,13 @@ CLI utility launching an OpenAI agent able to search ponder summaries,
 occurrences and read full markdown files from the journal.
 
 Usage:
-    python -m think.agent path/to/task.txt [--model MODEL] [--max-tokens N]
+    python -m think.agent path/to/task.txt [--model MODEL] [--max-tokens N] [-v]
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ from agents import (
 )
 
 from think.indexer import search_occurrences as search_occurrences_impl, search_ponders as search_ponders_impl
+from think.utils import setup_cli
 
 
 @function_tool
@@ -96,16 +98,27 @@ def main() -> None:
         default=1024,
         help="Maximum tokens for the final response",
     )
-    args = parser.parse_args()
+
+    args = setup_cli(parser)
 
     if args.task_file == "-":
         user_prompt = sys.stdin.read()
     else:
         if not os.path.isfile(args.task_file):
             parser.error(f"Task file not found: {args.task_file}")
-        user_prompt = Path(args.task_file).read_text(encoding="utf-8")
+        if args.verbose:
+            logging.getLogger().setLevel(logging.DEBUG)
+            logging.getLogger("openai.agents").setLevel(logging.DEBUG)
 
+    logging.info("Loading task file %s", args.task_file)
+    user_prompt = Path(args.task_file).read_text(encoding="utf-8")
+
+    logging.debug("Task contents: %s", user_prompt)
+
+    logging.info("Building agent with model %s", args.model)
     agent, run_config = build_agent(args.model, args.max_tokens)
+
+    logging.info("Running agent")
     result = Runner.run_sync(agent, user_prompt, run_config=run_config)
     print(result.final_output)
 
