@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 from agents import (
@@ -23,24 +24,24 @@ from agents import (
     set_default_openai_key,
 )
 
-from think.indexer import search_occurrences, search_ponders
+from think.indexer import search_occurrences as search_occurrences_impl, search_ponders as search_ponders_impl
 
 
-@function_tool(name="search_ponder", description="Full-text search over ponder summaries")
-def tool_search_ponder(query: str) -> str:
-    """Search ponder sentences using the journal index."""
+@function_tool
+def search_ponder(query: str) -> str:
+    """Full-text search over ponder summaries using the journal index."""
 
     journal = os.getenv("JOURNAL_PATH", "")
-    _total, results = search_ponders(journal, query, 5)
+    _total, results = search_ponders_impl(journal, query, 5)
     return "\n".join(r["text"] for r in results)
 
 
-@function_tool(name="search_occurrences", description="Search structured occurrences by keyword")
-def tool_search_occurrences(query: str) -> str:
-    """Search occurrences using the journal index."""
+@function_tool
+def search_occurrences(query: str) -> str:
+    """Search structured occurrences by keyword using the journal index."""
 
     journal = os.getenv("JOURNAL_PATH", "")
-    results = search_occurrences(journal, query, 5)
+    results = search_occurrences_impl(journal, query, 5)
     lines = []
     for r in results:
         meta = r.get("metadata", {})
@@ -48,11 +49,12 @@ def tool_search_occurrences(query: str) -> str:
     return "\n".join(lines)
 
 
-@function_tool(
-    name="read_markdown", description="Read an entire Markdown file for a given date and filename"
-)
-def tool_read_markdown(date: str, filename: str) -> str:
-    """Return markdown contents from ``journal/YYYYMMDD/filename.md``."""
+@function_tool
+def read_markdown(date: str, filename: str) -> str:
+    """Read an entire Markdown file for a given date and filename.
+    
+    Returns markdown contents from journal/YYYYMMDD/filename.md.
+    """
 
     md_path = Path("journal") / date / f"{filename}.md"
     if not md_path.is_file():
@@ -79,14 +81,14 @@ def build_agent(model: str, max_tokens: int) -> tuple[Agent, RunConfig]:
             "to search ponder summaries, search occurrences, and read markdown files. "
             "When answering, always mention which tool was used."
         ),
-        tools=[tool_search_ponder, tool_search_occurrences, tool_read_markdown],
+        tools=[search_ponder, search_occurrences, read_markdown],
     )
     return agent, run_config
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sunstone Agent CLI")
-    parser.add_argument("task_file", help="Path to .txt file with the request")
+    parser.add_argument("task_file", help="Path to .txt file with the request, or '-' for stdin")
     parser.add_argument("--model", default="gpt-4", help="OpenAI model to use")
     parser.add_argument(
         "--max-tokens",
@@ -96,10 +98,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not os.path.isfile(args.task_file):
-        parser.error(f"Task file not found: {args.task_file}")
+    if args.task_file == "-":
+        user_prompt = sys.stdin.read()
+    else:
+        if not os.path.isfile(args.task_file):
+            parser.error(f"Task file not found: {args.task_file}")
+        user_prompt = Path(args.task_file).read_text(encoding="utf-8")
 
-    user_prompt = Path(args.task_file).read_text(encoding="utf-8")
     agent, run_config = build_agent(args.model, args.max_tokens)
     result = Runner.run_sync(agent, user_prompt, run_config=run_config)
     print(result.final_output)
