@@ -3,12 +3,11 @@ import os
 
 from fastmcp import FastMCP
 
-from think.utils import setup_cli
-
-from .indexer import (
+from think.indexer import (
     search_occurrences,
     search_ponders,
 )
+from think.utils import setup_cli
 
 
 def create_server(journal: str) -> FastMCP:
