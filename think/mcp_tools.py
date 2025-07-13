@@ -8,13 +8,15 @@ _SERVER_URL = os.getenv("SUNSTONE_MCP_URL")
 def get_sunstone_client():
     """Return a new FastMCP Client for Sunstone tools."""
     from fastmcp import Client
+    from fastmcp.client.transports import PythonStdioTransport
 
     if _SERVER_URL:
         server_source = _SERVER_URL
-    else:
-        # Use the absolute path to the server script
-        server_source = _SERVER_PATH
-    return Client(server_source)
+        return Client(server_source)
+
+    env = os.environ.copy()
+    transport = PythonStdioTransport(_SERVER_PATH, env=env)
+    return Client(transport)
 
 
 async def close_client():
