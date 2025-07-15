@@ -66,7 +66,7 @@ def _get_or_create_cache(client: genai.Client, model: str, display_name: str, te
         model=model,
         config=types.CreateCachedContentConfig(
             display_name=display_name,
-            contents=[types.Part.from_text(text)],
+            contents=[text],
             ttl="900s",
         ),
     )
