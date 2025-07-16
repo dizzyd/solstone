@@ -67,8 +67,7 @@ def test_occurrence_index(tmp_path):
     topics_dir = day / "topics"
     topics_dir.mkdir()
     (topics_dir / "meetings.json").write_text(json.dumps(data))
-    cache: dict = {}
-    mod.scan_occurrences(str(journal), cache, verbose=True)
+    mod.scan_occurrences(str(journal), verbose=True)
     results = mod.search_occurrences(str(journal), "Standup")
     assert results and results[0]["metadata"]["day"] == "20240101"
 
@@ -81,8 +80,9 @@ def test_ponder_index(tmp_path):
     topics_dir = day / "topics"
     topics_dir.mkdir()
     (topics_dir / "files.md").write_text("This is a test sentence.\n")
-    cache: dict = {}
-    mod.scan_ponders(str(journal), cache, verbose=True)
+    mod.scan_ponders(str(journal), verbose=True)
     total, results = mod.search_ponders(str(journal), "test")
+    assert total == 1
+    assert results and results[0]["metadata"]["path"] == "20240102/topics/files.md"
     assert total == 1
     assert results and results[0]["metadata"]["path"] == "20240102/topics/files.md"
