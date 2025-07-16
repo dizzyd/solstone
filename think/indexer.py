@@ -86,29 +86,32 @@ def find_ponder_files(journal: str, exts: Tuple[str, ...] | None = None) -> Dict
 def _scan_files(
     conn: sqlite3.Connection,
     files: Dict[str, str],
-    cache_map: Dict[str, int],
     delete_sql: str,
     index_func,
     verbose: bool = False,
 ) -> bool:
     changed = False
     total = len(files)
+
+    # Get current file mtimes from database
+    cursor = conn.execute("SELECT path, mtime FROM files")
+    db_mtimes = dict(cursor.fetchall())
+
     for idx, (rel, path) in enumerate(files.items(), 1):
         if total:
             print(f"[{idx}/{total}] {rel}")
         mtime = int(os.path.getmtime(path))
-        if cache_map.get(rel) != mtime:
+        if db_mtimes.get(rel) != mtime:
             conn.execute(delete_sql, (rel,))
             index_func(conn, rel, path, verbose)
             conn.execute("REPLACE INTO files(path, mtime) VALUES (?, ?)", (rel, mtime))
-            cache_map[rel] = mtime
             changed = True
 
-    for rel in list(cache_map.keys()):
+    # Remove files that no longer exist
+    for rel in db_mtimes:
         if rel not in files:
             conn.execute(delete_sql, (rel,))
             conn.execute("DELETE FROM files WHERE path=?", (rel,))
-            del cache_map[rel]
             changed = True
 
     return changed
@@ -169,15 +172,14 @@ def _index_occurrences(conn: sqlite3.Connection, rel: str, path: str, verbose: b
         )
 
 
-def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) -> bool:
+def scan_ponders(journal: str, verbose: bool = False) -> bool:
     """Index sentences from ponder markdown files."""
     conn, _ = get_index(journal)
-    p_cache = cache.setdefault("ponders", {})
     files = find_ponder_files(journal, (".md",))
     if files:
         print(f"\nIndexing {len(files)} topic files...")
     changed = _scan_files(
-        conn, files, p_cache, "DELETE FROM sentences WHERE path=?", _index_sentences, verbose
+        conn, files, "DELETE FROM sentences WHERE path=?", _index_sentences, verbose
     )
     if changed:
         conn.commit()
@@ -185,15 +187,14 @@ def scan_ponders(journal: str, cache: Dict[str, dict], verbose: bool = False) ->
     return changed
 
 
-def scan_occurrences(journal: str, cache: Dict[str, dict], verbose: bool = False) -> bool:
+def scan_occurrences(journal: str, verbose: bool = False) -> bool:
     """Index occurrence JSON files."""
     conn, _ = get_index(journal)
-    o_cache = cache.setdefault("occurrences", {})
     files = find_ponder_files(journal, (".json",))
     if files:
         print(f"\nIndexing {len(files)} occurrence files...")
     changed = _scan_files(
-        conn, files, o_cache, "DELETE FROM occurrences WHERE path=?", _index_occurrences, verbose
+        conn, files, "DELETE FROM occurrences WHERE path=?", _index_occurrences, verbose
     )
     if changed:
         conn.commit()
@@ -326,11 +327,12 @@ def main() -> None:
 
     journal = os.getenv("JOURNAL_PATH")
 
-    cache = load_cache(journal)
     if args.rescan:
+        # Load cache only for entities, remove it from ponder/occurrence scanning
+        cache = load_cache(journal)
         changed = scan_entities(journal, cache)
-        changed |= scan_ponders(journal, cache, verbose=args.verbose)
-        changed |= scan_occurrences(journal, cache, verbose=args.verbose)
+        changed |= scan_ponders(journal, verbose=args.verbose)
+        changed |= scan_occurrences(journal, verbose=args.verbose)
         if changed:
             save_cache(journal, cache)
         journal_log("indexer rescan ok")
