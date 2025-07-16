@@ -167,6 +167,16 @@ def add_module_stubs(monkeypatch):
             async def wait_closed(self):
                 return None
 
+        class ConnectionClosed(Exception):
+            pass
+
+        class ClientConnection:
+            def __init__(self, *a, **k):
+                pass
+
+        client_mod = types.ModuleType("websockets.client")
+        client_mod.ClientConnection = ClientConnection
+
         async def serve(handler, host, port):
             class Server:
                 def __init__(self):
@@ -182,7 +192,10 @@ def add_module_stubs(monkeypatch):
 
         ws_mod.WebSocketServerProtocol = DummyWS
         ws_mod.serve = serve
+        ws_mod.ConnectionClosed = ConnectionClosed
+        ws_mod.client = client_mod
         sys.modules["websockets"] = ws_mod
+        sys.modules["websockets.client"] = client_mod
     for name in ["librosa", "noisereduce", "silero_vad", "watchdog.events", "watchdog.observers"]:
         if name not in sys.modules:
             mod = types.ModuleType(name)

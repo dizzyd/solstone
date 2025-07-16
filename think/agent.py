@@ -18,27 +18,9 @@ from pathlib import Path
 
 from agents import Agent, ModelSettings, RunConfig, Runner, set_default_openai_key
 
-try:  # Optional import to avoid heavy dependencies during tests
-    from think.mcp_server import read_markdown, search_occurrence, search_ponder
-except Exception:  # pragma: no cover - replaced in tests
-
-    def search_ponder(*_args, **_kwargs):
-        raise NotImplementedError
-
-    def search_occurrence(*_args, **_kwargs):
-        raise NotImplementedError
-
-    def read_markdown(*_args, **_kwargs):
-        raise NotImplementedError
-
-
 from think.utils import setup_cli
 
-# Aliases for backwards compatibility with tests
-tool_search_ponder = search_ponder
-tool_search_occurrences = search_occurrence
-tool_read_markdown = read_markdown
-
+from agents.mcp import MCPServerStdio
 
 def build_agent(model: str, max_tokens: int) -> tuple[Agent, RunConfig]:
     """Return configured OpenAI agent and run configuration."""
@@ -51,11 +33,6 @@ def build_agent(model: str, max_tokens: int) -> tuple[Agent, RunConfig]:
         model=model,
         model_settings=ModelSettings(max_tokens=max_tokens, temperature=0.2),
     )
-
-    try:
-        from agents.mcp import MCPServerStdio
-    except Exception:  # pragma: no cover - missing in test stubs
-        MCPServerStdio = None
 
     mcp_servers = []
     if MCPServerStdio is not None:
