@@ -1,51 +1,87 @@
-"""List available sunstone CLI commands."""
+import importlib
+import sys
+from importlib.metadata import entry_points
+from io import StringIO
+from typing import List, Tuple
 
-COMMANDS = [
-    ("gemini-mic", "Record audio and save FLAC files", "[-d] [-t SECONDS] [--ws-port PORT]"),
-    ("gemini-transcribe", "Transcribe FLAC files using Gemini", "[-p PROMPT] [--repair DAY]"),
-    ("sunstone-hear", "Run gemini-mic and gemini-transcribe continuously", ""),
-    ("gemini-live", "Live transcription from WebSocket", "--ws-url URL [--whisper]"),
-    ("screen-watch", "Capture screenshots and compare with cached versions", "[--min PIXELS]"),
-    ("screen-describe", "Describe screenshot diffs using Gemini", "[--scan DAY] [--repair DAY]"),
-    (
-        "sunstone-see",
-        "Run screen-watch and screen-describe in a loop",
-        "[interval] [additional args]",
-    ),
-    ("ponder", "Summarize a day's journal with Gemini", "DAY [-f PROMPT] [-p] [-c] [--force]"),
-    ("cluster", "Generate a Markdown report from JSON files", "DAY"),
-    (
-        "reduce-screen",
-        "Summarize monitor JSON files with Gemini",
-        "DAY [--prompt FILE] [--force] [-d] [--start HH:MM] [--end HH:MM]",
-    ),
-    ("dream", "Run the Dream review web service", "--password PASSWORD [--port PORT]"),
-    ("entity-roll", "Merge entity data across days", "[--force] [--day DAY]"),
-    ("journal-stats", "Scan a journal and print statistics", ""),
-    (
-        "dream-extract",
-        "Chunk a media file into the journal",
-        "MEDIA TIMESTAMP [--see BOOL] [--hear BOOL] [--see-sample SECS]",
-    ),
-    (
-        "process-day",
-        "Run daily processing tasks on a journal day",
-        "[--day DAY] [--force] [--repair] [--rebuild]",
-    ),
-    ("ponder-mcp", "Start MCP search server", "[--port PORT] [--stdio]"),
-    ("journal-index", "Index ponder markdown and occurrence files", "[--rescan] [-q QUERY]"),
-    ("empty-trash", "Permanently delete trashed audio files", "[--dry-run] [--jobs N]"),
-]
+
+def get_parser_help(module_name: str, func_name: str = "main") -> Tuple[str, str]:
+    """Return description and usage for a command."""
+    try:
+        module = importlib.import_module(module_name)
+    except Exception:
+        return "", ""
+
+    description = module.__doc__.splitlines()[0].strip() if module.__doc__ else ""
+
+    if hasattr(module, "parse_args"):
+        try:
+            module.parse_args()
+        except Exception:
+            pass
+
+    help_output = ""
+    old_stdout = sys.stdout
+    sys.stdout = StringIO()
+    try:
+        if hasattr(module, func_name):
+            old_argv = sys.argv
+            sys.argv = [module_name, "--help"]
+            try:
+                getattr(module, func_name)()
+            except SystemExit:
+                pass
+            finally:
+                sys.argv = old_argv
+            help_output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+
+    usage = ""
+    for line in help_output.splitlines():
+        if line.lower().startswith("usage:"):
+            parts = line.split()
+            if len(parts) > 2:
+                usage = " ".join(parts[2:])
+            break
+
+    return description, usage
+
+
+def discover_commands() -> List[Tuple[str, str, str]]:
+    """Return available sunstone commands discovered via entry points."""
+    commands = []
+
+    eps = entry_points()
+    if hasattr(eps, "select"):
+        scripts = eps.select(group="console_scripts")
+    else:
+        scripts = eps.get("console_scripts", [])  # type: ignore[attr-defined]
+
+    sunstone_eps = [
+        ep for ep in scripts if ep.value.startswith(("hear.", "see.", "think.", "dream."))
+    ]
+    sunstone_eps.sort(key=lambda ep: ep.name)
+
+    for ep in sunstone_eps:
+        module_path, func_name = ep.value.split(":")
+        description, usage = get_parser_help(module_path, func_name)
+        commands.append((ep.name, description, usage))
+
+    return commands
 
 
 def main() -> None:
-    """Print available sunstone commands with short descriptions."""
+    """Print available sunstone commands with descriptions."""
     print("Available commands:\n")
-    for name, desc, args in COMMANDS:
-        if args:
-            print(f"{name} {args}\n    {desc}")
+    for name, desc, usage in discover_commands():
+        if usage:
+            print(f"{name} {usage}")
         else:
-            print(f"{name}\n    {desc}")
+            print(name)
+        if desc:
+            print(f"    {desc}")
+        print()
 
 
 if __name__ == "__main__":
