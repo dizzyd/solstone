@@ -6,22 +6,22 @@ from typing import Any
 from fastmcp import FastMCP
 
 from think.indexer import search_occurrences as search_occurrences_impl
-from think.indexer import search_ponders as search_ponders_impl
+from think.indexer import search_topics as search_topics_impl
 from think.utils import setup_cli
 
 
-def search_ponder(query: str, limit: int = 5, offset: int = 0) -> dict[str, Any]:
-    """Full-text search over ponder summaries."""
+def search_topic(query: str, limit: int = 5, offset: int = 0) -> dict[str, Any]:
+    """Full-text search over topic summaries."""
 
     journal = os.getenv("JOURNAL_PATH", "")
-    total, results = search_ponders_impl(journal, query, limit, offset)
+    total, results = search_topics_impl(journal, query, limit, offset)
     items = []
     for r in results:
         meta = r.get("metadata", {})
-        ponder = meta.get("ponder", "")
-        if ponder.endswith(".md"):
-            ponder = ponder[:-3]
-        items.append({"day": meta.get("day", ""), "filename": ponder, "text": r.get("text", "")})
+        topic = meta.get("topic", "")
+        if topic.endswith(".md"):
+            topic = topic[:-3]
+        items.append({"day": meta.get("day", ""), "filename": topic, "text": r.get("text", "")})
     return {"total": total, "results": items}
 
 
@@ -50,7 +50,7 @@ def read_markdown(date: str, filename: str) -> str:
 def create_server(journal: str) -> FastMCP:
     mcp = FastMCP(name="sunstone")
     os.environ["JOURNAL_PATH"] = journal
-    mcp.tool(search_ponder, title="Search ponders")
+    mcp.tool(search_topic, title="Search topics")
     mcp.tool(search_occurrence, title="Search occurrences")
     mcp.tool(read_markdown, title="Read markdown")
     return mcp

@@ -80,8 +80,8 @@ def test_ponder_index(tmp_path):
     topics_dir = day / "topics"
     topics_dir.mkdir()
     (topics_dir / "files.md").write_text("This is a test sentence.\n")
-    mod.scan_ponders(str(journal), verbose=True)
-    total, results = mod.search_ponders(str(journal), "test")
+    mod.scan_topics(str(journal), verbose=True)
+    total, results = mod.search_topics(str(journal), "test")
     assert total == 1
     assert results and results[0]["metadata"]["path"] == "20240102/topics/files.md"
     assert total == 1

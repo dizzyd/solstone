@@ -1,4 +1,4 @@
-"""Utilities for indexing ponder outputs and occurrences."""
+"""Utilities for indexing topic outputs and occurrences."""
 
 import json
 import os
@@ -41,7 +41,7 @@ def get_index(journal: str) -> Tuple[sqlite3.Connection, str]:
     """Return SQLite connection for sentence and occurrence indexes."""
     db_dir = os.path.join(journal, INDEX_DIR)
     os.makedirs(db_dir, exist_ok=True)
-    db_path = os.path.join(db_dir, "ponders.sqlite")
+    db_path = os.path.join(db_dir, "indexer.sqlite")
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -49,7 +49,7 @@ def get_index(journal: str) -> Tuple[sqlite3.Connection, str]:
     conn.execute(
         """
         CREATE VIRTUAL TABLE IF NOT EXISTS sentences USING fts5(
-            sentence, path UNINDEXED, day UNINDEXED, ponder UNINDEXED, position UNINDEXED
+            sentence, path UNINDEXED, day UNINDEXED, topic UNINDEXED, position UNINDEXED
         )
         """
     )
@@ -74,8 +74,8 @@ def get_index(journal: str) -> Tuple[sqlite3.Connection, str]:
     return conn, db_path
 
 
-def find_ponder_files(journal: str, exts: Tuple[str, ...] | None = None) -> Dict[str, str]:
-    """Map relative ponder file path to full path filtered by ``exts``."""
+def find_topic_files(journal: str, exts: Tuple[str, ...] | None = None) -> Dict[str, str]:
+    """Map relative topic file path to full path filtered by ``exts``."""
     files: Dict[str, str] = {}
     exts = exts or (".md", ".json")
     for day, day_path in find_day_dirs(journal).items():
@@ -147,11 +147,11 @@ def _index_sentences(conn: sqlite3.Connection, rel: str, path: str, verbose: boo
     sentences = split_sentences(text)
     if verbose:
         print(f"  indexed {len(sentences)} sentences")
-    day, ponder = rel.split(os.sep, 1)
+    day, topic = rel.split(os.sep, 1)
     for pos, sentence in enumerate(sentences):
         conn.execute(
-            ("INSERT INTO sentences(sentence, path, day, ponder, position) VALUES (?, ?, ?, ?, ?)"),
-            (sentence, rel, day, ponder, pos),
+            ("INSERT INTO sentences(sentence, path, day, topic, position) VALUES (?, ?, ?, ?, ?)"),
+            (sentence, rel, day, topic, pos),
         )
 
 
@@ -196,10 +196,10 @@ def _index_occurrences(conn: sqlite3.Connection, rel: str, path: str, verbose: b
         )
 
 
-def scan_ponders(journal: str, verbose: bool = False) -> bool:
-    """Index sentences from ponder markdown files."""
+def scan_topics(journal: str, verbose: bool = False) -> bool:
+    """Index sentences from topic markdown files."""
     conn, _ = get_index(journal)
-    files = find_ponder_files(journal, (".md",))
+    files = find_topic_files(journal, (".md",))
     if files:
         print(f"\nIndexing {len(files)} topic files...")
     changed = _scan_files(
@@ -214,7 +214,7 @@ def scan_ponders(journal: str, verbose: bool = False) -> bool:
 def scan_occurrences(journal: str, verbose: bool = False) -> bool:
     """Index occurrence JSON files."""
     conn, _ = get_index(journal)
-    files = find_ponder_files(journal, (".json",))
+    files = find_topic_files(journal, (".json",))
     if files:
         print(f"\nIndexing {len(files)} occurrence files...")
     changed = _scan_files(
@@ -260,10 +260,10 @@ def scan_raws(journal: str, verbose: bool = False) -> bool:
     return changed
 
 
-def search_ponders(
+def search_topics(
     journal: str, query: str, limit: int = 5, offset: int = 0
 ) -> tuple[int, List[Dict[str, str]]]:
-    """Search the ponder sentence index and return total count and results."""
+    """Search the topic sentence index and return total count and results."""
 
     conn, _ = get_index(journal)
     db = sqlite_utils.Database(conn)
@@ -275,20 +275,20 @@ def search_ponders(
 
     cursor = conn.execute(
         f"""
-        SELECT sentence, path, day, ponder, position, bm25(sentences) as rank
+        SELECT sentence, path, day, topic, position, bm25(sentences) as rank
         FROM sentences WHERE sentences MATCH {quoted} ORDER BY rank LIMIT ? OFFSET ?
         """,
         (limit, offset),
     )
     results: List[Dict[str, str]] = []
-    for sentence, path, day, ponder, pos, rank in cursor.fetchall():
+    for sentence, path, day, topic, pos, rank in cursor.fetchall():
         results.append(
             {
                 "id": path,
                 "text": sentence,
                 "metadata": {
                     "day": day,
-                    "ponder": ponder,
+                    "topic": topic,
                     "path": path,
                     "index": pos,
                 },
@@ -394,14 +394,14 @@ def _display_search_results(results: List[Dict[str, str]]) -> None:
     for idx, r in enumerate(results, 1):
         meta = r.get("metadata", {})
         snippet = r["text"]
-        label = meta.get("ponder") or meta.get("time") or ""
+        label = meta.get("topic") or meta.get("time") or ""
         print(f"{idx}. {meta.get('day')} {label}: {snippet}")
 
 
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Index ponder markdown and occurrence files")
+    parser = argparse.ArgumentParser(description="Index topic markdown and occurrence files")
     parser.add_argument(
         "--rescan",
         action="store_true",
@@ -437,7 +437,7 @@ def main() -> None:
         else:
             cache = load_cache(journal)
             changed = scan_entities(journal, cache)
-            changed |= scan_ponders(journal, verbose=args.verbose)
+            changed |= scan_topics(journal, verbose=args.verbose)
             changed |= scan_occurrences(journal, verbose=args.verbose)
             if changed:
                 save_cache(journal, cache)
@@ -445,7 +445,7 @@ def main() -> None:
 
     # Handle query argument
     if args.query is not None:
-        search_func = search_raws if args.raws else search_ponders
+        search_func = search_raws if args.raws else search_topics
         if args.query:
             # Single query mode - run query and exit
             _total, results = search_func(journal, args.query, 5)
