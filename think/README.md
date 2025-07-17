@@ -81,7 +81,7 @@ python -m think.agent path/to/task.txt [--model MODEL] [--max-tokens N]
 Set `OPENAI_API_KEY` and `JOURNAL_PATH` in your environment so the agent can
 query your journal index. The tools available to the agent are:
 
-- **search_ponder** – full text search across `topics/*.md` sentences.
+- **search_topic** – full text search across `topics/*.md` sentences.
 - **search_occurrences** – keyword search over `occurrences.json` entries.
 - **read_markdown** – return the contents of any `journal/YYYYMMDD/*.md` file.
 

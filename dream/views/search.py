@@ -7,7 +7,7 @@ from typing import Any
 import markdown  # type: ignore
 from flask import Blueprint, jsonify, render_template, request
 
-from think.indexer import search_occurrences, search_ponders
+from think.indexer import search_occurrences, search_topics
 
 from .. import state
 from ..utils import format_date
@@ -20,8 +20,8 @@ def search_page() -> str:
     return render_template("search.html", active="search")
 
 
-@bp.route("/search/api/ponder")
-def search_ponder_api() -> Any:
+@bp.route("/search/api/topic")
+def search_topic_api() -> Any:
     query = request.args.get("q", "").strip()
     if not query:
         return jsonify({"total": 0, "results": []})
@@ -38,7 +38,7 @@ def search_ponder_api() -> Any:
     from think.utils import get_topics
 
     topics = get_topics()
-    total, rows = search_ponders(state.journal_root, query, limit, offset)
+    total, rows = search_topics(state.journal_root, query, limit, offset)
     results = []
     for r in rows:
         meta = r.get("metadata", {})
@@ -74,8 +74,8 @@ def search_occurrence_api() -> Any:
     return jsonify(results)
 
 
-@bp.route("/search/api/ponder_detail")
-def ponder_detail() -> Any:
+@bp.route("/search/api/topic_detail")
+def topic_detail() -> Any:
     path = request.args.get("path")
     if not path:
         return jsonify({}), 400

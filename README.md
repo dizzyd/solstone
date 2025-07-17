@@ -15,7 +15,7 @@ Captured files are organised under a **journal** directory containing daily `YYY
 - **Think** 🧠 - Data analysis and AI-powered insights via commands like `ponder`,
   `cluster` and `process-day`.
 - **Dream** 🌐 - Run `dream --password PASSWORD` for a web UI to review entities and meetings.
-- **Serve** 🛰️ - `ponder-mcp` launches an OAuth-protected MCP server for searching ponders and occurrences.
+ - **Serve** 🛰️ - `ponder-mcp` launches an OAuth-protected MCP server for searching topics and occurrences.
 - **Help** ❓ - `sunstone` prints a list of available commands and their arguments.
 
 ## Quick Start
