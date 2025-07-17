@@ -16,7 +16,6 @@ from think.utils import day_log, day_path, get_topics, setup_cli
 
 TOPICS = get_topics()
 TOPIC_DIR = os.path.join(os.path.dirname(__file__), "topics")
-DEFAULT_TOPIC_PATH = TOPICS.get("day", {}).get("path", os.path.join(TOPIC_DIR, "day.txt"))
 
 # Common system instruction that explains the overall context for Gemini
 # analysis. The topic prompt will be provided afterwards as a separate
@@ -177,8 +176,8 @@ def main() -> None:
         "--topic",
         "--prompt",
         dest="topic",
-        default=DEFAULT_TOPIC_PATH,
-        help="Topic file to use",
+        required=True,
+        help="Topic file to use (required)",
     )
     parser.add_argument(
         "-p",
