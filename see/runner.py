@@ -109,16 +109,19 @@ def main() -> None:
     )
     args, extra_args = setup_cli(parser, parse_known=True)
 
-    if args.verbose and "-v" not in extra_args and "--verbose" not in extra_args:
-        extra_args = ["-v", *extra_args]
+    # Pass through all original arguments (skip script name)
+    all_args = sys.argv[1:]
+    # Remove the interval argument if it was provided, since we handle it separately
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        all_args = all_args[1:]
 
     interval = args.interval
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    scan_thread = Thread(target=_run_scan, args=(interval, extra_args))
-    describe_thread = Thread(target=_run_describe, args=(extra_args,))
+    scan_thread = Thread(target=_run_scan, args=(interval, all_args))
+    describe_thread = Thread(target=_run_describe, args=(all_args,))
 
     scan_thread.start()
     describe_thread.start()
