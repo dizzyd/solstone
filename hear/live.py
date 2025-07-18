@@ -10,7 +10,6 @@ import soundfile as sf
 import websockets
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
-from faster_whisper import WhisperModel
 from google import genai
 from google.genai import types
 from silero_vad import load_silero_vad
@@ -22,18 +21,10 @@ from think.utils import setup_cli
 
 MODEL = GEMINI_FLASH  # -lite-preview-06-17
 
-USER_PROMPT = "Please transcribe any spoken words or utterances you hear in this audio clip, accuracy is important."
-
-MEETING_PROMPT = (
-    "Identify any meetings currently visible and, if possible, return only the name"
-    " of the active speaker. Return an empty string if no meeting or speaker is found."
-)
-
 
 def transcribe_light(client, model: str, audio_bytes: bytes) -> str:
-
     parts = [
-        types.Part.from_text(text=USER_PROMPT),
+        types.Part.from_text(text="Please transcribe any spoken words or utterances you hear in this audio clip, accuracy is important."),
         types.Part.from_bytes(data=audio_bytes, mime_type="audio/flac"),
     ]
 
@@ -45,7 +36,7 @@ def transcribe_light(client, model: str, audio_bytes: bytes) -> str:
         config=types.GenerateContentConfig(
             temperature=0.3,
             max_output_tokens=1024,
-            system_instruction="You are an expert transcriptionist. Your task is to transcribe all spoken words or utterances you hear in the audio clip into simple text. Do not include any additional commentary or formatting, if you heard no words or utterances then return a single newline.",
+            system_instruction="You are a precise audio transcriptionist. Listen to the audio and write down exactly what words are spoken. Return only the spoken text with no punctuation, formatting, or additional comments.",
             thinking_config=types.ThinkingConfig(thinking_budget=0),
             response_mime_type="text/plain",
         ),
@@ -55,11 +46,8 @@ def transcribe_light(client, model: str, audio_bytes: bytes) -> str:
     return result
 
 
-whisper_model = None
-
-
-async def identify_active_speaker(client) -> str:
-    """Capture a screenshot and ask Gemini who is speaking."""
+async def identify_active_speaker(client, speaker_state) -> None:
+    """Capture a screenshot and ask Gemini who is speaking, updating shared state."""
     try:
         screenshot_start = time.time()
         bus = await MessageBus(bus_type=BusType.SESSION).connect()
@@ -68,10 +56,12 @@ async def identify_active_speaker(client) -> str:
         logging.debug(f"Screenshot capture took {screenshot_duration:.3f}s")
     except Exception as e:  # pragma: no cover - DBus not available in tests
         logging.error("Screenshot capture failed: %s", e)
-        return ""
+        speaker_state["current_speaker"] = "Unknown"
+        speaker_state["task_running"] = False
+        return
 
     parts = [
-        types.Part.from_text(text=MEETING_PROMPT),
+        types.Part.from_text(text="Analyze this desktop screenshot and look for any visible meetings to identify the currently active speaker."),
         types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png"),
     ]
     contents = [types.Content(role="user", parts=parts)]
@@ -84,33 +74,49 @@ async def identify_active_speaker(client) -> str:
             config=types.GenerateContentConfig(
                 temperature=0.1,
                 max_output_tokens=256 + 1024,
+                system_instruction="Examine this screenshot looking ONLY for video conferencing apps like Zoom, Teams, Meet, or WebEx. Then if found, identify who is actively speaking right now based on visual indicators such as the speaker's frame being highlighted or outlined differently. Return only the speaker's first name, or 'Unknown' if no meeting is visible or nobody is clearly speaking.",
                 thinking_config=types.ThinkingConfig(thinking_budget=1024),
                 response_mime_type="text/plain",
             ),
         )
         gemini_duration = time.time() - gemini_start
         logging.debug(f"Gemini speaker identification took {gemini_duration:.3f}s")
-        logging.info("Meeting Speaker: %s", response.text)
-        return response.text.strip()
+        speaker_name = response.text.strip()
+        logging.info("Meeting Speaker: %s", speaker_name)
+        speaker_state["current_speaker"] = speaker_name
     except Exception as e:
         logging.error("Gemini meeting request failed: %s", e)
-        return ""
+        speaker_state["current_speaker"] = "Unknown"
+    finally:
+        speaker_state["task_running"] = False
 
 
-def transcribe_whisper(audio_bytes: bytes) -> str:
-    """Transcribe using faster-whisper."""
-    global whisper_model
-    if whisper_model is None:
-        whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
-
-    whisper_start = time.time()
-    with io.BytesIO(audio_bytes) as buf:
-        segments, _ = whisper_model.transcribe(buf, language="en", task="transcribe")
-        text = " ".join(segment.text for segment in segments).strip()
-    whisper_duration = time.time() - whisper_start
-    logging.debug(f"Whisper transcription took {whisper_duration:.3f}s")
-    logging.info("Whisper result: %s", text)
-    return text
+async def transcribe_audio_segments(segments, client, speaker_state):
+    """Transcribe audio segments in a separate async task."""
+    try:
+        combined_audio = np.concatenate([seg["data"] for seg in segments])
+        audio_int16 = (np.clip(combined_audio, -1.0, 1.0) * 32767).astype(np.int16)
+        buf = io.BytesIO()
+        sf.write(buf, audio_int16, SAMPLE_RATE, format="FLAC")
+        
+        transcribe_start = time.time()
+        text = transcribe_light(
+            client,
+            MODEL,
+            buf.getvalue(),
+        )
+        transcribe_duration = time.time() - transcribe_start
+        logging.debug(f"Transcription took {transcribe_duration:.3f}s")
+        
+        if speaker_state is not None:
+            current_speaker = speaker_state.get("current_speaker", "")
+            prefix = f"{current_speaker}: " if current_speaker else ""
+            print(f"{prefix}{text}")
+        else:
+            print(text)
+            
+    except Exception as e:
+        logging.error("Transcription error: %s", e)
 
 
 async def handle_audio_message(
@@ -119,7 +125,6 @@ async def handle_audio_message(
     stash: np.ndarray,
     client,
     speaker_state: dict | None,
-    use_whisper: bool = False,
 ) -> np.ndarray:
     """Handle a single audio message from WebSocket."""
     try:
@@ -127,72 +132,29 @@ async def handle_audio_message(
         mono = chunk.mean(axis=1)
         stash = np.concatenate((stash, mono))
 
-        # Update speaker state from any completed screenshot task
-        if speaker_state is not None:
-            task = speaker_state.get("task")
-            if task and task.done():
-                try:
-                    speaker_state["name"] = task.result().strip()
-                except Exception as e:  # pragma: no cover - async task errors
-                    logging.error("Active speaker task error: %s", e)
-                    speaker_state["name"] = ""
-                speaker_state["task"] = None
-
-            # Trigger screenshot capture if stash grows beyond 3 seconds
-            if len(stash) / SAMPLE_RATE > 3 and speaker_state.get("task") is None:
-                speaker_state["task"] = asyncio.create_task(identify_active_speaker(client))
+        # Trigger screenshot capture if stash grows beyond 3 seconds and no task is running
+        if (speaker_state is not None and 
+            len(stash) / SAMPLE_RATE > 3 and 
+            not speaker_state.get("task_running", False)):
+            speaker_state["task_running"] = True
+            asyncio.create_task(identify_active_speaker(client, speaker_state))
 
         segments, stash = detect_speech(vad, "live", stash)
         
-        # Combine all segments if there are any
+        # Launch transcription as async task if segments found
         if segments:
-            combined_audio = np.concatenate([seg["data"] for seg in segments])
-            audio_int16 = (np.clip(combined_audio, -1.0, 1.0) * 32767).astype(np.int16)
-            buf = io.BytesIO()
-            sf.write(buf, audio_int16, SAMPLE_RATE, format="FLAC")
-            try:
-                transcribe_start = time.time()
-                g_text = transcribe_light(
-                    client,
-                    MODEL,
-                    buf.getvalue(),
-                )
-                transcribe_duration = time.time() - transcribe_start
-                logging.debug(f"Gemini transcription took {transcribe_duration:.3f}s")
+            asyncio.create_task(transcribe_audio_segments(segments, client, speaker_state))
                 
-                if use_whisper:
-                    w_text = transcribe_whisper(buf.getvalue())
-                    if speaker_state is not None:
-                        prefix = (
-                            f"{speaker_state.get('name', '')}: " if speaker_state.get("name") else ""
-                        )
-                        print(f"G: {prefix}{g_text}\nW: {w_text}")
-                    else:
-                        print(f"G: {g_text}\nW: {w_text}")
-                else:
-                    if speaker_state is not None:
-                        prefix = (
-                            f"{speaker_state.get('name', '')}: " if speaker_state.get("name") else ""
-                        )
-                        print(f"G: {prefix}{g_text}")
-                    else:
-                        print(f"G: {g_text}")
-                
-                if speaker_state is not None:
-                    speaker_state["name"] = ""
-                    speaker_state["task"] = None
-            except Exception as e:
-                logging.error("Transcription error: %s", e)
         return stash
     except Exception as e:
         logging.error("Error processing audio chunk: %s", e)
         return stash
 
 
-async def live_loop(ws_url: str, client, use_whisper: bool = False, use_speaker: bool = False) -> None:
+async def live_loop(ws_url: str, client, use_speaker: bool = False) -> None:
     vad = load_silero_vad()
     stash = np.array([], dtype=np.float32)
-    speaker_state = {"task": None, "name": ""} if use_speaker else None
+    speaker_state = {"task_running": False, "current_speaker": "Unknown"} if use_speaker else None
     processed_seconds = 0.0
     max_retries = 5
     retry_delay = 2.0
@@ -204,7 +166,7 @@ async def live_loop(ws_url: str, client, use_whisper: bool = False, use_speaker:
                 logging.info("WebSocket connected successfully")
                 async for msg in ws:
                     stash = await handle_audio_message(
-                        msg, vad, stash, client, speaker_state, use_whisper
+                        msg, vad, stash, client, speaker_state
                     )
                     processed_seconds += (len(msg) // 8) / SAMPLE_RATE  # Approximate calculation
 
@@ -242,9 +204,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Live transcription from WebSocket")
     parser.add_argument("--ws-url", required=True, help="WebSocket URL from gemini-mic")
     parser.add_argument(
-        "--whisper", action="store_true", help="Enable Whisper transcription (off by default)"
-    )
-    parser.add_argument(
         "--speaker", action="store_true", help="Enable speaker identification (off by default)"
     )
     args = setup_cli(parser)
@@ -255,7 +214,7 @@ def main() -> None:
 
     client = genai.Client(api_key=api_key)
 
-    asyncio.run(live_loop(args.ws_url, client, args.whisper, args.speaker))
+    asyncio.run(live_loop(args.ws_url, client, args.speaker))
 
 
 if __name__ == "__main__":

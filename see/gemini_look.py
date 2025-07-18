@@ -52,6 +52,7 @@ def gemini_describe_region(image, box, models=None, entities=None):
     # Ensure the module is initialized
     if _gemini_client is None:
         initialize()
+    client = _gemini_client
 
     native_y_min, native_x_min, native_y_max, native_x_max = box["box_2d"]
     im_with_box = image.copy()
@@ -81,7 +82,7 @@ def gemini_describe_region(image, box, models=None, entities=None):
 
     for model_name in models_to_try:
         try:
-            response = _gemini_client.models.generate_content(
+            response = client.models.generate_content(
                 model=model_name,
                 contents=contents,
                 config=types.GenerateContentConfig(
