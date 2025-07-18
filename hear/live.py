@@ -143,8 +143,11 @@ async def handle_audio_message(
                 speaker_state["task"] = asyncio.create_task(identify_active_speaker(client))
 
         segments, stash = detect_speech(vad, "live", stash)
-        for seg in segments:
-            audio_int16 = (np.clip(seg["data"], -1.0, 1.0) * 32767).astype(np.int16)
+        
+        # Combine all segments if there are any
+        if segments:
+            combined_audio = np.concatenate([seg["data"] for seg in segments])
+            audio_int16 = (np.clip(combined_audio, -1.0, 1.0) * 32767).astype(np.int16)
             buf = io.BytesIO()
             sf.write(buf, audio_int16, SAMPLE_RATE, format="FLAC")
             try:
