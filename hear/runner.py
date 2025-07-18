@@ -70,9 +70,14 @@ def main() -> None:
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    capture_args = extra + ["--ws-port", "9987"]
+    # Pass through all original arguments (skip script name)
+    all_args = sys.argv[1:]
+    
+    capture_args = all_args + ["--ws-port", "9987"]
+    transcribe_args = all_args
+    
     capture_thread = Thread(target=_run_loop, args=("capture.py", capture_args))
-    transcribe_thread = Thread(target=_run_loop, args=("transcribe.py", extra))
+    transcribe_thread = Thread(target=_run_loop, args=("transcribe.py", transcribe_args))
 
     capture_thread.start()
     transcribe_thread.start()
