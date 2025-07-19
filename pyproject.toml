@@ -39,8 +39,17 @@ dependencies = [
 
     # Natural language time parsing
     "timefhuman",
+    "Pillow",
+    "numpy",
+    "dbus-next",
     
-    # Audio processing dependencies
+    "sqlite-utils",
+    "openai>=1.2.0",
+    "openai-agents>=0.1.0",
+]
+
+[project.optional-dependencies]
+full = [
     "soundcard",
     "soundfile",
     "silero-vad",
@@ -48,25 +57,13 @@ dependencies = [
     "torch",
     "librosa",
     "scipy",
-    "numpy",
     "websockets",
-    
-    # Image processing dependencies
-    "Pillow",
     "opencv-python",
     "scikit-image",
-    
-    # Linux desktop integration
-    "dbus-next",
     "PyGObject",
     "watchdog",
-    "syntok",
-    "sqlite-utils",
-    "openai>=1.2.0",
-    "openai-agents>=0.1.0",
 ]
 
-[project.optional-dependencies]
 dev = [
     "black",
     "flake8",
