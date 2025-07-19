@@ -1,0 +1,68 @@
+import argparse
+import logging
+from pathlib import Path
+
+import soundfile as sf
+
+from think.utils import day_path, setup_cli
+
+TOLERANCE_SEC = 1.0
+
+
+def split_file(path: Path, cleanup: bool) -> None:
+    data, sr = sf.read(path, dtype="float32")
+    if data.ndim != 2 or data.shape[1] != 2:
+        raise RuntimeError(f"{path} is not stereo")
+    base = path.stem.replace("_audio", "")
+    mic_path = path.with_name(f"{base}_mic_audio.flac")
+    sys_path = path.with_name(f"{base}_system_audio.flac")
+    if mic_path.exists() or sys_path.exists():
+        logging.info("Skipping %s, split files exist", path.name)
+        if cleanup and mic_path.exists() and sys_path.exists():
+            path.unlink(missing_ok=True)
+        return
+    sf.write(mic_path, data[:, 0], sr, format="FLAC")
+    sf.write(sys_path, data[:, 1], sr, format="FLAC")
+    logging.info("Split %s -> %s, %s", path.name, mic_path.name, sys_path.name)
+    if cleanup and mic_path.exists() and sys_path.exists():
+        path.unlink(missing_ok=True)
+
+
+def find_files(day_dir: Path, length_min: float) -> list[Path]:
+    expected = length_min * 60
+    files: list[Path] = []
+    for audio in sorted(day_dir.glob("*_audio.flac")):
+        try:
+            info = sf.info(audio)
+        except Exception as exc:  # pragma: no cover - invalid file
+            logging.error("Failed to read %s: %s", audio, exc)
+            continue
+        duration = info.frames / info.samplerate if info.samplerate else 0
+        if abs(duration - expected) <= TOLERANCE_SEC:
+            files.append(audio)
+    return files
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Split stereo audio files")
+    parser.add_argument("day", help="Day directory YYYYMMDD")
+    parser.add_argument("length", type=float, help="Length in minutes")
+    parser.add_argument(
+        "--cleanup", action="store_true", help="Remove source after split"
+    )
+    parser.add_argument("--dry", action="store_true", help="Dry run")
+    args = setup_cli(parser)
+
+    day_dir = Path(day_path(args.day))
+    files = find_files(day_dir, args.length)
+
+    if args.dry:
+        print(f"{len(files)} files to split")
+        return
+
+    for path in files:
+        split_file(path, args.cleanup)
+
+
+if __name__ == "__main__":
+    main()
