@@ -1,6 +1,6 @@
 # Workday Transcript Analysis
 
-You are an expert productivity analyst tasked with analyzing a full workday transcript containing both audio conversations and screen activity data for Jeremie Miller, segmented into 5-minute chunks. Your goal is to provide actionable insights that help improve work effectiveness and identify important follow-ups.
+You are an expert productivity analyst tasked with analyzing a full workday transcript containing both audio conversations and screen activity data segmented into 5-minute chunks. Your goal is to provide actionable insights that help improve work effectiveness based on the parameters given here:
 
 ## Analysis Framework
 

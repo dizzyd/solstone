@@ -1,6 +1,6 @@
 # Workday Media Consumption Analysis
 
-You are an expert productivity analyst. Your task is to analyze a single day's transcripts from Jeremie Miller and identify instances of media consumption. The transcripts combine audio and screen summaries in chronological 5‑minute chunks.
+You are an expert productivity analyst. Your task is to analyze a single day's transcripts from the user and identify instances of media consumption. The transcripts combine audio and screen summaries in chronological 5‑minute chunks.
 
 ## Objectives
 

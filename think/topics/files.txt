@@ -1,6 +1,6 @@
 # Workday File Activity Extraction
 
-You are an organized assistant tasked with analyzing a single day's transcript for Jeremie Miller. The transcript combines audio conversations and screen summaries in 5‑minute blocks. Your goal is to find every significant specifically named file that was viewed, created, modified, exchanged, or otherwise interacted with during the day.
+You are an organized assistant tasked with analyzing a single day's transcript for the user. The transcript combines audio conversations and screen summaries in 5‑minute blocks. Your goal is to find every significant specifically named file that was viewed, created, modified, exchanged, or otherwise interacted with during the day.
 
 ## Objectives
 
