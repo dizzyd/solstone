@@ -62,6 +62,16 @@ class Transcriber:
         except Exception as e:
             logging.error(f"Failed to move {raw_path} to trash: {e}")
 
+    def _move_to_heard(self, audio_path: Path) -> None:
+        """Move processed ``audio_path`` into the day "heard" directory."""
+        heard_dir = audio_path.parent / "heard"
+        try:
+            heard_dir.mkdir(exist_ok=True)
+            audio_path.rename(heard_dir / audio_path.name)
+            logging.info("Moved %s to %s", audio_path, heard_dir)
+        except Exception as exc:  # pragma: no cover - filesystem errors
+            logging.error("Failed to move %s to heard: %s", audio_path, exc)
+
     def _process_raw(
         self, raw_path: Path, no_stash: bool = False
     ) -> List[Dict[str, object]] | None:
@@ -248,6 +258,8 @@ class Transcriber:
         json_path = self._get_json_path(raw_path)
         if json_path.exists() or json_path.name in self.processed:
             self.processed.add(json_path.name)
+            if json_path.exists() and raw_path.name.endswith("_audio.flac"):
+                self._move_to_heard(raw_path)
             self._mark_buffering_precursors()
             return
 
@@ -257,6 +269,8 @@ class Transcriber:
         success = self._transcribe_segments(raw_path, segments)
         if success:
             self.processed.add(json_path.name)
+            if raw_path.name.endswith("_audio.flac"):
+                self._move_to_heard(raw_path)
             self._mark_buffering_precursors()
         else:
             self.processing.clear()
@@ -264,22 +278,16 @@ class Transcriber:
     @staticmethod
     def scan_day(day_dir: Path) -> dict[str, list[str]]:
         """Return lists of raw, processed and repairable files within ``day_dir``."""
-        raw_paths = list(day_dir.glob("*_raw.flac"))
-        raw_paths.extend(day_dir.glob("*_audio.flac"))
-        raw_paths.extend(day_dir.glob("*_audio.ogg"))
-        raw = sorted(p.name for p in raw_paths)
+        raw = sorted(p.name for p in day_dir.glob("*_audio.flac"))
 
-        processed = sorted(p.name for p in day_dir.glob("*_audio.json"))
+        heard_dir = day_dir / "heard"
+        processed = (
+            sorted(p.name for p in heard_dir.glob("*_audio.flac"))
+            if heard_dir.is_dir()
+            else []
+        )
 
-        repairable: list[str] = []
-        for p in raw_paths:
-            json_path = p.with_name(
-                p.stem.replace("_raw", "").replace("_audio", "") + "_audio.json"
-            )
-            if not json_path.exists():
-                repairable.append(p.name)
-
-        return {"raw": raw, "processed": processed, "repairable": sorted(repairable)}
+        return {"raw": raw, "processed": processed, "repairable": raw.copy()}
 
     def repair_day(self, date_str: str, files: list[str], dry_run: bool = False) -> int:
         """Process ``files`` belonging to ``date_str`` and return the count."""
