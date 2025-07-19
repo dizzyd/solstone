@@ -1,4 +1,5 @@
 import importlib
+import json
 
 
 def test_scan_day(tmp_path, monkeypatch):
@@ -14,12 +15,30 @@ def test_scan_day(tmp_path, monkeypatch):
     (day / "entities.md").write_text("")
     (day / "topics").mkdir()
     (day / "topics" / "day.md").write_text("")
+    data = {
+        "day": "20240101",
+        "occurrences": [
+            {
+                "type": "meeting",
+                "start": "00:00:00",
+                "end": "00:05:00",
+                "title": "t",
+                "summary": "s",
+                "work": True,
+                "participants": [],
+                "details": "",
+            }
+        ],
+    }
+    (day / "topics" / "meetings.json").write_text(json.dumps(data))
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     js = stats_mod.JournalStats()
     js.scan_day("20240101", str(day))
     assert js.days["20240101"]["audio_flac"] == 1
     assert js.days["20240101"]["repair_hear"] == 1
     assert js.totals["diff_png"] == 1
+    assert js.topic_counts["meetings"] == 1
+    assert js.heatmap[0][0] == 5
 
 
 def test_markdown(tmp_path, monkeypatch):
@@ -29,6 +48,10 @@ def test_markdown(tmp_path, monkeypatch):
     day.mkdir()
     (day / "123456_audio.flac").write_bytes(b"RIFF")
     (day / "123456_audio.json").write_text("{}")
+    (day / "topics").mkdir()
+    (day / "topics" / "meetings.json").write_text(
+        json.dumps({"day": "20240101", "occurrences": []})
+    )
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     js = stats_mod.JournalStats()
     js.scan(str(journal))
@@ -36,3 +59,4 @@ def test_markdown(tmp_path, monkeypatch):
     assert "Days scanned: 1" in md
     js.save_markdown(str(journal))
     assert (journal / "summary.md").exists()
+    assert "Ponder processed" in md
