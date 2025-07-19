@@ -40,7 +40,7 @@ def find_files(
     expected = length_min * 60
     files: list[Path] = []
 
-    for name in info["processed"]:
+    for name in sorted(set(info.get("processed", [])) | set(info.get("raw", []))):
         audio = day_dir / name
         try:
             meta = sf.info(audio)
