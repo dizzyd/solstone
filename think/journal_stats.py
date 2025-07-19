@@ -4,7 +4,7 @@ import os
 import re
 import sys
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict
 
@@ -27,6 +27,9 @@ class JournalStats:
         self.total_audio_sec = 0.0
         self.total_audio_bytes = 0
         self.total_image_bytes = 0
+        self.topic_counts: Counter[str] = Counter()
+        self.topic_minutes: Counter[str] = Counter()
+        self.heatmap: list[list[float]] = [[0.0 for _ in range(24)] for _ in range(7)]
 
     def scan_day(self, day: str, path: str) -> None:
         stats: Counter[str] = Counter()
@@ -74,8 +77,48 @@ class JournalStats:
         entity_info = entity_scan_day(day)
         stats["repair_entity"] = len(entity_info["repairable"])
         ponder_info = ponder_scan_day(day)
-        stats["ponder"] = int(bool(ponder_info["processed"]))
+        stats["ponder_processed"] = len(ponder_info["processed"])
         stats["repair_ponder"] = len(ponder_info["repairable"])
+
+        # --- occurrences ---
+        topics_dir = day_dir / "topics"
+        if topics_dir.is_dir():
+            weekday = datetime.strptime(day, "%Y%m%d").weekday()
+            for fname in os.listdir(topics_dir):
+                base, ext = os.path.splitext(fname)
+                if ext != ".json":
+                    continue
+                try:
+                    with open(topics_dir / fname, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    continue
+                items = data.get("occurrences", []) if isinstance(data, dict) else data
+                if not isinstance(items, list):
+                    continue
+                for occ in items:
+                    self.topic_counts[base] += 1
+                    start = occ.get("start")
+                    end = occ.get("end")
+                    try:
+                        sh, sm, ss = map(int, start.split(":"))
+                        eh, em, es = map(int, end.split(":"))
+                    except Exception:
+                        continue
+                    start_sec = sh * 3600 + sm * 60 + ss
+                    end_sec = eh * 3600 + em * 60 + es
+                    if end_sec < start_sec:
+                        duration = 0
+                    else:
+                        duration = end_sec - start_sec
+                    self.topic_minutes[base] += duration / 60
+                    for sec in range(start_sec, end_sec, 60):
+                        hour = sec // 3600
+                        if 0 <= hour < 24:
+                            self.heatmap[weekday][hour] += 1
+                    leftover = (end_sec - start_sec) % 60
+                    if leftover and 0 <= end_sec // 3600 < 24:
+                        self.heatmap[weekday][end_sec // 3600] += leftover / 60
 
         counts_for_totals = dict(stats)
         self.totals.update(counts_for_totals)
@@ -127,7 +170,9 @@ class JournalStats:
         print(
             f"Screen summaries: {self.totals.get('screen_md', 0)} | Days with entities.md: {self.totals.get('entities', 0)}"
         )
-        print(f"Days with ponder results: {self.totals.get('ponder', 0)}")
+        print(
+            f"Ponder processed: {self.totals.get('ponder_processed', 0)} | Repairable: {self.totals.get('repair_ponder', 0)}"
+        )
 
         # per-day audio hours
         if day_count:
@@ -180,7 +225,19 @@ class JournalStats:
             f"- Screen summaries: {self.totals.get('screen_md', 0)}"
             f" | Days with entities.md: {self.totals.get('entities', 0)}"
         )
-        lines.append(f"- Days with ponder results: {self.totals.get('ponder', 0)}")
+        lines.append(
+            f"- Ponder processed: {self.totals.get('ponder_processed', 0)}"
+            f" | Repairable: {self.totals.get('repair_ponder', 0)}"
+        )
+
+        if self.topic_counts:
+            lines.append("")
+            lines.append("## Topic activity")
+            for topic in sorted(self.topic_counts):
+                minutes = self.topic_minutes.get(topic, 0.0)
+                lines.append(
+                    f"- {topic}: {self.topic_counts[topic]} occurrences, {minutes:.1f}m"
+                )
 
         if day_count:
             lines.append("")
@@ -201,6 +258,14 @@ class JournalStats:
                 bar = "#" * int(val * scale)
                 lines.append(f"- {d} | {bar} {val}")
 
+        if any(any(row) for row in self.heatmap):
+            lines.append("")
+            lines.append("## Activity heat map (minutes)")
+            days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            for idx, row in enumerate(self.heatmap):
+                values = " ".join(f"{int(v):2d}" for v in row)
+                lines.append(f"- {days[idx]}: {values}")
+
         return "\n".join(lines)
 
     def save_markdown(self, journal: str) -> None:
@@ -217,6 +282,9 @@ class JournalStats:
             "total_audio_seconds": self.total_audio_sec,
             "total_audio_bytes": self.total_audio_bytes,
             "total_image_bytes": self.total_image_bytes,
+            "topic_counts": dict(self.topic_counts),
+            "topic_minutes": {k: round(v, 2) for k, v in self.topic_minutes.items()},
+            "heatmap": self.heatmap,
         }
 
     def save_json(self, journal: str) -> None:
