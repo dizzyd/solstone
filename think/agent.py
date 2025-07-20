@@ -10,11 +10,8 @@ Usage:
 When ``TASK_FILE`` is omitted, an interactive ``chat>`` prompt is started.
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
-import inspect
 import logging
 import os
 import sys
@@ -26,48 +23,8 @@ from agents.mcp import MCPServerStdio
 from think.utils import setup_cli
 
 
-def build_agent(model: str, max_tokens: int) -> tuple[Agent, RunConfig]:
-    """Return configured OpenAI agent and run configuration."""
-
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if api_key:
-        set_default_openai_key(api_key)
-
-    run_config = RunConfig(
-        model=model,
-        model_settings=ModelSettings(max_tokens=max_tokens, temperature=0.2),
-    )
-
-    mcp_servers = []
-    if MCPServerStdio is not None:
-        server = MCPServerStdio(
-            {
-                "command": sys.executable,
-                "args": ["-m", "think.mcp_server", "--stdio"],
-            }
-        )
-        if hasattr(server, "connect"):
-            try:
-                if inspect.iscoroutinefunction(server.connect):
-                    asyncio.run(server.connect())
-                else:
-                    server.connect()
-            except Exception:  # pragma: no cover - best effort
-                logging.debug("Failed to connect MCP server", exc_info=True)
-        mcp_servers.append(server)
-
-    agent = Agent(
-        name="SunstoneCLI",
-        instructions=(
-            "You are the Sunstone journal assistant. Use the provided tools to "
-            "search ponder summaries, search occurrences, and read markdown files."
-        ),
-        mcp_servers=mcp_servers,
-    )
-    return agent, run_config
-
-
-def main() -> None:
+async def main_async():
+    """Main async entry point."""
     parser = argparse.ArgumentParser(description="Sunstone Agent CLI")
     parser.add_argument(
         "task_file",
@@ -88,51 +45,91 @@ def main() -> None:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.getLogger("openai.agents").setLevel(logging.DEBUG)
 
+    # Set OpenAI API key
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if api_key:
+        set_default_openai_key(api_key)
+
+    # Get task/prompt
     if args.task_file is None:
-        user_prompts = None
+        user_prompts = None  # Interactive mode
     elif args.task_file == "-":
         user_prompts = [sys.stdin.read()]
     else:
         if not os.path.isfile(args.task_file):
             parser.error(f"Task file not found: {args.task_file}")
-
         logging.info("Loading task file %s", args.task_file)
         user_prompts = [Path(args.task_file).read_text(encoding="utf-8")]
 
-    logging.info("Building agent with model %s", args.model)
-    agent, run_config = build_agent(args.model, args.max_tokens)
+    # Configure MCP server
+    journal_path = os.getenv("JOURNAL_PATH", "journal")
+    mcp_server = MCPServerStdio(
+        params={
+            "command": sys.executable,
+            "args": ["-m", "think.mcp_server"],
+            "env": {
+                "JOURNAL_PATH": journal_path,
+                "PYTHONPATH": os.pathsep.join([os.getcwd()] + sys.path),
+            },
+        },
+        name="Sunstone MCP Server",
+    )
 
-    try:
+    # Configure run settings
+    run_config = RunConfig(
+        model=args.model,
+        model_settings=ModelSettings(max_tokens=args.max_tokens, temperature=0.2),
+    )
+
+    # Connect to MCP server and run
+    async with mcp_server:
+        # Create agent with connected server
+        agent = Agent(
+            name="SunstoneCLI",
+            instructions=(
+                "You are the Sunstone journal assistant. Use the provided tools to "
+                "search ponder summaries, search occurrences, and read markdown files."
+            ),
+            mcp_servers=[mcp_server],
+        )
+
         if user_prompts is None:
-            # interactive mode
+            # Interactive mode
+            logging.info("Starting interactive mode with model %s", args.model)
             try:
                 while True:
                     try:
-                        prompt = input("chat> ")
+                        # Use asyncio-friendly input
+                        loop = asyncio.get_event_loop()
+                        prompt = await loop.run_in_executor(None, lambda: input("chat> "))
+                        
+                        if not prompt:
+                            continue
+                        
+                        result = await Runner.run(agent, prompt, run_config=run_config)
+                        print(result.final_output)
+                        
                     except EOFError:
                         break
-                    if not prompt:
-                        continue
-                    result = Runner.run_sync(agent, prompt, run_config=run_config)
-                    print(result.final_output)
             except KeyboardInterrupt:
                 pass
         else:
+            # Single prompt mode
             user_prompt = user_prompts[0]
             logging.debug("Task contents: %s", user_prompt)
-            logging.info("Running agent")
-            result = Runner.run_sync(agent, user_prompt, run_config=run_config)
+            logging.info("Running agent with model %s", args.model)
+            
+            result = await Runner.run(agent, user_prompt, run_config=run_config)
             print(result.final_output)
-    finally:
-        for server in getattr(agent, "mcp_servers", []):
-            if hasattr(server, "cleanup"):
-                try:
-                    if inspect.iscoroutinefunction(server.cleanup):
-                        asyncio.run(server.cleanup())
-                    else:
-                        server.cleanup()
-                except Exception:  # pragma: no cover - best effort
-                    logging.debug("Failed to cleanup MCP server", exc_info=True)
+
+
+def main():
+    """Entry point that runs the async main."""
+    try:
+        asyncio.run(main_async())
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        raise
 
 
 if __name__ == "__main__":
