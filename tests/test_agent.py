@@ -1,106 +1,65 @@
+import asyncio
 import importlib
 import sys
 import types
 from types import SimpleNamespace
 
 
-def test_agent_run(monkeypatch):
+async def run_main(mod, argv):
+    sys.argv = argv
+    await mod.main_async()
+
+
+def test_agent_main(monkeypatch, tmp_path, capsys):
     agents_stub = types.ModuleType("agents")
+
+    last_kwargs = {}
 
     class DummyAgent:
         def __init__(self, *a, **k):
-            self.kwargs = k
+            last_kwargs.update(k)
 
     class DummyRunner:
-        @staticmethod
-        def run_sync(*a, **k):
-            return "done"
+        called = False
 
-    def decorator(fn=None, **_):
-        if fn is None:
-            return lambda f: f
-        return fn
+        @staticmethod
+        async def run(agent, prompt, run_config=None):
+            DummyRunner.called = True
+            return SimpleNamespace(final_output="ok")
 
     agents_stub.Agent = DummyAgent
     agents_stub.Runner = DummyRunner
-    agents_stub.function_tool = decorator
     agents_stub.RunConfig = lambda **k: SimpleNamespace()
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
 
     agents_mcp_stub = types.ModuleType("agents.mcp")
 
-    class DummyMCPServer:
-        def __init__(self, params: dict):
-            self.params = params
-            self.connected = False
+    class DummyMCP:
+        async def __aenter__(self):
+            return self
 
-        def connect(self):
-            self.connected = True
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
 
-    agents_mcp_stub.MCPServerStdio = DummyMCPServer
-
-    sys.modules["agents"] = agents_stub
-    sys.modules["agents.mcp"] = agents_mcp_stub
-
-    mod = importlib.import_module("think.agent")
-
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
-    monkeypatch.setenv("JOURNAL_PATH", "/tmp")
-
-    monkeypatch.setattr(mod, "Agent", DummyAgent)
-    monkeypatch.setattr(mod, "Runner", DummyRunner)
-    monkeypatch.setattr(mod, "RunConfig", lambda **k: SimpleNamespace())
-    monkeypatch.setattr(mod, "ModelSettings", lambda **k: SimpleNamespace())
-    monkeypatch.setattr(mod, "set_default_openai_key", lambda k: None)
-
-    agent, cfg = mod.build_agent("gpt-4", 100)
-    result = mod.Runner.run_sync(agent, "Hello", run_config=cfg)
-    assert result == "done"
-
-
-def test_agent_run_with_mcp(monkeypatch):
-    agents_stub = types.ModuleType("agents")
-
-    class DummyAgent:
-        def __init__(self, *a, **k):
-            self.kwargs = k
-
-    class DummyRunner:
-        @staticmethod
-        def run_sync(*a, **k):
-            return "done"
-
-    class DummyMCPServer:
-        def __init__(self, params: dict):
-            self.params = params
-            self.connected = False
-
-        def connect(self):
-            self.connected = True
-
-    def decorator(fn=None, **_):
-        if fn is None:
-            return lambda f: f
-        return fn
-
-    agents_stub.Agent = DummyAgent
-    agents_stub.Runner = DummyRunner
-    agents_stub.function_tool = decorator
-    agents_stub.RunConfig = lambda **k: SimpleNamespace()
-    agents_stub.ModelSettings = lambda **k: SimpleNamespace()
-    agents_stub.set_default_openai_key = lambda k: None
-
-    agents_mcp_stub = types.ModuleType("agents.mcp")
-    agents_mcp_stub.MCPServerStdio = DummyMCPServer
+    agents_mcp_stub.MCPServerStdio = lambda **k: DummyMCP()
 
     sys.modules["agents"] = agents_stub
     sys.modules["agents.mcp"] = agents_mcp_stub
 
     mod = importlib.import_module("think.agent")
 
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
-    monkeypatch.setenv("JOURNAL_PATH", "/tmp")
+    journal = tmp_path / "journal"
+    journal.mkdir()
+    task = tmp_path / "task.txt"
+    task.write_text("hello")
 
-    agent, cfg = mod.build_agent("gpt-4", 100)
-    assert agent.kwargs.get("mcp_servers")
+    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+
+    asyncio.run(run_main(mod, ["think-agent", str(task)]))
+
+    out = capsys.readouterr().out
+    assert "ok" in out
+    assert DummyRunner.called
+    assert last_kwargs.get("mcp_servers") is not None
