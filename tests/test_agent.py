@@ -33,6 +33,10 @@ def test_agent_run(monkeypatch):
     class DummyMCPServer:
         def __init__(self, params: dict):
             self.params = params
+            self.connected = False
+
+        def connect(self):
+            self.connected = True
 
     agents_mcp_stub.MCPServerStdio = DummyMCPServer
 
@@ -70,6 +74,10 @@ def test_agent_run_with_mcp(monkeypatch):
     class DummyMCPServer:
         def __init__(self, params: dict):
             self.params = params
+            self.connected = False
+
+        def connect(self):
+            self.connected = True
 
     def decorator(fn=None, **_):
         if fn is None:

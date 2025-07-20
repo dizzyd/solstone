@@ -38,11 +38,15 @@ def build_agent(model: str, max_tokens: int) -> tuple[Agent, RunConfig]:
 
     mcp_servers = []
     if MCPServerStdio is not None:
-        mcp_servers.append(
-            MCPServerStdio(
-                {"command": "python", "args": ["think/mcp_server.py", "--stdio"]}
-            )
+        server = MCPServerStdio(
+            {"command": "python", "args": ["think/mcp_server.py", "--stdio"]}
         )
+        if hasattr(server, "connect"):
+            try:
+                server.connect()
+            except Exception:  # pragma: no cover - best effort
+                logging.debug("Failed to connect MCP server", exc_info=True)
+        mcp_servers.append(server)
 
     agent = Agent(
         name="SunstoneCLI",
