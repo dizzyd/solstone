@@ -82,7 +82,8 @@ think-agent [TASK_FILE] [--model MODEL] [--max-tokens N]
 If `TASK_FILE` is omitted an interactive prompt is started.
 
 Set `OPENAI_API_KEY` and `JOURNAL_PATH` in your environment so the agent can
-query your journal index. The tools available to the agent are:
+query your journal index. The command starts a local MCP server and connects to
+it automatically. The tools available to the agent are:
 
 - **search_topic** – full text search across `topics/*.md` sentences.
 - **search_occurrences** – keyword search over `occurrences.json` entries.
