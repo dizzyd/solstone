@@ -76,8 +76,10 @@ It can search across topic summaries, search the occurrences index and read
 full Markdown files from the journal using three custom tools.
 
 ```bash
-python -m think.agent path/to/task.txt [--model MODEL] [--max-tokens N]
+think-agent [TASK_FILE] [--model MODEL] [--max-tokens N]
 ```
+
+If `TASK_FILE` is omitted an interactive prompt is started.
 
 Set `OPENAI_API_KEY` and `JOURNAL_PATH` in your environment so the agent can
 query your journal index. The tools available to the agent are:

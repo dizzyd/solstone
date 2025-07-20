@@ -31,9 +31,8 @@ def test_agent_run(monkeypatch):
     agents_mcp_stub = types.ModuleType("agents.mcp")
 
     class DummyMCPServer:
-        def __init__(self, command: str, args: list[str]):
-            self.command = command
-            self.args = args
+        def __init__(self, params: dict):
+            self.params = params
 
     agents_mcp_stub.MCPServerStdio = DummyMCPServer
 
@@ -69,9 +68,8 @@ def test_agent_run_with_mcp(monkeypatch):
             return "done"
 
     class DummyMCPServer:
-        def __init__(self, command: str, args: list[str]):
-            self.command = command
-            self.args = args
+        def __init__(self, params: dict):
+            self.params = params
 
     def decorator(fn=None, **_):
         if fn is None:
