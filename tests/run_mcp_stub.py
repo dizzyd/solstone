@@ -28,5 +28,4 @@ mcp_server.search_topics_impl = stub_search_topics
 mcp_server.search_occurrences_impl = stub_search_occurrences
 
 if __name__ == "__main__":
-    mcp = mcp_server.create_server(os.environ["JOURNAL_PATH"])
-    mcp.run("stdio")
+    mcp_server.mcp.run()

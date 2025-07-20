@@ -101,14 +101,16 @@ async def main_async():
                     try:
                         # Use asyncio-friendly input
                         loop = asyncio.get_event_loop()
-                        prompt = await loop.run_in_executor(None, lambda: input("chat> "))
-                        
+                        prompt = await loop.run_in_executor(
+                            None, lambda: input("chat> ")
+                        )
+
                         if not prompt:
                             continue
-                        
+
                         result = await Runner.run(agent, prompt, run_config=run_config)
                         print(result.final_output)
-                        
+
                     except EOFError:
                         break
             except KeyboardInterrupt:
@@ -118,7 +120,7 @@ async def main_async():
             user_prompt = user_prompts[0]
             logging.debug("Task contents: %s", user_prompt)
             logging.info("Running agent with model %s", args.model)
-            
+
             result = await Runner.run(agent, user_prompt, run_config=run_config)
             print(result.final_output)
 
