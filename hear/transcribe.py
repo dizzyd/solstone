@@ -43,7 +43,6 @@ class Transcriber:
         self.entities_path = journal_dir / "entities.md"
         self.model = load_silero_vad()
         self.merged_stash = np.array([], dtype=np.float32)
-        self.processed: set[str] = set()
         self.processing: list[Path] = []
         self.observer: Optional[Observer] = None
         self.executor = ThreadPoolExecutor()
@@ -71,6 +70,27 @@ class Transcriber:
             logging.info("Moved %s to %s", audio_path, heard_dir)
         except Exception as exc:  # pragma: no cover - filesystem errors
             logging.error("Failed to move %s to heard: %s", audio_path, exc)
+
+    def _processed(self, raw_path: Path) -> None:
+        """Move the given raw_path and precursors to heard directory, marking precursors as buffering."""
+        # Mark and move precursor files to heard
+        for precursor_path in self.processing:
+            if not precursor_path.exists() or precursor_path == raw_path:
+                continue
+            json_path = self._get_json_path(precursor_path)
+            try:
+                json_path.write_text(json.dumps({"buffering": True}, indent=2))
+                self._move_to_heard(precursor_path)
+            except Exception as exc:  # pragma: no cover - filesystem errors
+                logging.error(
+                    "Failed to mark/move precursor %s: %s", precursor_path, exc
+                )
+        
+        # Move the current raw_path to heard
+        self._move_to_heard(raw_path)
+        
+        # Clear processing list
+        self.processing.clear()
 
     def _process_raw(
         self, raw_path: Path, no_stash: bool = False
@@ -109,7 +129,7 @@ class Transcriber:
                 )
 
                 # when testing, save denoised mic audio for validation
-                sf.write("./mic_denoise.flac", mic_new, SAMPLE_RATE)
+                #sf.write("./mic_denoise.flac", mic_new, SAMPLE_RATE)
 
                 merged, mic_ranges = merge_streams(sys_new, mic_new, sr)
 
@@ -256,11 +276,8 @@ class Transcriber:
         self.processing.append(raw_path)
 
         json_path = self._get_json_path(raw_path)
-        if json_path.exists() or json_path.name in self.processed:
-            self.processed.add(json_path.name)
-            if json_path.exists() and raw_path.name.endswith("_audio.flac"):
-                self._move_to_heard(raw_path)
-            self._mark_buffering_precursors()
+        if json_path.exists():
+            self._processed(raw_path)
             return
 
         if segments is None:
@@ -268,10 +285,7 @@ class Transcriber:
 
         success = self._transcribe_segments(raw_path, segments)
         if success:
-            self.processed.add(json_path.name)
-            if raw_path.name.endswith("_audio.flac"):
-                self._move_to_heard(raw_path)
-            self._mark_buffering_precursors()
+            self._processed(raw_path)
         else:
             self.processing.clear()
 
@@ -283,11 +297,11 @@ class Transcriber:
         can easily open them. Processed audio lives in the ``heard/`` subfolder.
         """
 
-        raw = sorted(p.name for p in day_dir.glob("*_audio.flac"))
+        raw = sorted(p.name for p in day_dir.glob("*_raw.flac"))
 
         heard_dir = day_dir / "heard"
         processed = (
-            [f"heard/{p.name}" for p in sorted(heard_dir.glob("*_audio.flac"))]
+            [f"heard/{p.name}" for p in sorted(heard_dir.glob("*_raw.flac"))]
             if heard_dir.is_dir()
             else []
         )
@@ -354,7 +368,6 @@ class Transcriber:
                     self.observer.schedule(handler, str(day_dir), recursive=True)
                     self.observer.start()
                     self.watch_dir = day_dir
-                    self.processed.clear()
                     current_day = today_str
                     logging.info(f"Watching {day_dir}")
                 time.sleep(1)
