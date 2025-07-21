@@ -344,7 +344,7 @@ class Transcriber:
         handler = PatternMatchingEventHandler(
             patterns=["*_raw.flac"],
             ignore_directories=True,
-            ignore_patterns=["*/trash/*"],
+            ignore_patterns=["*/trash/*", "*/heard/*"],
         )
 
         def on_created(event):
