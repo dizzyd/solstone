@@ -332,6 +332,10 @@ class Transcriber:
             logging.info(f"Processing audio file: {audio_path}")
             json_path = self._get_json_path(audio_path)
             before = json_path.exists()
+            if before:
+                logging.info(f"Skipping already processed file: {json_path}")
+                success += 1
+                continue
             # Don't stash on the last file
             is_last_file = i == len(files_sorted) - 1
             self._handle_raw(audio_path, no_stash=is_last_file)

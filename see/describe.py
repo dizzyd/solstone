@@ -90,22 +90,24 @@ class Describer:
 
     @staticmethod
     def scan_day(day_dir: Path) -> dict[str, list[str]]:
-        """Return lists of processed and repairable files within ``day_dir``.
+        """Return lists of raw, processed and repairable files within ``day_dir``.
 
-        Processed files are ``*_diff.png`` files in the ``seen/`` directory. 
+        Raw files are ``*_diff.png`` files in the ``seen/`` directory. 
+        Processed files are ``*_diff.json`` files in ``day_dir``.
         Repairable files are ``*_diff_box.json`` files in ``day_dir``.
         """
 
         seen_dir = day_dir / "seen"
-        processed = (
+        raw = (
             [f"seen/{p.name}" for p in sorted(seen_dir.glob("*_diff.png"))]
             if seen_dir.is_dir()
             else []
         )
 
+        processed = sorted(p.name for p in day_dir.glob("*_diff.json"))
         repairable = sorted(p.name for p in day_dir.glob("*_diff_box.json"))
 
-        return {"processed": processed, "repairable": repairable}
+        return {"raw": raw, "processed": processed, "repairable": repairable}
 
     def repair_day(self, date_str: str, files: list[str], dry_run: bool = False) -> int:
         """Process ``files`` belonging to ``date_str`` and return the count."""
@@ -134,7 +136,9 @@ class Describer:
             try:
                 logging.info(f"Describing image: {img_path}")
                 if json_path.exists():
+                    logging.info(f"Already processed {img_path}")
                     self._move_to_seen(img_path, box_path)
+                    success += 1
                 else:
                     self._process_once(img_path, box_path, json_path)
                     if json_path.exists():
@@ -255,6 +259,7 @@ def main() -> None:
 
         info = Describer.scan_day(day_dir)
         print(f"Day {args.scan} scan results:")
+        print(f"  Raw files: {len(info['raw'])}")
         print(f"  Processed files: {len(info['processed'])}")
         print(f"  Repairable files: {len(info['repairable'])}")
 
