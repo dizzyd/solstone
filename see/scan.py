@@ -4,9 +4,11 @@ import datetime
 import json
 import logging
 import os
+import tempfile
 import time
 
 from PIL import Image, ImageDraw
+from PIL.PngImagePlugin import PngInfo
 
 from see.screen_compare import compare_images
 from see.screen_dbus import idle_time_ms, screen_snap
@@ -135,14 +137,19 @@ def process_once(journal, min_threshold):
                 os.makedirs(day_dir, exist_ok=True)
                 base = os.path.join(day_dir, f"{time_part}_monitor_{idx}_diff")
                 img_filename = base + ".png"
-                censored_img.save(img_filename)
+
+                # Add box_2d to PNG metadata
+                pnginfo = PngInfo()
+                pnginfo.add_text("box_2d", json.dumps(largest_box["box_2d"]))
+
+                # Atomically save the image
+                with tempfile.NamedTemporaryFile(
+                    dir=os.path.dirname(img_filename), suffix=".pngtmp", delete=False
+                ) as tf:
+                    censored_img.save(tf, format="PNG", pnginfo=pnginfo)
+                os.replace(tf.name, img_filename)
+
                 logging.info("[Monitor %s] Saved diff image: %s", idx, img_filename)
-                box_filename = base + "_box.json"
-                with open(box_filename, "w") as bf:
-                    json.dump(largest_box, bf)
-                logging.info(
-                    "[Monitor %s] Saved bounding box JSON: %s", idx, box_filename
-                )
                 prev_images[idx] = censored_img
             else:
                 logging.debug(

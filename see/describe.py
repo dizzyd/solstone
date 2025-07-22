@@ -31,46 +31,52 @@ class Describer:
         self.attempts: dict[str, int] = {}
         self._last_reduce: Optional[datetime.datetime] = None
 
-    def _move_to_seen(self, img_path: Path, box_path: Path) -> Tuple[Path, Path]:
+    def _move_to_seen(self, img_path: Path) -> Path:
         seen_dir = img_path.parent / "seen"
         try:
             seen_dir.mkdir(exist_ok=True)
             new_img = seen_dir / img_path.name
-            new_box = seen_dir / box_path.name
             img_path.rename(new_img)
-            box_path.rename(new_box)
-            logging.info("Moved %s and %s to %s", img_path, box_path, seen_dir)
-            return new_img, new_box
+            logging.info("Moved %s to %s", img_path, seen_dir)
+            return new_img
         except Exception as exc:  # pragma: no cover - filesystem errors
             logging.error(
-                "Failed to move %s and %s to seen: %s", img_path, box_path, exc
+                "Failed to move %s to seen: %s", img_path, exc
             )
-            return img_path, box_path
+            return img_path
 
-    def _process_once(self, img_path: Path, box_path: Path, json_path: Path) -> None:
-        result = self.describe(img_path, box_path)
+    def _process_once(self, img_path: Path, json_path: Path) -> None:
+        result = self.describe(img_path)
         if not result:
             raise RuntimeError("Gemini API returned no result")
         json_path.write_text(json.dumps(result["result"], indent=2))
         logging.info(f"Described {img_path} -> {json_path}")
-        new_img, new_box = self._move_to_seen(img_path, box_path)
+        new_img = self._move_to_seen(img_path)
         crumb_builder = (
-            CrumbBuilder().add_file(new_img).add_file(new_box).add_file(self.entities)
+            CrumbBuilder().add_file(new_img).add_file(self.entities)
         )
         crumb_builder.add_model(result["model_used"])
         crumb_path = crumb_builder.commit(str(json_path))
         logging.info(f"Crumb saved to {crumb_path}")
 
-    def _process(self, img_path: Path, box_path: Path, json_path: Path) -> None:
+    def _get_json_path(self, img_path: Path) -> Path:
+        """Get the corresponding JSON path for a PNG file, ensuring *_diff.json naming."""
+        if img_path.name.endswith("_diff.png"):
+            return img_path.with_suffix(".json")
+        else:
+            # Convert *.png to *_diff.json
+            return img_path.parent / f"{img_path.stem}_diff.json"
+
+    def _process(self, img_path: Path, json_path: Path) -> None:
         if json_path.exists() or json_path.name in self.processed:
-            if img_path.exists() and box_path.exists():
-                self._move_to_seen(img_path, box_path)
+            if img_path.exists():
+                self._move_to_seen(img_path)
             self.processed.add(json_path.name)
             return
         attempts = 0
         while attempts < 2:
             try:
-                self._process_once(img_path, box_path, json_path)
+                self._process_once(img_path, json_path)
                 break
             except Exception as e:
                 attempts += 1
@@ -80,10 +86,17 @@ class Describer:
                     logging.error(f"Failed to describe {img_path}: {e}")
         self.processed.add(json_path.name)
 
-    def describe(self, img_path: Path, box_path: Path) -> Optional[dict]:
-        logging.info(f"Processing {img_path} with box {box_path}")
-        box = json.loads(box_path.read_text())
+    def describe(self, img_path: Path) -> Optional[dict]:
+        logging.info(f"Processing {img_path}")
         with Image.open(img_path) as im:
+            # Read box_2d from PNG metadata,
+            box_2d_str = im.text.get("box_2d")
+            if box_2d_str:
+                box = json.loads(box_2d_str)
+            else:
+                # Default to full image dimensions
+                box = [0, 0, im.width, im.height]
+                logging.warning(f"No box_2d metadata found in {img_path}, using full image dimensions: {box}")
             return gemini_look.gemini_describe_region(
                 im, box, entities=str(self.entities)
             )
@@ -92,20 +105,21 @@ class Describer:
     def scan_day(day_dir: Path) -> dict[str, list[str]]:
         """Return lists of raw, processed and repairable files within ``day_dir``.
 
-        Raw files are ``*_diff.png`` files in the ``seen/`` directory. 
+        Raw files are ``*.png`` files in the ``seen/`` directory. 
         Processed files are ``*_diff.json`` files in ``day_dir``.
-        Repairable files are ``*_diff_box.json`` files in ``day_dir``.
+        Repairable files are ``*.png`` files in ``day_dir``.
         """
 
         seen_dir = day_dir / "seen"
         raw = (
-            [f"seen/{p.name}" for p in sorted(seen_dir.glob("*_diff.png"))]
+            [f"seen/{p.name}" for p in sorted(seen_dir.glob("*.png"))]
             if seen_dir.is_dir()
             else []
         )
 
         processed = sorted(p.name for p in day_dir.glob("*_diff.json"))
-        repairable = sorted(p.name for p in day_dir.glob("*_diff_box.json"))
+        
+        repairable = sorted(p.name for p in day_dir.glob("*.png"))
 
         return {"raw": raw, "processed": processed, "repairable": repairable}
 
@@ -123,24 +137,22 @@ class Describer:
 
         success = 0
 
-        for box_name in files:
-            box_path = day_dir / box_name
-            prefix = box_path.stem.replace("_box", "")
-            img_path = box_path.with_name(prefix + ".png")
-            json_path = box_path.with_name(prefix + ".json")
+        for img_name in files:
+            img_path = day_dir / img_name
+            json_path = self._get_json_path(img_path)
 
             if not img_path.exists():
-                logging.warning(f"Skipping {box_path}: missing image {img_path}")
+                logging.warning(f"Skipping {img_path}: file does not exist")
                 continue
 
             try:
                 logging.info(f"Describing image: {img_path}")
                 if json_path.exists():
                     logging.info(f"Already processed {img_path}")
-                    self._move_to_seen(img_path, box_path)
+                    self._move_to_seen(img_path)
                     success += 1
                 else:
-                    self._process_once(img_path, box_path, json_path)
+                    self._process_once(img_path, json_path)
                     if json_path.exists():
                         success += 1
             except Exception as e:
@@ -169,26 +181,33 @@ class Describer:
         except Exception as exc:
             logging.error(f"reduce_day failed: {exc}")
 
+    def _handle_image_event(self, event_path: str, event_type: str = "detected") -> None:
+        """Common handler for image file events (created/moved)."""
+        img_path = Path(event_path)
+        json_path = self._get_json_path(img_path)
+
+        if not img_path.exists():
+            logging.warning(f"Skipping {img_path}: file does not exist")
+            return
+
+        logging.info(f"Image {event_type}, processing: {img_path}")
+        self.executor.submit(self._process, img_path, json_path)
+
     def start(self):
         handler = PatternMatchingEventHandler(
-            patterns=["*_diff_box.json"],
+            patterns=["*.png"],
             ignore_directories=True,
             ignore_patterns=["*/seen/*"],
         )
 
         def on_created(event):
-            box_path = Path(event.src_path)
-            prefix = box_path.stem.replace("_box", "")
-            img_path = box_path.with_name(prefix + ".png")
-            json_path = box_path.with_name(prefix + ".json")
+            self._handle_image_event(event.src_path, "created")
 
-            if not img_path.exists():
-                logging.warning(f"Skipping {box_path}: missing image {img_path}")
-                return
-
-            self.executor.submit(self._process, img_path, box_path, json_path)
+        def on_moved(event):
+            self._handle_image_event(event.dest_path, "moved")
 
         handler.on_created = on_created
+        handler.on_moved = on_moved
 
         self.observer = None
         current_day: Optional[str] = None
@@ -196,12 +215,12 @@ class Describer:
             while True:
                 today_str = datetime.datetime.now().strftime("%Y%m%d")
                 day_dir = self.journal_dir / today_str
-                if day_dir.exists() and (current_day != today_str):
+                if day_dir.is_dir() and (current_day != today_str):
                     if self.observer:
                         self.observer.stop()
                         self.observer.join()
                     self.observer = Observer()
-                    self.observer.schedule(handler, str(day_dir), recursive=True)
+                    self.observer.schedule(handler, str(day_dir), recursive=False)
                     self.observer.start()
                     self.watch_dir = day_dir
                     self.processed.clear()

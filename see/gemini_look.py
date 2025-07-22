@@ -60,7 +60,7 @@ def gemini_describe_region(image, box, models=None, entities=None):
         initialize()
     client = _gemini_client
 
-    native_y_min, native_x_min, native_y_max, native_x_max = box["box_2d"]
+    native_y_min, native_x_min, native_y_max, native_x_max = box
     im_with_box = image.copy()
     draw = ImageDraw.Draw(im_with_box)
     draw.rectangle(
