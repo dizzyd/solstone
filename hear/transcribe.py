@@ -211,8 +211,6 @@ class Transcriber:
             json_name = audio_path.name.replace("_raw.flac", "_audio.json")
         elif audio_path.name.endswith("_audio.flac"):
             json_name = audio_path.name.replace("_audio.flac", "_audio.json")
-        elif audio_path.name.endswith("_audio.ogg"):
-            json_name = audio_path.name.replace("_audio.ogg", "_audio.json")
         else:
             # Fallback for other extensions
             json_name = audio_path.stem + "_audio.json"
@@ -297,11 +295,11 @@ class Transcriber:
         can easily open them. Processed audio lives in the ``heard/`` subfolder.
         """
 
-        raw = sorted(p.name for p in day_dir.glob("*_raw.flac"))
+        raw = sorted(p.name for p in day_dir.glob("*.flac"))
 
         heard_dir = day_dir / "heard"
         processed = (
-            [f"heard/{p.name}" for p in sorted(heard_dir.glob("*_raw.flac"))]
+            [f"heard/{p.name}" for p in sorted(heard_dir.glob("*.flac"))]
             if heard_dir.is_dir()
             else []
         )
@@ -333,6 +331,7 @@ class Transcriber:
             json_path = self._get_json_path(audio_path)
             before = json_path.exists()
             if before:
+                self._move_to_heard(audio_path)
                 logging.info(f"Skipping already processed file: {json_path}")
                 success += 1
                 continue
@@ -346,7 +345,7 @@ class Transcriber:
 
     def start(self):
         handler = PatternMatchingEventHandler(
-            patterns=["*_raw.flac"],
+            patterns=["*.flac"],
             ignore_directories=True,
             ignore_patterns=["*/trash/*", "*/heard/*"],
         )
