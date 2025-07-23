@@ -63,7 +63,7 @@ def stats_data() -> Any:
         "stats": {},
         "summary_html": "",
     }
-    
+
     if state.journal_root:
         # Load stats.json
         stats_path = os.path.join(state.journal_root, "stats.json")
@@ -73,7 +73,7 @@ def stats_data() -> Any:
                     response["stats"] = json.load(f)
             except Exception:
                 pass
-        
+
         # Load and render summary.md
         summary_path = os.path.join(state.journal_root, "summary.md")
         if os.path.isfile(summary_path):
@@ -83,5 +83,5 @@ def stats_data() -> Any:
                     response["summary_html"] = markdown.markdown(f.read(), extensions=['extra'])
             except Exception:
                 pass
-    
+
     return jsonify(response)
