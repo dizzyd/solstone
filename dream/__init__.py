@@ -107,6 +107,7 @@ calendar_occurrences = calendar_view.calendar_occurrences
 calendar_days = calendar_view.calendar_days
 login = home_view.login
 logout = home_view.logout
+stats_data = home_view.stats_data
 
 __all__ = [
     "app",
@@ -155,6 +156,7 @@ __all__ = [
     "time_since",
     "list_day_folders",
     "reload_entities",
+    "stats_data",
     "journal_root",
     "entities_index",
     "occurrences_index",
