@@ -112,13 +112,14 @@ class JournalStats:
                     else:
                         duration = end_sec - start_sec
                     self.topic_minutes[base] += duration / 60
-                    for sec in range(start_sec, end_sec, 60):
-                        hour = sec // 3600
-                        if 0 <= hour < 24:
-                            self.heatmap[weekday][hour] += 1
-                    leftover = (end_sec - start_sec) % 60
-                    if leftover and 0 <= end_sec // 3600 < 24:
-                        self.heatmap[weekday][end_sec // 3600] += leftover / 60
+                    cur = start_sec
+                    while cur < end_sec:
+                        hour = cur // 3600
+                        if hour >= 24:
+                            break
+                        next_tick = min((hour + 1) * 3600, end_sec)
+                        self.heatmap[weekday][hour] += (next_tick - cur) / 60
+                        cur = next_tick
 
         counts_for_totals = dict(stats)
         self.totals.update(counts_for_totals)
