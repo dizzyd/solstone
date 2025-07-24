@@ -103,6 +103,7 @@ def process_once(journal, min_threshold):
     idle_ms = idle_time_ms()
     if not recent_audio and last_ts and idle_ms / 1000 >= (time.time() - last_ts):
         logging.debug("Desktop still idle; nothing to do.")
+        touch_health("see")
         return
 
     try:
