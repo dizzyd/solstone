@@ -22,6 +22,7 @@ sunstone/
 ├── tests/          # pytest test suites
 ├── JOURNAL.md      # Domain model for journal directories
 ├── README.md       # Helpful project overview
+├── CHANGELOG.md    # Project version history & release notes
 ├── CRUMBS.md       # Definition of the .crumb file format
 └── AGENTS.md       # AI & contributor guidance (this file)
 ```
@@ -63,9 +64,9 @@ sunstone/
 
 ---
 
-## Security & Secrets
+## Important Notes
 
-* **No hard‑coded secrets**: All credentials must come from environment variables or arguments.
+* **Update Changelog**: Remember to update `CHANGELOG.md` after adding any new features or capabilities.
 * **Input Validation**: Sanitize and validate all external inputs (file paths, user data).
 * **Error Handling**: Raise exceptions for unexpected states; avoid silent failures.
 
