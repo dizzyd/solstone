@@ -47,7 +47,7 @@ def detect_creation_time(path: str, api_key: Optional[str] = None) -> Optional[d
     metadata = _extract_metadata(path)
 
     lines = [
-        f"# exiftool -all output for {os.path.basename(path)}",
+        f"# exiftool -all output for {path}",
         "",
         metadata,
     ]
