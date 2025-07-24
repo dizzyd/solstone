@@ -1,6 +1,8 @@
 # Changelog
 
-## 2025-07-25
+Guide for updating, always append new entries to the existing list for the same day, but start a new day section if the date has changed.
+
+## 2025-07-24
 
 - CHANGELOG.md created to start tracking agentic coding updates
 - Renamed `think/detect.py` and `think/detect.txt` to `think/created_detect.py` and
@@ -15,9 +17,6 @@
 - `detect_transcript_json` utility and `detect_transcript_json.txt` for
   converting transcript text segments into the JSON format used by
   `hear.transcribe`.
-
-## 2025-07-26
-
 - `think/importer.py` can now process `.txt` and `.pdf` transcript files.
 - Detected creation time via `detect_created` and splits transcripts with
   `detect_transcript_segment`, converting each chunk to JSON with
