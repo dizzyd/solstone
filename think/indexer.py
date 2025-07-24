@@ -327,7 +327,13 @@ def scan_raws(journal: str, verbose: bool = False) -> bool:
 
 
 def search_topics(
-    journal: str, query: str, limit: int = 5, offset: int = 0
+    journal: str,
+    query: str,
+    limit: int = 5,
+    offset: int = 0,
+    *,
+    day: str | None = None,
+    topic: str | None = None,
 ) -> tuple[int, List[Dict[str, str]]]:
     """Search the topic sentence index and return total count and results."""
 
@@ -335,16 +341,27 @@ def search_topics(
     db = sqlite_utils.Database(conn)
     quoted = db.quote(query)
 
+    where_clause = f"topics_text MATCH {quoted}"
+    params: List[str] = []
+    
+    if day:
+        where_clause += " AND day=?"
+        params.append(day)
+    if topic:
+        where_clause += " AND topic LIKE ?"
+        params.append(f"%{topic}%")
+
     total = conn.execute(
-        f"SELECT count(*) FROM topics_text WHERE topics_text MATCH {quoted}"
+        f"SELECT count(*) FROM topics_text WHERE {where_clause}",
+        params
     ).fetchone()[0]
 
     cursor = conn.execute(
         f"""
         SELECT sentence, path, day, topic, position, bm25(topics_text) as rank
-        FROM topics_text WHERE topics_text MATCH {quoted} ORDER BY rank LIMIT ? OFFSET ?
+        FROM topics_text WHERE {where_clause} ORDER BY rank LIMIT ? OFFSET ?
         """,
-        (limit, offset),
+        params + [limit, offset],
     )
     results: List[Dict[str, str]] = []
     for sentence, path, day, topic, pos, rank in cursor.fetchall():
@@ -368,41 +385,57 @@ def search_topics(
 def search_occurrences(
     journal: str,
     query: str,
-    n_results: int = 5,
+    limit: int = 5,
+    offset: int = 0,
     *,
     day: str | None = None,
     start: str | None = None,
     end: str | None = None,
     topic: str | None = None,
-) -> List[Dict[str, Any]]:
-    """Search the occurrences index and return results."""
+) -> tuple[int, List[Dict[str, Any]]]:
+    """Search the occurrences index and return total count and results."""
     conn, _ = get_index(journal)
     db = sqlite_utils.Database(conn)
     quoted = db.quote(query)
+    
+    # Build WHERE clause and parameters
+    where_clause = f"occ_text MATCH {quoted}"
+    params: List[str] = []
+    
+    if day:
+        where_clause += " AND m.day=?"
+        params.append(day)
+    if topic:
+        where_clause += " AND m.topic=?"
+        params.append(topic)
+    if start:
+        where_clause += " AND m.end>=?"
+        params.append(start)
+    if end:
+        where_clause += " AND m.start<=?"
+        params.append(end)
+    
+    # Get total count
+    total = conn.execute(
+        f"""
+        SELECT count(*)
+        FROM occ_text t JOIN occ_match m ON t.path=m.path AND t.idx=m.idx
+        WHERE {where_clause}
+        """,
+        params
+    ).fetchone()[0]
+    
+    # Get results with limit and offset
     sql = f"""
         SELECT t.content,
                m.path, m.day, m.idx, m.topic, m.start, m.end,
                bm25(occ_text) as rank
         FROM occ_text t JOIN occ_match m ON t.path=m.path AND t.idx=m.idx
-        WHERE occ_text MATCH {quoted}
+        WHERE {where_clause}
+        ORDER BY rank LIMIT ? OFFSET ?
     """
-    params: List[str] = []
-    if day:
-        sql += " AND m.day=?"
-        params.append(day)
-    if topic:
-        sql += " AND m.topic=?"
-        params.append(topic)
-    if start:
-        sql += " AND m.end>=?"
-        params.append(start)
-    if end:
-        sql += " AND m.start<=?"
-        params.append(end)
-    sql += " ORDER BY rank LIMIT ?"
-    params.append(n_results)
-
-    cursor = conn.execute(sql, params)
+    
+    cursor = conn.execute(sql, params + [limit, offset])
     results = []
     for row in cursor.fetchall():
         (
@@ -444,7 +477,7 @@ def search_occurrences(
             }
         )
     conn.close()
-    return results
+    return total, results
 
 
 def search_raws(
