@@ -69,6 +69,7 @@ sunstone/
 * **Update Changelog**: Remember to update `CHANGELOG.md` after adding any new features or capabilities.
 * **Input Validation**: Sanitize and validate all external inputs (file paths, user data).
 * **Error Handling**: Raise exceptions for unexpected states; avoid silent failures.
+* **JOURNAL_PATH**: The `setup_cli()` utility (that all `main()` use) validates that this env var is available, so avoid passing the journal path around when it's accessible anywhere via the environment.
 
 ---
 
