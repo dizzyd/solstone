@@ -75,7 +75,7 @@ WantedBy=timers.target
 
 `think.agent` provides a small command line interface around an OpenAI agent.
 It can search across topic summaries, query raw transcripts and read
-full Markdown files from the journal using three custom tools.
+full topic summaries from the journal using custom tools.
 
 ```bash
 think-agent [TASK_FILE] [--model MODEL] [--max-tokens N]
@@ -85,14 +85,9 @@ If `TASK_FILE` is omitted an interactive prompt is started.
 
 Set `OPENAI_API_KEY` and `JOURNAL_PATH` in your environment so the agent can
 query your journal index. The command starts a local MCP server and connects to
-it automatically. The tools available to the agent are:
+it automatically.
 
-- **search_topic** – full text search across `topics/*.md` sentences.
-- **search_raw** – full text search over raw `*_audio.json` and
-  `*_diff.json` files for a specific day (requires the `day` argument).
-- **read_markdown** – return the contents of any `journal/YYYYMMDD/*.md` file.
-
-The agent will loop automatically and print its final answer to `stdout`.
+The agent will run automatically and print its final answer to `stdout`.
 
 ## Topic map keys
 
