@@ -51,7 +51,7 @@ def run_process_day(log_path: Path) -> None:
     logging.info("think.process_day finished in %s seconds", duration)
 
 
-def start_runners(journal: str) -> list[subprocess.Popen]:
+def start_runners(journal: str) -> list[tuple[subprocess.Popen, str]]:
     """Launch hear and see runners logging output to supervisor.log."""
     log_path = Path(journal) / "health" / "supervisor.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,8 +64,18 @@ def start_runners(journal: str) -> list[subprocess.Popen]:
                 stderr=log_file,
                 start_new_session=True,
             )
-        procs.append(proc)
+        runner_name = module.split(".")[0]  # "hear" or "see"
+        procs.append((proc, runner_name))
     return procs
+
+
+def check_runner_exits(procs: list[tuple[subprocess.Popen, str]]) -> list[str]:
+    """Check if any runner processes have exited and return their names."""
+    exited = []
+    for proc, name in procs:
+        if proc.poll() is not None:  # Process has exited
+            exited.append(name)
+    return exited
 
 
 def supervise(
@@ -75,11 +85,20 @@ def supervise(
     interval: int = CHECK_INTERVAL,
     command: str = "notify-send",
     daily: bool = True,
+    procs: list[tuple[subprocess.Popen, str]] | None = None,
 ) -> None:
     """Monitor heartbeat files and alert when they become stale."""
     log_path = Path(journal) / "health" / "supervisor.log"
     last_day = datetime.now().date()
     while True:  # pragma: no cover - loop checked via unit tests by patching
+        # Check for runner exits first (immediate alert)
+        if procs:
+            exited = check_runner_exits(procs)
+            if exited:
+                msg = f"Runner process exited: {', '.join(sorted(exited))}"
+                logging.error(msg)
+                send_notification(msg, command)
+        
         stale = check_health(journal, threshold)
         if stale:
             msg = f"Journaling offline: {', '.join(sorted(stale))}"
@@ -140,7 +159,7 @@ def main() -> None:
         level=level, handlers=handlers, format="%(asctime)s %(levelname)s %(message)s"
     )
 
-    procs: list[subprocess.Popen] = []
+    procs: list[tuple[subprocess.Popen, str]] = []
     if not args.no_runners:
         procs = start_runners(journal)
     try:
@@ -150,9 +169,10 @@ def main() -> None:
             interval=args.interval,
             command=args.notify_cmd,
             daily=not args.no_daily,
+            procs=procs if procs else None,
         )
     finally:
-        for proc in procs:
+        for proc, name in procs:
             try:
                 proc.terminate()
             except Exception:
