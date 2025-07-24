@@ -16,7 +16,7 @@ You have access to three primary search tools and two resource types for journal
 
 ### Tool: `search_event`
 **Purpose**: Searches the events that have been auto-extracted from the days transcripts
-**Returns**: Structured event data with timestamps, descriptions, and associated metadata
+**Returns**: JSON structured event data with start/end times, event descriptions, and associated metadata
 **Use when**: Finding specific occurrences, meetings, or notable activities across the journal
 
 ### Resource: `journal://summary/{day}/{topic}`
