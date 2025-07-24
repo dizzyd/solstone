@@ -13,3 +13,16 @@
 
 - `think/detect_transcript.py` and `think/detect_transcript.txt` for splitting
   transcripts into 5 minute segments
+
+## 2025-07-25
+
+### Changed
+
+- Renamed `detect_transcript` function and prompt to
+  `detect_transcript_segment`/`detect_transcript_segment.txt`.
+
+### Added
+
+- `detect_transcript_json` utility and `detect_transcript_json.txt` for
+  converting transcript text segments into the JSON format used by
+  `hear.transcribe`.
