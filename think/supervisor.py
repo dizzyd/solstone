@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -36,6 +37,23 @@ def send_notification(message: str, command: str = "notify-send") -> None:
         logging.error("Failed to send notification: %s", exc)
 
 
+def start_runners(journal: str) -> list[subprocess.Popen]:
+    """Launch hear and see runners logging output to supervisor.log."""
+    log_path = Path(journal) / "health" / "supervisor.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    procs = []
+    for module in ("hear.runner", "see.runner"):
+        with open(log_path, "ab") as log_file:
+            proc = subprocess.Popen(
+                [sys.executable, "-m", module],
+                stdout=log_file,
+                stderr=log_file,
+                start_new_session=True,
+            )
+        procs.append(proc)
+    return procs
+
+
 def supervise(
     journal: str,
     *,
@@ -50,6 +68,8 @@ def supervise(
             msg = f"Journaling offline: {', '.join(sorted(stale))}"
             logging.warning(msg)
             send_notification(msg, command)
+        else:
+            logging.info("Heartbeat OK")
         time.sleep(interval)
 
 
@@ -79,12 +99,35 @@ def main() -> None:
     if not journal:
         parser.error("JOURNAL_PATH not set")
 
-    supervise(
-        journal,
-        threshold=args.threshold,
-        interval=args.interval,
-        command=args.notify_cmd,
+    log_path = Path(journal) / "health" / "supervisor.log"
+    handlers: list[logging.Handler] = [logging.FileHandler(log_path, encoding="utf-8")]
+    if args.verbose:
+        handlers.append(logging.StreamHandler())
+
+    level = logging.DEBUG if args.debug else logging.INFO
+    logging.getLogger().handlers = []
+    logging.basicConfig(
+        level=level, handlers=handlers, format="%(asctime)s %(levelname)s %(message)s"
     )
+
+    procs = start_runners(journal)
+    try:
+        supervise(
+            journal,
+            threshold=args.threshold,
+            interval=args.interval,
+            command=args.notify_cmd,
+        )
+    finally:
+        for proc in procs:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
