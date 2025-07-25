@@ -46,8 +46,7 @@ def search_topic(query: str, limit: int = 5, offset: int = 0, *, topic: str | No
         - search_topic("planning", topic="standup")
     """
     try:
-        journal = os.getenv("JOURNAL_PATH", "journal")
-        total, results = search_topics_impl(journal, query, limit, offset, topic=topic)
+        total, results = search_topics_impl(query, limit, offset, topic=topic)
 
         items = []
         for r in results:
@@ -98,10 +97,7 @@ def search_raw(query: str, day: str, limit: int = 5, offset: int = 0) -> dict[st
         - search_raw("feature flag", day="20240102", limit=10)
     """
     try:
-        journal = os.getenv("JOURNAL_PATH", "journal")
-        total, results = search_raws_impl(
-            journal, query, limit=limit, offset=offset, day=day
-        )
+        total, results = search_raws_impl(query, limit=limit, offset=offset, day=day)
 
         items = []
         for r in results:
@@ -160,9 +156,7 @@ def search_events(
     """
 
     try:
-        journal = os.getenv("JOURNAL_PATH", "journal")
         rows = search_occurrences_impl(
-            journal,
             query,
             n_results=limit,
             offset=offset,
