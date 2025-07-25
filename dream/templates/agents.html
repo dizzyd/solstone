@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% set title = 'Agents' %}
+{% set active = 'agents' %}
+{% block head %}
+<style>
+.container { padding: 0 1em; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="container">
+  <form id="agentForm" class="input-area">
+    <textarea id="agentInput" rows="3" placeholder="Ask the agents..."></textarea>
+    <button type="submit">✨</button>
+  </form>
+</div>
+<script>
+  document.getElementById('agentForm').onsubmit = function(e){
+    e.preventDefault();
+    alert('Coming soon!');
+  };
+</script>
+{% endblock %}
