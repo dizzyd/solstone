@@ -31,7 +31,7 @@ def stub_search_raws(query, limit=5, offset=0, day=None):
 
 def stub_search_occurrences(
     query,
-    n_results=5,
+    limit=5,
     offset=0,
     *,
     day=None,
@@ -39,8 +39,8 @@ def stub_search_occurrences(
     end=None,
     topic=None,
 ):
-    log_call(f"events:{query}:{day}:{topic}:{start}:{end}:{n_results}")
-    return [
+    log_call(f"events:{query}:{day}:{topic}:{start}:{end}:{limit}:{offset}")
+    return 1, [
         {
             "text": "Standup",
             "metadata": {

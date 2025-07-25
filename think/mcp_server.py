@@ -48,18 +48,22 @@ def search_topic(
         - search_topic("planning", topic="standup")
     """
     try:
-        total, results = search_topics_impl(query, limit, offset, topic=topic)
+        kwargs = {}
+        if topic is not None:
+            kwargs["topic"] = topic
+        total, results = search_topics_impl(query, limit, offset, **kwargs)
 
         items = []
         for r in results:
             meta = r.get("metadata", {})
-            topic = meta.get("topic", "")
-            if topic.endswith(".md"):
-                topic = topic[:-3]
+            topic_label = meta.get("topic", "")
+            if topic_label.endswith(".md"):
+                topic_label = topic_label[:-3]
+            topic_label = os.path.basename(topic_label)
             items.append(
                 {
                     "day": meta.get("day", ""),
-                    "filename": topic,
+                    "topic": topic_label,
                     "text": r.get("text", ""),
                 }
             )
@@ -158,9 +162,9 @@ def search_events(
     """
 
     try:
-        rows = search_occurrences_impl(
+        total, rows = search_occurrences_impl(
             query,
-            n_results=limit,
+            limit=limit,
             offset=offset,
             day=day,
             start=start,
@@ -183,7 +187,7 @@ def search_events(
                 }
             )
 
-        return {"limit": limit, "results": items}
+        return {"total": total, "limit": limit, "offset": offset, "results": items}
     except Exception as exc:
         return {
             "error": f"Failed to search events: {exc}",
@@ -198,22 +202,16 @@ def get_topic_summary(day: str, topic: str) -> TextResource:
     md_path = Path(journal) / day / "topics" / f"{topic}.md"
 
     if not md_path.is_file():
-        content = {"error": f"Topic '{topic}' not found for day {day}"}
+        text = f"Topic '{topic}' not found for day {day}"
     else:
         text = md_path.read_text(encoding="utf-8")
-        content = {
-            "day": day,
-            "topic": topic,
-            "summary": text,
-            "word_count": len(text.split()),
-        }
 
     return TextResource(
         uri=f"journal://summary/{day}/{topic}",
         name=f"Summary: {topic} ({day})",
         description=f"Summary of {topic} topic from {day}",
-        mime_type="application/json",
-        text=json.dumps(content, indent=2),
+        mime_type="text/markdown",
+        text=text,
     )
 
 

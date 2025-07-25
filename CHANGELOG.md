@@ -1,8 +1,8 @@
 # Changelog
 
-Guide for updating, always append new entries to the existing list for the same day, but start a new day section if the date has changed.
+Guide for updating: always append new entries to the existing list for the same day, but start a new day section at the top if the date has changed in the Mountain time zone.
 
-## 2025-07-24
+## 2025-07-25
 
 - CHANGELOG.md created to start tracking agentic coding updates
 - Renamed `think/detect.py` and `think/detect.txt` to `think/created_detect.py` and
@@ -25,3 +25,4 @@ Guide for updating, always append new entries to the existing list for the same 
   five minutes per chunk.
 - search_* functions no longer require JOURNAL_PATH argument; get_index infers from environment and tests updated
 - think-agent supports `-o/--out` to write the final result or error to a file
+- Added initial Agents view accessible at `/agents` with a rocket icon and a textarea form.

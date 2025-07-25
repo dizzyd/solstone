@@ -26,6 +26,7 @@ from .utils import (
     update_top_entry,
 )
 from .views import admin as admin_view
+from .views import agents as agents_view
 from .views import calendar as calendar_view
 from .views import chat as chat_view
 from .views import entities as entities_view
@@ -77,6 +78,7 @@ entities = entities_view.entities
 calendar = calendar_view.calendar_page
 calendar_day = calendar_view.calendar_day
 chat_page = chat_view.chat_page
+agents_page = agents_view.agents_page
 send_message = chat_view.send_message
 chat_history = chat_view.chat_history
 clear_history = chat_view.clear_history
@@ -118,6 +120,7 @@ __all__ = [
     "calendar",
     "calendar_day",
     "chat_page",
+    "agents_page",
     "send_message",
     "chat_history",
     "clear_history",

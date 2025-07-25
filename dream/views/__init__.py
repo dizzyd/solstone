@@ -4,7 +4,7 @@ from importlib import import_module
 
 from flask import Flask
 
-from . import admin, calendar, entities, home, search, tasks
+from . import admin, agents, calendar, entities, home, search, tasks
 
 live_view = import_module(".live", __name__)
 
@@ -21,6 +21,7 @@ def register_views(app: Flask) -> None:
         calendar.bp,
         admin.bp,
         chat_view.bp,
+        agents.bp,
         import_view.bp,
         live_view.bp,
         tasks.bp,
