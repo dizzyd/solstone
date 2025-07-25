@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import List, Optional
 
@@ -10,7 +11,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from .models import GEMINI_LITE
+from .models import GEMINI_FLASH, GEMINI_PRO
 
 
 def _load_json_prompt() -> str:
@@ -43,20 +44,26 @@ def parse_line_numbers(json_text: str, num_lines: int) -> List[int]:
     try:
         data = json.loads(json_text)
     except json.JSONDecodeError as exc:  # pragma: no cover - network errors
+        logging.error("Failed to parse JSON response")
         raise ValueError("invalid JSON") from exc
 
     if not isinstance(data, list) or not data:
+        logging.error("JSON response is not a non-empty list")
         raise ValueError("expected non-empty list")
 
     line_numbers: List[int] = []
     last = 0
     for item in data:
         if not isinstance(item, int):
+            logging.error(f"Invalid line number type: {type(item)}")
             raise ValueError("line numbers must be integers")
         if item <= last or item < 1 or item > num_lines:
+            logging.error(f"Invalid line number: {item} (last: {last}, max: {num_lines})")
             raise ValueError("invalid line number")
         line_numbers.append(item)
         last = item
+    
+    logging.info(f"Successfully parsed {len(line_numbers)} segment boundaries: {line_numbers}")
     return line_numbers
 
 
@@ -68,21 +75,26 @@ def segments_from_lines(lines: List[str], line_numbers: List[int]) -> List[str]:
         segments.append("\n".join(lines[start - 1 : num - 1]).strip())  # noqa: E203
         start = num
     segments.append("\n".join(lines[start - 1 :]).strip())  # noqa: E203
+    
+    logging.info(f"Created {len(segments)} transcript segments")
     return segments
 
 
 def detect_transcript_segment(text: str, api_key: Optional[str] = None) -> List[str]:
     """Return transcript segments for ``text`` using Gemini."""
+    logging.info("Starting transcript segmentation with Gemini")
+    
     if api_key is None:
         load_dotenv()
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
+            logging.error("GOOGLE_API_KEY not found in environment")
             raise RuntimeError("GOOGLE_API_KEY not set")
 
     numbered, lines = number_lines(text)
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model=GEMINI_LITE,
+        model=GEMINI_PRO,
         contents=[numbered],
         config=types.GenerateContentConfig(
             temperature=0.3,
@@ -93,23 +105,29 @@ def detect_transcript_segment(text: str, api_key: Optional[str] = None) -> List[
         ),
     )
 
+    logging.info(f"Received response from Gemini: {response.text}")
     line_numbers = parse_line_numbers(response.text, len(lines))
-    return segments_from_lines(lines, line_numbers)
+    segments = segments_from_lines(lines, line_numbers)
+    
+    return segments
 
 
 def detect_transcript_json(
     text: str, api_key: Optional[str] = None
 ) -> Optional[list]:
     """Return transcript ``text`` converted to JSON using Gemini."""
+    logging.info(f"Starting transcript JSON conversion with Gemini for text: {text[:100]}...")
+    
     if api_key is None:
         load_dotenv()
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
+            logging.error("GOOGLE_API_KEY not found in environment")
             raise RuntimeError("GOOGLE_API_KEY not set")
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model=GEMINI_LITE,
+        model=GEMINI_FLASH,
         contents=[text],
         config=types.GenerateContentConfig(
             temperature=0.3,
@@ -120,9 +138,13 @@ def detect_transcript_json(
         ),
     )
 
+    logging.info(f"Received response from Gemini: {response.text[:100]}")
     try:
-        return json.loads(response.text)
+        result = json.loads(response.text)
+        logging.info("Successfully converted transcript to JSON")
+        return result
     except json.JSONDecodeError:
+        logging.error("Failed to parse JSON response from Gemini")
         return None
 
 
