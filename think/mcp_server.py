@@ -40,7 +40,7 @@ def search_topic(
         - total: Total number of matching topics
         - limit: Current limit value used for this query
         - offset: Current offset value used for this query
-        - results: List of matching topics with day, topic, and text excerpt
+        - results: List of matching topics with day, topic, and text excerpt, ordered by text relevance
 
     Examples:
         - search_topic("machine learning projects")
@@ -93,7 +93,7 @@ def search_raw(query: str, day: str, limit: int = 5, offset: int = 0) -> dict[st
         - total: Total number of matching raw entries
         - limit: Current limit value used for this query
         - offset: Current offset value used for this query
-        - results: List of entries with day, time, type, and text snippet
+        - results: List of entries with day, time, type, and text snippet, ordered by time series in the given range
 
     Examples:
         - search_raw("error message", day="20240101")
@@ -151,6 +151,7 @@ def search_events(
     Returns:
         Dictionary with ``limit``, ``offset`` and ``results`` list containing day, topic,
         start/end times and short event summaries.
+        Ordered by day and start time (most recent first).
 
     Examples:
         - search_events("sprint review")

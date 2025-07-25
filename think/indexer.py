@@ -431,14 +431,14 @@ def search_occurrences(
         params,
     ).fetchone()[0]
 
-    # Get results with limit and offset
+    # Get results with limit and offset, ordered by day and start time (newest first)
     sql = f"""
         SELECT t.content,
                m.path, m.day, m.idx, m.topic, m.start, m.end,
                bm25(occ_text) as rank
         FROM occ_text t JOIN occ_match m ON t.path=m.path AND t.idx=m.idx
         WHERE {where_clause}
-        ORDER BY rank LIMIT ? OFFSET ?
+        ORDER BY m.day DESC, m.start DESC LIMIT ? OFFSET ?
     """
 
     cursor = conn.execute(sql, params + [limit, offset])

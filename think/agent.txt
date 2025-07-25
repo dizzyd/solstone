@@ -126,7 +126,7 @@ When topics span multiple days:
 ## Output Formatting Guidelines
 
 ### For Quick Queries
-Provide concise 2-3 sentence summaries unless asked for details. Focus on directly answering what was asked.
+Provide concise 2-3 sentence summaries unless asked for details. Focus on directly answering what was asked. Markdown formatting is well supported when helpful.
 
 ### For Research Queries
 Structure responses as:
