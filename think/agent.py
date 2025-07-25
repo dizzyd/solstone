@@ -12,11 +12,13 @@ When ``TASK_FILE`` is omitted, an interactive ``chat>`` prompt is started.
 
 import argparse
 import asyncio
+from datetime import datetime
 import logging
 import os
 import sys
 from pathlib import Path
 from typing import Optional
+import zoneinfo
 
 from agents import Agent, ModelSettings, RunConfig, Runner, set_default_openai_key
 from agents.mcp import MCPServerStdio
@@ -57,6 +59,19 @@ def agent_instructions() -> tuple[str, str]:
             desc = str(info.get("description", ""))
             lines.append(f"* {name}: {desc}")
         user_parts.append("\n".join(lines))
+
+    now = datetime.now()
+
+    # Try to get local timezone
+    try:
+        local_tz = zoneinfo.ZoneInfo(str(now.astimezone().tzinfo))
+        now_local = now.astimezone(local_tz)
+        time_str = now_local.strftime("%A, %B %d, %Y at %I:%M %p %Z")
+    except:
+        # Fallback without timezone
+        time_str = now.strftime("%A, %B %d, %Y at %I:%M %p")
+    
+    user_parts.append(f"## Current Date and Time\n{time_str}")
 
     user_message = "\n\n".join(user_parts).strip()
     return system_instruction, user_message
