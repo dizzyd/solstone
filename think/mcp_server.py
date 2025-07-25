@@ -19,7 +19,9 @@ mcp = FastMCP("sunstone")
 
 
 @mcp.tool
-def search_topic(query: str, limit: int = 5, offset: int = 0, *, topic: str | None = None) -> dict[str, Any]:
+def search_topic(
+    query: str, limit: int = 5, offset: int = 0, *, topic: str | None = None
+) -> dict[str, Any]:
     """Search across journal topic summaries using semantic full-text search.
 
     This tool searches through pre-processed topic summaries that represent
@@ -57,7 +59,7 @@ def search_topic(query: str, limit: int = 5, offset: int = 0, *, topic: str | No
             items.append(
                 {
                     "day": meta.get("day", ""),
-                    "topic": topic,
+                    "filename": topic,
                     "text": r.get("text", ""),
                 }
             )
@@ -181,7 +183,7 @@ def search_events(
                 }
             )
 
-        return {"limit": limit, "offset": offset, "results": items}
+        return {"limit": limit, "results": items}
     except Exception as exc:
         return {
             "error": f"Failed to search events: {exc}",
