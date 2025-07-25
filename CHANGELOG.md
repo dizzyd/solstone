@@ -2,6 +2,10 @@
 
 Guide for updating, always append new entries to the existing list for the same day, but start a new day section if the date has changed.
 
+## 2025-07-25
+
+- Added initial Agents view accessible at `/agents` with a rocket icon and a textarea form.
+
 ## 2025-07-24
 
 - CHANGELOG.md created to start tracking agentic coding updates
