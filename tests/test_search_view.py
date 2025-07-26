@@ -81,7 +81,7 @@ def test_search_occurrence_api(tmp_path):
     topics_dir.mkdir()
     (topics_dir / "meetings.json").write_text(json.dumps(data))
 
-    indexer.scan_occurrences(str(journal))
+    indexer.scan_events(str(journal))
     review.journal_root = str(journal)
 
     with review.app.test_request_context("/search/api/occurrence?q=Standup"):
