@@ -12,15 +12,25 @@ When ``TASK_FILE`` is omitted, an interactive ``chat>`` prompt is started.
 
 import argparse
 import asyncio
-from datetime import datetime
+import json
 import logging
 import os
 import sys
+import zoneinfo
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import zoneinfo
 
-from agents import Agent, ModelSettings, RunConfig, Runner, set_default_openai_key, SQLiteSession
+from agents import (
+    Agent,
+    AgentHooks,
+    ModelSettings,
+    RunConfig,
+    Runner,
+    SQLiteSession,
+    enable_verbose_stdout_logging,
+    set_default_openai_key,
+)
 from agents.mcp import MCPServerStdio
 
 from think.utils import get_topics, setup_cli
@@ -28,14 +38,84 @@ from think.utils import get_topics, setup_cli
 AGENT_PATH = Path(__file__).with_name("agent.txt")
 
 
-def write_output(path: Optional[str], text: str) -> None:
-    """Write *text* to *path* if provided."""
-    if not path:
-        return
-    try:
-        Path(path).write_text(text, encoding="utf-8")
-    except Exception as exc:  # pragma: no cover - display only
-        logging.error("Failed to write output to %s: %s", path, exc)
+def setup_logging(verbose: bool = False) -> logging.Logger:
+    """Setup logging configuration for agent and tools."""
+
+    if verbose:
+        enable_verbose_stdout_logging()
+
+        openai_agents_logger = logging.getLogger("openai.agents")
+        openai_agents_logger.setLevel(logging.DEBUG)
+        if not openai_agents_logger.handlers:
+            handler = logging.StreamHandler(sys.stdout)
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+            handler.setFormatter(formatter)
+            openai_agents_logger.addHandler(handler)
+
+        tracing_logger = logging.getLogger("openai.agents.tracing")
+        tracing_logger.setLevel(logging.DEBUG)
+        if not tracing_logger.handlers:
+            tracing_logger.addHandler(handler)
+
+    app_logger = logging.getLogger(__name__)
+    if verbose:
+        app_logger.setLevel(logging.DEBUG)
+    else:
+        app_logger.setLevel(logging.INFO)
+
+    return app_logger
+
+
+class JSONEventWriter:
+    """Write JSONL events to stdout and optional file."""
+
+    def __init__(self, path: Optional[str] = None) -> None:
+        self.path = path
+        self.file = None
+        if path:
+            try:
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                self.file = open(path, "a", encoding="utf-8")
+            except Exception as exc:  # pragma: no cover - display only
+                logging.error("Failed to open %s: %s", path, exc)
+
+    def emit(self, data: dict) -> None:
+        line = json.dumps(data, ensure_ascii=False)
+        print(line)
+        if self.file:
+            try:
+                self.file.write(line + "\n")
+                self.file.flush()
+            except Exception as exc:  # pragma: no cover - display only
+                logging.error("Failed to write event to %s: %s", self.path, exc)
+
+    def close(self) -> None:
+        if self.file:
+            try:
+                self.file.close()
+            except Exception:
+                pass
+
+
+class ToolLoggingHooks(AgentHooks):
+    """Custom hooks to log tool calls and other agent events."""
+
+    def __init__(self, writer: JSONEventWriter) -> None:
+        self.writer = writer
+
+    def on_tool_call_start(self, context, tool_name: str, arguments: dict) -> None:
+        self.writer.emit({"event": "tool_start", "tool": tool_name, "args": arguments})
+
+    def on_tool_call_end(self, context, tool_name: str, result) -> None:
+        self.writer.emit({"event": "tool_end", "tool": tool_name, "result": result})
+
+    def on_agent_start(self, context, agent_name: str) -> None:
+        self.writer.emit({"event": "agent_start", "agent": agent_name})
+
+    def on_agent_end(self, context, agent_name: str, result) -> None:
+        self.writer.emit({"event": "agent_end", "agent": agent_name})
 
 
 def agent_instructions() -> tuple[str, str]:
@@ -54,7 +134,10 @@ def agent_instructions() -> tuple[str, str]:
 
     topics = get_topics()
     if topics:
-        lines = ["## Topics", "These are the topics available for use in tool and resource requests:"]
+        lines = [
+            "## Topics",
+            "These are the topics available for use in tool and resource requests:",
+        ]
         for name, info in sorted(topics.items()):
             desc = str(info.get("contains", ""))
             lines.append(f"* Topic: `{name}`: {desc}")
@@ -67,10 +150,10 @@ def agent_instructions() -> tuple[str, str]:
         local_tz = zoneinfo.ZoneInfo(str(now.astimezone().tzinfo))
         now_local = now.astimezone(local_tz)
         time_str = now_local.strftime("%A, %B %d, %Y at %I:%M %p %Z")
-    except:
+    except Exception:
         # Fallback without timezone
         time_str = now.strftime("%A, %B %d, %Y at %I:%M %p")
-    
+
     extra_parts.append(f"## Current Date and Time\n{time_str}")
 
     extra_context = "\n\n".join(extra_parts).strip()
@@ -106,9 +189,8 @@ async def main_async():
     args = setup_cli(parser)
     out_path = args.out
 
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.getLogger("openai.agents").setLevel(logging.DEBUG)
+    app_logger = setup_logging(args.verbose)
+    event_writer = JSONEventWriter(out_path)
 
     # Set OpenAI API key
     api_key = os.getenv("OPENAI_API_KEY", "")
@@ -125,7 +207,7 @@ async def main_async():
     else:
         if not os.path.isfile(args.task_file):
             parser.error(f"Task file not found: {args.task_file}")
-        logging.info("Loading task file %s", args.task_file)
+        app_logger.info("Loading task file %s", args.task_file)
         user_prompt = Path(args.task_file).read_text(encoding="utf-8")
 
     # Configure MCP server
@@ -154,19 +236,21 @@ async def main_async():
                 name="SunstoneCLI",
                 instructions=f"{system_instruction}\n\n{extra_context}",
                 model=args.model,
-                model_settings=ModelSettings(max_tokens=args.max_tokens, temperature=0.2),
+                model_settings=ModelSettings(
+                    max_tokens=args.max_tokens, temperature=0.2
+                ),
                 mcp_servers=[mcp_server],
+                hooks=ToolLoggingHooks(event_writer),
             )
 
             if user_prompt is None:
                 # Interactive mode with session management
-                logging.info("Starting interactive mode with model %s", args.model)
+                app_logger.info("Starting interactive mode with model %s", args.model)
                 session = SQLiteSession("sunstone_cli_session")
-                
+
                 try:
                     while True:
                         try:
-                            # Use asyncio-friendly input
                             loop = asyncio.get_event_loop()
                             prompt = await loop.run_in_executor(
                                 None, lambda: input("chat> ")
@@ -175,11 +259,13 @@ async def main_async():
                             if not prompt:
                                 continue
 
+                            event_writer.emit({"event": "start", "prompt": prompt})
                             result = await Runner.run(
                                 agent, prompt, session=session, run_config=run_config
                             )
-                            print(result.final_output)
-                            write_output(out_path, result.final_output)
+                            event_writer.emit(
+                                {"event": "finish", "result": result.final_output}
+                            )
 
                         except EOFError:
                             break
@@ -187,17 +273,17 @@ async def main_async():
                     pass
             else:
                 # Single prompt mode
-                logging.debug("Task contents: %s", user_prompt)
-                logging.info("Running agent with model %s", args.model)
+                app_logger.debug("Task contents: %s", user_prompt)
+                app_logger.info("Running agent with model %s", args.model)
 
-                result = await Runner.run(
-                    agent, user_prompt, run_config=run_config
-                )
-                print(result.final_output)
-                write_output(out_path, result.final_output)
+                event_writer.emit({"event": "start", "prompt": user_prompt})
+                result = await Runner.run(agent, user_prompt, run_config=run_config)
+                event_writer.emit({"event": "finish", "result": result.final_output})
     except Exception as exc:
-        write_output(out_path, str(exc))
+        event_writer.emit({"event": "error", "error": str(exc)})
         raise
+    finally:
+        event_writer.close()
 
 
 def main():

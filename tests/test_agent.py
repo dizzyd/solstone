@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import json
 import sys
 import types
 from types import SimpleNamespace
@@ -35,6 +36,8 @@ def test_agent_main(monkeypatch, tmp_path, capsys):
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
     agents_stub.SQLiteSession = object
+    agents_stub.AgentHooks = object
+    agents_stub.enable_verbose_stdout_logging = lambda: None
 
     agents_mcp_stub = types.ModuleType("agents.mcp")
 
@@ -62,8 +65,10 @@ def test_agent_main(monkeypatch, tmp_path, capsys):
 
     asyncio.run(run_main(mod, ["think-agent", str(task)]))
 
-    out = capsys.readouterr().out
-    assert "ok" in out
+    out_lines = capsys.readouterr().out.strip().splitlines()
+    events = [json.loads(line) for line in out_lines]
+    assert events[0] == {"event": "start", "prompt": "hello"}
+    assert events[-1] == {"event": "finish", "result": "ok"}
     assert DummyRunner.called
     assert last_kwargs.get("mcp_servers") is not None
 
@@ -86,6 +91,8 @@ def test_agent_outfile(monkeypatch, tmp_path):
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
     agents_stub.SQLiteSession = object
+    agents_stub.AgentHooks = object
+    agents_stub.enable_verbose_stdout_logging = lambda: None
 
     agents_mcp_stub = types.ModuleType("agents.mcp")
 
@@ -114,7 +121,9 @@ def test_agent_outfile(monkeypatch, tmp_path):
 
     asyncio.run(run_main(mod, ["think-agent", str(task), "-o", str(out_file)]))
 
-    assert out_file.read_text() == "ok"
+    events = [json.loads(line) for line in out_file.read_text().splitlines()]
+    assert events[0] == {"event": "start", "prompt": "hello"}
+    assert events[-1] == {"event": "finish", "result": "ok"}
 
 
 def test_agent_outfile_error(monkeypatch, tmp_path):
@@ -135,6 +144,8 @@ def test_agent_outfile_error(monkeypatch, tmp_path):
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
     agents_stub.SQLiteSession = object
+    agents_stub.AgentHooks = object
+    agents_stub.enable_verbose_stdout_logging = lambda: None
 
     agents_mcp_stub = types.ModuleType("agents.mcp")
 
@@ -164,4 +175,5 @@ def test_agent_outfile_error(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError):
         asyncio.run(run_main(mod, ["think-agent", str(task), "-o", str(out_file)]))
 
-    assert out_file.read_text() == "boom"
+    events = [json.loads(line) for line in out_file.read_text().splitlines()]
+    assert events[-1] == {"event": "error", "error": "boom"}
