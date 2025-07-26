@@ -2,6 +2,9 @@
 
 Guide for updating: always append new entries to the existing list for the same day, but start a new day section at the top if the date has changed in the Mountain time zone.
 
+## 2025-07-26
+- Task list view truncates long descriptions with ellipsis and prevents wrapping
+
 ## 2025-07-25
 
 - CHANGELOG.md created to start tracking agentic coding updates
