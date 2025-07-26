@@ -101,7 +101,19 @@ def test_search_raw_api(tmp_path):
 
     day_dir = journal / "20240103"
     day_dir.mkdir()
-    (day_dir / "123000_audio.json").write_text(json.dumps({"text": "hello raw"}))
+    (day_dir / "123000_audio.json").write_text(
+        json.dumps(
+            [
+                {
+                    "start": "00:00:01",
+                    "source": "mic",
+                    "speaker": 1,
+                    "text": "hello raw",
+                },
+                {"topics": ["t"], "setting": "personal"},
+            ]
+        )
+    )
 
     indexer.scan_raws(str(journal))
     review.journal_root = str(journal)

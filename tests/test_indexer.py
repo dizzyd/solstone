@@ -99,8 +99,22 @@ def test_raw_index(tmp_path):
     os.environ["JOURNAL_PATH"] = str(journal)
     day = journal / "20240103"
     day.mkdir()
-    (day / "123000_audio.json").write_text(json.dumps({"text": "hello"}))
-    (day / "123000_monitor_1_diff.json").write_text(json.dumps({"desc": "screen"}))
+    (day / "123000_audio.json").write_text(
+        json.dumps(
+            [
+                {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "hello"},
+                {"topics": ["hi"], "setting": "personal"},
+            ]
+        )
+    )
+    (day / "123000_monitor_1_diff.json").write_text(
+        json.dumps(
+            {
+                "visual_description": "screen",
+                "full_ocr": "some ocr",
+            }
+        )
+    )
     mod.scan_raws(str(journal), verbose=True)
     total, results = mod.search_raws("hello")
     assert total == 1
@@ -139,11 +153,25 @@ def test_search_raws_day(tmp_path):
 
     day1 = journal / "20240105"
     day1.mkdir()
-    (day1 / "123000_audio.json").write_text(json.dumps({"text": "hello"}))
+    (day1 / "123000_audio.json").write_text(
+        json.dumps(
+            [
+                {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "hello"},
+                {"topics": ["hi"], "setting": "personal"},
+            ]
+        )
+    )
 
     day2 = journal / "20240106"
     day2.mkdir()
-    (day2 / "090000_audio.json").write_text(json.dumps({"text": "hello"}))
+    (day2 / "090000_audio.json").write_text(
+        json.dumps(
+            [
+                {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "hello"},
+                {"topics": ["hi"], "setting": "personal"},
+            ]
+        )
+    )
 
     mod.scan_raws(str(journal), verbose=True)
 
@@ -162,8 +190,22 @@ def test_search_raws_time_order(tmp_path):
 
     day = journal / "20240107"
     day.mkdir()
-    (day / "090000_audio.json").write_text(json.dumps({"text": "hello"}))
-    (day / "123000_audio.json").write_text(json.dumps({"text": "hello"}))
+    (day / "090000_audio.json").write_text(
+        json.dumps(
+            [
+                {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "hello"},
+                {"topics": ["hi"], "setting": "personal"},
+            ]
+        )
+    )
+    (day / "123000_audio.json").write_text(
+        json.dumps(
+            [
+                {"start": "00:00:02", "source": "mic", "speaker": 1, "text": "hello"},
+                {"topics": ["hi"], "setting": "personal"},
+            ]
+        )
+    )
 
     mod.scan_raws(str(journal), verbose=True)
 
