@@ -70,11 +70,19 @@ def parse_line_numbers(json_text: str, num_lines: int) -> List[int]:
 def segments_from_lines(lines: List[str], line_numbers: List[int]) -> List[str]:
     """Return transcript segments split at ``line_numbers``."""
     segments: List[str] = []
-    start = 1
-    for num in line_numbers:
-        segments.append("\n".join(lines[start - 1 : num - 1]).strip())  # noqa: E203
-        start = num
-    segments.append("\n".join(lines[start - 1 :]).strip())  # noqa: E203
+    segment_start = 1
+    
+    for segment_boundary in line_numbers:
+        if segment_boundary == 1:
+            continue
+        # Create segment from current start up to (but not including) the boundary
+        segment_lines = lines[segment_start - 1 : segment_boundary - 1]
+        segments.append("\n".join(segment_lines).strip())
+        segment_start = segment_boundary
+    
+    # Add final segment from last boundary to end
+    final_segment_lines = lines[segment_start - 1 :]
+    segments.append("\n".join(final_segment_lines).strip())
     
     logging.info(f"Created {len(segments)} transcript segments")
     return segments
@@ -82,8 +90,7 @@ def segments_from_lines(lines: List[str], line_numbers: List[int]) -> List[str]:
 
 def detect_transcript_segment(text: str, api_key: Optional[str] = None) -> List[str]:
     """Return transcript segments for ``text`` using Gemini."""
-    logging.info("Starting transcript segmentation with Gemini")
-    
+
     if api_key is None:
         load_dotenv()
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -92,6 +99,7 @@ def detect_transcript_segment(text: str, api_key: Optional[str] = None) -> List[
             raise RuntimeError("GOOGLE_API_KEY not set")
 
     numbered, lines = number_lines(text)
+    logging.info(f"Starting transcript segmentation with Gemini for: {numbered[:100]}...")
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=GEMINI_PRO,
