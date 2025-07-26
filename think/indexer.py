@@ -103,7 +103,7 @@ def get_index(
     )
     conn.execute(
         """
-        CREATE VIRTUAL TABLE IF NOT EXISTS raws_text USING fts5(
+        CREATE VIRTUAL TABLE IF NOT EXISTS transcripts_text USING fts5(
             content, path UNINDEXED, day UNINDEXED, time UNINDEXED, type UNINDEXED
         )
         """
@@ -129,14 +129,14 @@ def find_summary_files(
     return files
 
 
-# Raw file helpers -----------------------------------------------------------
+# Transcript file helpers -----------------------------------------------------------
 
 AUDIO_RE = re.compile(r"^(?P<time>\d{6})_audio\.json$")
 SCREEN_RE = re.compile(r"^(?P<time>\d{6})_[a-z]+_\d+_diff\.json$")
 
 
-def find_raw_files(journal: str) -> Dict[str, str]:
-    """Return mapping of raw JSON file paths relative to ``journal``."""
+def find_transcript_files(journal: str) -> Dict[str, str]:
+    """Return mapping of transcript JSON file paths relative to ``journal``."""
     files: Dict[str, str] = {}
     for day, day_path in find_day_dirs(journal).items():
         for name in os.listdir(day_path):
@@ -330,8 +330,10 @@ def _parse_screen_diff(path: str) -> List[str]:
     return texts
 
 
-def _index_raws(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) -> None:
-    """Index text from raw audio or screen diff JSON files."""
+def _index_transcripts(
+    conn: sqlite3.Connection, rel: str, path: str, verbose: bool
+) -> None:
+    """Index text from transcript audio or screen diff JSON files."""
     logger = logging.getLogger(__name__)
 
     name = os.path.basename(path)
@@ -354,18 +356,18 @@ def _index_raws(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) ->
     for text in texts:
         conn.execute(
             (
-                "INSERT INTO raws_text(content, path, day, time, type) VALUES (?, ?, ?, ?, ?)"
+                "INSERT INTO transcripts_text(content, path, day, time, type) VALUES (?, ?, ?, ?, ?)"
             ),
             (text, rel, day, time_part, rtype),
         )
     if verbose:
-        logger.info("  indexed raw %s entries", len(texts))
+        logger.info("  indexed transcript %s entries", len(texts))
 
 
-def scan_raws(journal: str, verbose: bool = False) -> bool:
-    """Index raw audio and screen diff JSON files on a per-day basis."""
+def scan_transcripts(journal: str, verbose: bool = False) -> bool:
+    """Index transcript audio and screen diff JSON files on a per-day basis."""
     logger = logging.getLogger(__name__)
-    files = find_raw_files(journal)
+    files = find_transcript_files(journal)
     if not files:
         return False
 
@@ -377,9 +379,13 @@ def scan_raws(journal: str, verbose: bool = False) -> bool:
     changed = False
     for day, day_files in grouped.items():
         conn, _ = get_index(journal, day=day)
-        logger.info("\nIndexing %s raw files for %s...", len(day_files), day)
+        logger.info("\nIndexing %s transcript files for %s...", len(day_files), day)
         if _scan_files(
-            conn, day_files, "DELETE FROM raws_text WHERE path=?", _index_raws, verbose
+            conn,
+            day_files,
+            "DELETE FROM transcripts_text WHERE path=?",
+            _index_transcripts,
+            verbose,
         ):
             conn.commit()
             changed = True
@@ -549,13 +555,13 @@ def search_events(
 search_occurrences = search_events
 
 
-def search_raws(
+def search_transcripts(
     query: str,
     limit: int = 5,
     offset: int = 0,
     day: str | None = None,
 ) -> tuple[int, List[Dict[str, str]]]:
-    """Search raw indexes and return total count and results.
+    """Search transcript indexes and return total count and results.
 
     If ``day`` is provided only that day's index is searched and results are
     ordered chronologically. Otherwise all available per-day indexes are
@@ -576,14 +582,14 @@ def search_raws(
         quoted = db.quote(query)
 
         total += conn.execute(
-            f"SELECT count(*) FROM raws_text WHERE raws_text MATCH {quoted}"
+            f"SELECT count(*) FROM transcripts_text WHERE transcripts_text MATCH {quoted}"
         ).fetchone()[0]
 
         order_clause = "time" if day else "rank"
         cursor = conn.execute(
             f"""
-            SELECT content, path, day, time, type, bm25(raws_text) as rank
-            FROM raws_text WHERE raws_text MATCH {quoted} ORDER BY {order_clause}
+            SELECT content, path, day, time, type, bm25(transcripts_text) as rank
+            FROM transcripts_text WHERE transcripts_text MATCH {quoted} ORDER BY {order_clause}
             """
         )
 
@@ -633,13 +639,13 @@ def main() -> None:
         help="Scan journal and update the index before searching",
     )
     parser.add_argument(
-        "--raws",
+        "--transcripts",
         action="store_true",
-        help="Operate on raw *_audio.json and *_diff.json files",
+        help="Operate on transcript *_audio.json and *_diff.json files",
     )
     parser.add_argument(
         "--day",
-        help="Limit raw query to a specific YYYYMMDD day",
+        help="Limit transcript query to a specific YYYYMMDD day",
     )
     parser.add_argument(
         "-q",
@@ -659,10 +665,10 @@ def main() -> None:
     journal = os.getenv("JOURNAL_PATH")
 
     if args.rescan:
-        if args.raws:
-            changed = scan_raws(journal, verbose=args.verbose)
+        if args.transcripts:
+            changed = scan_transcripts(journal, verbose=args.verbose)
             if changed:
-                journal_log("indexer raw rescan ok")
+                journal_log("indexer transcript rescan ok")
         else:
             cache = load_cache(journal)
             changed = scan_entities(journal, cache)
@@ -674,9 +680,9 @@ def main() -> None:
 
     # Handle query argument
     if args.query is not None:
-        search_func = search_raws if args.raws else search_summaries
+        search_func = search_transcripts if args.transcripts else search_summaries
         query_kwargs = {}
-        if args.raws:
+        if args.transcripts:
             query_kwargs["day"] = args.day
         if args.query:
             # Single query mode - run query and exit
@@ -693,6 +699,10 @@ def main() -> None:
                     break
                 _total, results = search_func(query, 5, **query_kwargs)
                 _display_search_results(results)
+
+
+# Backwards compatibility alias
+search_raws = search_transcripts
 
 
 if __name__ == "__main__":

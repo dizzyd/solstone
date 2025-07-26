@@ -115,7 +115,7 @@ def test_raw_index(tmp_path):
             }
         )
     )
-    mod.scan_raws(str(journal), verbose=True)
+    mod.scan_transcripts(str(journal), verbose=True)
     total, results = mod.search_raws("hello")
     assert total == 1
     assert results and results[0]["metadata"]["type"] == "audio"
@@ -173,7 +173,7 @@ def test_search_raws_day(tmp_path):
         )
     )
 
-    mod.scan_raws(str(journal), verbose=True)
+    mod.scan_transcripts(str(journal), verbose=True)
 
     total_all, _ = mod.search_raws("hello", limit=10)
     assert total_all == 2
@@ -207,7 +207,7 @@ def test_search_raws_time_order(tmp_path):
         )
     )
 
-    mod.scan_raws(str(journal), verbose=True)
+    mod.scan_transcripts(str(journal), verbose=True)
 
     total, results = mod.search_raws("hello", limit=10, day="20240107")
     assert total == 2
