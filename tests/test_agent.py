@@ -26,7 +26,7 @@ def test_agent_main(monkeypatch, tmp_path, capsys):
         called = False
 
         @staticmethod
-        async def run(agent, prompt, run_config=None):
+        async def run(agent, prompt, session=None, run_config=None):
             DummyRunner.called = True
             return SimpleNamespace(final_output="ok")
 
@@ -35,7 +35,11 @@ def test_agent_main(monkeypatch, tmp_path, capsys):
     agents_stub.RunConfig = lambda **k: SimpleNamespace()
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
-    agents_stub.SQLiteSession = object
+    class DummySession:
+        def __init__(self, *a, **k):
+            pass
+
+    agents_stub.SQLiteSession = DummySession
     agents_stub.AgentHooks = object
     agents_stub.enable_verbose_stdout_logging = lambda: None
 
@@ -52,6 +56,7 @@ def test_agent_main(monkeypatch, tmp_path, capsys):
 
     sys.modules["agents"] = agents_stub
     sys.modules["agents.mcp"] = agents_mcp_stub
+    sys.modules.pop("think.agents", None)
 
     mod = importlib.reload(importlib.import_module("think.agent"))
 
@@ -82,7 +87,7 @@ def test_agent_outfile(monkeypatch, tmp_path):
 
     class DummyRunner:
         @staticmethod
-        async def run(agent, prompt, run_config=None):
+        async def run(agent, prompt, session=None, run_config=None):
             return SimpleNamespace(final_output="ok")
 
     agents_stub.Agent = DummyAgent
@@ -90,7 +95,11 @@ def test_agent_outfile(monkeypatch, tmp_path):
     agents_stub.RunConfig = lambda **k: SimpleNamespace()
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
-    agents_stub.SQLiteSession = object
+    class DummySession:
+        def __init__(self, *a, **k):
+            pass
+
+    agents_stub.SQLiteSession = DummySession
     agents_stub.AgentHooks = object
     agents_stub.enable_verbose_stdout_logging = lambda: None
 
@@ -107,6 +116,7 @@ def test_agent_outfile(monkeypatch, tmp_path):
 
     sys.modules["agents"] = agents_stub
     sys.modules["agents.mcp"] = agents_mcp_stub
+    sys.modules.pop("think.agents", None)
 
     mod = importlib.reload(importlib.import_module("think.agent"))
 
@@ -135,7 +145,7 @@ def test_agent_outfile_error(monkeypatch, tmp_path):
 
     class DummyRunner:
         @staticmethod
-        async def run(agent, prompt, run_config=None):
+        async def run(agent, prompt, session=None, run_config=None):
             raise RuntimeError("boom")
 
     agents_stub.Agent = DummyAgent
@@ -143,7 +153,11 @@ def test_agent_outfile_error(monkeypatch, tmp_path):
     agents_stub.RunConfig = lambda **k: SimpleNamespace()
     agents_stub.ModelSettings = lambda **k: SimpleNamespace()
     agents_stub.set_default_openai_key = lambda k: None
-    agents_stub.SQLiteSession = object
+    class DummySession:
+        def __init__(self, *a, **k):
+            pass
+
+    agents_stub.SQLiteSession = DummySession
     agents_stub.AgentHooks = object
     agents_stub.enable_verbose_stdout_logging = lambda: None
 
@@ -160,6 +174,7 @@ def test_agent_outfile_error(monkeypatch, tmp_path):
 
     sys.modules["agents"] = agents_stub
     sys.modules["agents.mcp"] = agents_mcp_stub
+    sys.modules.pop("think.agents", None)
 
     mod = importlib.reload(importlib.import_module("think.agent"))
 
