@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 
 
@@ -51,3 +52,40 @@ def test_search_topic_api_filters(tmp_path):
         resp = search_view.search_topic_api()
     assert resp.json["total"] == 1
     assert resp.json["results"][0]["topic"] == "files"
+
+
+def test_search_occurrence_api(tmp_path):
+    indexer = importlib.import_module("think.indexer")
+    review = importlib.import_module("dream")
+    search_view = importlib.import_module("dream.views.search")
+
+    journal = tmp_path
+    os.environ["JOURNAL_PATH"] = str(journal)
+
+    day = journal / "20240101"
+    day.mkdir()
+    data = {
+        "day": "20240101",
+        "occurrences": [
+            {
+                "type": "meeting",
+                "source": "topics/meetings.md",
+                "start": "09:00:00",
+                "end": "09:30:00",
+                "title": "Standup",
+                "summary": "Daily sync",
+            }
+        ],
+    }
+    topics_dir = day / "topics"
+    topics_dir.mkdir()
+    (topics_dir / "meetings.json").write_text(json.dumps(data))
+
+    indexer.scan_occurrences(str(journal))
+    review.journal_root = str(journal)
+
+    with review.app.test_request_context("/search/api/occurrence?q=Standup"):
+        resp = search_view.search_occurrence_api()
+
+    assert resp.json["total"] == 1
+    assert resp.json["results"][0]["topic"] == "meetings"

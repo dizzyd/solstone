@@ -82,10 +82,50 @@ def search_occurrence_api() -> Any:
     except ValueError:
         offset = 0
 
+    from think.utils import get_topics
+
+    topics = get_topics()
     day = request.args.get("day")
     topic_filter = request.args.get("topic")
     total, rows = search_occurrences(query, limit, offset, day=day, topic=topic_filter)
-    return jsonify({"total": total, "results": rows})
+    results = []
+    for r in rows:
+        meta = r.get("metadata", {})
+        topic = meta.get("topic", "")
+        if topic.startswith("topics/"):
+            topic = topic[len("topics/") :]
+        if topic.endswith(".md"):
+            topic = topic[:-3]
+        text = r.get("text", "")
+        words = text.split()
+        if len(words) > 100:
+            text = " ".join(words[:100]) + " ..."
+        start = meta.get("start", "")
+        end = meta.get("end")
+        length = 0
+        if start and end:
+            try:
+                import datetime as _dt
+
+                s = _dt.datetime.strptime(start, "%H:%M:%S")
+                e = _dt.datetime.strptime(end, "%H:%M:%S")
+                length = int((e - s).total_seconds() / 60)
+            except Exception:
+                length = 0
+        results.append(
+            {
+                "day": meta.get("day", ""),
+                "date": format_date(meta.get("day", "")),
+                "topic": topic,
+                "color": topics.get(topic, {}).get("color"),
+                "start": start,
+                "length": length,
+                "text": markdown.markdown(text, extensions=["extra"]),
+                "score": r.get("score", 0.0),
+            }
+        )
+
+    return jsonify({"total": total, "results": results})
 
 
 @bp.route("/search/api/topic_detail")
