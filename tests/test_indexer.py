@@ -69,11 +69,11 @@ def test_occurrence_index(tmp_path):
     topics_dir = day / "topics"
     topics_dir.mkdir()
     (topics_dir / "meetings.json").write_text(json.dumps(data))
-    mod.scan_occurrences(str(journal), verbose=True)
-    total, results = mod.search_occurrences("Standup")
+    mod.scan_events(str(journal), verbose=True)
+    total, results = mod.search_events("Standup")
     assert total == 1
     assert results and results[0]["metadata"]["day"] == "20240101"
-    assert results[0]["occurrence"]["title"] == "Standup"
+    assert results[0]["event"]["title"] == "Standup"
 
 
 def test_ponder_index(tmp_path):

@@ -1,4 +1,4 @@
-"""Utilities for indexing topic outputs and occurrences."""
+"""Utilities for indexing topic outputs and events."""
 
 import json
 import logging
@@ -76,7 +76,7 @@ def get_index(
     )
     conn.execute(
         """
-        CREATE VIRTUAL TABLE IF NOT EXISTS occ_text USING fts5(
+        CREATE VIRTUAL TABLE IF NOT EXISTS events_text USING fts5(
             content,
             path UNINDEXED, day UNINDEXED, idx UNINDEXED
         )
@@ -84,7 +84,7 @@ def get_index(
     )
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS occ_match(
+        CREATE TABLE IF NOT EXISTS event_match(
             path TEXT,
             day TEXT,
             idx INTEGER,
@@ -96,10 +96,10 @@ def get_index(
         """
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS occ_match_day_start_end ON occ_match(day, start, end)"
+        "CREATE INDEX IF NOT EXISTS event_match_day_start_end ON event_match(day, start, end)"
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS occ_match_day_topic ON occ_match(day, topic)"
+        "CREATE INDEX IF NOT EXISTS event_match_day_topic ON event_match(day, topic)"
     )
     conn.execute(
         """
@@ -214,22 +214,20 @@ def _index_sentences(
         )
 
 
-def _index_occurrences(
-    conn: sqlite3.Connection, rel: str, path: str, verbose: bool
-) -> None:
+def _index_events(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) -> None:
     logger = logging.getLogger(__name__)
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    occs = data.get("occurrences", []) if isinstance(data, dict) else data
+    events = data.get("occurrences", []) if isinstance(data, dict) else data
     if verbose:
-        logger.info("  indexed %s occurrences", len(occs))
+        logger.info("  indexed %s events", len(events))
     day = rel.split(os.sep, 1)[0]
     topic = os.path.splitext(os.path.basename(rel))[0]
-    for idx, occ in enumerate(occs):
+    for idx, event in enumerate(events):
         conn.execute(
-            ("INSERT INTO occ_text(content, path, day, idx) " "VALUES (?, ?, ?, ?)"),
+            ("INSERT INTO events_text(content, path, day, idx) " "VALUES (?, ?, ?, ?)"),
             (
-                json.dumps(occ, ensure_ascii=False),
+                json.dumps(event, ensure_ascii=False),
                 rel,
                 day,
                 idx,
@@ -237,15 +235,15 @@ def _index_occurrences(
         )
         conn.execute(
             (
-                "INSERT INTO occ_match(path, day, idx, topic, start, end) VALUES (?, ?, ?, ?, ?, ?)"
+                "INSERT INTO event_match(path, day, idx, topic, start, end) VALUES (?, ?, ?, ?, ?, ?)"
             ),
             (
                 rel,
                 day,
                 idx,
                 topic,
-                occ.get("start", ""),
-                occ.get("end", ""),
+                event.get("start", ""),
+                event.get("end", ""),
             ),
         )
 
@@ -266,18 +264,21 @@ def scan_topics(journal: str, verbose: bool = False) -> bool:
     return changed
 
 
-def scan_occurrences(journal: str, verbose: bool = False) -> bool:
-    """Index occurrence JSON files."""
+def scan_events(journal: str, verbose: bool = False) -> bool:
+    """Index event JSON files."""
     logger = logging.getLogger(__name__)
     conn, _ = get_index(journal)
     files = find_topic_files(journal, (".json",))
     if files:
-        logger.info("\nIndexing %s occurrence files...", len(files))
+        logger.info("\nIndexing %s event files...", len(files))
     changed = _scan_files(
         conn,
         files,
-        ["DELETE FROM occ_text WHERE path=?", "DELETE FROM occ_match WHERE path=?"],
-        _index_occurrences,
+        [
+            "DELETE FROM events_text WHERE path=?",
+            "DELETE FROM event_match WHERE path=?",
+        ],
+        _index_events,
         verbose,
     )
     if changed:
@@ -436,7 +437,10 @@ def search_topics(
     return total, results
 
 
-def search_occurrences(
+# Search events from the events index.
+
+
+def search_events(
     query: str,
     limit: int = 5,
     offset: int = 0,
@@ -446,13 +450,13 @@ def search_occurrences(
     end: str | None = None,
     topic: str | None = None,
 ) -> tuple[int, List[Dict[str, Any]]]:
-    """Search the occurrences index and return total count and results."""
+    """Search the events index and return total count and results."""
     conn, _ = get_index()
     db = sqlite_utils.Database(conn)
     quoted = db.quote(query)
 
     # Build WHERE clause and parameters
-    where_clause = f"occ_text MATCH {quoted}"
+    where_clause = f"events_text MATCH {quoted}"
     params: List[str] = []
 
     if day:
@@ -472,7 +476,7 @@ def search_occurrences(
     total = conn.execute(
         f"""
         SELECT count(*)
-        FROM occ_text t JOIN occ_match m ON t.path=m.path AND t.idx=m.idx
+        FROM events_text t JOIN event_match m ON t.path=m.path AND t.idx=m.idx
         WHERE {where_clause}
         """,
         params,
@@ -482,8 +486,8 @@ def search_occurrences(
     sql = f"""
         SELECT t.content,
                m.path, m.day, m.idx, m.topic, m.start, m.end,
-               bm25(occ_text) as rank
-        FROM occ_text t JOIN occ_match m ON t.path=m.path AND t.idx=m.idx
+               bm25(events_text) as rank
+        FROM events_text t JOIN event_match m ON t.path=m.path AND t.idx=m.idx
         WHERE {where_clause}
         ORDER BY m.day DESC, m.start DESC LIMIT ? OFFSET ?
     """
@@ -526,11 +530,15 @@ def search_occurrences(
                     "participants": occ_obj.get("participants"),
                 },
                 "score": rank,
-                "occurrence": occ_obj,
+                "event": occ_obj,
             }
         )
     conn.close()
     return total, results
+
+
+# Backwards compatibility alias
+search_occurrences = search_events
 
 
 def search_raws(
@@ -608,9 +616,7 @@ def _display_search_results(results: List[Dict[str, str]]) -> None:
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Index topic markdown and occurrence files"
-    )
+    parser = argparse.ArgumentParser(description="Index topic markdown and event files")
     parser.add_argument(
         "--rescan",
         action="store_true",
@@ -651,7 +657,7 @@ def main() -> None:
             cache = load_cache(journal)
             changed = scan_entities(journal, cache)
             changed |= scan_topics(journal, verbose=args.verbose)
-            changed |= scan_occurrences(journal, verbose=args.verbose)
+            changed |= scan_events(journal, verbose=args.verbose)
             if changed:
                 save_cache(journal, cache)
                 journal_log("indexer rescan ok")
