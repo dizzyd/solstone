@@ -286,28 +286,75 @@ def scan_occurrences(journal: str, verbose: bool = False) -> bool:
     return changed
 
 
+def _parse_audio_json(path: str) -> List[str]:
+    """Return transcript texts from ``*_audio.json`` file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return []
+    texts: List[str] = []
+    if isinstance(data, list):
+        for entry in data:
+            if isinstance(entry, dict):
+                text = entry.get("text")
+                if text:
+                    texts.append(str(text))
+    elif isinstance(data, dict):
+        text = data.get("text")
+        if text:
+            texts.append(str(text))
+    return texts
+
+
+def _parse_screen_diff(path: str) -> List[str]:
+    """Return visual description and OCR text from ``*_diff.json`` file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return []
+    texts: List[str] = []
+    if isinstance(data, dict):
+        desc = data.get("visual_description")
+        if desc:
+            texts.append(str(desc))
+        ocr = data.get("full_ocr")
+        if ocr:
+            texts.append(str(ocr))
+    return texts
+
+
 def _index_raws(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) -> None:
+    """Index text from raw audio or screen diff JSON files."""
     logger = logging.getLogger(__name__)
-    with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
+
     name = os.path.basename(path)
     m = AUDIO_RE.match(name)
-    rtype = "audio"
-    if not m:
+    if m:
+        rtype = "audio"
+        texts = _parse_audio_json(path)
+    else:
         m = SCREEN_RE.match(name)
+        if not m:
+            return
         rtype = "screen"
+        texts = _parse_screen_diff(path)
+
     if not m:
         return
+
     time_part = m.group("time")
     day = rel.split(os.sep, 1)[0]
-    conn.execute(
-        (
-            "INSERT INTO raws_text(content, path, day, time, type) VALUES (?, ?, ?, ?, ?)"
-        ),
-        (content, rel, day, time_part, rtype),
-    )
+    for text in texts:
+        conn.execute(
+            (
+                "INSERT INTO raws_text(content, path, day, time, type) VALUES (?, ?, ?, ?, ?)"
+            ),
+            (text, rel, day, time_part, rtype),
+        )
     if verbose:
-        logger.info("  indexed raw %s", rel)
+        logger.info("  indexed raw %s entries", len(texts))
 
 
 def scan_raws(journal: str, verbose: bool = False) -> bool:
