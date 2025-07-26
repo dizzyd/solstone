@@ -4,6 +4,8 @@ Guide for updating: always append new entries to the existing list for the same 
 
 ## 2025-07-26
 - Task list view truncates long descriptions with ellipsis and prevents wrapping
+- Search results allow filtering by clicking dates or topics which insert
+  `day:` and `topic:` filters into the query and auto-run the search
 
 ## 2025-07-25
 
