@@ -2,6 +2,11 @@
 
 Guide for updating: always append new entries to the existing list for the same day, but start a new day section at the top if the date has changed in the Mountain time zone.
 
+## 2025-07-28
+- `think-agent` provides an `AgentSession` helper for stateful runs with event callbacks.
+- The standalone `think.agents` module was removed and its functionality merged into `think.agent`.
+- `think-agent` CLI now uses `AgentSession` for a cleaner implementation.
+
 ## 2025-07-26
 - Task list view truncates long descriptions with ellipsis and prevents wrapping
 - Integrated task and event WebSocket endpoints into the main Flask app
