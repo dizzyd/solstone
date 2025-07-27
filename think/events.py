@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any, Callable, Literal, Optional, TypedDict, Union
+
+
+class ToolStartEvent(TypedDict):
+    """Event emitted when a tool starts."""
+
+    event: Literal["tool_start"]
+    tool: str
+    args: Optional[dict[str, Any]]
+
+
+class ToolEndEvent(TypedDict):
+    """Event emitted when a tool finishes."""
+
+    event: Literal["tool_end"]
+    tool: str
+    result: Any
+
+
+class StartEvent(TypedDict):
+    """Event emitted when an agent run begins."""
+
+    event: Literal["start"]
+    prompt: str
+
+
+class FinishEvent(TypedDict):
+    """Event emitted when an agent run finishes successfully."""
+
+    event: Literal["finish"]
+    result: str
+
+
+class ErrorEvent(TypedDict):
+    """Event emitted when an error occurs."""
+
+    event: Literal["error"]
+    error: str
+
+
+Event = Union[ToolStartEvent, ToolEndEvent, StartEvent, FinishEvent, ErrorEvent]
+
+
+__all__ = [
+    "ToolStartEvent",
+    "ToolEndEvent",
+    "StartEvent",
+    "FinishEvent",
+    "ErrorEvent",
+    "Event",
+    "JSONEventWriter",
+    "JSONEventCallback",
+]
+
+
+class JSONEventWriter:
+    """Write JSONL events to stdout and an optional file."""
+
+    def __init__(self, path: Optional[str] = None) -> None:
+        self.path = path
+        self.file = None
+        if path:
+            try:
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                self.file = open(path, "a", encoding="utf-8")
+            except Exception as exc:  # pragma: no cover - display only
+                logging.error("Failed to open %s: %s", path, exc)
+
+    def emit(self, data: Event) -> None:
+        line = json.dumps(data, ensure_ascii=False)
+        print(line)
+        if self.file:
+            try:
+                self.file.write(line + "\n")
+                self.file.flush()
+            except Exception as exc:  # pragma: no cover - display only
+                logging.error("Failed to write event to %s: %s", self.path, exc)
+
+    def close(self) -> None:
+        if self.file:
+            try:
+                self.file.close()
+            except Exception:
+                pass
+
+
+class JSONEventCallback:
+    """Emit JSON events via a callback."""
+
+    def __init__(self, callback: Optional[Callable[[Event], None]] = None) -> None:
+        self.callback = callback
+
+    def emit(self, data: Event) -> None:
+        if self.callback:
+            self.callback(data)

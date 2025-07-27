@@ -13,8 +13,6 @@ When ``TASK_FILE`` is omitted, an interactive ``chat>`` prompt is started.
 from __future__ import annotations
 
 import argparse
-import asyncio
-import json
 import logging
 import os
 import sys
@@ -38,6 +36,7 @@ from agents.mcp import MCPServerStdio
 from think.utils import get_topics, setup_cli
 
 from .agent_session import BaseAgentSession
+from .events import JSONEventCallback, JSONEventWriter
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -66,50 +65,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
         app_logger.setLevel(logging.DEBUG)
     else:
         app_logger.setLevel(logging.INFO)
-
     return app_logger
-
-
-class JSONEventWriter:
-    """Write JSONL events to stdout and optional file."""
-
-    def __init__(self, path: Optional[str] = None) -> None:
-        self.path = path
-        self.file = None
-        if path:
-            try:
-                Path(path).parent.mkdir(parents=True, exist_ok=True)
-                self.file = open(path, "a", encoding="utf-8")
-            except Exception as exc:  # pragma: no cover - display only
-                logging.error("Failed to open %s: %s", path, exc)
-
-    def emit(self, data: dict) -> None:
-        line = json.dumps(data, ensure_ascii=False)
-        print(line)
-        if self.file:
-            try:
-                self.file.write(line + "\n")
-                self.file.flush()
-            except Exception as exc:  # pragma: no cover - display only
-                logging.error("Failed to write event to %s: %s", self.path, exc)
-
-    def close(self) -> None:
-        if self.file:
-            try:
-                self.file.close()
-            except Exception:
-                pass
-
-
-class JSONEventCallback:
-    """Emit JSON events via a callback."""
-
-    def __init__(self, callback: Optional[Callable[[dict], None]] = None) -> None:
-        self.callback = callback
-
-    def emit(self, data: dict) -> None:
-        if self.callback:
-            self.callback(data)
 
 
 class ToolLoggingHooks(AgentHooks):
@@ -122,6 +78,7 @@ class ToolLoggingHooks(AgentHooks):
         self.writer.emit({"event": "tool_start", "tool": tool_name, "args": arguments})
 
     def on_tool_call_end(self, context, tool_name: str, result) -> None:
+
         self.writer.emit({"event": "tool_end", "tool": tool_name, "result": result})
 
     def on_agent_start(self, context, agent_name: str) -> None:

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -27,6 +26,7 @@ from google import genai
 from google.genai import types
 
 from .agent_session import BaseAgentSession
+from .events import JSONEventCallback, JSONEventWriter
 from .models import GEMINI_FLASH
 from .openai import agent_instructions
 from .utils import setup_cli
@@ -41,48 +41,6 @@ def setup_logging(verbose: bool) -> logging.Logger:
         logging.basicConfig(level=logging.INFO)
 
     return logging.getLogger(__name__)
-
-
-class JSONEventWriter:
-    """Write JSONL events to stdout and optional file."""
-
-    def __init__(self, path: Optional[str] = None) -> None:
-        self.path = path
-        self.file = None
-        if path:
-            try:
-                Path(path).parent.mkdir(parents=True, exist_ok=True)
-                self.file = open(path, "a", encoding="utf-8")
-            except Exception as exc:  # pragma: no cover - display only
-                logging.error("Failed to open %s: %s", path, exc)
-
-    def emit(self, data: dict) -> None:
-        line = json.dumps(data, ensure_ascii=False)
-        print(line)
-        if self.file:
-            try:
-                self.file.write(line + "\n")
-                self.file.flush()
-            except Exception as exc:  # pragma: no cover - display only
-                logging.error("Failed to write event to %s: %s", self.path, exc)
-
-    def close(self) -> None:
-        if self.file:
-            try:
-                self.file.close()
-            except Exception:
-                pass
-
-
-class JSONEventCallback:
-    """Emit JSON events via a callback."""
-
-    def __init__(self, callback: Optional[Callable[[dict], None]] = None) -> None:
-        self.callback = callback
-
-    def emit(self, data: dict) -> None:
-        if self.callback:
-            self.callback(data)
 
 
 class ToolLoggingHooks:
