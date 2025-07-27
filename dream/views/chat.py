@@ -13,23 +13,15 @@ from .. import state
 bp = Blueprint("chat", __name__, template_folder="../templates")
 
 
-async def ask_gemini(prompt: str, attachments: List[str], api_key: str) -> str:
-    """Send ``prompt`` along with prior chat history to Gemini."""
+async def ask_gemini(prompt: str, attachments: List[str]) -> str:
+    """Send ``prompt`` to Gemini using a shared :class:`AgentSession`."""
 
-    async with AgentSession() as agent:
-        for m in state.chat_history:
-            role = "user" if m["role"] == "user" else "model"
-            agent.add_history(role, m["text"])
+    if state.chat_agent is None:
+        state.chat_agent = AgentSession()
+        await state.chat_agent.__aenter__()
 
-        full_prompt = prompt
-        if attachments:
-            full_prompt = "\n".join([prompt] + attachments)
-
-        text = await agent.run(full_prompt)
-
-    state.chat_history.append({"role": "user", "text": prompt})
-    state.chat_history.append({"role": "bot", "text": text})
-    return text
+    full_prompt = "\n".join([prompt] + attachments) if attachments else prompt
+    return await state.chat_agent.run(full_prompt)
 
 
 @bp.route("/chat")
@@ -47,7 +39,7 @@ def send_message() -> Any:
     message = payload.get("message", "")
     attachments = payload.get("attachments", [])
 
-    result = ask_gemini(message, attachments, api_key)
+    result = ask_gemini(message, attachments)
     if asyncio.iscoroutine(result):
         result = asyncio.run(result)
     return jsonify(text=result)
@@ -57,12 +49,21 @@ def send_message() -> Any:
 def chat_history() -> Any:
     """Return the full cached chat history."""
 
-    return jsonify(history=state.chat_history)
+    history = []
+    if state.chat_agent is not None:
+        for msg in state.chat_agent.history:
+            history.append({"role": msg["role"], "text": msg["content"]})
+    return jsonify(history=history)
 
 
 @bp.route("/chat/api/clear", methods=["POST"])
 def clear_history() -> Any:
     """Clear the cached history."""
 
-    state.chat_history.clear()
+    agent = state.chat_agent
+    if agent is not None:
+        result = agent.__aexit__(None, None, None)
+        if asyncio.iscoroutine(result):
+            asyncio.run(result)
+    state.chat_agent = None
     return jsonify(ok=True)

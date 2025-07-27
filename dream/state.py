@@ -1,8 +1,10 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-# Cached Gemini chat history. Each entry is a mapping with
-# ``role`` ("user" or "bot") and ``text`` keys.
-chat_history: List[Dict[str, str]] = []
+from think.genai import AgentSession
+
+# Cached Gemini chat agent session. ``AgentSession.history`` stores
+# the role/content pairs for the conversation.
+chat_agent: Optional[AgentSession] = None
 
 journal_root: str = ""
 entities_index: Dict[str, Dict[str, dict]] = {}
