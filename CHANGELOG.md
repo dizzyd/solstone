@@ -1,4 +1,7 @@
 # Changelog
+## 2025-08-05
+- `think.mcp_server.get_media` resource returns the raw FLAC or PNG
+  referenced by a transcript JSON using `think.utils.get_raw_file`.
 ## 2025-08-04
 - `think.utils.get_raw_file` returns the relative raw path, mime type and
   metadata for a transcript.

@@ -33,6 +33,14 @@ You have access to three primary search tools and two resource types for journal
 **Returns**: Markdown-formatted raw transcripts organized in 5-minute intervals
 **Use when**: You need to examine detailed activity during a specific time period, particularly useful for reconstructing exact sequences of events
 
+### Resource: `journal://media/{day}/{name}`
+**Purpose**: Returns the raw FLAC or PNG file referenced by a transcript JSON
+**Parameters**:
+  - `day`: YYYYMMDD folder
+  - `name`: Transcript JSON filename (e.g., `HHMMSS_audio.json` or `HHMMSS_monitor_1_diff.json`)
+**Returns**: Binary media file (`audio/flac` or `image/png`)
+**Use when**: You need the original audio or screenshot file for a specific transcript entry
+
 ### Resource vs Tool Selection
 
 **Use resources when:**

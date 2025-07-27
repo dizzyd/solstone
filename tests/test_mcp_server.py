@@ -14,19 +14,32 @@ async def run_client(script: Path, env: dict[str, str]):
         )
         result3 = await client.call_tool("search_events", {"query": "meet"})
         resource = await client.read_resource("journal://summary/20240101/foo")
-    return result1.data, result2.data, result3.data, resource[0].text
+        media = await client.read_resource("journal://media/20240101/090000_audio.json")
+    return (
+        result1.data,
+        result2.data,
+        result3.data,
+        resource[0].text,
+        media[0].blob,
+    )
 
 
 def test_mcp_server_via_stdio(tmp_path):
     calls_file = tmp_path / "calls.txt"
     env = {"JOURNAL_PATH": str(tmp_path), "CALLS_FILE": str(calls_file)}
 
-    day_dir = tmp_path / "20240101" / "topics"
-    day_dir.mkdir(parents=True)
-    (day_dir / "foo.md").write_text("first paragraph\n\nsecond", encoding="utf-8")
+    day_dir = tmp_path / "20240101"
+    topics_dir = day_dir / "topics"
+    topics_dir.mkdir(parents=True)
+    (topics_dir / "foo.md").write_text("first paragraph\n\nsecond", encoding="utf-8")
+
+    heard = day_dir / "heard"
+    heard.mkdir()
+    (heard / "090000_audio.flac").write_bytes(b"data")
+    (day_dir / "090000_audio.json").write_text("[]", encoding="utf-8")
 
     script = Path(__file__).with_name("run_mcp_stub.py")
-    data1, data2, data3, text = asyncio.run(run_client(script, env))
+    data1, data2, data3, text, blob = asyncio.run(run_client(script, env))
     # The resource returns raw text content, not JSON
     summary_text = text
 
@@ -54,6 +67,9 @@ def test_mcp_server_via_stdio(tmp_path):
         ],
     }
     assert summary_text == "first paragraph\n\nsecond"
+    import base64
+
+    assert base64.b64decode(blob) == b"data"
     assert data3 == {
         "total": 1,
         "limit": 5,
