@@ -95,6 +95,7 @@ class AgentSession(BaseAgentSession):
         *,
         max_tokens: int = 4096,
         on_event: Optional[Callable[[dict], None]] = None,
+        persona: str = "default",
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
@@ -105,12 +106,13 @@ class AgentSession(BaseAgentSession):
         self.run_config = RunConfig()
         self._history: list[dict[str, str]] = []
         self._pending_history: list[dict[str, str]] = []
+        self.persona = persona
 
     async def __aenter__(self) -> "AgentSession":
         self._mcp = create_mcp_client()
         await self._mcp.__aenter__()
 
-        system_instruction, extra_context = agent_instructions()
+        system_instruction, extra_context, _ = agent_instructions(self.persona)
         self.agent = Agent(
             name="SunstoneCLI",
             instructions=f"{system_instruction}\n\n{extra_context}",
@@ -164,10 +166,13 @@ async def run_prompt(
     model: str = "gpt-4.1",
     max_tokens: int = 4096,
     on_event: Optional[Callable[[dict], None]] = None,
+    persona: str = "default",
 ) -> str:
     """Convenience helper to run ``prompt`` with a temporary :class:`AgentSession`."""
 
-    async with AgentSession(model, max_tokens=max_tokens, on_event=on_event) as ag:
+    async with AgentSession(
+        model, max_tokens=max_tokens, on_event=on_event, persona=persona
+    ) as ag:
         return await ag.run(prompt)
 
 
@@ -196,6 +201,12 @@ async def main_async():
         "--out",
         help="File path to write the final result or error to",
     )
+    parser.add_argument(
+        "-p",
+        "--persona",
+        default="default",
+        help="Persona instructions to load",
+    )
 
     args = setup_cli(parser)
     out_path = args.out
@@ -223,7 +234,10 @@ async def main_async():
 
     try:
         async with AgentSession(
-            model=args.model, max_tokens=args.max_tokens, on_event=event_writer.emit
+            model=args.model,
+            max_tokens=args.max_tokens,
+            on_event=event_writer.emit,
+            persona=args.persona,
         ) as agent_session:
             if user_prompt is None:
                 app_logger.info("Starting interactive mode with model %s", args.model)

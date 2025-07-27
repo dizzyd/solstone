@@ -31,7 +31,7 @@ CATEGORY_COLORS = [
     "#795548",
 ]
 
-AGENT_PATH = Path(__file__).with_name("agent.txt")
+AGENT_DIR = Path(__file__).with_name("agents")
 
 
 def day_path(day: str) -> str:
@@ -164,10 +164,22 @@ def get_topics() -> dict[str, dict[str, object]]:
     return topics
 
 
-def agent_instructions() -> Tuple[str, str]:
-    """Return system instruction and initial user context."""
+def agent_instructions(persona: str = "default") -> Tuple[str, str, dict[str, object]]:
+    """Return system instruction, initial user context and metadata for ``persona``."""
 
-    system_instruction = AGENT_PATH.read_text(encoding="utf-8")
+    txt_path = AGENT_DIR / f"{persona}.txt"
+    system_instruction = txt_path.read_text(encoding="utf-8")
+
+    meta: dict[str, object] = {}
+    json_path = txt_path.with_suffix(".json")
+    if json_path.exists():
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                meta.update(data)
+        except Exception as exc:  # pragma: no cover - optional metadata
+            logging.debug("Error reading %s: %s", json_path, exc)
 
     extra_parts: list[str] = []
     journal = os.getenv("JOURNAL_PATH")
@@ -200,7 +212,7 @@ def agent_instructions() -> Tuple[str, str]:
     extra_parts.append(f"## Current Date and Time\n{time_str}")
 
     extra_context = "\n\n".join(extra_parts).strip()
-    return system_instruction, extra_context
+    return system_instruction, extra_context, meta
 
 
 def create_mcp_client(backend: Literal["agents", "fastmcp"] = "agents") -> Any:
