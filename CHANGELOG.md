@@ -6,6 +6,8 @@ Guide for updating: always append new entries to the existing list for the same 
 - Unified `AgentSession` APIs for `think.agent` and `think.genai`.
 - `dream` chat view now works with either agent implementation.
 - Documentation expanded with a common interface section.
+- Dream chat backend now stores the shared `AgentSession` instance instead of
+  manually managing chat history.
 
 ## 2025-07-29
 - Updated `think.agent` and `think.genai` to rely on built-in in-memory session management.

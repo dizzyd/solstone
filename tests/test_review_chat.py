@@ -23,37 +23,68 @@ def test_send_message_success(monkeypatch):
     review = importlib.import_module("dream")
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
-    def fake_gemini(msg, attach, key):
-        review.state.chat_history.append({"role": "user", "text": msg})
-        review.state.chat_history.append({"role": "bot", "text": "pong"})
-        return "pong"
+    class DummyAgent:
+        def __init__(self):
+            self.history = []
 
-    monkeypatch.setattr("dream.views.chat.ask_gemini", fake_gemini)
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def run(self, prompt):
+            self.history.append({"role": "user", "content": prompt})
+            self.history.append({"role": "assistant", "content": "pong"})
+            return "pong"
+
+    monkeypatch.setattr("dream.views.chat.AgentSession", DummyAgent)
 
     with review.app.test_request_context(
         "/chat/api/send", method="POST", json={"message": "hi"}
     ):
         resp = review.send_message()
     assert resp.json == {"text": "pong"}
-    assert review.state.chat_history[-2:] == [
-        {"role": "user", "text": "hi"},
-        {"role": "bot", "text": "pong"},
+    assert review.state.chat_agent.history[-2:] == [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "pong"},
     ]
 
 
 def test_history_and_clear(monkeypatch):
     review = importlib.import_module("dream")
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
-    review.state.chat_history = [
-        {"role": "user", "text": "u"},
-        {"role": "bot", "text": "b"},
-    ]
+
+    class DummyAgent:
+        def __init__(self):
+            self.history = [
+                {"role": "user", "content": "u"},
+                {"role": "assistant", "content": "b"},
+            ]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def run(self, prompt):
+            self.history.append({"role": "user", "content": prompt})
+            self.history.append({"role": "assistant", "content": "pong"})
+            return "pong"
+
+    review.state.chat_agent = DummyAgent()
 
     with review.app.test_request_context("/chat/api/history"):
         resp = review.chat_history()
-    assert resp.json == {"history": review.state.chat_history}
+    assert resp.json == {
+        "history": [
+            {"role": "user", "text": "u"},
+            {"role": "assistant", "text": "b"},
+        ]
+    }
 
     with review.app.test_request_context("/chat/api/clear", method="POST"):
         resp = review.clear_history()
     assert resp.json == {"ok": True}
-    assert review.state.chat_history == []
+    assert review.state.chat_agent is None
