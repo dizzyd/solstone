@@ -1,6 +1,7 @@
 # Changelog
 ## 2025-07-31
 - Added `think.google` module replacing `think.genai`.
+- Added `think.events` module standardizing event emission across backends.
 - Introduced `BaseAgentSession` ensuring common API for agent sessions.
 - OpenAI logic moved to `think.openai`; `think.agent` now re-exports it.
 
