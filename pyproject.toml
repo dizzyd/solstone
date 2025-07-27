@@ -112,7 +112,7 @@ include = ["hear*", "see*", "think*", "dream*"]
 [tool.setuptools.package-data]
 hear = ["*.txt"]
 see = ["*.txt"]
-think = ["*.txt", "topics/*.txt"]
+think = ["*.txt", "topics/*.txt", "agents/*.txt", "agents/*.json"]
 dream = [
     "templates/*.html",
     "static/*",

@@ -2,6 +2,8 @@
 ## 2025-08-05
 - `think.mcp_server.get_media` resource returns the raw FLAC or PNG
   referenced by a transcript JSON using `think.utils.get_raw_file`.
+- Agent instructions moved to `think/agents/default.txt` and loaded via
+  `agent_instructions(persona)` with optional personas.
 ## 2025-08-04
 - `think.utils.get_raw_file` returns the relative raw path, mime type and
   metadata for a transcript.
