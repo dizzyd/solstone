@@ -29,7 +29,7 @@ from .agents import BaseAgentSession, JSONEventCallback
 from .models import GPT_O4_MINI
 
 DEFAULT_MODEL = GPT_O4_MINI
-DEFAULT_MAX_TOKENS = 4096
+DEFAULT_MAX_TOKENS = 1024*32
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -112,7 +112,7 @@ class AgentSession(BaseAgentSession):
             name="SunstoneCLI",
             instructions=f"{system_instruction}\n\n{extra_context}",
             model=self.model,
-            model_settings=ModelSettings(max_tokens=self.max_tokens, temperature=0.2),
+            model_settings=ModelSettings(max_tokens=self.max_tokens),
             mcp_servers=[self._mcp],
             hooks=ToolLoggingHooks(self._callback),
         )

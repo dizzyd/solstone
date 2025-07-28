@@ -2,10 +2,10 @@ GEMINI_PRO = "gemini-2.5-pro"
 GEMINI_FLASH = "gemini-2.5-flash"
 GEMINI_LITE = "gemini-2.5-flash-lite"
 
-GPT_4O = "gpt-4o-2024-05-13"
-GPT_4_TURBO = "gpt-4-turbo-2024-04-09"
-GPT_O3 = "o3"
-GPT_O4_MINI = "o4-mini"
+GPT_4O = "gpt-4o"
+GPT_4_1 = "gpt-4.1"
+GPT_O3 = "o3-2025-04-16"
+GPT_O4_MINI = "o4-mini-2025-04-16"
 
 CLAUDE_OPUS_4 = "claude-opus-4-20250514"
 CLAUDE_SONNET_4 = "claude-sonnet-4-20250514"
@@ -16,7 +16,7 @@ __all__ = [
     "GEMINI_FLASH",
     "GEMINI_LITE",
     "GPT_4O",
-    "GPT_4_TURBO",
+    "GPT_4_1",
     "GPT_O3",
     "GPT_O4_MINI",
     "CLAUDE_OPUS_4",
