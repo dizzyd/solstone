@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, TypedDict, Union
+
+from think.utils import setup_cli
 
 
 class ToolStartEvent(TypedDict):
@@ -155,3 +160,126 @@ __all__ = [
     "JSONEventCallback",
     "BaseAgentSession",
 ]
+
+
+async def main_async() -> None:
+    """Unified CLI for all agent backends."""
+
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument(
+        "--backend",
+        choices=["openai", "google", "anthropic"],
+        default="openai",
+        help="Backend provider",
+    )
+    pre_args, _ = pre_parser.parse_known_args()
+
+    if pre_args.backend == "google":
+        from . import google as backend_mod
+    elif pre_args.backend == "anthropic":
+        from . import anthropic as backend_mod
+    else:
+        from . import openai as backend_mod
+
+    parser = argparse.ArgumentParser(description="Sunstone Agent CLI")
+    parser.add_argument(
+        "task_file",
+        nargs="?",
+        help="Path to .txt file with the request, '-' for stdin or omit for interactive",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["openai", "google", "anthropic"],
+        default=pre_args.backend,
+        help="Backend provider",
+    )
+    parser.add_argument(
+        "--model",
+        default=getattr(backend_mod, "DEFAULT_MODEL"),
+        help="Model to use",
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=getattr(backend_mod, "DEFAULT_MAX_TOKENS"),
+        help="Maximum tokens for the final response",
+    )
+    parser.add_argument(
+        "-q", "--query", help="Direct prompt text for single query mode"
+    )
+    parser.add_argument(
+        "-o", "--out", help="File path to write the final result or error to"
+    )
+    parser.add_argument(
+        "-p", "--persona", default="default", help="Persona instructions to load"
+    )
+
+    args = setup_cli(parser)
+    out_path = args.out
+
+    app_logger = backend_mod.setup_logging(args.verbose)
+    event_writer = JSONEventWriter(out_path)
+    journal_writer = JournalEventWriter()
+
+    def emit_event(data: Event) -> None:
+        event_writer.emit(data)
+        journal_writer.emit(data)
+
+    if args.backend == "openai":
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if api_key:
+            from agents import set_default_openai_key
+
+            set_default_openai_key(api_key)
+
+    if args.query:
+        user_prompt = args.query
+    elif args.task_file is None:
+        user_prompt = None
+    elif args.task_file == "-":
+        user_prompt = sys.stdin.read()
+    else:
+        if not os.path.isfile(args.task_file):
+            parser.error(f"Task file not found: {args.task_file}")
+        app_logger.info("Loading task file %s", args.task_file)
+        user_prompt = Path(args.task_file).read_text(encoding="utf-8")
+
+    try:
+        async with backend_mod.AgentSession(
+            model=args.model,
+            max_tokens=args.max_tokens,
+            on_event=emit_event,
+            persona=args.persona,
+        ) as agent_session:
+            if user_prompt is None:
+                app_logger.info("Starting interactive mode with model %s", args.model)
+                try:
+                    while True:
+                        try:
+                            loop = asyncio.get_event_loop()
+                            prompt = await loop.run_in_executor(
+                                None, lambda: input("chat> ")
+                            )
+                            if not prompt:
+                                continue
+                            await agent_session.run(prompt)
+                        except EOFError:
+                            break
+                except KeyboardInterrupt:
+                    pass
+            else:
+                app_logger.debug("Task contents: %s", user_prompt)
+                app_logger.info("Running agent with model %s", args.model)
+                await agent_session.run(user_prompt)
+    except Exception as exc:  # pragma: no cover - unexpected
+        emit_event({"event": "error", "error": str(exc)})
+        raise
+    finally:
+        event_writer.close()
+        journal_writer.close()
+
+
+def main() -> None:
+    """Entry point wrapper."""
+
+    asyncio.run(main_async())

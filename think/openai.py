@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
-"""think.openai
+"""OpenAI backed agent implementation.
 
-CLI utility launching an OpenAI agent able to search ponder summaries,
-occurrences and read full markdown files from the journal.
-
-Usage:
-    think-agent [TASK_FILE] [--model MODEL] [--max-tokens N] [-v] [-o OUT]
-
-When ``TASK_FILE`` is omitted, an interactive ``chat>`` prompt is started.
+This module provides :class:`AgentSession` which wraps the OpenAI Agents API
+and exposes a simple ``run(prompt)`` coroutine. It is used by the unified
+``think-agents`` CLI and can be imported directly for programmatic access.
 """
 
 from __future__ import annotations
 
-import argparse
-import asyncio
 import logging
-import os
 import sys
-from pathlib import Path
 from typing import Callable, Optional
 
 from agents import (
@@ -28,18 +20,15 @@ from agents import (
     Runner,
     SQLiteSession,
     enable_verbose_stdout_logging,
-    set_default_openai_key,
 )
 from agents.mcp import MCPServerStdio
 
-from think.utils import agent_instructions, create_mcp_client, setup_cli
+from think.utils import agent_instructions, create_mcp_client
 
-from .agents import (
-    BaseAgentSession,
-    JournalEventWriter,
-    JSONEventCallback,
-    JSONEventWriter,
-)
+from .agents import BaseAgentSession, JSONEventCallback
+
+DEFAULT_MODEL = "gpt-4.1"
+DEFAULT_MAX_TOKENS = 4096
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -96,9 +85,9 @@ class AgentSession(BaseAgentSession):
 
     def __init__(
         self,
-        model: str = "gpt-4.1",
+        model: str = DEFAULT_MODEL,
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
         on_event: Optional[Callable[[dict], None]] = None,
         persona: str = "default",
     ) -> None:
@@ -175,8 +164,8 @@ class AgentSession(BaseAgentSession):
 async def run_prompt(
     prompt: str,
     *,
-    model: str = "gpt-4.1",
-    max_tokens: int = 4096,
+    model: str = DEFAULT_MODEL,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     on_event: Optional[Callable[[dict], None]] = None,
     persona: str = "default",
 ) -> str:
@@ -188,110 +177,10 @@ async def run_prompt(
         return await ag.run(prompt)
 
 
-async def main_async():
-    """Main async entry point."""
-    parser = argparse.ArgumentParser(description="Sunstone Agent CLI")
-    parser.add_argument(
-        "task_file",
-        nargs="?",
-        help="Path to .txt file with the request, '-' for stdin or omit for interactive",
-    )
-    parser.add_argument("--model", default="gpt-4.1", help="OpenAI model to use")
-    parser.add_argument(
-        "--max-tokens",
-        type=int,
-        default=4096,
-        help="Maximum tokens for the final response",
-    )
-    parser.add_argument(
-        "-q",
-        "--query",
-        help="Direct prompt text for single query mode",
-    )
-    parser.add_argument(
-        "-o",
-        "--out",
-        help="File path to write the final result or error to",
-    )
-    parser.add_argument(
-        "-p",
-        "--persona",
-        default="default",
-        help="Persona instructions to load",
-    )
-
-    args = setup_cli(parser)
-    out_path = args.out
-
-    app_logger = setup_logging(args.verbose)
-    event_writer = JSONEventWriter(out_path)
-    journal_writer = JournalEventWriter()
-
-    def emit_event(data: dict) -> None:
-        event_writer.emit(data)
-        journal_writer.emit(data)
-
-    # Set OpenAI API key
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if api_key:
-        set_default_openai_key(api_key)
-
-    # Get task/prompt
-    if args.query:
-        user_prompt = args.query
-    elif args.task_file is None:
-        user_prompt = None  # Interactive mode
-    elif args.task_file == "-":
-        user_prompt = sys.stdin.read()
-    else:
-        if not os.path.isfile(args.task_file):
-            parser.error(f"Task file not found: {args.task_file}")
-        app_logger.info("Loading task file %s", args.task_file)
-        user_prompt = Path(args.task_file).read_text(encoding="utf-8")
-
-    try:
-        async with AgentSession(
-            model=args.model,
-            max_tokens=args.max_tokens,
-            on_event=emit_event,
-            persona=args.persona,
-        ) as agent_session:
-            if user_prompt is None:
-                app_logger.info("Starting interactive mode with model %s", args.model)
-                try:
-                    while True:
-                        try:
-                            loop = asyncio.get_event_loop()
-                            prompt = await loop.run_in_executor(
-                                None, lambda: input("chat> ")
-                            )
-                            if not prompt:
-                                continue
-                            await agent_session.run(prompt)
-                        except EOFError:
-                            break
-                except KeyboardInterrupt:
-                    pass
-            else:
-                app_logger.debug("Task contents: %s", user_prompt)
-                app_logger.info("Running agent with model %s", args.model)
-                await agent_session.run(user_prompt)
-    except Exception as exc:
-        emit_event({"event": "error", "error": str(exc)})
-        raise
-    finally:
-        event_writer.close()
-        journal_writer.close()
-
-
-def main():
-    """Entry point that runs the async main."""
-    try:
-        asyncio.run(main_async())
-    except Exception as e:
-        logging.error(f"Error: {e}")
-        raise
-
-
-if __name__ == "__main__":
-    main()
+__all__ = [
+    "AgentSession",
+    "run_prompt",
+    "setup_logging",
+    "DEFAULT_MODEL",
+    "DEFAULT_MAX_TOKENS",
+]

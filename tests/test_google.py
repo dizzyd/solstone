@@ -93,7 +93,8 @@ def test_google_main(monkeypatch, tmp_path, capsys):
     _setup_genai_stub(monkeypatch)
     _setup_fastmcp_stub(monkeypatch)
     sys.modules.pop("think.google", None)
-    mod = importlib.reload(importlib.import_module("think.google"))
+    importlib.reload(importlib.import_module("think.google"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -103,7 +104,7 @@ def test_google_main(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-google", str(task)]))
+    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "google"]))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -125,7 +126,8 @@ def test_google_outfile(monkeypatch, tmp_path):
     _setup_genai_stub(monkeypatch)
     _setup_fastmcp_stub(monkeypatch)
     sys.modules.pop("think.google", None)
-    mod = importlib.reload(importlib.import_module("think.google"))
+    importlib.reload(importlib.import_module("think.google"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -136,7 +138,12 @@ def test_google_outfile(monkeypatch, tmp_path):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-google", str(task), "-o", str(out_file)]))
+    asyncio.run(
+        run_main(
+            mod,
+            ["think-agents", str(task), "-o", str(out_file), "--backend", "google"],
+        )
+    )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
     assert events[0] == {
@@ -169,7 +176,8 @@ def test_google_outfile_error(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "fastmcp.client.transports", transports_mod)
 
     sys.modules.pop("think.google", None)
-    mod = importlib.reload(importlib.import_module("think.google"))
+    importlib.reload(importlib.import_module("think.google"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -181,7 +189,12 @@ def test_google_outfile_error(monkeypatch, tmp_path):
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     with pytest.raises(RuntimeError):
-        asyncio.run(run_main(mod, ["think-google", str(task), "-o", str(out_file)]))
+        asyncio.run(
+            run_main(
+                mod,
+                ["think-agents", str(task), "-o", str(out_file), "--backend", "google"],
+            )
+        )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
     assert events[-1] == {"event": "error", "error": "boom"}
