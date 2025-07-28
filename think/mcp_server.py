@@ -297,4 +297,4 @@ def get_media(day: str, name: str) -> FileResource:
 
 if __name__ == "__main__":
     # When run directly, use stdio transport (default)
-    mcp.run()
+    mcp.run(show_banner=False)
