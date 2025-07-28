@@ -18,6 +18,7 @@ class ToolStartEvent(TypedDict):
     """Event emitted when a tool starts."""
 
     event: Literal["tool_start"]
+    ts: int
     tool: str
     args: Optional[dict[str, Any]]
 
@@ -26,6 +27,7 @@ class ToolEndEvent(TypedDict):
     """Event emitted when a tool finishes."""
 
     event: Literal["tool_end"]
+    ts: int
     tool: str
     result: Any
 
@@ -34,6 +36,7 @@ class StartEvent(TypedDict):
     """Event emitted when an agent run begins."""
 
     event: Literal["start"]
+    ts: int
     prompt: str
     persona: str
     model: str
@@ -43,6 +46,7 @@ class FinishEvent(TypedDict):
     """Event emitted when an agent run finishes successfully."""
 
     event: Literal["finish"]
+    ts: int
     result: str
 
 
@@ -50,6 +54,7 @@ class ErrorEvent(TypedDict):
     """Event emitted when an error occurs."""
 
     event: Literal["error"]
+    ts: int
     error: str
 
 
@@ -120,7 +125,7 @@ class JSONEventCallback:
 
     def emit(self, data: Event) -> None:
         if self.callback:
-            self.callback(data)
+            self.callback({**data, "ts": int(time.time() * 1000)})
 
 
 class BaseAgentSession(ABC):
@@ -222,6 +227,8 @@ async def main_async() -> None:
     journal_writer = JournalEventWriter()
 
     def emit_event(data: Event) -> None:
+        if "ts" not in data:
+            data["ts"] = int(time.time() * 1000)
         event_writer.emit(data)
         journal_writer.emit(data)
 

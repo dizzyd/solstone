@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import time
 
 
 def test_chat_page_renders(tmp_path):
@@ -150,6 +151,7 @@ def test_tool_event_pushed(monkeypatch):
                 self.cb(
                     {
                         "event": "tool_start",
+                        "ts": int(time.time() * 1000),
                         "tool": "search_events",
                         "args": {"query": prompt},
                     }
@@ -167,3 +169,4 @@ def test_tool_event_pushed(monkeypatch):
 
     assert resp.json == {"text": "pong"}
     assert events[0]["view"] == "chat"
+    assert isinstance(events[0]["ts"], int)
