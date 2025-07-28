@@ -74,7 +74,8 @@ def test_claude_main(monkeypatch, tmp_path, capsys):
     _setup_anthropic_stub(monkeypatch)
     _setup_fastmcp_stub(monkeypatch)
     sys.modules.pop("think.anthropic", None)
-    mod = importlib.reload(importlib.import_module("think.anthropic"))
+    importlib.reload(importlib.import_module("think.anthropic"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -84,7 +85,7 @@ def test_claude_main(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-claude", str(task)]))
+    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "anthropic"]))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -106,7 +107,8 @@ def test_claude_outfile(monkeypatch, tmp_path):
     _setup_anthropic_stub(monkeypatch)
     _setup_fastmcp_stub(monkeypatch)
     sys.modules.pop("think.anthropic", None)
-    mod = importlib.reload(importlib.import_module("think.anthropic"))
+    importlib.reload(importlib.import_module("think.anthropic"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -117,7 +119,12 @@ def test_claude_outfile(monkeypatch, tmp_path):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-claude", str(task), "-o", str(out_file)]))
+    asyncio.run(
+        run_main(
+            mod,
+            ["think-agents", str(task), "-o", str(out_file), "--backend", "anthropic"],
+        )
+    )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
     assert events[0] == {
@@ -149,7 +156,8 @@ def test_claude_outfile_error(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "fastmcp.client.transports", transports_mod)
 
     sys.modules.pop("think.anthropic", None)
-    mod = importlib.reload(importlib.import_module("think.anthropic"))
+    importlib.reload(importlib.import_module("think.anthropic"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -161,7 +169,19 @@ def test_claude_outfile_error(monkeypatch, tmp_path):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
     with pytest.raises(RuntimeError):
-        asyncio.run(run_main(mod, ["think-claude", str(task), "-o", str(out_file)]))
+        asyncio.run(
+            run_main(
+                mod,
+                [
+                    "think-agents",
+                    str(task),
+                    "-o",
+                    str(out_file),
+                    "--backend",
+                    "anthropic",
+                ],
+            )
+        )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
     assert events[-1] == {"event": "error", "error": "boom"}

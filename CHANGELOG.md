@@ -1,4 +1,7 @@
 # Changelog
+## 2025-08-08
+- New ``think-agents`` CLI consolidates ``think-agent`` and ``think-claude``.
+- Backend modules no longer expose their own command line interfaces.
 ## 2025-08-07
 - Agent start events now log the active persona and model.
 - Added `think.anthropic` CLI using the Anthropic Claude SDK.

@@ -62,7 +62,8 @@ def test_openai_main(monkeypatch, tmp_path, capsys):
     sys.modules["agents.mcp"] = agents_mcp_stub
     sys.modules.pop("think.openai", None)
 
-    mod = importlib.reload(importlib.import_module("think.openai"))
+    importlib.reload(importlib.import_module("think.openai"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -72,7 +73,7 @@ def test_openai_main(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agent", str(task)]))
+    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "openai"]))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -136,7 +137,8 @@ def test_openai_outfile(monkeypatch, tmp_path):
     sys.modules["agents.mcp"] = agents_mcp_stub
     sys.modules.pop("think.openai", None)
 
-    mod = importlib.reload(importlib.import_module("think.openai"))
+    importlib.reload(importlib.import_module("think.openai"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -147,7 +149,12 @@ def test_openai_outfile(monkeypatch, tmp_path):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agent", str(task), "-o", str(out_file)]))
+    asyncio.run(
+        run_main(
+            mod,
+            ["think-agents", str(task), "-o", str(out_file), "--backend", "openai"],
+        )
+    )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
     assert events[0] == {
@@ -208,7 +215,8 @@ def test_openai_outfile_error(monkeypatch, tmp_path):
     sys.modules["agents.mcp"] = agents_mcp_stub
     sys.modules.pop("think.openai", None)
 
-    mod = importlib.reload(importlib.import_module("think.openai"))
+    importlib.reload(importlib.import_module("think.openai"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -220,7 +228,12 @@ def test_openai_outfile_error(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
     with pytest.raises(RuntimeError):
-        asyncio.run(run_main(mod, ["think-agent", str(task), "-o", str(out_file)]))
+        asyncio.run(
+            run_main(
+                mod,
+                ["think-agents", str(task), "-o", str(out_file), "--backend", "openai"],
+            )
+        )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
     assert events[-1] == {"event": "error", "error": "boom"}

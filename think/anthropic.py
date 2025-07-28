@@ -1,37 +1,26 @@
 #!/usr/bin/env python3
-"""think.anthropic
+"""Anthropic Claude backed agent implementation.
 
-CLI utility launching an Anthropic Claude agent able to search ponder summaries,
-occurrences and read full markdown files from the journal.
-
-Usage:
-    think-claude [TASK_FILE] [--model MODEL] [--max-tokens N] [-v] [-o OUT]
-
-When TASK_FILE is omitted, an interactive chat prompt is started.
+This module exposes :class:`AgentSession` for interacting with Anthropic's
+Claude API and is used by the ``think-agents`` CLI.
 """
 
 from __future__ import annotations
 
-import argparse
-import asyncio
 import json
 import logging
 import os
-import sys
-from pathlib import Path
 from typing import Any, Callable, Optional
 
 from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam, ToolParam, ToolUseBlock
 
-from .agents import (
-    BaseAgentSession,
-    JournalEventWriter,
-    JSONEventCallback,
-    JSONEventWriter,
-)
+from .agents import BaseAgentSession, JSONEventCallback
 from .models import CLAUDE_OPUS_4
-from .utils import agent_instructions, create_mcp_client, setup_cli
+from .utils import agent_instructions, create_mcp_client
+
+DEFAULT_MODEL = CLAUDE_OPUS_4
+DEFAULT_MAX_TOKENS = 4096
 
 
 def setup_logging(verbose: bool) -> logging.Logger:
@@ -96,9 +85,9 @@ class AgentSession(BaseAgentSession):
 
     def __init__(
         self,
-        model: str = CLAUDE_OPUS_4,
+        model: str = DEFAULT_MODEL,
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
         on_event: Optional[Callable[[dict], None]] = None,
         persona: str = "default",
     ) -> None:
@@ -216,8 +205,8 @@ class AgentSession(BaseAgentSession):
 async def run_prompt(
     prompt: str,
     *,
-    model: str = CLAUDE_OPUS_4,
-    max_tokens: int = 4096,
+    model: str = DEFAULT_MODEL,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     on_event: Optional[Callable[[dict], None]] = None,
     persona: str = "default",
 ) -> str:
@@ -228,94 +217,10 @@ async def run_prompt(
         return await ag.run(prompt)
 
 
-async def main_async() -> None:
-    """Main async entry point."""
-    parser = argparse.ArgumentParser(description="Sunstone Claude Agent CLI")
-    parser.add_argument(
-        "task_file",
-        nargs="?",
-        help="Path to .txt file with request, '-' for stdin or omit for interactive",
-    )
-    parser.add_argument("--model", default=CLAUDE_OPUS_4, help="Claude model to use")
-    parser.add_argument(
-        "--max-tokens", type=int, default=4096, help="Maximum tokens for final response"
-    )
-    parser.add_argument(
-        "-q", "--query", help="Direct prompt text for single query mode"
-    )
-    parser.add_argument(
-        "-o", "--out", help="File path to write final result or error to"
-    )
-    parser.add_argument(
-        "-p", "--persona", default="default", help="Persona instructions to load"
-    )
-
-    args = setup_cli(parser)
-    out_path = args.out
-
-    app_logger = setup_logging(args.verbose)
-    event_writer = JSONEventWriter(out_path)
-    journal_writer = JournalEventWriter()
-
-    def emit_event(data: dict) -> None:
-        event_writer.emit(data)
-        journal_writer.emit(data)
-
-    if args.query:
-        user_prompt = args.query
-    elif args.task_file is None:
-        user_prompt = None
-    elif args.task_file == "-":
-        user_prompt = sys.stdin.read()
-    else:
-        if not os.path.isfile(args.task_file):
-            parser.error(f"Task file not found: {args.task_file}")
-        app_logger.info("Loading task file %s", args.task_file)
-        user_prompt = Path(args.task_file).read_text(encoding="utf-8")
-
-    try:
-        async with AgentSession(
-            model=args.model,
-            max_tokens=args.max_tokens,
-            on_event=emit_event,
-            persona=args.persona,
-        ) as agent_session:
-            if user_prompt is None:
-                app_logger.info("Starting interactive mode with model %s", args.model)
-                try:
-                    while True:
-                        try:
-                            loop = asyncio.get_event_loop()
-                            prompt = await loop.run_in_executor(
-                                None, lambda: input("chat> ")
-                            )
-                            if not prompt:
-                                continue
-                            await agent_session.run(prompt)
-                        except EOFError:
-                            break
-                except KeyboardInterrupt:
-                    pass
-            else:
-                app_logger.debug("Task contents: %s", user_prompt)
-                app_logger.info("Running agent with model %s", args.model)
-                await agent_session.run(user_prompt)
-    except Exception as exc:
-        emit_event({"event": "error", "error": str(exc)})
-        raise
-    finally:
-        event_writer.close()
-        journal_writer.close()
-
-
-def main() -> None:
-    """Entry point that runs the async main."""
-    try:
-        asyncio.run(main_async())
-    except Exception as e:
-        logging.error(f"Error: {e}")
-        raise
-
-
-if __name__ == "__main__":
-    main()
+__all__ = [
+    "AgentSession",
+    "run_prompt",
+    "setup_logging",
+    "DEFAULT_MODEL",
+    "DEFAULT_MAX_TOKENS",
+]

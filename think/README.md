@@ -73,22 +73,21 @@ WantedBy=timers.target
 
 ## CLI Agent
 
-Three command line tools offer the same interface using different LLM backends:
+The single ``think-agents`` command works with OpenAI, Gemini or Claude via the
+``--backend`` option:
 
 ```bash
-think-agent   [TASK_FILE] [--model MODEL] [--max-tokens N] [-o OUT_FILE]
-think-google  [TASK_FILE] [--model MODEL] [--max-tokens N] [-o OUT_FILE]
-think-claude  [TASK_FILE] [--model MODEL] [--max-tokens N] [-o OUT_FILE]
+think-agents [TASK_FILE] [--backend PROVIDER] [--model MODEL] [--max-tokens N] [-o OUT_FILE]
 ```
 
-`think-agent` relies on the OpenAI Agents API, `think-google` talks to Gemini via
-the `google-genai` library and `think-claude` uses the Anthropic Claude SDK. All
-three start a local MCP server so tools
+The provider can be ``openai`` (default), ``google`` or ``anthropic``. The CLI
+starts a local MCP server so tools
 like topic search are available during a run. If `TASK_FILE` is omitted an
 interactive prompt is started.
 
-Set `OPENAI_API_KEY`, `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` (depending on the
-command) along with `JOURNAL_PATH` so the agent can query your journal index.
+Set the corresponding API key environment variable (`OPENAI_API_KEY`,
+`GOOGLE_API_KEY` or `ANTHROPIC_API_KEY`) along with `JOURNAL_PATH` so the agent can
+query your journal index.
 The agent prints its
 final answer to `stdout`; `-o` or `--out` writes all JSON events to a file.
 
