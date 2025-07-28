@@ -246,6 +246,7 @@ def create_mcp_client(backend: Literal["agents", "fastmcp"] = "agents") -> Any:
             "env": env,
         },
         name="Sunstone MCP Server",
+        client_session_timeout_seconds=None,
     )
 
 
