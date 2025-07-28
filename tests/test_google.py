@@ -108,13 +108,14 @@ def test_google_main(monkeypatch, tmp_path, capsys):
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
-    assert events[0] == {
-        "event": "start",
-        "prompt": "hello",
-        "persona": "default",
-        "model": "gemini-2.5-flash",
-    }
-    assert events[-1] == {"event": "finish", "result": "ok"}
+    assert events[0]["event"] == "start"
+    assert isinstance(events[0]["ts"], int)
+    assert events[0]["prompt"] == "hello"
+    assert events[0]["persona"] == "default"
+    assert events[0]["model"] == "gemini-2.5-flash"
+    assert events[-1]["event"] == "finish"
+    assert isinstance(events[-1]["ts"], int)
+    assert events[-1]["result"] == "ok"
 
     logged = list((journal / "agents").glob("*.jsonl"))
     assert len(logged) == 1
@@ -146,13 +147,14 @@ def test_google_outfile(monkeypatch, tmp_path):
     )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
-    assert events[0] == {
-        "event": "start",
-        "prompt": "hello",
-        "persona": "default",
-        "model": "gemini-2.5-flash",
-    }
-    assert events[-1] == {"event": "finish", "result": "ok"}
+    assert events[0]["event"] == "start"
+    assert isinstance(events[0]["ts"], int)
+    assert events[0]["prompt"] == "hello"
+    assert events[0]["persona"] == "default"
+    assert events[0]["model"] == "gemini-2.5-flash"
+    assert events[-1]["event"] == "finish"
+    assert isinstance(events[-1]["ts"], int)
+    assert events[-1]["result"] == "ok"
 
     logged = list((journal / "agents").glob("*.jsonl"))
     assert len(logged) == 1
@@ -197,7 +199,9 @@ def test_google_outfile_error(monkeypatch, tmp_path):
         )
 
     events = [json.loads(line) for line in out_file.read_text().splitlines()]
-    assert events[-1] == {"event": "error", "error": "boom"}
+    assert events[-1]["event"] == "error"
+    assert isinstance(events[-1]["ts"], int)
+    assert events[-1]["error"] == "boom"
 
     logged = list((journal / "agents").glob("*.jsonl"))
     assert len(logged) == 1

@@ -1,4 +1,6 @@
 # Changelog
+## 2025-08-09
+- Agent event JSON messages now include a ``ts`` epoch timestamp.
 ## 2025-08-08
 - New ``think-agents`` CLI consolidates ``think-agent`` and ``think-claude``.
 - Backend modules no longer expose their own command line interfaces.
