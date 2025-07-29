@@ -12,6 +12,11 @@ body {height:100vh; overflow:hidden;}
 #messages .event-card{background:#fff4e5;border:1px solid #f0ad4e;border-radius:6px;padding:0.5em 0.75em;margin-bottom:0.75em;font-size:0.85em;max-width:80%;align-self:flex-start;}
 #messages .event-card a{text-decoration:none;color:#007bff;}
 #messages .event-card a:hover{text-decoration:underline;}
+#messages .tool-placard{background:#e3f2fd;border:1px solid #2196f3;border-radius:6px;padding:0.4em 0.6em;margin-bottom:0.5em;font-size:0.8em;max-width:60%;align-self:flex-start;cursor:help;position:relative;}
+#messages .tool-placard:hover{background:#bbdefb;}
+#messages .tool-placard .tool-name{font-weight:bold;color:#1976d2;}
+#messages .tool-placard .tool-tooltip{visibility:hidden;background:#333;color:#fff;text-align:left;border-radius:4px;padding:0.5em;position:absolute;z-index:1000;bottom:125%;left:0;min-width:300px;max-width:500px;font-size:0.75em;font-family:monospace;white-space:pre-wrap;opacity:0;transition:opacity 0.3s;}
+#messages .tool-placard:hover .tool-tooltip{visibility:visible;opacity:1;}
 #drawer {display:none; border-top:1px solid #ddd; padding:0.5em; background:#fafafa;}
 </style>
 {% endblock %}
@@ -49,6 +54,26 @@ function addEventCard(text, url){
   a.href=url;
   a.textContent=text;
   div.appendChild(a);
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop=messagesDiv.scrollHeight;
+}
+
+function addToolPlacard(toolName, args){
+  const div=document.createElement('div');
+  div.className='tool-placard';
+  
+  const nameSpan=document.createElement('span');
+  nameSpan.className='tool-name';
+  nameSpan.textContent=toolName;
+  div.appendChild(nameSpan);
+  
+  if(args){
+    const tooltip=document.createElement('div');
+    tooltip.className='tool-tooltip';
+    tooltip.textContent=JSON.stringify(args, null, 2);
+    div.appendChild(tooltip);
+  }
+  
   messagesDiv.appendChild(div);
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
 }
@@ -100,13 +125,19 @@ backendSelect.addEventListener('change', async ()=>{
 });
 
 appEvents.listen('chat',e=>{
-  if(e.event==='tool_start'&&e.args&&e.args.query){
-    let idx='summaries';
-    if(e.tool.includes('event')) idx='events';
-    else if(e.tool.includes('transcript')) idx='transcripts';
-    const q=e.args.query+(idx==='summaries'?'':' index:'+idx);
-    const url=searchBase+'#q='+encodeURIComponent(q);
-    addEventCard('Search '+e.args.query,url);
+  if(e.event==='tool_start'){
+    // Handle search tools with special event cards
+    if(e.args&&e.args.query){
+      let idx='summaries';
+      if(e.tool.includes('event')) idx='events';
+      else if(e.tool.includes('transcript')) idx='transcripts';
+      const q=e.args.query+(idx==='summaries'?'':' index:'+idx);
+      const url=searchBase+'#q='+encodeURIComponent(q);
+      addEventCard('Search '+e.args.query,url);
+    } else {
+      // Handle all other tools with placards
+      addToolPlacard(e.tool, e.args);
+    }
   }
 });
 
