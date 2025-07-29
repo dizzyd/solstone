@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import traceback
 from typing import Any, Callable, Optional
 
@@ -16,7 +17,7 @@ from fastmcp import Client
 from google import genai
 from google.genai import types
 
-from .agents import BaseAgentSession, JSONEventCallback
+from .agents import BaseAgentSession, JSONEventCallback, ThinkingEvent
 from .models import GEMINI_FLASH
 from .utils import agent_instructions, create_mcp_client
 
@@ -146,8 +147,50 @@ class AgentSession(BaseAgentSession):
                 tool_config=types.ToolConfig(
                     function_calling_config=types.FunctionCallingConfig(mode="AUTO")
                 ),
+                thinking_config=types.ThinkingConfig(
+                    include_thoughts=True,
+                    thinking_budget=-1  # Enable dynamic thinking
+                ) if hasattr(types, 'ThinkingConfig') else None,
             )
             response = await self.chat.send_message(prompt, config=cfg)
+            
+            # Extract thinking content from response
+            if hasattr(response, 'candidates') and response.candidates:
+                for candidate in response.candidates:
+                    # Check for thinking content in candidate
+                    if hasattr(candidate, 'thought') and candidate.thought:
+                        thinking_event: ThinkingEvent = {
+                            "event": "thinking",
+                            "ts": int(time.time() * 1000),
+                            "summary": candidate.thought,
+                            "model": self.model
+                        }
+                        self._callback.emit(thinking_event)
+                    
+                    # Also check content parts for thinking
+                    if hasattr(candidate, 'content') and candidate.content:
+                        if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                            for part in candidate.content.parts:
+                                # Check if this part contains thinking content
+                                if hasattr(part, 'thought') and part.thought and hasattr(part, 'text') and part.text:
+                                    thinking_event: ThinkingEvent = {
+                                        "event": "thinking",
+                                        "ts": int(time.time() * 1000),
+                                        "summary": part.text,
+                                        "model": self.model
+                                    }
+                                    self._callback.emit(thinking_event)
+            
+            # Also check for thinking at the response level
+            if hasattr(response, 'thought') and response.thought:
+                thinking_event: ThinkingEvent = {
+                    "event": "thinking",
+                    "ts": int(time.time() * 1000),
+                    "summary": response.thought,
+                    "model": self.model
+                }
+                self._callback.emit(thinking_event)
+            
             text = response.text
             self._callback.emit({"event": "finish", "result": text})
             self._history.append({"role": "user", "content": prompt})

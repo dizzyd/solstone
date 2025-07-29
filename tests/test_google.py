@@ -51,6 +51,7 @@ def _setup_genai_stub(monkeypatch):
         GenerateContentConfig=lambda **k: SimpleNamespace(**k),
         ToolConfig=lambda **k: SimpleNamespace(**k),
         FunctionCallingConfig=lambda **k: SimpleNamespace(**k),
+        ThinkingConfig=lambda **k: SimpleNamespace(**k),
         Content=lambda **k: SimpleNamespace(**k),
         Part=lambda **k: SimpleNamespace(**k),
     )
