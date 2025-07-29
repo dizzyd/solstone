@@ -13,7 +13,12 @@ from syntok import segmenter
 
 from think.utils import get_topics, journal_log, setup_cli
 
-from .entities import find_day_dirs, load_cache, save_cache, scan_entities
+from .entities import (
+    find_day_dirs,
+    load_cache,
+    save_cache,
+)
+from .entities import scan_entities as scan_entities_cache
 
 INDEX_DIR = "indexer"
 
@@ -22,6 +27,7 @@ DB_NAMES = {
     "summaries": "summaries.sqlite",
     "events": "events.sqlite",
     "transcripts": "transcripts.sqlite",
+    "entities": "entities.sqlite",
 }
 
 # SQL statements to create required tables per index
@@ -61,6 +67,14 @@ SCHEMAS = {
         """
         CREATE VIRTUAL TABLE IF NOT EXISTS transcripts_text USING fts5(
             content, path UNINDEXED, day UNINDEXED, time UNINDEXED, type UNINDEXED
+        )
+        """,
+    ],
+    "entities": [
+        "CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, mtime INTEGER)",
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS entities_text USING fts5(
+            type, name, desc, path UNINDEXED, day UNINDEXED
         )
         """,
     ],
@@ -362,6 +376,87 @@ def _parse_screen_diff(path: str) -> List[str]:
     return texts
 
 
+ENTITY_ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
+
+
+def parse_entity_line(line: str) -> Tuple[str, str, str] | None:
+    """Parse a single line from an ``entities.md`` file."""
+    cleaned = line.replace("**", "")
+    match = ENTITY_ITEM_RE.match(cleaned)
+    if not match:
+        return None
+
+    text = match.group(1).strip()
+    if ":" not in text:
+        return None
+
+    etype, rest = text.split(":", 1)
+    rest = rest.strip()
+    if " - " in rest:
+        name, desc = rest.split(" - ", 1)
+    else:
+        name, desc = rest, ""
+
+    return etype.strip(), name.strip(), desc.strip()
+
+
+def parse_entities(path: str) -> List[Tuple[str, str, str]]:
+    """Return parsed entity tuples from ``entities.md`` inside ``path``."""
+    items: List[Tuple[str, str, str]] = []
+    valid_types = {"Person", "Company", "Project", "Tool"}
+
+    file_path = os.path.join(path, "entities.md")
+    if not os.path.isfile(file_path):
+        return items
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not ENTITY_ITEM_RE.match(line.replace("**", "")):
+                continue
+            parsed = parse_entity_line(line)
+            if not parsed:
+                continue
+            etype, name, desc = parsed
+            if etype not in valid_types:
+                continue
+            items.append((etype, name, desc))
+
+    return items
+
+
+def find_entity_files(journal: str) -> Dict[str, str]:
+    """Return mapping of entity file paths relative to ``journal``."""
+    files: Dict[str, str] = {}
+    top_path = os.path.join(journal, "entities.md")
+    if os.path.isfile(top_path):
+        files["entities.md"] = top_path
+
+    for day, path in find_day_dirs(journal).items():
+        md_path = os.path.join(path, "entities.md")
+        if os.path.isfile(md_path):
+            files[os.path.join(day, "entities.md")] = md_path
+
+    return files
+
+
+def _index_entities(
+    conn: sqlite3.Connection, rel: str, path: str, verbose: bool
+) -> None:
+    """Index parsed entities from ``entities.md`` file."""
+    logger = logging.getLogger(__name__)
+    entries = parse_entities(os.path.dirname(path))
+    day = rel.split(os.sep, 1)[0] if os.sep in rel else ""
+    for etype, name, desc in entries:
+        conn.execute(
+            (
+                "INSERT INTO entities_text(type, name, desc, path, day) VALUES (?, ?, ?, ?, ?)"
+            ),
+            (etype, name, desc, rel, day),
+        )
+    if verbose:
+        logger.info("  indexed %s entities", len(entries))
+
+
 def _index_transcripts(
     conn: sqlite3.Connection, rel: str, path: str, verbose: bool
 ) -> None:
@@ -422,6 +517,26 @@ def scan_transcripts(journal: str, verbose: bool = False) -> bool:
             conn.commit()
             changed = True
         conn.close()
+    return changed
+
+
+def scan_entities(journal: str, verbose: bool = False) -> bool:
+    """Index entities from ``entities.md`` files across the journal."""
+    logger = logging.getLogger(__name__)
+    conn, _ = get_index(index="entities", journal=journal)
+    files = find_entity_files(journal)
+    if files:
+        logger.info("\nIndexing %s entity files...", len(files))
+    changed = _scan_files(
+        conn,
+        files,
+        "DELETE FROM entities_text WHERE path=?",
+        _index_entities,
+        verbose,
+    )
+    if changed:
+        conn.commit()
+    conn.close()
     return changed
 
 
@@ -642,6 +757,69 @@ def search_transcripts(
     return total, results[start:end]
 
 
+def search_entities(
+    query: str,
+    limit: int = 5,
+    offset: int = 0,
+    *,
+    day: str | None = None,
+    etype: str | None = None,
+    name: str | None = None,
+) -> tuple[int, List[Dict[str, Any]]]:
+    """Search the entities index and return total count and results."""
+
+    conn, _ = get_index(index="entities")
+    db = sqlite_utils.Database(conn)
+
+    fts_parts = []
+    if query:
+        fts_parts.append(query)
+    if name:
+        fts_parts.append(f"name:{name}")
+    where_clause = "1"
+    params: List[str] = []
+    if fts_parts:
+        quoted = db.quote(" AND ".join(fts_parts))
+        where_clause = f"entities_text MATCH {quoted}"
+    if day:
+        where_clause += " AND day=?"
+        params.append(day)
+    if etype:
+        where_clause += " AND type=?"
+        params.append(etype)
+
+    total = conn.execute(
+        f"SELECT count(*) FROM entities_text WHERE {where_clause}", params
+    ).fetchone()[0]
+
+    cursor = conn.execute(
+        f"""
+        SELECT type, name, desc, path, day, bm25(entities_text) as rank
+        FROM entities_text WHERE {where_clause} ORDER BY rank LIMIT ? OFFSET ?
+        """,
+        params + [limit, offset],
+    )
+
+    results = []
+    for etype_val, name_val, desc_val, path_val, day_val, rank in cursor.fetchall():
+        results.append(
+            {
+                "id": f"{path_val}:{name_val}",
+                "text": desc_val or name_val,
+                "metadata": {
+                    "day": day_val,
+                    "path": path_val,
+                    "type": etype_val,
+                    "name": name_val,
+                },
+                "score": rank,
+            }
+        )
+
+    conn.close()
+    return total, results
+
+
 def _display_search_results(results: List[Dict[str, str]]) -> None:
     """Display search results in a consistent format."""
     for idx, r in enumerate(results, 1):
@@ -659,7 +837,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--index",
-        choices=["summaries", "events", "transcripts"],
+        choices=["summaries", "events", "transcripts", "entities"],
         required=True,
         help="Which index to operate on",
     )
@@ -710,11 +888,15 @@ def main() -> None:
                 journal_log("indexer events rescan ok")
         elif args.index == "summaries":
             cache = load_cache(journal)
-            changed = scan_entities(journal, cache)
+            changed = scan_entities_cache(journal, cache)
             changed |= scan_summaries(journal, verbose=args.verbose)
             if changed:
                 save_cache(journal, cache)
                 journal_log("indexer summaries rescan ok")
+        elif args.index == "entities":
+            changed = scan_entities(journal, verbose=args.verbose)
+            if changed:
+                journal_log("indexer entities rescan ok")
 
     # Handle query argument
     if args.query is not None:
@@ -724,6 +906,9 @@ def main() -> None:
         elif args.index == "events":
             search_func = search_events
             query_kwargs = {}
+        elif args.index == "entities":
+            search_func = search_entities
+            query_kwargs = {"day": args.day}
         else:
             search_func = search_summaries
             query_kwargs = {}

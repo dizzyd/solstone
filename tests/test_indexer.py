@@ -4,7 +4,7 @@ import os
 
 
 def test_parse_entity_line():
-    indexer = importlib.import_module("think.entities")
+    indexer = importlib.import_module("think.indexer")
     line = "* Person: John Doe - desc"
     etype, name, desc = indexer.parse_entity_line(line)
     assert etype == "Person" and name == "John Doe" and desc == "desc"
@@ -12,7 +12,7 @@ def test_parse_entity_line():
 
 
 def test_parse_entities(tmp_path):
-    indexer = importlib.import_module("think.entities")
+    indexer = importlib.import_module("think.indexer")
     md = tmp_path / "entities.md"
     md.write_text("* Person: Jane - info\n")
     result = indexer.parse_entities(str(tmp_path))
@@ -212,3 +212,25 @@ def test_search_raws_time_order(tmp_path):
     total, results = mod.search_transcripts("hello", limit=10, day="20240107")
     assert total == 2
     assert [r["metadata"]["time"] for r in results] == ["090000", "123000"]
+
+
+def test_entities_index(tmp_path):
+    mod = importlib.import_module("think.indexer")
+    journal = tmp_path
+    os.environ["JOURNAL_PATH"] = str(journal)
+
+    (journal / "entities.md").write_text("* Person: Alice - Example\n")
+    day = journal / "20240108"
+    day.mkdir()
+    (day / "entities.md").write_text("* Project: Sunstone\n")
+
+    mod.scan_entities(str(journal), verbose=True)
+
+    total, results = mod.search_entities("Alice")
+    assert total == 1
+    assert results[0]["metadata"]["day"] == ""
+
+    total_proj, results_proj = mod.search_entities("", etype="Project")
+    assert total_proj == 1
+    assert results_proj[0]["metadata"]["day"] == "20240108"
+    assert (journal / "indexer" / "entities.sqlite").exists()
