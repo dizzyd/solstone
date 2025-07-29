@@ -832,6 +832,7 @@ def search_entities(
     day: str | None = None,
     etype: str | None = None,
     name: str | None = None,
+    top: bool | None = None,
 ) -> tuple[int, List[Dict[str, Any]]]:
     """Search the entities index and return total count and results."""
 
@@ -855,6 +856,9 @@ def search_entities(
     if etype:
         where_clause += " AND type=?"
         params.append(etype)
+    if top is not None:
+        where_clause += " AND top=?"
+        params.append(1 if top else 0)
 
     total_entities = conn.execute(
         f"SELECT count(*) FROM entities WHERE {where_clause}", params
@@ -901,6 +905,10 @@ def search_entities(
         appearance_offset = 0
         remaining_limit = limit - (total_entities - offset)
     else:
+        remaining_limit = 0
+
+    # Skip entity_appearances search if top is specified
+    if top is not None:
         remaining_limit = 0
 
     fts_clause = "1"
