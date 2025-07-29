@@ -112,3 +112,7 @@ Guide for updating:
 - Fixed Anthropic agent sessions to reconnect MCP client if the connection closes.
 - OpenAI chat backend now starts and stops its MCP server for each request,
   fixing cancel scope errors when switching sessions.
+
+## 2025-07-29
+
+- Added `entities` index to `think.indexer` with FTS search of `entities.md` files.
