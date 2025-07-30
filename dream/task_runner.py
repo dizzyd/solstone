@@ -12,7 +12,6 @@ from simple_websocket import ConnectionClosed
 
 from . import state
 from .tasks import task_manager
-from .views.entities import reload_entities
 
 
 def _run_command(
@@ -95,41 +94,11 @@ def run_task(
     with contextlib.redirect_stdout(out_logger), contextlib.redirect_stderr(err_logger):
         try:
             if name == "reindex":
-                code = 0
-                for idx_name in ["summaries", "events", "transcripts"]:
-                    args = [
-                        sys.executable,
-                        "-m",
-                        "think.indexer",
-                        "--index",
-                        idx_name,
-                        "--rescan",
-                        "--verbose",
-                    ]
-                    commands.append(" ".join(args))
-                    code = (
-                        _run_command(args, logger, stop)
-                        if use_stop
-                        else _run_command(args, logger)
-                    )
-                    if code != 0:
-                        break
-            elif name == "summary":
-                args = ["think-journal-stats", "--verbose"]
-                commands.append(" ".join(args))
-                code = (
-                    _run_command(args, logger, stop)
-                    if use_stop
-                    else _run_command(args, logger)
-                )
-            elif name == "reload_entities":
                 args = [
                     sys.executable,
                     "-m",
                     "think.indexer",
-                    "--index",
-                    "entities",
-                    "--rescan",
+                    "--rescan-all",
                     "--verbose",
                 ]
                 commands.append(" ".join(args))
@@ -138,7 +107,14 @@ def run_task(
                     if use_stop
                     else _run_command(args, logger)
                 )
-                reload_entities()
+            elif name == "summary":
+                args = ["think-journal-stats", "--verbose"]
+                commands.append(" ".join(args))
+                code = (
+                    _run_command(args, logger, stop)
+                    if use_stop
+                    else _run_command(args, logger)
+                )
             elif name == "hear_repair":
                 if not day:
                     raise ValueError("day required")

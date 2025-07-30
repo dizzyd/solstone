@@ -18,7 +18,6 @@ pre { background:#f5f5f5; padding:0.5em; }
   <h1>Admin</h1>
   <button id="reindexBtn">Reindex</button>
   <button id="summaryBtn">Refresh Summary</button>
-  <button id="entitiesBtn">Reload Entities</button>
   <pre id="status"></pre>
   {% set cats = ['hear','see','reduce','ponder','entity'] %}
   <div class="tabs">
@@ -83,7 +82,6 @@ function runTask(data){
 }
 document.getElementById('reindexBtn').onclick=()=>runTask({task:'reindex',src:'admin'});
 document.getElementById('summaryBtn').onclick=()=>runTask({task:'summary',src:'admin'});
-document.getElementById('entitiesBtn').onclick=()=>runTask({task:'reload_entities',src:'admin'});
 function loadLog(){
   fetch('{{ url_for('admin.task_log') }}').then(r=>r.json()).then(data=>{
     const pre=document.getElementById('logOutput');

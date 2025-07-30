@@ -65,10 +65,6 @@ def refresh_summary() -> Any:
     return jsonify({"status": "ok"})
 
 
-@bp.route("/admin/api/reload_entities", methods=["POST"])
-def reload_entities_view() -> Any:
-    run_task("reload_entities")
-    return jsonify({"status": "ok"})
 
 
 def _valid_day(day: str) -> bool:
