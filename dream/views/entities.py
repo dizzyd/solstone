@@ -121,11 +121,35 @@ def api_top_generate() -> Any:
     payload = request.get_json(force=True)
     etype = payload.get("type")
     name = payload.get("name")
-    # Get entity info from the indexer search
-    _total, results = search_entities("", limit=1, etype=etype, name=name)
-    info = results[0]["metadata"] if results else None
+    # Get all entity appearances to collect descriptions
+    _total, results = search_entities("", limit=1000, etype=etype, name=name, order="day")
+    if not results:
+        return ("", 400)
+
+    # Build info structure compatible with generate_top_summary
+    descriptions = {}
+    primary = ""
+    for result in results:
+        meta = result["metadata"]
+        day = meta.get("day")
+        text = result.get("text", "")
+        if day and text and text != name:  # Skip empty descriptions and just the name
+            descriptions[day] = text
+        elif not day and text and text != name:  # Top-level entity
+            primary = text
+
+    # If no primary description from top-level, use the most recent daily description
+    if not primary and descriptions:
+        latest_day = max(descriptions.keys())
+        primary = descriptions[latest_day]
+
+    info = {
+        "descriptions": descriptions,
+        "primary": primary
+    }
+
     api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key or info is None:
+    if not api_key:
         return ("", 400)
     try:
         desc = generate_top_summary(info, api_key)
