@@ -64,14 +64,22 @@ class ToolExecutor:
                     name=tool_use.name,
                     arguments=tool_use.input,
                 )
+            # Extract content from CallToolResult if needed
+            if hasattr(result, 'content'):
+                # MCP CallToolResult object
+                result_data = result.content
+            else:
+                # Direct result (dict, string, etc.)
+                result_data = result
+                
             self.callback.emit(
                 {
                     "event": "tool_end",
                     "tool": tool_use.name,
-                    "result": result,
+                    "result": result_data,
                 }
             )
-            content = result if isinstance(result, str) else json.dumps(result)
+            content = result_data if isinstance(result_data, str) else json.dumps(result_data)
         except Exception as exc:  # pragma: no cover - unexpected
             self.callback.emit(
                 {
