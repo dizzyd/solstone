@@ -4,40 +4,417 @@
 {% block head %}
 <style>
 .container { padding: 0 1em; }
-table { border-collapse: collapse; width:100%; table-layout: fixed; }
-th, td { padding:4px 8px; border-bottom:1px solid #ddd; white-space: nowrap; }
-td:last-child { overflow:hidden; text-overflow:ellipsis; }
+
+/* Agent Cards */
+.agent-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.agent-card {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.agent-card:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.agent-card.selected {
+  border-color: #007bff;
+  background: #f8f9ff;
+  box-shadow: 0 0 0 1px #007bff;
+}
+
+.agent-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.agent-card p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.agent-card .view-details {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: #f0f0f0;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.agent-card:hover .view-details {
+  opacity: 1;
+}
+
+.agent-card .view-details:hover {
+  background: #007bff;
+  color: white;
+}
+
+/* Input Form */
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  margin-bottom: 2rem;
+}
+
+.input-area textarea {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.input-area button {
+  padding: 0.75rem 1.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.input-area button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.input-area button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.selection-status {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.selection-status.required {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+/* Session History Table */
+table { 
+  border-collapse: collapse; 
+  width: 100%; 
+  table-layout: fixed; 
+  margin-top: 2rem;
+}
+th, td { 
+  padding: 4px 8px; 
+  border-bottom: 1px solid #ddd; 
+  white-space: nowrap; 
+}
+td:last-child { 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+
+/* Modal Styling (reused from entities.html) */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+  background-color: white;
+  margin: 5% auto;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  position: relative;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: white;
+  z-index: 3;
+}
+
+.close:hover { 
+  color: #000; 
+}
+
+.modal-header {
+  padding: 20px 40px 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background: white;
+  border-radius: 8px 8px 0 0;
+}
+
+.modal-header h3 { 
+  margin: 0; 
+  color: #333; 
+}
+
+.modal-body {
+  max-height: calc(80vh - 80px);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.modal-body .markdown-content h1,
+.modal-body .markdown-content h2,
+.modal-body .markdown-content h3,
+.modal-body .markdown-content h4,
+.modal-body .markdown-content h5,
+.modal-body .markdown-content h6 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #333;
+}
+
+.modal-body .markdown-content p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.modal-body .markdown-content ul,
+.modal-body .markdown-content ol {
+  margin-bottom: 1rem;
+  padding-left: 2rem;
+}
+
+.modal-body .markdown-content code {
+  background: #f8f9fa;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+.modal-body .markdown-content pre {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
 </style>
 {% endblock %}
 {% block body %}
 <div class="container">
+  <h1>Agents</h1>
+  
+  <!-- Agent Selection Cards -->
+  <div id="agentCards" class="agent-cards"></div>
+  
+  <!-- Selection Status -->
+  <div id="selectionStatus" class="selection-status required">
+    Please select an agent to continue.
+  </div>
+  
+  <!-- Input Form -->
   <form id="agentForm" class="input-area">
-    <textarea id="agentInput" rows="3" placeholder="Ask the agents..."></textarea>
-    <button type="submit">✨</button>
+    <textarea id="agentInput" rows="3" placeholder="Ask the selected agent..."></textarea>
+    <button type="submit" disabled>✨</button>
   </form>
+  
+  <!-- Session History -->
   <table id="agentTable"></table>
 </div>
+
+<!-- Agent Details Modal -->
+<div id="agentModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <div class="modal-header">
+      <h3 id="modalTitle"></h3>
+    </div>
+    <div class="modal-body">
+      <div id="modalContent" class="markdown-content"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-  document.getElementById('agentForm').onsubmit = function(e){
-    e.preventDefault();
-    alert('Coming soon!');
-  };
+let availableAgents = [];
+let selectedAgent = null;
 
-  function buildRow(a){
-    const tr=document.createElement('tr');
-    const short=a.prompt.length>80?a.prompt.slice(0,80)+'…':a.prompt;
-    tr.innerHTML=`<td>${a.since}</td><td>${a.model}</td><td>${a.persona}</td><td title="${a.prompt}">${short}</td>`;
-    return tr;
-  }
-
-  function loadAgents(){
-    fetch('{{ url_for('agents.agents_list') }}').then(r=>r.json()).then(data=>{
-      const table=document.getElementById('agentTable');
-      table.innerHTML='<tr><th>Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
-      data.forEach(a=>table.appendChild(buildRow(a)));
+// Load available agents and render cards
+function loadAvailableAgents() {
+  fetch('{{ url_for('agents.available_agents') }}')
+    .then(r => r.json())
+    .then(agents => {
+      availableAgents = agents;
+      renderAgentCards();
+      // Auto-select first agent if only one available
+      if (agents.length === 1) {
+        selectAgent(agents[0].id);
+      }
     });
-  }
+}
 
-  loadAgents();
+// Render agent selection cards
+function renderAgentCards() {
+  const container = document.getElementById('agentCards');
+  container.innerHTML = '';
+  
+  availableAgents.forEach(agent => {
+    const card = document.createElement('div');
+    card.className = 'agent-card';
+    card.dataset.agentId = agent.id;
+    card.innerHTML = `
+      <button class="view-details" onclick="viewAgentDetails('${agent.id}', event)">View Details</button>
+      <h3>${agent.title}</h3>
+      <p>${agent.description}</p>
+    `;
+    
+    card.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('view-details')) {
+        selectAgent(agent.id);
+      }
+    });
+    
+    container.appendChild(card);
+  });
+}
+
+// Select an agent
+function selectAgent(agentId) {
+  selectedAgent = agentId;
+  
+  // Update card selection
+  document.querySelectorAll('.agent-card').forEach(card => {
+    card.classList.toggle('selected', card.dataset.agentId === agentId);
+  });
+  
+  // Update form state
+  const submitBtn = document.querySelector('#agentForm button');
+  const statusDiv = document.getElementById('selectionStatus');
+  
+  if (selectedAgent) {
+    submitBtn.disabled = false;
+    const agent = availableAgents.find(a => a.id === agentId);
+    statusDiv.textContent = `Selected: ${agent.title}`;
+    statusDiv.className = 'selection-status';
+  } else {
+    submitBtn.disabled = true;
+    statusDiv.textContent = 'Please select an agent to continue.';
+    statusDiv.className = 'selection-status required';
+  }
+}
+
+// View agent details in modal
+function viewAgentDetails(agentId, event) {
+  event.stopPropagation();
+  
+  const agent = availableAgents.find(a => a.id === agentId);
+  if (!agent) return;
+  
+  document.getElementById('modalTitle').textContent = agent.title;
+  document.getElementById('modalContent').innerHTML = '<p>Loading...</p>';
+  document.getElementById('agentModal').style.display = 'block';
+  
+  // Load and render agent content
+  fetch(`{{ url_for('agents.agent_content', agent_id='') }}${agentId}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('modalContent').innerHTML = `<p>Error: ${data.error}</p>`;
+      } else {
+        // Convert markdown to HTML
+        const html = marked.parse(data.content);
+        document.getElementById('modalContent').innerHTML = html;
+      }
+    })
+    .catch(err => {
+      document.getElementById('modalContent').innerHTML = `<p>Error loading content: ${err.message}</p>`;
+    });
+}
+
+// Form submission
+document.getElementById('agentForm').onsubmit = function(e) {
+  e.preventDefault();
+  
+  if (!selectedAgent) {
+    alert('Please select an agent first.');
+    return;
+  }
+  
+  const input = document.getElementById('agentInput');
+  if (!input.value.trim()) {
+    alert('Please enter a message.');
+    return;
+  }
+  
+  // TODO: Backend integration will be handled later
+  alert(`Selected agent: ${selectedAgent}\nMessage: ${input.value}\n\nBackend integration coming soon!`);
+};
+
+// Modal close functionality
+document.querySelector('.close').onclick = function() {
+  document.getElementById('agentModal').style.display = 'none';
+};
+
+window.onclick = function(event) {
+  const modal = document.getElementById('agentModal');
+  if (event.target == modal) {
+    modal.style.display = 'none';
+  }
+};
+
+// Session history table functions
+function buildRow(a) {
+  const tr = document.createElement('tr');
+  const short = a.prompt.length > 80 ? a.prompt.slice(0, 80) + '…' : a.prompt;
+  tr.innerHTML = `<td>${a.since}</td><td>${a.model}</td><td>${a.persona}</td><td title="${a.prompt}">${short}</td>`;
+  return tr;
+}
+
+function loadAgentSessions() {
+  fetch('{{ url_for('agents.agents_list') }}')
+    .then(r => r.json())
+    .then(data => {
+      const table = document.getElementById('agentTable');
+      table.innerHTML = '<tr><th>Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
+      data.forEach(a => table.appendChild(buildRow(a)));
+    });
+}
+
+// Initialize
+loadAvailableAgents();
+loadAgentSessions();
 </script>
 {% endblock %}
