@@ -13,7 +13,6 @@ import time
 import traceback
 from typing import Any, Callable, Optional
 
-from fastmcp import Client
 from google import genai
 from google.genai import types
 
@@ -68,46 +67,11 @@ class AgentSession(BaseAgentSession):
         self.model = model
         self.max_tokens = max_tokens
         self._callback = JSONEventCallback(on_event)
-        self._mcp: Client | None = None
-        self.client: genai.Client | None = None
-        self.chat: genai.chats.AsyncChat | None = None
-        self.system_instruction = ""
         self._history: list[dict[str, str]] = []
         self.persona = persona
 
     async def __aenter__(self) -> "AgentSession":
-        try:
-            self._mcp = create_mcp_client("fastmcp")
-            await self._mcp.__aenter__()
-
-            api_key = os.getenv("GOOGLE_API_KEY")
-            if not api_key:
-                raise RuntimeError("GOOGLE_API_KEY not set")
-            self.client = genai.Client(api_key=api_key)
-
-            self.system_instruction, first_user, _ = agent_instructions(self.persona)
-
-            ToolLoggingHooks(self._callback).attach(self._mcp.session)
-            self.chat = self.client.aio.chats.create(
-                model=self.model,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.system_instruction
-                ),
-                history=[
-                    types.Content(role="user", parts=[types.Part(text=first_user)])
-                ],
-            )
-            return self
-        except Exception as exc:
-            self._callback.emit(
-                {
-                    "event": "error",
-                    "error": str(exc),
-                    "trace": traceback.format_exc(),
-                }
-            )
-            setattr(exc, "_evented", True)
-            raise
+        return self
 
     @property
     def history(self) -> list[dict[str, str]]:
@@ -117,21 +81,19 @@ class AgentSession(BaseAgentSession):
 
     def add_history(self, role: str, text: str) -> None:
         """Record a message to the chat history."""
-        if self.chat is not None:
-            self.chat.record_history(
-                types.Content(role=role, parts=[types.Part(text=text)])
-            )
         self._history.append({"role": role, "content": text})
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        if self._mcp:
-            await self._mcp.__aexit__(exc_type, exc, tb)
+        pass
 
     async def run(self, prompt: str) -> str:
         """Run ``prompt`` through Gemini and return the result."""
         try:
-            if self._mcp is None or self.client is None or self.chat is None:
-                raise RuntimeError("AgentSession not initialized")
+            # Check API key
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                raise RuntimeError("GOOGLE_API_KEY not set")
+
             self._callback.emit(
                 {
                     "event": "start",
@@ -140,62 +102,90 @@ class AgentSession(BaseAgentSession):
                     "model": self.model,
                 }
             )
-            session = self._mcp.session
-            cfg = types.GenerateContentConfig(
-                max_output_tokens=self.max_tokens,
-                tools=[session],
-                tool_config=types.ToolConfig(
-                    function_calling_config=types.FunctionCallingConfig(mode="AUTO")
-                ),
-                thinking_config=types.ThinkingConfig(
-                    include_thoughts=True,
-                    thinking_budget=-1  # Enable dynamic thinking
-                ) if hasattr(types, 'ThinkingConfig') else None,
-            )
-            response = await self.chat.send_message(prompt, config=cfg)
-            
-            # Extract thinking content from response
-            if hasattr(response, 'candidates') and response.candidates:
-                for candidate in response.candidates:
-                    # Check for thinking content in candidate
-                    if hasattr(candidate, 'thought') and candidate.thought:
-                        thinking_event: ThinkingEvent = {
-                            "event": "thinking",
-                            "ts": int(time.time() * 1000),
-                            "summary": candidate.thought,
-                            "model": self.model
-                        }
-                        self._callback.emit(thinking_event)
-                    
-                    # Also check content parts for thinking
-                    if hasattr(candidate, 'content') and candidate.content:
-                        if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                            for part in candidate.content.parts:
-                                # Check if this part contains thinking content
-                                if hasattr(part, 'thought') and part.thought and hasattr(part, 'text') and part.text:
-                                    thinking_event: ThinkingEvent = {
-                                        "event": "thinking",
-                                        "ts": int(time.time() * 1000),
-                                        "summary": part.text,
-                                        "model": self.model
-                                    }
-                                    self._callback.emit(thinking_event)
-            
-            # Also check for thinking at the response level
-            if hasattr(response, 'thought') and response.thought:
-                thinking_event: ThinkingEvent = {
-                    "event": "thinking",
-                    "ts": int(time.time() * 1000),
-                    "summary": response.thought,
-                    "model": self.model
-                }
-                self._callback.emit(thinking_event)
-            
-            text = response.text
-            self._callback.emit({"event": "finish", "result": text})
-            self._history.append({"role": "user", "content": prompt})
-            self._history.append({"role": "assistant", "content": text})
-            return text
+
+            # Create fresh client and MCP for each run (prevents event loop issues)
+            async with create_mcp_client("fastmcp") as mcp:
+                client = genai.Client(api_key=api_key)
+
+                # Get system instruction and build history
+                system_instruction, first_user, _ = agent_instructions(self.persona)
+
+                # Build history for chat
+                history = []
+                if first_user:
+                    history.append(
+                        types.Content(role="user", parts=[types.Part(text=first_user)])
+                    )
+
+                # Add existing conversation history
+                for msg in self._history:
+                    role = msg["role"]
+                    # Google genai uses "model" instead of "assistant"
+                    if role == "assistant":
+                        role = "model"
+                    content = msg["content"]
+                    history.append(
+                        types.Content(role=role, parts=[types.Part(text=content)])
+                    )
+
+                # Create fresh chat session
+                chat = client.aio.chats.create(
+                    model=self.model,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction
+                    ),
+                    history=history,
+                )
+
+                # Attach tool logging hooks to the MCP session
+                ToolLoggingHooks(self._callback).attach(mcp.session)
+
+                cfg = types.GenerateContentConfig(
+                    max_output_tokens=self.max_tokens,
+                    tools=[mcp.session],
+                    tool_config=types.ToolConfig(
+                        function_calling_config=types.FunctionCallingConfig(mode="AUTO")
+                    ),
+                    thinking_config=(
+                        types.ThinkingConfig(
+                            include_thoughts=True,
+                            thinking_budget=-1,  # Enable dynamic thinking
+                        )
+                        if hasattr(types, "ThinkingConfig")
+                        else None
+                    ),
+                )
+
+                response = await chat.send_message(prompt, config=cfg)
+
+                # Extract thinking content from response
+                if hasattr(response, "candidates") and response.candidates:
+                    for candidate in response.candidates:
+                        # Check for thinking content in candidate
+                        if hasattr(candidate, "thought") and candidate.thought:
+                            thinking_event: ThinkingEvent = {
+                                "event": "thinking",
+                                "ts": int(time.time() * 1000),
+                                "summary": candidate.thought,
+                                "model": self.model,
+                            }
+                            self._callback.emit(thinking_event)
+
+                # Also check for thinking at the response level
+                if hasattr(response, "thought") and response.thought:
+                    thinking_event: ThinkingEvent = {
+                        "event": "thinking",
+                        "ts": int(time.time() * 1000),
+                        "summary": response.thought,
+                        "model": self.model,
+                    }
+                    self._callback.emit(thinking_event)
+
+                text = response.text
+                self._callback.emit({"event": "finish", "result": text})
+                self._history.append({"role": "user", "content": prompt})
+                self._history.append({"role": "assistant", "content": text})
+                return text
         except Exception as exc:
             self._callback.emit(
                 {
