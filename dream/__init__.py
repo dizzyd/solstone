@@ -63,7 +63,6 @@ def create_app(journal: str = "", password: str = "") -> Flask:
     if journal:
         state.journal_root = journal
         task_manager.load_cached()
-        entities_view.reload_entities()
         state.occurrences_index = build_occurrence_index(journal)
     return app
 
