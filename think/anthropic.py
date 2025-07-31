@@ -64,12 +64,24 @@ class ToolExecutor:
                 )
             # Extract content from CallToolResult if needed
             if hasattr(result, 'content'):
-                # MCP CallToolResult object
-                result_data = result.content
+                # MCP CallToolResult object - extract text from TextContent objects
+                if isinstance(result.content, list):
+                    # Handle array of content items
+                    extracted_content = []
+                    for item in result.content:
+                        if hasattr(item, 'text'):
+                            # TextContent object - extract the text
+                            extracted_content.append(item.text)
+                        else:
+                            # Other content types - keep as is
+                            extracted_content.append(item)
+                    # If single text content, return as string, otherwise as list
+                    result_data = extracted_content[0] if len(extracted_content) == 1 else extracted_content
+                else:
+                    result_data = result.content
             else:
                 # Direct result (dict, string, etc.)
                 result_data = result
-                
             self.callback.emit({
                 "event": "tool_end",
                 "tool": tool_use.name,
@@ -121,12 +133,12 @@ async def run_agent(
 ) -> str:
     """Run a single prompt through the Anthropic Claude agent and return the response."""
     callback = JSONEventCallback(on_event)
-    
+
     try:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
-        
+
         client = AsyncAnthropic(api_key=api_key)
 
         callback.emit({
@@ -155,7 +167,7 @@ async def run_agent(
                         "type": "enabled",
                         "budget_tokens": min(10000, max_tokens - 1000)  # Reserve some tokens for final response
                     }
-                
+
                 response = await client.messages.create(
                     model=model,
                     max_tokens=max_tokens,
