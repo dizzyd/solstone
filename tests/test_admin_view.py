@@ -69,27 +69,7 @@ def test_admin_actions(monkeypatch, tmp_path):
         sys.executable,
         "-m",
         "think.indexer",
-        "--index",
-        "summaries",
-        "--rescan",
-        "--verbose",
-    ] in called
-    assert [
-        sys.executable,
-        "-m",
-        "think.indexer",
-        "--index",
-        "events",
-        "--rescan",
-        "--verbose",
-    ] in called
-    assert [
-        sys.executable,
-        "-m",
-        "think.indexer",
-        "--index",
-        "transcripts",
-        "--rescan",
+        "--rescan-all",
         "--verbose",
     ] in called
 
@@ -98,20 +78,6 @@ def test_admin_actions(monkeypatch, tmp_path):
         resp = review.refresh_summary()
     assert resp.json["status"] == "ok"
     assert ["think-journal-stats", "--verbose"] in called
-
-    called.clear()
-    with review.app.test_request_context("/admin/api/reload_entities", method="POST"):
-        resp = review.reload_entities_view()
-    assert resp.json["status"] == "ok"
-    assert [
-        sys.executable,
-        "-m",
-        "think.indexer",
-        "--index",
-        "entities",
-        "--rescan",
-        "--verbose",
-    ] in called
 
 
 def test_task_log_api(monkeypatch, tmp_path):
