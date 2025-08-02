@@ -134,29 +134,20 @@ def create_plan() -> object:
         return jsonify({"error": "Request is required"}), 400
     
     user_request = data["request"]
-    backend = data.get("backend", "openai")
     model = data.get("model", "")
-    max_tokens = data.get("max_tokens", 0)
     
     try:
         # Import planner module
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), ".."))
-        from think.planner import create_plan
+        from think.planner import generate_plan
         
-        # Run the planning async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            plan = loop.run_until_complete(create_plan(
-                user_request,
-                backend=backend,
-                model=model,
-                max_tokens=max_tokens
-            ))
-            return jsonify({"plan": plan})
-        finally:
-            loop.close()
+        # Generate the plan (synchronous)
+        if model:
+            plan = generate_plan(user_request, model=model)
+        else:
+            plan = generate_plan(user_request)
+        return jsonify({"plan": plan})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

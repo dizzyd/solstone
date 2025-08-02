@@ -428,6 +428,10 @@ tr a:hover {
       </div>
       
       <div id="configTab" class="tab-content">
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+          <em>Note: Plan generation uses Gemini. Configuration below applies to agent execution.</em>
+        </p>
+        
         <div class="config-section">
           <label for="agentBackend">Agent Backend</label>
           <select id="agentBackend">
@@ -560,9 +564,7 @@ async function createPlan(userRequest) {
       },
       body: JSON.stringify({
         request: userRequest,
-        backend: 'openai', // Default for now
-        model: '',
-        max_tokens: 0
+        model: '' // Uses Gemini Pro by default
       })
     });
     
