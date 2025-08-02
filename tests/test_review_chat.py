@@ -26,35 +26,19 @@ def test_send_message_no_key(monkeypatch):
 def test_send_message_success(monkeypatch):
     review = importlib.import_module("dream")
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    class DummyAgent:
-        def __init__(self, *a, **k):
-            self.history = []
+    async def dummy_run_agent(prompt, backend, on_event):
+        dummy_run_agent.called = (prompt, backend)
+        return "pong"
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def run(self, prompt):
-            self.history.append({"role": "user", "content": prompt})
-            self.history.append({"role": "assistant", "content": "pong"})
-            return "pong"
-
-    monkeypatch.setattr("dream.views.chat.GoogleAgent", DummyAgent)
-    monkeypatch.setattr("dream.views.chat.OpenAIAgent", DummyAgent)
+    monkeypatch.setattr("dream.views.chat.run_agent", dummy_run_agent)
 
     with review.app.test_request_context(
         "/chat/api/send", method="POST", json={"message": "hi", "backend": "google"}
     ):
         resp = asyncio.run(review.send_message())
-    assert resp.json == {"text": "pong"}
-    assert review.state.chat_agent.history[-2:] == [
-        {"role": "user", "content": "hi"},
-        {"role": "assistant", "content": "pong"},
-    ]
+    assert resp.json == {"text": "pong", "html": "<p>pong</p>"}
+    assert dummy_run_agent.called == ("hi", "google")
 
 
 def test_send_message_openai(monkeypatch):
@@ -62,102 +46,52 @@ def test_send_message_openai(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    class DummyAgent:
-        def __init__(self, *a, **k):
-            self.history = []
+    called = {}
 
-        async def __aenter__(self):
-            return self
+    async def dummy_run_agent(prompt, backend, on_event):
+        called["backend"] = backend
+        return "pong"
 
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def run(self, prompt):
-            self.history.append({"role": "user", "content": prompt})
-            self.history.append({"role": "assistant", "content": "pong"})
-            return "pong"
-
-    monkeypatch.setattr("dream.views.chat.GoogleAgent", DummyAgent)
-    monkeypatch.setattr("dream.views.chat.OpenAIAgent", DummyAgent)
+    monkeypatch.setattr("dream.views.chat.run_agent", dummy_run_agent)
 
     with review.app.test_request_context(
         "/chat/api/send", method="POST", json={"message": "hi", "backend": "openai"}
     ):
         resp = asyncio.run(review.send_message())
-    assert resp.json == {"text": "pong"}
-    assert review.state.chat_backend == "openai"
+    assert resp.json["text"] == "pong"
+    assert called["backend"] == "openai"
 
 
 def test_send_message_anthropic(monkeypatch):
     review = importlib.import_module("dream")
-    monkeypatch.setenv("GOOGLE_API_KEY", "x")
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    class DummyAgent:
-        def __init__(self, *a, **k):
-            self.history = []
+    called = {}
 
-        async def __aenter__(self):
-            return self
+    async def dummy_run_agent(prompt, backend, on_event):
+        called["backend"] = backend
+        return "pong"
 
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def run(self, prompt):
-            self.history.append({"role": "user", "content": prompt})
-            self.history.append({"role": "assistant", "content": "pong"})
-            return "pong"
-
-    monkeypatch.setattr("dream.views.chat.GoogleAgent", DummyAgent)
-    monkeypatch.setattr("dream.views.chat.OpenAIAgent", DummyAgent)
-    monkeypatch.setattr("dream.views.chat.ClaudeAgent", DummyAgent)
+    monkeypatch.setattr("dream.views.chat.run_agent", dummy_run_agent)
 
     with review.app.test_request_context(
         "/chat/api/send", method="POST", json={"message": "hi", "backend": "anthropic"}
     ):
         resp = asyncio.run(review.send_message())
-    assert resp.json == {"text": "pong"}
-    assert review.state.chat_backend == "anthropic"
+    assert resp.json["text"] == "pong"
+    assert called["backend"] == "anthropic"
 
 
 def test_history_and_clear(monkeypatch):
     review = importlib.import_module("dream")
-    monkeypatch.setenv("GOOGLE_API_KEY", "x")
-
-    class DummyAgent:
-        def __init__(self, *a, **k):
-            self.history = [
-                {"role": "user", "content": "u"},
-                {"role": "assistant", "content": "b"},
-            ]
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def run(self, prompt):
-            self.history.append({"role": "user", "content": prompt})
-            self.history.append({"role": "assistant", "content": "pong"})
-            return "pong"
-
-    review.state.chat_agent = DummyAgent()
 
     with review.app.test_request_context("/chat/api/history"):
         resp = review.chat_history()
-    assert resp.json == {
-        "history": [
-            {"role": "user", "text": "u"},
-            {"role": "assistant", "text": "b"},
-        ]
-    }
+    assert resp.json == {"history": []}
 
     with review.app.test_request_context("/chat/api/clear", method="POST"):
         resp = asyncio.run(review.clear_history())
     assert resp.json == {"ok": True}
-    assert review.state.chat_agent is None
 
 
 def test_tool_event_pushed(monkeypatch):
@@ -168,38 +102,25 @@ def test_tool_event_pushed(monkeypatch):
 
     monkeypatch.setattr("dream.views.chat.push_server.push", lambda e: events.append(e))
 
-    class DummyAgent:
-        def __init__(self, *a, **k):
-            self.history = []
-            self.cb = k.get("on_event")
+    async def dummy_run_agent(prompt, backend, on_event):
+        on_event(
+            {
+                "event": "tool_start",
+                "ts": int(time.time() * 1000),
+                "tool": "search_events",
+                "args": {"query": prompt},
+            }
+        )
+        return "pong"
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def run(self, prompt):
-            if self.cb:
-                self.cb(
-                    {
-                        "event": "tool_start",
-                        "ts": int(time.time() * 1000),
-                        "tool": "search_events",
-                        "args": {"query": prompt},
-                    }
-                )
-            self.history.append({"role": "user", "content": prompt})
-            self.history.append({"role": "assistant", "content": "pong"})
-            return "pong"
-
-    monkeypatch.setattr("dream.views.chat.GoogleAgent", DummyAgent)
+    monkeypatch.setattr("dream.views.chat.run_agent", dummy_run_agent)
 
     with review.app.test_request_context(
         "/chat/api/send", method="POST", json={"message": "hi", "backend": "google"}
     ):
         resp = asyncio.run(review.send_message())
 
-    assert resp.json == {"text": "pong"}
+    assert resp.json["text"] == "pong"
     assert events[0]["view"] == "chat"
+    assert events[0]["tool"] == "search_events"
     assert isinstance(events[0]["ts"], int)

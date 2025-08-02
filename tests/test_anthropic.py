@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from think.models import CLAUDE_SONNET_4
+
 
 async def run_main(mod, argv):
     sys.argv = argv
@@ -23,10 +25,14 @@ class DummyMessagesWithThinking:
     async def create(self, **kwargs):
         DummyMessagesWithThinking.kwargs = kwargs
         # Return response with both thinking and text content
-        return SimpleNamespace(content=[
-            SimpleNamespace(type="thinking", thinking="I need to analyze this step by step."),
-            SimpleNamespace(type="text", text="ok")
-        ])
+        return SimpleNamespace(
+            content=[
+                SimpleNamespace(
+                    type="thinking", thinking="I need to analyze this step by step."
+                ),
+                SimpleNamespace(type="text", text="ok"),
+            ]
+        )
 
 
 class DummyClient:
@@ -103,7 +109,7 @@ def test_claude_main(monkeypatch, tmp_path, capsys):
     assert isinstance(events[0]["ts"], int)
     assert events[0]["prompt"] == "hello"
     assert events[0]["persona"] == "default"
-    assert events[0]["model"] == "claude-opus-4-20250514"
+    assert events[0]["model"] == CLAUDE_SONNET_4
     assert events[-1]["event"] == "finish"
     assert isinstance(events[-1]["ts"], int)
     assert events[-1]["result"] == "ok"
@@ -142,7 +148,7 @@ def test_claude_outfile(monkeypatch, tmp_path):
     assert isinstance(events[0]["ts"], int)
     assert events[0]["prompt"] == "hello"
     assert events[0]["persona"] == "default"
-    assert events[0]["model"] == "claude-opus-4-20250514"
+    assert events[0]["model"] == CLAUDE_SONNET_4
     assert events[-1]["event"] == "finish"
     assert isinstance(events[-1]["ts"], int)
     assert events[-1]["result"] == "ok"
@@ -155,11 +161,11 @@ def test_claude_outfile(monkeypatch, tmp_path):
 
 def test_claude_thinking_events(monkeypatch, tmp_path, capsys):
     """Test that thinking events are properly emitted for Claude models."""
-    
+
     class DummyClientWithThinking:
         def __init__(self, *a, **k):
             self.messages = DummyMessagesWithThinking()
-    
+
     # Setup stubs with thinking support
     anthropic_mod = types.ModuleType("anthropic")
     anthropic_mod.AsyncAnthropic = DummyClientWithThinking
@@ -170,7 +176,7 @@ def test_claude_thinking_events(monkeypatch, tmp_path, capsys):
     anthropic_mod.types = types_mod
     monkeypatch.setitem(sys.modules, "anthropic", anthropic_mod)
     monkeypatch.setitem(sys.modules, "anthropic.types", types_mod)
-    
+
     _setup_fastmcp_stub(monkeypatch)
     sys.modules.pop("think.anthropic", None)
     importlib.reload(importlib.import_module("think.anthropic"))
@@ -188,19 +194,19 @@ def test_claude_thinking_events(monkeypatch, tmp_path, capsys):
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
-    
+
     # Check that we have start, thinking, and finish events
     assert events[0]["event"] == "start"
     assert isinstance(events[0]["ts"], int)
     assert events[0]["prompt"] == "hello"
-    
+
     # Look for thinking event
     thinking_events = [e for e in events if e["event"] == "thinking"]
     assert len(thinking_events) == 1
     assert thinking_events[0]["summary"] == "I need to analyze this step by step."
-    assert thinking_events[0]["model"] == "claude-opus-4-20250514"
+    assert thinking_events[0]["model"] == CLAUDE_SONNET_4
     assert isinstance(thinking_events[0]["ts"], int)
-    
+
     assert events[-1]["event"] == "finish"
     assert events[-1]["result"] == "ok"
 
