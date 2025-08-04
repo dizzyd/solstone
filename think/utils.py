@@ -3,12 +3,11 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 import zoneinfo
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from dotenv import load_dotenv
 from timefhuman import timefhuman
@@ -346,7 +345,7 @@ def get_matters(domain: str, *, limit: Optional[int] = None, offset: int = 0) ->
     -------
     dict[str, dict[str, object]]
         Dictionary where keys are matter timestamps and values contain
-        matter metadata from the .json file plus 'activity_log_path' field.
+        matter metadata from the matter.json file plus 'activity_log_path' field.
         Results are sorted by timestamp (newest first).
     """
     load_dotenv()
@@ -355,25 +354,25 @@ def get_matters(domain: str, *, limit: Optional[int] = None, offset: int = 0) ->
         raise RuntimeError("JOURNAL_PATH not set")
 
     domain_path = Path(journal) / "domains" / domain
-    matters_dir = domain_path / "matters"
     matters: dict[str, dict[str, object]] = {}
 
-    if not matters_dir.exists():
+    if not domain_path.exists():
         return matters
 
-    # Find all .json files (matter metadata)
-    json_files = list(matters_dir.glob("*.json"))
-    # Sort by filename (timestamp) in descending order (newest first)
-    json_files.sort(reverse=True)
+    # Find all timestamp directories (matters are now stored as directories)
+    timestamp_dirs = [d for d in domain_path.iterdir() if d.is_dir() and d.name.isdigit()]
+    # Sort by directory name (timestamp) in descending order (newest first)
+    timestamp_dirs.sort(key=lambda d: d.name, reverse=True)
 
     # Apply offset and limit
     start_idx = offset
-    end_idx = start_idx + limit if limit is not None else len(json_files)
-    json_files = json_files[start_idx:end_idx]
+    end_idx = start_idx + limit if limit is not None else len(timestamp_dirs)
+    timestamp_dirs = timestamp_dirs[start_idx:end_idx]
 
-    for json_path in json_files:
-        timestamp = json_path.stem
-        jsonl_path = matters_dir / f"{timestamp}.jsonl"
+    for matter_dir in timestamp_dirs:
+        timestamp = matter_dir.name
+        json_path = matter_dir / "matter.json"
+        jsonl_path = matter_dir / "matter.jsonl"
 
         try:
             with open(json_path, "r", encoding="utf-8") as f:

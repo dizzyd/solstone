@@ -20,7 +20,7 @@ Each domain is organized as `domains/<domain>/` where `<domain>` is a descriptiv
 
 - `domain.json` – metadata file with domain title and description.
 - `entities.md` – entities specific to this domain.
-- `matters/` – domain-specific sub-projects and focused topics.
+- `<timestamp>/` – individual matter directories for domain-specific sub-projects and focused topics.
 
 ### Domain metadata
 
@@ -45,20 +45,20 @@ The `entities.md` file follows the same format as the top-level entities file bu
 
 ### Domain matters
 
-Matters represent specific scoped topics, sub-projects, or focused areas of work within a domain. Each matter is stored as a pair of files in `domains/<domain>/matters/` using a timestamp-based ID system.
+Matters represent specific scoped topics, sub-projects, or focused areas of work within a domain. Each matter is stored as a directory within the domain using a timestamp-based ID system.
 
 #### Matter file structure
 
-Each matter consists of two files with the same timestamp ID:
+Each matter is organized as `domains/<domain>/<timestamp>/` where the timestamp serves as the matter ID. Within each matter directory:
 
-- `<timestamp>.json` – matter metadata including title, description, and other properties
-- `<timestamp>.jsonl` – chronological log of matter-related activities in JSON Lines format
+- `matter.json` – matter metadata including title, description, and other properties
+- `matter.jsonl` – chronological log of matter-related activities in JSON Lines format
 
-The timestamp follows the same format used for agents and tasks, ensuring unique identification and chronological ordering.
+The timestamp follows the same format used for agents and tasks, ensuring unique identification and chronological ordering. This structure allows for future expansion with additional matter-related files.
 
 #### Matter metadata format
 
-The `<timestamp>.json` file contains the matter's core information:
+The `matter.json` file contains the matter's core information:
 
 ```json
 {
@@ -83,7 +83,7 @@ Optional fields:
 
 #### Matter activity log
 
-The `<timestamp>.jsonl` file maintains a chronological record of all matter-related activities in JSON Lines format. The specific format and fields will be defined separately.
+The `matter.jsonl` file maintains a chronological record of all matter-related activities in JSON Lines format. The specific format and fields will be defined separately.
 
 This structure allows matters to serve as focused tracking mechanisms for specific topics within a domain, with full activity history and metadata management.
 

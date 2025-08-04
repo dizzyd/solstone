@@ -13,8 +13,8 @@ def test_matter_detail_route_validation():
         # Set up test journal structure
         journal_path = Path(tmp_dir) / "journal"
         domain_path = journal_path / "domains" / "test-domain"
-        matters_path = domain_path / "matters"
-        matters_path.mkdir(parents=True)
+        matter_path = domain_path / "20250101120000"
+        matter_path.mkdir(parents=True)
 
         # Create domain.json
         domain_data = {
@@ -34,7 +34,7 @@ def test_matter_detail_route_validation():
             "tags": ["test"],
             "created": "2025-01-01T12:00:00Z",
         }
-        (matters_path / "20250101120000.json").write_text(json.dumps(matter_data))
+        (matter_path / "matter.json").write_text(json.dumps(matter_data))
 
         # Mock the environment
         with patch.dict(os.environ, {"JOURNAL_PATH": str(journal_path)}):

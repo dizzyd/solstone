@@ -82,9 +82,7 @@ def create_domain() -> Any:
         entities_md = domain_path / "entities.md"
         entities_md.write_text("", encoding="utf-8")
 
-        # Create matters directory
-        matters_dir = domain_path / "matters"
-        matters_dir.mkdir(exist_ok=True)
+        # No need to create matters directory - matters will be created as timestamp directories
 
         return jsonify({"success": True, "domain": domain_name})
 
@@ -390,11 +388,9 @@ def generate_domain_description(domain_name: str) -> Any:
                 pass
 
         # Check if domain has matters
-        matters_dir = domain_path / "matters"
-        if matters_dir.exists():
-            matters_files = list(matters_dir.glob("*.md"))
-            if matters_files:
-                context_parts.append(f"Domain has {len(matters_files)} matter files")
+        matters = get_matters(domain_name)
+        if matters:
+            context_parts.append(f"Domain has {len(matters)} matters")
 
         context = "\n".join(context_parts)
 
