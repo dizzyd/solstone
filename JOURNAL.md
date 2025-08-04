@@ -53,8 +53,10 @@ Each matter is organized as `domains/<domain>/<timestamp>/` where the timestamp 
 
 - `matter.json` – matter metadata including title, description, and other properties
 - `matter.jsonl` – chronological log of matter-related activities in JSON Lines format
+- `attachments/` – directory containing files and their metadata
+- `objectives/` – directory containing objectives with metadata and activity logs
 
-The timestamp follows the same format used for agents and tasks, ensuring unique identification and chronological ordering. This structure allows for future expansion with additional matter-related files.
+The timestamp follows the same format used for agents and tasks, ensuring unique identification and chronological ordering.
 
 #### Matter metadata format
 
@@ -85,7 +87,75 @@ Optional fields:
 
 The `matter.jsonl` file maintains a chronological record of all matter-related activities in JSON Lines format. The specific format and fields will be defined separately.
 
-This structure allows matters to serve as focused tracking mechanisms for specific topics within a domain, with full activity history and metadata management.
+#### Matter attachments
+
+The `attachments/` directory contains files relevant to the matter along with their metadata. Each attachment consists of:
+
+- `<filename>.<extension>` – the actual file (document, image, code, etc.)
+- `<filename>.json` – metadata describing the attachment
+
+The metadata file format:
+
+```json
+{
+  "title": "API Documentation",
+  "description": "Complete API reference documentation for the performance optimization work",
+  "created": "2025-01-15T14:30:00Z",
+  "modified": "2025-01-15T14:30:00Z",
+  "size": 2048576,
+  "mime_type": "application/pdf",
+  "tags": ["documentation", "api", "reference"]
+}
+```
+
+Required fields:
+- `title` – human-readable name for the attachment
+- `description` – detailed explanation of the attachment's content and relevance
+
+Optional fields:
+- `created` – ISO 8601 timestamp when attachment was added
+- `modified` – ISO 8601 timestamp when attachment was last modified
+- `size` – file size in bytes
+- `mime_type` – MIME type of the attached file
+- `tags` – array of keywords for categorization
+
+#### Matter objectives
+
+The `objectives/` directory contains specific goals and sub-tasks related to the matter. Each objective is organized as `<timestamp>/` containing:
+
+- `<timestamp>.json` – objective metadata
+- `<timestamp>.jsonl` – chronological log of objective-related activities
+
+The objective metadata format:
+
+```json
+{
+  "title": "Reduce API response time by 50%",
+  "description": "Implement caching and database query optimization to achieve sub-200ms response times for all endpoints",
+  "created": "2025-01-15T10:45:00Z",
+  "status": "in_progress",
+  "priority": "high",
+  "target_date": "2025-02-01T00:00:00Z",
+  "completion_criteria": [
+    "All API endpoints respond in under 200ms",
+    "Database query optimization completed",
+    "Redis caching layer implemented"
+  ]
+}
+```
+
+Required fields:
+- `title` – concise objective statement
+- `description` – detailed explanation of what needs to be accomplished
+
+Optional fields:
+- `created` – ISO 8601 timestamp of objective creation
+- `status` – current state (e.g., "pending", "in_progress", "completed", "blocked")
+- `priority` – importance level (e.g., "low", "medium", "high", "critical")
+- `target_date` – ISO 8601 timestamp for when objective should be completed
+- `completion_criteria` – array of specific measurable outcomes that define success
+
+This structure allows matters to serve as comprehensive project management units with full activity history, relevant files, and structured goal tracking.
 
 ## Day folder contents
 
