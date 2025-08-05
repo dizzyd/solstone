@@ -616,3 +616,88 @@ def get_domain_matters(domain_name: str) -> Any:
 
     except Exception as e:
         return jsonify({"error": f"Failed to get matters: {str(e)}"}), 500
+
+
+@bp.route("/api/domains/<domain_name>/matters", methods=["POST"])
+def create_matter(domain_name: str) -> Any:
+    """Create a new matter in the specified domain."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    title = data.get("title", "").strip()
+    description = data.get("description", "").strip()
+    
+    if not title:
+        return jsonify({"error": "Matter title is required"}), 400
+    if not description:
+        return jsonify({"error": "Matter description is required"}), 400
+
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        return jsonify({"error": "JOURNAL_PATH not set"}), 500
+
+    domain_path = Path(journal) / "domains" / domain_name
+    if not domain_path.exists():
+        return jsonify({"error": "Domain not found"}), 404
+
+    try:
+        # Generate timestamp-based matter ID
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        
+        # Ensure unique timestamp (in case of rapid creation)
+        matter_path = domain_path / timestamp
+        counter = 1
+        while matter_path.exists():
+            timestamp_with_counter = f"{timestamp}_{counter:02d}"
+            matter_path = domain_path / timestamp_with_counter
+            counter += 1
+            if counter > 99:  # Safety limit
+                return jsonify({"error": "Unable to generate unique matter ID"}), 500
+        
+        # Use the final timestamp (with counter if needed)
+        if counter > 1:
+            timestamp = f"{timestamp}_{counter-1:02d}"
+            matter_path = domain_path / timestamp
+
+        # Create matter directory
+        matter_path.mkdir(parents=True, exist_ok=True)
+
+        # Create matter.json
+        matter_data = {
+            "title": title,
+            "description": description,
+            "created": datetime.now().isoformat() + "Z",
+            "status": data.get("status", "active"),
+            "priority": data.get("priority", "medium"),
+        }
+        
+        # Process tags
+        tags_input = data.get("tags", "").strip()
+        if tags_input:
+            tags = [tag.strip() for tag in tags_input.split(",") if tag.strip()]
+            if tags:
+                matter_data["tags"] = tags
+
+        matter_json = matter_path / "matter.json"
+        with open(matter_json, "w", encoding="utf-8") as f:
+            json.dump(matter_data, f, indent=2, ensure_ascii=False)
+
+        # Create empty matter.jsonl (activity log)
+        matter_jsonl = matter_path / "matter.jsonl"
+        matter_jsonl.write_text("", encoding="utf-8")
+
+        # Create directories for attachments and objectives
+        (matter_path / "attachments").mkdir(exist_ok=True)
+        (matter_path / "objectives").mkdir(exist_ok=True)
+
+        return jsonify({
+            "success": True, 
+            "matter_timestamp": timestamp,
+            "matter_data": matter_data
+        })
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to create matter: {str(e)}"}), 500

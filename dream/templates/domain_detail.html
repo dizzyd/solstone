@@ -181,35 +181,40 @@
   color: #666;
 }
 
-.entity-count {
-  text-align: center;
-  font-weight: bold;
-  color: #007bff;
-  width: 80px;
-}
 
 .star-button {
   background: none;
   border: none;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  width: 30px;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  width: 36px;
   text-align: center;
+  font-weight: bold;
 }
 
 .star-button:hover {
   background: #f0f0f0;
+  transform: scale(1.1);
 }
 
 .star-button.starred {
   color: #ffc107;
+  text-shadow: 0 0 3px rgba(255, 193, 7, 0.5);
 }
 
 .star-button.unstarred {
-  color: #ccc;
+  color: #999;
+  border: 2px solid #999;
+  background: white;
+}
+
+.star-button.unstarred:hover {
+  color: #ffc107;
+  border-color: #ffc107;
+  background: #fff9e6;
 }
 
 .entities-section {
@@ -594,6 +599,175 @@
   background: #ffebee;
   color: #c62828;
 }
+
+/* Add Matter styles */
+.add-matter-item {
+  border: 2px dashed #ddd;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #666;
+  transition: all 0.2s;
+  min-height: 100px;
+}
+
+.add-matter-item:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: #f8f9ff;
+}
+
+.add-matter-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-matter-icon {
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.add-matter-text {
+  font-size: 1.1em;
+  font-weight: 500;
+}
+
+.btn {
+  padding: 0.75em 1.5em;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* Modal styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  background-color: white;
+  margin: 5% auto;
+  padding: 2em;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.close {
+  color: #aaa;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.close:hover {
+  color: #333;
+}
+
+.form-group {
+  margin-bottom: 1.5em;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5em;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%;
+  padding: 0.75em;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1em;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.25em;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1em;
+  justify-content: flex-end;
+  margin-top: 2em;
+}
+
+.btn-secondary {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.btn-secondary:hover {
+  background: #eee;
+}
+
+.error-message {
+  background: #fee;
+  color: #c33;
+  padding: 0.75em;
+  border-radius: 6px;
+  margin-bottom: 1em;
+  border: 1px solid #fcc;
+}
 </style>
 {% endblock %}
 {% block body %}
@@ -632,7 +806,16 @@
         <div class="matters-list" id="matters-list">
         </div>
         <div id="no-matters" class="no-entities" style="display: none;">
-          No matters found for this domain yet.
+          <p>No matters found for this domain yet.</p>
+          <button class="btn btn-primary" onclick="openAddMatterModal()">+ Add Matter</button>
+        </div>
+        <div class="add-matter-card" id="add-matter-card" style="display: none;">
+          <div class="matter-item add-matter-item" onclick="openAddMatterModal()">
+            <div class="add-matter-content">
+              <div class="add-matter-icon">+</div>
+              <div class="add-matter-text">Add Matter</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -664,13 +847,12 @@
       
       <div class="entities-section">
         <div class="entities-container">
-          <h3>All Entities</h3>
+          <h3 id="all-entities-title">Other Entities</h3>
           <table class="entities-table">
             <thead>
               <tr>
                 <th></th>
                 <th class="entity-type">Type</th>
-                <th class="entity-count">Count</th>
                 <th class="entity-name">Name</th>
                 <th class="entity-desc">Description</th>
               </tr>
@@ -681,6 +863,55 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Matter Creation Modal -->
+<div id="matterModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Create New Matter</h2>
+      <span class="close" onclick="closeMatterModal()">&times;</span>
+    </div>
+    <div id="matterErrorContainer"></div>
+    <form id="matterForm">
+      <div class="form-group">
+        <label for="matterTitle">Title*</label>
+        <input type="text" id="matterTitle" name="title" required placeholder="e.g., API Performance Optimization">
+      </div>
+      <div class="form-group">
+        <label for="matterDescription">Description*</label>
+        <textarea id="matterDescription" name="description" required placeholder="Detailed explanation of the matter's scope and purpose..." rows="4"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="matterStatus">Status</label>
+        <select id="matterStatus" name="status">
+          <option value="active" selected>Active</option>
+          <option value="pending">Pending</option>
+          <option value="paused">Paused</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="matterPriority">Priority</label>
+        <select id="matterPriority" name="priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="matterTags">Tags</label>
+        <input type="text" id="matterTags" name="tags" placeholder="e.g., performance, backend, optimization (comma-separated)">
+        <small>Enter tags separated by commas</small>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeMatterModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Matter</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -742,6 +973,48 @@ document.addEventListener('DOMContentLoaded', function() {
   loadMatters();
 });
 
+// Matter form submission
+document.getElementById('matterForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearMatterErrors();
+  
+  const formData = new FormData(e.target);
+  const data = Object.fromEntries(formData.entries());
+  
+  try {
+    const response = await fetch(`/api/domains/${encodeURIComponent(domainName)}/matters`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      closeMatterModal();
+      loadMatters(); // Reload the matters list
+      
+      // Optional: Show success message or navigate to the new matter
+      // console.log('Matter created successfully:', result.matter_timestamp);
+    } else {
+      showMatterError(result.error || 'An error occurred while creating the matter');
+    }
+  } catch (error) {
+    console.error('Error creating matter:', error);
+    showMatterError('Network error occurred');
+  }
+});
+
+// Close modal when clicking outside
+window.addEventListener('click', (e) => {
+  const modal = document.getElementById('matterModal');
+  if (e.target === modal) {
+    closeMatterModal();
+  }
+});
+
 function loadEntities() {
   fetch(`/api/domains/${encodeURIComponent(domainName)}/entities`)
     .then(response => response.json())
@@ -783,8 +1056,9 @@ function renderEntities() {
     });
   }
   
-  // Render all entities
-  entitiesData.all_entities.forEach(entity => {
+  // Render non-starred entities only (filtering out domain entities)
+  const unstarredEntities = entitiesData.all_entities.filter(e => !e.starred);
+  unstarredEntities.forEach(entity => {
     const row = createEntityRow(entity, false);
     allTbody.appendChild(row);
   });
@@ -820,19 +1094,6 @@ function createEntityRow(entity, isDomainSection) {
   
   row.appendChild(starCell);
   row.appendChild(typeCell);
-  
-  if (!isDomainSection) {
-    // Add count column for all entities section
-    const countCell = document.createElement('td');
-    countCell.className = 'entity-count';
-    if (entity.top) {
-      countCell.innerHTML = '<span style="color:gold">★</span>';
-    } else {
-      countCell.textContent = entity.count || 0;
-    }
-    row.appendChild(countCell);
-  }
-  
   row.appendChild(nameCell);
   row.appendChild(descCell);
   
@@ -917,16 +1178,19 @@ function renderMatters() {
   
   const mattersList = document.getElementById('matters-list');
   const noMatters = document.getElementById('no-matters');
+  const addMatterCard = document.getElementById('add-matter-card');
   
   // Clear existing content
   mattersList.innerHTML = '';
   
   if (mattersData.length === 0) {
     noMatters.style.display = 'block';
+    addMatterCard.style.display = 'none';
     return;
   }
   
   noMatters.style.display = 'none';
+  addMatterCard.style.display = 'block';
   
   mattersData.forEach(matter => {
     const matterElement = createMatterElement(matter);
@@ -1008,6 +1272,40 @@ function formatTimeSince(epochSeconds) {
   
   const weeks = Math.floor(days / 7);
   return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+}
+
+function openAddMatterModal() {
+  const modal = document.getElementById('matterModal');
+  const form = document.getElementById('matterForm');
+  
+  // Reset form
+  form.reset();
+  clearMatterErrors();
+  
+  // Set default values
+  document.getElementById('matterStatus').value = 'active';
+  document.getElementById('matterPriority').value = 'medium';
+  
+  modal.style.display = 'block';
+  document.getElementById('matterTitle').focus();
+}
+
+function closeMatterModal() {
+  const modal = document.getElementById('matterModal');
+  const form = document.getElementById('matterForm');
+  
+  modal.style.display = 'none';
+  form.reset();
+  clearMatterErrors();
+}
+
+function clearMatterErrors() {
+  document.getElementById('matterErrorContainer').innerHTML = '';
+}
+
+function showMatterError(message) {
+  document.getElementById('matterErrorContainer').innerHTML = 
+    `<div class="error-message">${message}</div>`;
 }
 
 function escapeHtml(text) {
