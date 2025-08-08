@@ -55,6 +55,12 @@ def build_commands(day: str, force: bool, verbose: bool = False) -> list[list[st
         entity_cmd.append("--force")
     commands.append(entity_cmd)
 
+    # Run journal stats at the end to update overall statistics
+    stats_cmd = ["think-journal-stats"]
+    if verbose:
+        stats_cmd.append("--verbose")
+    commands.append(stats_cmd)
+
     return commands
 
 
