@@ -102,6 +102,7 @@
             <span>Screen</span>
           </label>
           <button class="btn" id="requestBtn">Load Transcript</button>
+          <button class="btn" id="mediaBtn" style="display:none">Load Media</button>
         </div>
       </div>
       <div class="panel" id="panel"></div>
@@ -142,6 +143,7 @@
   const rangeText = document.getElementById('rangeText');
   const panel = document.getElementById('panel');
   const requestBtn = document.getElementById('requestBtn');
+  const mediaBtn = document.getElementById('mediaBtn');
   
   const zoomRoot = document.getElementById('zoomTimeline');
   const zoomGrid = zoomRoot.querySelector('.zoom-grid');
@@ -425,6 +427,7 @@
         panel.innerHTML = d.html || '';
         // Show and update zoom timeline after loading transcript
         zoomRoot.classList.add('active');
+        mediaBtn.style.display = 'block'; // Show media button when zoom timeline is active
         zoomStart = range.start;
         zoomEnd = range.end;
         zoomHeight = zoomRoot.clientHeight;
@@ -435,6 +438,51 @@
         renderZoom();
       });
   });
+
+  mediaBtn.addEventListener('click', () => {
+    const start = hhmmss(zoomRange.start);
+    const end = hhmmss(zoomRange.end);
+    const audio = document.getElementById('audioCheck').checked;
+    const screen = document.getElementById('screenCheck').checked;
+    let type = null;
+    if (audio && !screen) type = 'audio';
+    else if (!audio && screen) type = 'screen';
+    
+    fetch(`/calendar/api/media_files/${day}?start=${start}&end=${end}${type ? '&type=' + type : ''}`)
+      .then(r => r.json())
+      .then(data => {
+        renderMediaFiles(data.media || []);
+      })
+      .catch(() => {
+        panel.innerHTML = '<p>Error loading media files.</p>';
+      });
+  });
+
+  function renderMediaFiles(mediaFiles) {
+    if (mediaFiles.length === 0) {
+      panel.innerHTML = '<p>No media files found in the selected time range.</p>';
+      return;
+    }
+
+    let html = '';
+    mediaFiles.forEach(file => {
+      html += `<div style="margin-bottom: 24px;">`;
+      html += `<h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">${file.human_time}</h4>`;
+      
+      if (file.type === 'audio') {
+        html += `<audio controls style="width: 100%; max-width: 400px;">`;
+        html += `<source src="${file.url}" type="${file.mime_type}">`;
+        html += `Your browser does not support the audio element.`;
+        html += `</audio>`;
+      } else if (file.type === 'screen') {
+        html += `<img src="${file.url}" style="max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;" alt="Screenshot at ${file.human_time}">`;
+      }
+      
+      html += `</div>`;
+    });
+
+    panel.innerHTML = html;
+  }
 })();
 </script>
 {% endblock %}
