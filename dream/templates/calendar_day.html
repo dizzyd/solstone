@@ -15,14 +15,14 @@
 <div class="container">
   {{ macros.day_heading(title,
         prev_day and url_for('calendar.calendar_day', day=prev_day),
-        next_day and url_for('calendar.calendar_day', day=next_day)) }}
+        next_day and url_for('calendar.calendar_day', day=next_day),
+        url_for('calendar.calendar_transcript_page', day=day),
+        url_for('admin.admin_day_page', day=day)) }}
   <div class="tabs">
     <a class="tab active" href="#events" data-target="events">Events</a>
     {% for file in files %}
     <a class="tab" href="#{{ file.topic }}" data-target="{{ file.topic }}" data-color="{{ file.color }}">{{ file.label }}</a>
     {% endfor %}
-    <a class="admin-link" style="margin-left:0" href="{{ url_for('calendar.calendar_transcript_page', day=day) }}" title="Transcripts" aria-label="Transcripts">📝</a>
-    <a class="admin-link" href="{{ url_for('admin.admin_day_page', day=day) }}" title="Admin" aria-label="Admin">⚙️</a>
   </div>
   <div class="content" id="events">
     <div id="eventsView"></div>
@@ -66,7 +66,6 @@ function colorTabs(){
 function orderTabs(topics){
   const container = document.querySelector('.tabs');
   const eventTab = container.querySelector('.tab[data-target="events"]');
-  const admin = container.querySelector('.admin-link');
   const fileTabs = Array.from(container.querySelectorAll('.tab')).filter(t => t !== eventTab);
   const order = {};
   topics.forEach((s,i)=>{order[s]=i;});
@@ -78,7 +77,6 @@ function orderTabs(topics){
   container.innerHTML = '';
   container.appendChild(eventTab);
   fileTabs.forEach(t=>container.appendChild(t));
-  if(admin) container.appendChild(admin);
   tabs = Array.from(container.querySelectorAll('.tab'));
 }
 

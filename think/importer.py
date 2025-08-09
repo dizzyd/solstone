@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from datetime import timedelta
@@ -41,36 +42,41 @@ def str2bool(value: str) -> bool:
 
 def split_audio(path: str, out_dir: str, start: dt.datetime) -> None:
     """Split audio from ``path`` into 60s FLAC segments in ``out_dir``."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        segment_template = os.path.join(tmpdir, "segment_%03d.flac")
+    # First, get the duration of the input file
+    probe_cmd = [
+        "ffprobe",
+        "-v", "quiet",
+        "-show_entries", "format=duration",
+        "-of", "csv=p=0",
+        path,
+    ]
+    result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
+    duration = float(result.stdout.strip())
+    
+    # Calculate number of 60-second segments
+    num_segments = int(duration // 60) + (1 if duration % 60 > 0 else 0)
+    
+    # Create each segment individually to ensure proper FLAC headers
+    for idx in range(num_segments):
+        segment_start = idx * 60
+        ts = start + timedelta(seconds=segment_start)
+        time_part = ts.strftime("%H%M%S")
+        dest = os.path.join(out_dir, f"{time_part}_import_raw.flac")
+        
         cmd = [
             "ffmpeg",
-            "-i",
-            path,
+            "-i", path,
+            "-ss", str(segment_start),
+            "-t", "60",
             "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-c:a",
-            "flac",
-            "-f",
-            "segment",
-            "-segment_time",
-            "60",
-            segment_template,
+            "-ac", "1",
+            "-ar", "16000",
+            "-c:a", "flac",
+            "-y",  # Overwrite output files
+            dest,
         ]
         subprocess.run(cmd, check=True)
-
-        segments = sorted(os.listdir(tmpdir))
-        for idx, name in enumerate(segments):
-            if not name.endswith(".flac"):
-                continue
-            ts = start + timedelta(seconds=idx * 60)
-            time_part = ts.strftime("%H%M%S")
-            dest = os.path.join(out_dir, f"{time_part}_import_raw.flac")
-            os.replace(os.path.join(tmpdir, name), dest)
-            logger.info(f"Added audio segment to journal: {dest}")
+        logger.info(f"Added audio segment to journal: {dest}")
 
 
 def process_video(path: str, out_dir: str, start: dt.datetime, sample_s: float) -> None:

@@ -176,8 +176,8 @@ class Transcriber:
                 return None
 
             day = raw_path.parent.name
-            # Handle both _raw and _audio suffixes
-            time_part = raw_path.stem.replace("_raw", "").replace("_audio", "")
+            # Extract time part from filename (first part before any underscore)
+            time_part = raw_path.stem.split("_")[0]
             end_dt = datetime.datetime.strptime(f"{day}_{time_part}", "%Y%m%d_%H%M%S")
             file_duration = len(data) / SAMPLE_RATE
             base_dt = end_dt - datetime.timedelta(
