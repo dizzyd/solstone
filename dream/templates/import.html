@@ -15,6 +15,9 @@ button:disabled { background:#ccc; color:#666; cursor:not-allowed; opacity:0.6; 
 .close { position:absolute; top:10px; right:15px; cursor:pointer; font-size:24px; }
 .spinner { display:inline-block; width:12px; height:12px; border:2px solid #ccc; border-top-color:#333; border-radius:50%; animation:spin 1s linear infinite; margin-left:4px; }
 #taskOutput { white-space: pre-wrap; word-wrap: break-word; }
+.domain-selector { margin-left: auto; display: flex; align-items: center; gap: 0.5em; }
+.domain-selector label { font-size: 0.9em; color: #666; }
+.domain-selector select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; background: white; }
 @keyframes spin { to { transform:rotate(360deg); } }
 </style>
 {% endblock %}
@@ -23,6 +26,12 @@ button:disabled { background:#ccc; color:#666; cursor:not-allowed; opacity:0.6; 
   <div class="tabs">
     <div class="tab active" data-target="media">Media</div>
     <div class="tab" data-target="paste">Paste</div>
+    <div class="domain-selector">
+      <label for="domainSelect">Domain:</label>
+      <select id="domainSelect">
+        <option value="">None</option>
+      </select>
+    </div>
   </div>
   <form id="importForm">
     <div class="content" id="media">
@@ -97,6 +106,9 @@ document.getElementById('importForm').onsubmit=e=>{
   } else {
     fd.append('text', document.getElementById('pasteText').value);
   }
+  // Add selected domain
+  const domain = document.getElementById('domainSelect').value;
+  if(domain) fd.append('domain', domain);
   fetch('{{ url_for('import_view.import_save') }}', {method:'POST', body:fd})
     .then(async r=>{
       const d=await r.json();
@@ -153,6 +165,39 @@ document.getElementById('startBtn').onclick=()=>{
 document.querySelectorAll('.close')[0].onclick=()=>{document.getElementById('detectModal').style.display='none';};
 document.querySelectorAll('.close')[1].onclick=()=>{document.getElementById('taskModal').style.display='none';};
 window.onclick=e=>{if(e.target==document.getElementById('detectModal'))document.getElementById('detectModal').style.display='none';if(e.target==document.getElementById('taskModal'))document.getElementById('taskModal').style.display='none';};
+
+// Load domains for dropdown
+function loadDomains(){
+  fetch('{{ url_for('domains.domains_list') }}').then(r=>r.json()).then(domains=>{
+    const select=document.getElementById('domainSelect');
+    const current=select.value; // Preserve current selection
+    select.innerHTML='<option value="">None</option>';
+    Object.entries(domains).forEach(([name,data])=>{
+      const opt=document.createElement('option');
+      opt.value=name;
+      opt.textContent=data.title||name;
+      if(name===current) opt.selected=true;
+      select.appendChild(opt);
+    });
+  }).catch(()=>{/*ignore*/});
+}
+
+// Auto-select domain from URL fragment
+function checkUrlFragment(){
+  const fragment = window.location.hash.substring(1); // Remove #
+  if(fragment){
+    const select = document.getElementById('domainSelect');
+    const option = select.querySelector(`option[value="${fragment}"]`);
+    if(option) {
+      option.selected = true;
+      // Clear the fragment to avoid confusion
+      history.replaceState(null, null, window.location.pathname + window.location.search);
+    }
+  }
+}
+
 loadLog();
+loadDomains();
+setTimeout(checkUrlFragment, 100); // Wait for domains to load
 </script>
 {% endblock %}

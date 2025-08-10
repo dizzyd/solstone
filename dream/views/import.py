@@ -33,6 +33,7 @@ def import_save() -> Any:
     imp_dir.mkdir(parents=True, exist_ok=True)
     upload = request.files.get("file")
     text = request.form.get("text", "").strip()
+    domain = request.form.get("domain", "").strip() or None
     
     # Generate timestamp for filename
     timestamp_ms = int(time.time() * 1000)
@@ -66,7 +67,8 @@ def import_save() -> Any:
         "detection_result": detection_result,
         "detected_timestamp": ts,
         "file_size": path.stat().st_size if path.exists() else 0,
-        "mime_type": upload.content_type if upload else "text/plain"
+        "mime_type": upload.content_type if upload else "text/plain",
+        "domain": domain  # Include selected domain
     }
     
     metadata_path = Path(str(path) + ".json")
