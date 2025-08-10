@@ -31,6 +31,7 @@ def submit_job(
     remove_disfluencies: bool,
     filter_profanity: bool,
     skip_punctuation: bool,
+    entities: list[str] | None = None,
 ):
     url = f"{API_BASE}/jobs"
     headers = {"Authorization": f"Bearer {token}"}
@@ -60,6 +61,9 @@ def submit_job(
         options["speakers_count"] = speakers_count
     if speaker_channels_count is not None:
         options["speaker_channels_count"] = speaker_channels_count
+    if entities:
+        options["custom_vocabularies"] = [{"phrases": entities}]
+        options["strict_custom_vocabulary"] = False
 
     data = {"options": json.dumps(options)}
 
@@ -106,6 +110,7 @@ def transcribe_file(media_path: Path, **kwargs) -> dict:
             - remove_disfluencies (bool): Remove ums/uhs (default: False)
             - filter_profanity (bool): Replace profanities (default: False)
             - skip_punctuation (bool): Disable punctuation (default: False)
+            - entities (list): Custom vocabulary terms to improve recognition
             - poll_interval (float): Seconds between polls (default: 2.5)
             - timeout (float): Overall timeout in seconds (default: 1800)
 
@@ -127,6 +132,7 @@ def transcribe_file(media_path: Path, **kwargs) -> dict:
     remove_disfluencies = kwargs.get("remove_disfluencies", False)
     filter_profanity = kwargs.get("filter_profanity", False)
     skip_punctuation = kwargs.get("skip_punctuation", False)
+    entities = kwargs.get("entities", None)
     poll_interval = kwargs.get("poll_interval", 2.5)
     timeout = kwargs.get("timeout", 1800)
 
@@ -143,6 +149,7 @@ def transcribe_file(media_path: Path, **kwargs) -> dict:
         remove_disfluencies=remove_disfluencies,
         filter_profanity=filter_profanity,
         skip_punctuation=skip_punctuation,
+        entities=entities,
     )
     logging.info("Job submitted: %s", job_id)
 
@@ -330,6 +337,11 @@ def main():
         "--skip-punctuation", action="store_true", help="Disable punctuation in output"
     )
     parser.add_argument(
+        "--entities",
+        nargs="*",
+        help="Custom vocabulary terms to improve recognition (space-separated)",
+    )
+    parser.add_argument(
         "--poll-interval",
         type=float,
         default=2.5,
@@ -399,6 +411,7 @@ def main():
         remove_disfluencies=args.remove_disfluencies,
         filter_profanity=args.filter_profanity,
         skip_punctuation=args.skip_punctuation,
+        entities=args.entities,
     )
     logging.info("Job submitted: %s", job_id)
 
