@@ -4,15 +4,16 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 import cv2
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
+from hear.revai import convert_revai_to_sunstone, transcribe_file
 from see.screen_compare import compare_images
 from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
@@ -45,33 +46,42 @@ def split_audio(path: str, out_dir: str, start: dt.datetime) -> None:
     # First, get the duration of the input file
     probe_cmd = [
         "ffprobe",
-        "-v", "quiet",
-        "-show_entries", "format=duration",
-        "-of", "csv=p=0",
+        "-v",
+        "quiet",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "csv=p=0",
         path,
     ]
     result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
     duration = float(result.stdout.strip())
-    
+
     # Calculate number of 60-second segments
     num_segments = int(duration // 60) + (1 if duration % 60 > 0 else 0)
-    
+
     # Create each segment individually to ensure proper FLAC headers
     for idx in range(num_segments):
         segment_start = idx * 60
         ts = start + timedelta(seconds=segment_start)
         time_part = ts.strftime("%H%M%S")
         dest = os.path.join(out_dir, f"{time_part}_import_raw.flac")
-        
+
         cmd = [
             "ffmpeg",
-            "-i", path,
-            "-ss", str(segment_start),
-            "-t", "60",
+            "-i",
+            path,
+            "-ss",
+            str(segment_start),
+            "-t",
+            "60",
             "-vn",
-            "-ac", "1",
-            "-ar", "16000",
-            "-c:a", "flac",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "flac",
             "-y",  # Overwrite output files
             dest,
         ]
@@ -166,6 +176,68 @@ def process_transcript(path: str, day_dir: str, base_dt: dt.datetime) -> None:
         logger.info(f"Added transcript segment to journal: {json_path}")
 
 
+def audio_transcribe(path: str, day_dir: str, base_dt: dt.datetime) -> None:
+    """Transcribe audio using Rev AI and save 5-minute chunks as imported JSON."""
+    logger.info(f"Transcribing audio file: {path}")
+    media_path = Path(path)
+
+    # Transcribe using Rev AI
+    try:
+        revai_json = transcribe_file(media_path)
+    except Exception as e:
+        logger.error(f"Failed to transcribe audio: {e}")
+        raise
+
+    # Convert to Sunstone format
+    sunstone_transcript = convert_revai_to_sunstone(revai_json)
+
+    if not sunstone_transcript:
+        logger.warning("No transcript entries found")
+        return
+
+    # Group entries into 5-minute chunks
+    chunks = []
+    current_chunk = []
+    chunk_start_time = None
+
+    for entry in sunstone_transcript:
+        # Parse the timestamp from the entry
+        start_str = entry.get("start", "00:00:00")
+        h, m, s = map(int, start_str.split(":"))
+        entry_seconds = h * 3600 + m * 60 + s
+
+        # Determine which 5-minute chunk this belongs to
+        chunk_index = entry_seconds // 300  # 300 seconds = 5 minutes
+
+        # If this is a new chunk, save the previous one
+        if chunk_start_time is not None and chunk_index != chunk_start_time:
+            if current_chunk:
+                chunks.append((chunk_start_time, current_chunk))
+            current_chunk = []
+            chunk_start_time = chunk_index
+        elif chunk_start_time is None:
+            chunk_start_time = chunk_index
+
+        current_chunk.append(entry)
+
+    # Don't forget the last chunk
+    if current_chunk:
+        chunks.append((chunk_start_time, current_chunk))
+
+    # Save each chunk as a separate JSON file
+    for chunk_index, chunk_entries in chunks:
+        # Calculate timestamp for this chunk
+        ts = base_dt + timedelta(minutes=chunk_index * 5)
+        json_path = os.path.join(
+            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.json"
+        )
+
+        # Save the chunk
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(chunk_entries, f, indent=2)
+        logger.info(f"Added transcript chunk to journal: {json_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Chunk a media file into the journal")
     parser.add_argument("media", help="Path to video or audio file")
@@ -176,7 +248,10 @@ def main() -> None:
         "--see", type=str2bool, default=True, help="Process video stream"
     )
     parser.add_argument(
-        "--hear", type=str2bool, default=True, help="Process audio stream"
+        "--split", type=str2bool, default=False, help="Split audio stream into segments"
+    )
+    parser.add_argument(
+        "--hear", type=str2bool, default=True, help="Transcribe audio using Rev AI"
     )
     parser.add_argument(
         "--see-sample",
@@ -216,6 +291,8 @@ def main() -> None:
         return
 
     if args.hear:
+        audio_transcribe(args.media, day_dir, base_dt)
+    if args.split:
         split_audio(args.media, day_dir, base_dt)
     if args.see:
         process_video(args.media, day_dir, base_dt, args.see_sample)
