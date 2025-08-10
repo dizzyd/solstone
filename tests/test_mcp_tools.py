@@ -41,7 +41,7 @@ def test_mcp_tools_via_stdio(tmp_path):
 
     heard = day_dir / "heard"
     heard.mkdir()
-    (heard / "090000_audio.flac").write_bytes(b"data")
+    (heard / "090000_raw.flac").write_bytes(b"data")
     (day_dir / "090000_audio.json").write_text("[]", encoding="utf-8")
 
     script = Path(__file__).with_name("run_mcp_stub.py")

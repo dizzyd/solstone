@@ -26,6 +26,6 @@ def test_get_raw_file(tmp_path):
     assert meta["visual_description"] == "screen"
 
     path, mime, meta = utils.get_raw_file("20240101", "090000_audio.json")
-    assert path == "heard/090000_audio.flac"
+    assert path == "heard/090000_raw.flac"
     assert mime == "audio/flac"
     assert isinstance(meta, list) and meta[0]["text"] == "hello"

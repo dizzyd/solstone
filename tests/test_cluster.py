@@ -5,7 +5,7 @@ def test_cluster(tmp_path, monkeypatch):
     mod = importlib.import_module("think.cluster")
     day_dir = tmp_path / "20240101"
     day_dir.mkdir()
-    (day_dir / "120000_audio.json").write_text('{"text": "hi"}')
+    (day_dir / "120000_raw_audio.json").write_text('{"text": "hi"}')
     (day_dir / "120500_screen.md").write_text("screen summary")
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     result, count = mod.cluster("20240101")
@@ -18,7 +18,7 @@ def test_cluster_range(tmp_path, monkeypatch):
     mod = importlib.import_module("think.cluster")
     day_dir = tmp_path / "20240101"
     day_dir.mkdir()
-    (day_dir / "120000_audio.json").write_text('{"text": "hi"}')
+    (day_dir / "120000_raw_audio.json").write_text('{"text": "hi"}')
     (day_dir / "120000_monitor_1_diff.json").write_text("{}")
     (day_dir / "120000_screen.md").write_text("screen summary")
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
@@ -32,10 +32,10 @@ def test_cluster_scan(tmp_path, monkeypatch):
     day_dir = tmp_path / "20240101"
     day_dir.mkdir()
     # Audio transcripts at 09:01, 09:05, 09:20 and 11:00
-    (day_dir / "090101_audio.json").write_text("{}")
-    (day_dir / "090500_audio.json").write_text("{}")
-    (day_dir / "092000_audio.json").write_text("{}")
-    (day_dir / "110000_audio.json").write_text("{}")
+    (day_dir / "090101_raw_audio.json").write_text("{}")
+    (day_dir / "090500_raw_audio.json").write_text("{}")
+    (day_dir / "092000_raw_audio.json").write_text("{}")
+    (day_dir / "110000_raw_audio.json").write_text("{}")
     # Screen transcripts at 10:01, 10:05, 10:20 and 12:00
     (day_dir / "100101_screen.md").write_text("screen")
     (day_dir / "100500_screen.md").write_text("screen")
