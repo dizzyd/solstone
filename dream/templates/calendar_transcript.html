@@ -16,10 +16,11 @@
   }
   html,body{height:100%;}
   body{margin:0;background:var(--bg);color:#111827;font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;}
+  body.dragging{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
   .wrap{max-width:1200px;margin:0 auto;padding:16px;height:100%;box-sizing:border-box;}
   .card{height:80vh;background:var(--panel);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);display:grid;grid-template-columns:180px 1fr 180px;overflow:hidden}
 
-  .timeline{position:relative;border-right:1px solid var(--line);user-select:none;height:100%;overflow:hidden}
+  .timeline{position:relative;border-right:1px solid var(--line);user-select:none;height:100%;overflow:hidden;touch-action:pan-y}
   .grid{position:absolute;inset:0}
   .grid .hour{position:absolute;left:0;right:0;border-top:1px solid var(--line)}
   .grid .quarter{position:absolute;left:0;right:0;border-top:1px dashed var(--dash)}
@@ -28,10 +29,10 @@
   .lane{position:absolute;left:64px;right:0;top:0;bottom:0}
 
   .sel-wrap{position:absolute;left:58px;right:8px;pointer-events:none;z-index:2}
-  .sel{position:absolute;left:-4px;right:-4px;height:100%;background:color-mix(in oklab, var(--primary-50) 70%, transparent);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.06);pointer-events:auto;cursor:grab}
+  .sel{position:absolute;left:-4px;right:-4px;height:100%;background:color-mix(in oklab, var(--primary-50) 70%, transparent);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.06);pointer-events:auto;cursor:grab;touch-action:none}
   .sel:active{cursor:grabbing}
 
-  .bumper{position:absolute;left:40px;right:40px;margin:auto;height:14px;border:1px solid var(--primary);border-radius:999px;background:#dbeafe;cursor:ns-resize}
+  .bumper{position:absolute;left:40px;right:40px;margin:auto;height:14px;border:1px solid var(--primary);border-radius:999px;background:#dbeafe;cursor:ns-resize;touch-action:none}
   .bumper.top{top:-7px}
   .bumper.bottom{bottom:-7px}
 
@@ -51,7 +52,7 @@
   .btn:hover{background:#f9fafb}
 
   /* Zoomed timeline styles */
-  .zoom-timeline{position:relative;border-left:1px solid var(--line);user-select:none;height:100%;overflow:hidden;display:none}
+  .zoom-timeline{position:relative;border-left:1px solid var(--line);user-select:none;height:100%;overflow:hidden;display:none;touch-action:pan-y}
   .zoom-timeline.active{display:block}
   .zoom-labels{position:absolute;right:0;top:0;bottom:0;width:64px;background:var(--rail);border-left:1px solid var(--line);pointer-events:none}
   .zoom-label{position:absolute;left:0;padding-left:8px;transform:translateY(-50%);font-size:11px;color:var(--muted)}
@@ -61,7 +62,7 @@
   .mark.green{background:#86efac;left:0}
   .mark.yellow{background:#facc15;left:48px}
   .zoom-sel-wrap{position:absolute;left:8px;right:58px;pointer-events:none;z-index:2}
-  .zoom-sel{position:absolute;left:-4px;right:-4px;height:100%;background:color-mix(in oklab, var(--primary-50) 40%, transparent);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.06);pointer-events:auto;cursor:grab}
+  .zoom-sel{position:absolute;left:-4px;right:-4px;height:100%;background:color-mix(in oklab, var(--primary-50) 40%, transparent);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.06);pointer-events:auto;cursor:grab;touch-action:none}
   .zoom-sel:active{cursor:grabbing}
 </style>
 {% endblock %}
@@ -339,6 +340,7 @@
 
   function onPointerMove(ev){
     if (!drag) return;
+    ev.preventDefault();
     const dy = ev.clientY - drag.y0;
     const dMin = Math.round((dy / ppm) / STEP) * STEP;
     if (drag.mode === 'move'){
@@ -358,11 +360,18 @@
     }
     render();
   }
-  function onPointerUp(){ drag = null; window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); }
+  function onPointerUp(){ 
+    drag = null; 
+    document.body.classList.remove('dragging');
+    window.removeEventListener('pointermove', onPointerMove); 
+    window.removeEventListener('pointerup', onPointerUp); 
+  }
 
   function begin(mode){
     return (ev) => {
       ev.stopPropagation();
+      ev.preventDefault();
+      document.body.classList.add('dragging');
       drag = { mode, y0: ev.clientY, r0: { ...range } };
       window.addEventListener('pointermove', onPointerMove);
       window.addEventListener('pointerup', onPointerUp);
@@ -378,9 +387,12 @@
     return (ev) => {
       if (!zoomRoot.classList.contains('active')) return;
       ev.stopPropagation();
+      ev.preventDefault();
+      document.body.classList.add('dragging');
       const zoomDrag = { mode, y0: ev.clientY, r0: { ...zoomRange } };
       
       const onZoomMove = (e) => {
+        e.preventDefault();
         const dy = e.clientY - zoomDrag.y0;
         const dMin = Math.round(dy / zoomPpm);
         
@@ -403,6 +415,7 @@
       };
       
       const onZoomUp = () => {
+        document.body.classList.remove('dragging');
         window.removeEventListener('pointermove', onZoomMove);
         window.removeEventListener('pointerup', onZoomUp);
       };
