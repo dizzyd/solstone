@@ -74,11 +74,115 @@ def get_transcript_json(token: str, job_id: str):
         die(f"Get transcript failed ({resp.status_code}): {resp.text}")
     return resp.json()
 
+def convert_revai_to_sunstone(revai_json: dict) -> list:
+    """Convert Rev.ai transcript format to Sunstone transcript format.
+    
+    Args:
+        revai_json: Dict with Rev.ai transcript structure (monologues with elements)
+        
+    Returns:
+        List of transcript entries in Sunstone format
+    """
+    result = []
+    
+    if "monologues" not in revai_json:
+        return result
+    
+    for monologue in revai_json["monologues"]:
+        speaker = monologue.get("speaker", 0) + 1  # Rev uses 0-based, we use 1-based
+        elements = monologue.get("elements", [])
+        
+        # Build sentences from elements
+        current_text = ""
+        start_ts = None
+        confidences = []
+        
+        for i, elem in enumerate(elements):
+            if elem["type"] == "text":
+                # Track first timestamp
+                if start_ts is None and elem.get("ts") is not None:
+                    start_ts = elem["ts"]
+                
+                # Add word
+                current_text += elem["value"]
+                
+                # Track confidence
+                if elem.get("confidence") is not None:
+                    confidences.append(elem["confidence"])
+                    
+            elif elem["type"] == "punct":
+                # Add punctuation
+                current_text += elem["value"]
+                
+                # If sentence-ending punctuation, create entry
+                if elem["value"] in [".", "!", "?"] and current_text.strip():
+                    # Format timestamp as HH:MM:SS
+                    if start_ts is not None:
+                        start_seconds = int(start_ts)
+                        hours = start_seconds // 3600
+                        minutes = (start_seconds % 3600) // 60
+                        seconds = start_seconds % 60
+                        start_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                    else:
+                        start_time = "00:00:00"
+                    
+                    # Create entry
+                    entry = {
+                        "start": start_time,
+                        "source": "mic",
+                        "speaker": speaker,
+                        "text": current_text.strip()
+                    }
+                    
+                    # Add description based on confidence
+                    if confidences:
+                        avg_confidence = sum(confidences) / len(confidences)
+                        if avg_confidence < 0.7:
+                            entry["description"] = "low confidence transcription"
+                        elif avg_confidence > 0.95:
+                            entry["description"] = "clear and confident speech"
+                    
+                    result.append(entry)
+                    
+                    # Reset for next sentence
+                    current_text = ""
+                    start_ts = None
+                    confidences = []
+        
+        # Handle any remaining text without sentence-ending punctuation
+        if current_text.strip():
+            if start_ts is not None:
+                start_seconds = int(start_ts)
+                hours = start_seconds // 3600
+                minutes = (start_seconds % 3600) // 60
+                seconds = start_seconds % 60
+                start_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            else:
+                start_time = "00:00:00"
+            
+            entry = {
+                "start": start_time,
+                "source": "mic",
+                "speaker": speaker,
+                "text": current_text.strip()
+            }
+            
+            if confidences:
+                avg_confidence = sum(confidences) / len(confidences)
+                if avg_confidence < 0.7:
+                    entry["description"] = "low confidence transcription"
+                elif avg_confidence > 0.95:
+                    entry["description"] = "clear and confident speech"
+            
+            result.append(entry)
+    
+    return result
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Rev AI transcription CLI (high-quality + diarization)."
+        description="Rev AI transcription CLI (high-quality + diarization). If a .json file is provided, converts it to Sunstone format instead of transcribing."
     )
-    parser.add_argument("media", help="Path to audio/video file")
+    parser.add_argument("media", help="Path to audio/video file or Rev AI JSON file to convert")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     parser.add_argument("-o", "--output", help="Write JSON to this path (default: stdout)")
     parser.add_argument("--language", default="en", help="ISO code (default: en)")
@@ -111,14 +215,39 @@ def main():
         format="%(levelname)s: %(message)s"
     )
 
+    media_path = Path(args.media).expanduser().resolve()
+    if not media_path.exists() or not media_path.is_file():
+        die(f"File not found: {media_path}")
+
+    # Check if input is a JSON file - if so, convert instead of transcribe
+    if media_path.suffix.lower() == ".json":
+        logging.info("Detected JSON input - converting Rev AI format to Sunstone format")
+        
+        # Load the Rev AI JSON
+        try:
+            with open(media_path, "r", encoding="utf-8") as f:
+                revai_data = json.load(f)
+        except json.JSONDecodeError as e:
+            die(f"Invalid JSON file: {e}")
+        
+        # Convert to Sunstone format
+        sunstone_transcript = convert_revai_to_sunstone(revai_data)
+        
+        # Output the result
+        if args.output:
+            out_path = Path(args.output).expanduser().resolve()
+            out_path.write_text(json.dumps(sunstone_transcript, indent=2, ensure_ascii=False), encoding="utf-8")
+            logging.info("Wrote converted transcript to %s", out_path)
+        else:
+            print(json.dumps(sunstone_transcript, indent=2, ensure_ascii=False))
+        
+        return
+
+    # Otherwise, do normal transcription
     load_dotenv()
     token = os.getenv("REVAI_ACCESS_TOKEN") or os.getenv("REV_ACCESS_TOKEN")
     if not token:
         die("Missing REVAI_ACCESS_TOKEN in .env")
-
-    media_path = Path(args.media).expanduser().resolve()
-    if not media_path.exists() or not media_path.is_file():
-        die(f"File not found: {media_path}")
 
     job_id = submit_job(
         token=token,
