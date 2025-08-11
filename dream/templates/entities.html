@@ -5,6 +5,24 @@
 <style>
 h1 { margin-bottom: 1em; }
 
+/* Entity type color scheme - light shades */
+:root {
+  --color-person: #e8f5e9;      /* Light green */
+  --color-company: #e3f2fd;     /* Light blue */
+  --color-project: #fff3e0;     /* Light orange */
+  --color-tool: #f3e5f5;        /* Light purple */
+  
+  --border-person: #a5d6a7;     /* Green border */
+  --border-company: #90caf9;    /* Blue border */
+  --border-project: #ffcc80;    /* Orange border */
+  --border-tool: #ce93d8;       /* Purple border */
+  
+  --text-person: #2e7d32;       /* Dark green text */
+  --text-company: #1565c0;      /* Dark blue text */
+  --text-project: #e65100;      /* Dark orange text */
+  --text-tool: #6a1b9a;         /* Dark purple text */
+}
+
 /* Table styling */
 table { 
   width: 100%; 
@@ -23,6 +41,47 @@ th {
   color: #333;
 }
 tr:hover { background: #f8f9fa; }
+
+/* Entity type specific table backgrounds */
+table[data-entity-type="Person"] {
+  background: linear-gradient(to bottom, var(--color-person) 0%, white 100px);
+}
+
+table[data-entity-type="Person"] th {
+  background: var(--color-person);
+  color: var(--text-person);
+  border-bottom: 2px solid var(--border-person);
+}
+
+table[data-entity-type="Company"] {
+  background: linear-gradient(to bottom, var(--color-company) 0%, white 100px);
+}
+
+table[data-entity-type="Company"] th {
+  background: var(--color-company);
+  color: var(--text-company);
+  border-bottom: 2px solid var(--border-company);
+}
+
+table[data-entity-type="Project"] {
+  background: linear-gradient(to bottom, var(--color-project) 0%, white 100px);
+}
+
+table[data-entity-type="Project"] th {
+  background: var(--color-project);
+  color: var(--text-project);
+  border-bottom: 2px solid var(--border-project);
+}
+
+table[data-entity-type="Tool"] {
+  background: linear-gradient(to bottom, var(--color-tool) 0%, white 100px);
+}
+
+table[data-entity-type="Tool"] th {
+  background: var(--color-tool);
+  color: var(--text-tool);
+  border-bottom: 2px solid var(--border-tool);
+}
 .count {
   text-align: center;
   font-weight: bold;
@@ -54,6 +113,85 @@ tr:hover { background: #f8f9fa; }
   display: flex;
   gap: 0;
   margin-bottom: 1em;
+}
+
+/* Entity type specific tab colors */
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  background: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.tab:hover {
+  background: #e9ecef;
+}
+
+.tab.active {
+  background: white;
+  font-weight: 600;
+}
+
+.tab[data-type="Person"] {
+  background: var(--color-person);
+  border-color: var(--border-person);
+  color: var(--text-person);
+}
+
+.tab[data-type="Person"]:hover {
+  background: #c8e6c9;
+}
+
+.tab[data-type="Person"].active {
+  background: white;
+  border-bottom: 3px solid var(--border-person);
+}
+
+.tab[data-type="Company"] {
+  background: var(--color-company);
+  border-color: var(--border-company);
+  color: var(--text-company);
+}
+
+.tab[data-type="Company"]:hover {
+  background: #bbdefb;
+}
+
+.tab[data-type="Company"].active {
+  background: white;
+  border-bottom: 3px solid var(--border-company);
+}
+
+.tab[data-type="Project"] {
+  background: var(--color-project);
+  border-color: var(--border-project);
+  color: var(--text-project);
+}
+
+.tab[data-type="Project"]:hover {
+  background: #ffe0b2;
+}
+
+.tab[data-type="Project"].active {
+  background: white;
+  border-bottom: 3px solid var(--border-project);
+}
+
+.tab[data-type="Tool"] {
+  background: var(--color-tool);
+  border-color: var(--border-tool);
+  color: var(--text-tool);
+}
+
+.tab[data-type="Tool"]:hover {
+  background: #e1bee7;
+}
+
+.tab[data-type="Tool"].active {
+  background: white;
+  border-bottom: 3px solid var(--border-tool);
 }
 
 /* Merge tab styles */
@@ -94,6 +232,43 @@ tr:hover { background: #f8f9fa; }
 .entity-card:hover {
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
   transform: translateY(-2px);
+}
+
+/* Entity type specific card colors */
+.entity-card[data-entity-type="Person"] {
+  background: var(--color-person);
+  border-color: var(--border-person);
+}
+
+.entity-card[data-entity-type="Person"] .entity-card-type {
+  color: var(--text-person);
+}
+
+.entity-card[data-entity-type="Company"] {
+  background: var(--color-company);
+  border-color: var(--border-company);
+}
+
+.entity-card[data-entity-type="Company"] .entity-card-type {
+  color: var(--text-company);
+}
+
+.entity-card[data-entity-type="Project"] {
+  background: var(--color-project);
+  border-color: var(--border-project);
+}
+
+.entity-card[data-entity-type="Project"] .entity-card-type {
+  color: var(--text-project);
+}
+
+.entity-card[data-entity-type="Tool"] {
+  background: var(--color-tool);
+  border-color: var(--border-tool);
+}
+
+.entity-card[data-entity-type="Tool"] .entity-card-type {
+  color: var(--text-tool);
 }
 
 .entity-card.dragging {
@@ -420,6 +595,7 @@ function reloadTabs() {
     Object.keys(counts).forEach(type => {
       const tab = document.createElement('div');
       tab.className = 'tab';
+      tab.setAttribute('data-type', type);
       tab.textContent = type;
       tab.onclick = () => showType(type);
       tabsDiv.appendChild(tab);
@@ -464,7 +640,9 @@ function showType(type) {
   activeType = type;
   
   // Show table, hide merge container
-  document.getElementById('entityTable').style.display = 'table';
+  const table = document.getElementById('entityTable');
+  table.style.display = 'table';
+  table.setAttribute('data-entity-type', type);
   document.getElementById('mergeContainer').style.display = 'none';
   
   // Update new entity button text to show current type
