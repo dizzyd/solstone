@@ -93,7 +93,7 @@ def test_openai_main(monkeypatch, tmp_path, capsys):
     assert isinstance(events[0]["ts"], int)
     assert events[0]["prompt"] == "hello"
     assert events[0]["persona"] == "default"
-    assert events[0]["model"] == "o4-mini"
+    assert events[0]["model"] == "gpt-5"
     assert events[-1]["event"] == "finish"
     assert isinstance(events[-1]["ts"], int)
     assert events[-1]["result"] == "ok"
@@ -200,7 +200,7 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     thinking_events = [e for e in events if e["event"] == "thinking"]
     assert len(thinking_events) == 1
     assert thinking_events[0]["summary"] == "I need to think about this step by step."
-    assert thinking_events[0]["model"] == "o4-mini-2025-04-16"
+    assert thinking_events[0]["model"] == "gpt-5"
     assert isinstance(thinking_events[0]["ts"], int)
     
     assert events[-1]["event"] == "finish"
@@ -286,7 +286,7 @@ def test_openai_outfile(monkeypatch, tmp_path):
     assert isinstance(events[0]["ts"], int)
     assert events[0]["prompt"] == "hello"
     assert events[0]["persona"] == "default"
-    assert events[0]["model"] == "o4-mini"
+    assert events[0]["model"] == "gpt-5"
     assert events[-1]["event"] == "finish"
     assert isinstance(events[-1]["ts"], int)
     assert events[-1]["result"] == "ok"
@@ -391,7 +391,7 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     thinking_events = [e for e in events if e["event"] == "thinking"]
     assert len(thinking_events) == 1
     assert thinking_events[0]["summary"] == "I need to think about this step by step."
-    assert thinking_events[0]["model"] == "o4-mini-2025-04-16"
+    assert thinking_events[0]["model"] == "gpt-5"
     assert isinstance(thinking_events[0]["ts"], int)
     
     assert events[-1]["event"] == "finish"
@@ -579,7 +579,7 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     thinking_events = [e for e in events if e["event"] == "thinking"]
     assert len(thinking_events) == 1
     assert thinking_events[0]["summary"] == "I need to think about this step by step."
-    assert thinking_events[0]["model"] == "o4-mini-2025-04-16"
+    assert thinking_events[0]["model"] == "gpt-5"
     assert isinstance(thinking_events[0]["ts"], int)
     
     assert events[-1]["event"] == "finish"

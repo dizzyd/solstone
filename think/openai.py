@@ -27,9 +27,9 @@ from agents import (
 from think.utils import agent_instructions, create_mcp_client
 
 from .agents import JSONEventCallback, ThinkingEvent
-from .models import GPT_O4_MINI
+from .models import GPT_5
 
-DEFAULT_MODEL = GPT_O4_MINI
+DEFAULT_MODEL = GPT_5
 DEFAULT_MAX_TOKENS = 1024 * 32
 
 
@@ -110,10 +110,9 @@ async def run_agent(
 
     try:
         model_name = model
-        if model.startswith("o4-mini"):
-            parts = model.split("-")
-            if len(parts) >= 2:
-                model_name = "-".join(parts[:2])
+        if model.startswith("gpt-5"):
+            # For gpt-5 models, use the full model name as-is
+            model_name = model
 
         callback.emit(
             {
