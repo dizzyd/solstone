@@ -362,8 +362,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--path", 
-        default="/mcp/", 
-        help="HTTP path for MCP endpoints (default: /mcp/)"
+        default="/mcp", 
+        help="HTTP path for MCP endpoints (default: /mcp)"
     )
     
     args = setup_cli(parser)
