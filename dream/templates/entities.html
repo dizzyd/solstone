@@ -47,15 +47,94 @@ tr:hover { background: #f8f9fa; }
 
 /* Tab styling with new entity button */
 .tabs-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin-bottom: 1em;
 }
 
 .tabs {
   display: flex;
   gap: 0;
+  margin-bottom: 1em;
+}
+
+/* Merge tab styles */
+.merge-container {
+  display: none;
+}
+
+.merge-search {
+  margin-bottom: 1.5em;
+}
+
+.merge-search input {
+  width: 100%;
+  padding: 0.75em;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1em;
+}
+
+.merge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1em;
+  margin-top: 1em;
+}
+
+.entity-card {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1em;
+  cursor: move;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+.entity-card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+.entity-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+}
+
+.entity-card.drag-over {
+  border-color: #007bff;
+  background: #e3f2fd;
+  transform: scale(1.05);
+}
+
+.entity-card-type {
+  font-size: 0.8em;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5em;
+}
+
+.entity-card-name {
+  font-weight: 600;
+  color: #333;
+  word-break: break-word;
+}
+
+.merge-status {
+  display: none;
+  padding: 1em;
+  margin: 1em 0;
+  border-radius: 6px;
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.merge-status.error {
+  background: #f8d7da;
+  color: #721c24;
+  border-color: #f5c6cb;
 }
 
 .new-entity-btn {
@@ -69,6 +148,8 @@ tr:hover { background: #f8f9fa; }
   font-weight: 500;
   transition: opacity 0.2s;
   white-space: nowrap;
+  margin-bottom: 1em;
+  display: inline-block;
 }
 
 .new-entity-btn:hover {
@@ -248,8 +329,8 @@ tr:hover { background: #f8f9fa; }
   <h1>Entity Review</h1>
   <div class="tabs-container">
     <div class="tabs" id="tabs"></div>
-    <button class="new-entity-btn" id="newEntityBtn" onclick="openNewEntityModal()" style="display: none;">+ New Entity</button>
   </div>
+  <button class="new-entity-btn" id="newEntityBtn" onclick="openNewEntityModal()" style="display: none;">+ New Entity</button>
   <table id="entityTable">
     <thead>
       <tr>
@@ -260,6 +341,14 @@ tr:hover { background: #f8f9fa; }
     </thead>
     <tbody id="entities"></tbody>
   </table>
+  
+  <div id="mergeContainer" class="merge-container">
+    <div class="merge-search">
+      <input type="text" id="mergeSearchInput" placeholder="Search entities to merge..." />
+    </div>
+    <div id="mergeStatus" class="merge-status"></div>
+    <div id="mergeGrid" class="merge-grid"></div>
+  </div>
 </div>
 
 <!-- Entity Details Modal -->
@@ -267,6 +356,23 @@ tr:hover { background: #f8f9fa; }
   <div class="modal-content">
     <span class="close">&times;</span>
     <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- Merge Confirmation Modal -->
+<div id="mergeConfirmModal" class="modal">
+  <div class="modal-content" style="max-width: 600px;">
+    <div class="modal-header">
+      <h2>Confirm Entity Merge</h2>
+      <span class="close" id="mergeConfirmClose">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div id="mergeDetails" style="margin-bottom: 1.5em;"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="mergeCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="mergeConfirmBtn">Confirm Merge</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -300,9 +406,13 @@ let data = {};
 let activeType = null;
 let currentItem = null;
 let generatingTops = new Set();
+let mergeMode = false;
+let allEntities = [];
+let draggedEntity = null;
 
 function reloadTabs() {
   const currentType = activeType;
+  const wasMergeMode = mergeMode;
   fetch('{{ url_for('entities.entities_types') }}').then(r => r.json()).then(counts => {
     const tabsDiv = document.getElementById('tabs');
     const newEntityBtn = document.getElementById('newEntityBtn');
@@ -310,12 +420,22 @@ function reloadTabs() {
     Object.keys(counts).forEach(type => {
       const tab = document.createElement('div');
       tab.className = 'tab';
-      tab.textContent = `${type} (${counts[type]})`;
+      tab.textContent = type;
       tab.onclick = () => showType(type);
       tabsDiv.appendChild(tab);
     });
+    
+    // Add Merge tab
+    const mergeTab = document.createElement('div');
+    mergeTab.className = 'tab';
+    mergeTab.textContent = 'Merge';
+    mergeTab.onclick = () => showMergeTab();
+    tabsDiv.appendChild(mergeTab);
+    
     const first = Object.keys(counts)[0];
-    if (currentType && counts[currentType] !== undefined) {
+    if (wasMergeMode) {
+      showMergeTab();
+    } else if (currentType && counts[currentType] !== undefined) {
       showType(currentType);
     } else if (first) {
       showType(first);
@@ -337,14 +457,20 @@ function loadType(type) {
 }
 
 function showType(type) {
+  mergeMode = false;
   document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.toggle('active', tab.textContent.startsWith(type));
   });
   activeType = type;
   
+  // Show table, hide merge container
+  document.getElementById('entityTable').style.display = 'table';
+  document.getElementById('mergeContainer').style.display = 'none';
+  
   // Update new entity button text to show current type
   const newEntityBtn = document.getElementById('newEntityBtn');
   newEntityBtn.textContent = `+ New ${type}`;
+  newEntityBtn.style.display = 'block';
   
   if (!data[type]) {
     loadType(type).then(renderTable);
@@ -673,10 +799,311 @@ function showNewEntityError(message) {
 document.getElementById('newEntityClose').onclick = closeNewEntityModal;
 document.getElementById('newEntityCancelBtn').onclick = closeNewEntityModal;
 
+// Merge Confirmation Modal event handlers
+document.getElementById('mergeConfirmClose').onclick = function() {
+  document.getElementById('mergeConfirmModal').style.display = 'none';
+  window.pendingMerge = null;
+};
+
+document.getElementById('mergeCancelBtn').onclick = function() {
+  document.getElementById('mergeConfirmModal').style.display = 'none';
+  window.pendingMerge = null;
+};
+
+document.getElementById('mergeConfirmBtn').onclick = function() {
+  if (window.pendingMerge) {
+    performMerge(window.pendingMerge.source, window.pendingMerge.target);
+  }
+};
+
 window.addEventListener('click', function(event) {
-  const modal = document.getElementById('newEntityModal');
-  if (event.target === modal) {
+  const newEntityModal = document.getElementById('newEntityModal');
+  const mergeModal = document.getElementById('mergeConfirmModal');
+  if (event.target === newEntityModal) {
     closeNewEntityModal();
+  } else if (event.target === mergeModal) {
+    mergeModal.style.display = 'none';
+    window.pendingMerge = null;
+  }
+});
+
+// Merge tab functionality
+function showMergeTab() {
+  mergeMode = true;
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.classList.toggle('active', tab.textContent === 'Merge');
+  });
+  
+  // Hide table, show merge container
+  document.getElementById('entityTable').style.display = 'none';
+  document.getElementById('mergeContainer').style.display = 'block';
+  document.getElementById('newEntityBtn').style.display = 'none';
+  
+  // Clear the search input and grid when switching to merge tab
+  const searchInput = document.getElementById('mergeSearchInput');
+  searchInput.value = '';
+  document.getElementById('mergeGrid').innerHTML = '';
+  allEntities = [];
+  
+  // Auto-focus the search input
+  searchInput.focus();
+}
+
+
+function renderMergeGrid(entities) {
+  const grid = document.getElementById('mergeGrid');
+  grid.innerHTML = '';
+  
+  entities.forEach(entity => {
+    const card = document.createElement('div');
+    card.className = 'entity-card';
+    card.draggable = true;
+    card.dataset.entityType = entity.type;
+    card.dataset.entityName = entity.name;
+    
+    // Get description for native tooltip
+    const description = entity.text && entity.text !== entity.name ? entity.text : 'No description available';
+    card.title = description;
+    
+    // Create card content
+    card.innerHTML = `
+      <div class="entity-card-type">${entity.type}</div>
+      <div class="entity-card-name">${entity.name}</div>
+    `;
+    
+    // Drag event handlers
+    card.addEventListener('dragstart', handleDragStart);
+    card.addEventListener('dragend', handleDragEnd);
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('drop', handleDrop);
+    card.addEventListener('dragenter', handleDragEnter);
+    card.addEventListener('dragleave', handleDragLeave);
+    
+    grid.appendChild(card);
+  });
+}
+
+function handleDragStart(e) {
+  draggedEntity = {
+    type: e.target.dataset.entityType,
+    name: e.target.dataset.entityName
+  };
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+  e.target.classList.remove('dragging');
+  // Clean up any lingering drag-over states
+  document.querySelectorAll('.entity-card.drag-over').forEach(card => {
+    card.classList.remove('drag-over');
+  });
+  draggedEntity = null;
+}
+
+function handleDragOver(e) {
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  e.dataTransfer.dropEffect = 'move';
+  
+  // Ensure the drag-over class is maintained while dragging over the element
+  if (draggedEntity && e.currentTarget.dataset.entityName !== draggedEntity.name) {
+    if (!e.currentTarget.classList.contains('drag-over')) {
+      e.currentTarget.classList.add('drag-over');
+    }
+  }
+  
+  return false;
+}
+
+function handleDragEnter(e) {
+  // Prevent event from bubbling to avoid issues with child elements
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (draggedEntity && e.currentTarget.dataset.entityName !== draggedEntity.name) {
+    e.currentTarget.classList.add('drag-over');
+  }
+}
+
+function handleDragLeave(e) {
+  // Prevent event from bubbling
+  e.stopPropagation();
+  
+  // Only remove drag-over if we're actually leaving the element
+  // Check if the related target is not a child of the current element
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = e.clientX;
+  const y = e.clientY;
+  
+  // Check if cursor is still within the bounds of the current element
+  if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+}
+
+async function handleDrop(e) {
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
+  
+  e.currentTarget.classList.remove('drag-over');
+  
+  const targetEntity = {
+    type: e.currentTarget.dataset.entityType,
+    name: e.currentTarget.dataset.entityName
+  };
+  
+  if (draggedEntity && targetEntity.name !== draggedEntity.name) {
+    // Show confirmation modal instead of directly merging
+    showMergeConfirmation(draggedEntity, targetEntity);
+  }
+  
+  return false;
+}
+
+async function showMergeConfirmation(source, target) {
+  // First, fetch entity details to get occurrence count
+  let sourceOccurrences = 0;
+  try {
+    const response = await fetch(`{{ url_for('search.search_entities_api') }}?type=${encodeURIComponent(source.type)}&name=${encodeURIComponent(source.name)}&limit=1000`);
+    const data = await response.json();
+    // Count day-specific occurrences (not the aggregated entry)
+    sourceOccurrences = data.results.filter(r => r.appearance).length;
+  } catch (error) {
+    console.error('Error fetching entity details:', error);
+  }
+  
+  // Build confirmation message
+  const detailsDiv = document.getElementById('mergeDetails');
+  detailsDiv.innerHTML = `
+    <div style="padding: 1em; background: #f8f9fa; border-radius: 8px; margin-bottom: 1em;">
+      <p style="margin-bottom: 1em;"><strong>This will merge:</strong></p>
+      <div style="display: flex; align-items: center; gap: 2em; margin-bottom: 1em;">
+        <div style="flex: 1; padding: 1em; background: white; border: 2px solid #dc3545; border-radius: 6px;">
+          <div style="font-size: 0.9em; color: #666; margin-bottom: 0.5em;">${source.type}</div>
+          <div style="font-weight: 600; color: #333;">${source.name}</div>
+        </div>
+        <div style="font-size: 1.5em;">→</div>
+        <div style="flex: 1; padding: 1em; background: white; border: 2px solid #28a745; border-radius: 6px;">
+          <div style="font-size: 0.9em; color: #666; margin-bottom: 0.5em;">${target.type}</div>
+          <div style="font-weight: 600; color: #333;">${target.name}</div>
+        </div>
+      </div>
+      ${sourceOccurrences > 0 ? `<p style="margin-bottom: 0.5em;"><strong>${sourceOccurrences} occurrence${sourceOccurrences !== 1 ? 's' : ''}</strong> will be updated.</p>` : ''}
+      <p style="margin: 0; color: #666; font-size: 0.9em;">All references to "${source.type}: ${source.name}" will be replaced with "${target.type}: ${target.name}"</p>
+    </div>
+  `;
+  
+  // Store entities for later use
+  window.pendingMerge = { source, target };
+  
+  // Show modal
+  const modal = document.getElementById('mergeConfirmModal');
+  modal.style.display = 'block';
+  
+  // Enable confirm button
+  const confirmBtn = document.getElementById('mergeConfirmBtn');
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Confirm Merge';
+}
+
+async function performMerge(source, target) {
+  const confirmBtn = document.getElementById('mergeConfirmBtn');
+  const modal = document.getElementById('mergeConfirmModal');
+  
+  // Disable button and show processing state
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Merging...';
+  
+  try {
+    // Call the backend merge endpoint
+    const response = await fetch('{{ url_for('entities.entities') }}/api/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: source.type,
+        source_name: source.name,
+        target_type: target.type,
+        target_name: target.name
+      })
+    });
+    
+    const result = await response.json();
+    
+    // Close modal
+    modal.style.display = 'none';
+    
+    const statusDiv = document.getElementById('mergeStatus');
+    statusDiv.style.display = 'block';
+    
+    if (response.ok) {
+      statusDiv.className = 'merge-status';
+      statusDiv.textContent = `Successfully merged "${source.type}: ${source.name}" into "${target.type}: ${target.name}"`;
+      
+      // Re-run the current search after merge
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+        const searchInput = document.getElementById('mergeSearchInput');
+        if (searchInput.value.trim().length >= 2) {
+          // Trigger the search again to refresh results
+          searchInput.dispatchEvent(new Event('input'));
+        } else {
+          // Clear the grid if no valid search
+          document.getElementById('mergeGrid').innerHTML = '';
+          allEntities = [];
+        }
+      }, 3000);
+    } else {
+      statusDiv.className = 'merge-status error';
+      statusDiv.textContent = result.error || 'Error performing merge';
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 5000);
+    }
+  } catch (error) {
+    // Close modal
+    modal.style.display = 'none';
+    
+    const statusDiv = document.getElementById('mergeStatus');
+    statusDiv.className = 'merge-status error';
+    statusDiv.style.display = 'block';
+    statusDiv.textContent = 'Network error occurred during merge';
+    console.error('Merge error:', error);
+    setTimeout(() => {
+      statusDiv.style.display = 'none';
+    }, 5000);
+  } finally {
+    // Reset button state
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Confirm Merge';
+  }
+}
+
+// Search functionality for merge tab
+document.getElementById('mergeSearchInput').addEventListener('input', async (e) => {
+  const query = e.target.value.trim();
+  
+  if (query.length === 0) {
+    // Clear the grid when search is empty
+    document.getElementById('mergeGrid').innerHTML = '';
+    allEntities = [];
+    return;
+  }
+  
+  if (query.length < 2) {
+    return; // Wait for at least 2 characters
+  }
+  
+  try {
+    const response = await fetch(`{{ url_for('search.search_entities_api') }}?q=${encodeURIComponent(query)}&limit=100`);
+    const data = await response.json();
+    const filtered = data.results.filter(e => !e.appearance);
+    allEntities = filtered; // Store the search results
+    renderMergeGrid(filtered);
+  } catch (error) {
+    console.error('Search error:', error);
   }
 });
 

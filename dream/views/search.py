@@ -173,8 +173,7 @@ def search_transcripts_api() -> Any:
 @bp.route("/search/api/entities")
 def search_entities_api() -> Any:
     query = request.args.get("q", "").strip()
-    if not query:
-        return jsonify({"total": 0, "results": []})
+    # Allow empty query to return all entities (useful for merge tab)
 
     try:
         limit = int(request.args.get("limit", 20))

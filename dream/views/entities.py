@@ -14,6 +14,7 @@ from ..utils import (
     generate_top_summary,
     modify_entity_file,
     modify_entity_in_file,
+    parse_entity_line,
     update_top_entry,
 )
 
@@ -234,6 +235,122 @@ def api_create_entity() -> Any:
             ),
             500,
         )
+
+
+@bp.route("/entities/api/merge", methods=["POST"])
+def api_merge_entities() -> Any:
+    """Merge source entity into target entity by renaming all occurrences."""
+    payload = request.get_json(force=True)
+    source_type = payload.get("source_type")
+    source_name = payload.get("source_name")
+    target_type = payload.get("target_type")
+    target_name = payload.get("target_name")
+
+    if not all([source_type, source_name, target_type, target_name]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    if source_name == target_name and source_type == target_type:
+        return jsonify({"error": "Cannot merge entity with itself"}), 400
+
+    # Get all days where the source entity appears
+    _total, source_results = search_entities(
+        "", limit=1000, etype=source_type, name=source_name, order="day"
+    )
+
+    if not source_results:
+        return jsonify({"error": f"Source entity '{source_type}: {source_name}' not found"}), 404
+
+    # Collect all days where source appears (excluding aggregated entity)
+    days_to_update = []
+    for result in source_results:
+        meta = result.get("metadata", {})
+        day = meta.get("day")
+        if day:  # Only process day-specific occurrences
+            days_to_update.append(day)
+
+    successful_days = []
+    failed_days = []
+
+    # Process each day's entities.md file to merge source into target
+    for day in days_to_update:
+        entities_file = os.path.join(state.journal_root, day, "entities.md")
+        if not os.path.exists(entities_file):
+            failed_days.append(day)
+            continue
+
+        try:
+            with open(entities_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            modified = False
+            new_lines = []
+
+            for line in lines:
+                # Parse entity line to check if it matches source
+                parsed = parse_entity_line(line)
+                if parsed:
+                    etype, name, desc = parsed
+                    if etype == source_type and name == source_name:
+                        # Replace with target entity, preserving description if present
+                        new_line = f"* {target_type}: {target_name}"
+                        if desc:
+                            new_line += f" - {desc}"
+                        new_line += "\n" if line.endswith("\n") else ""
+                        new_lines.append(new_line)
+                        modified = True
+                    else:
+                        new_lines.append(line)
+                else:
+                    new_lines.append(line)
+
+            if modified:
+                with open(entities_file, "w", encoding="utf-8") as f:
+                    f.writelines(new_lines)
+                successful_days.append(day)
+            else:
+                # No source entity found in this day
+                failed_days.append(day)
+        except Exception as e:
+            logging.error(f"Error processing entities.md for day {day}: {e}")
+            failed_days.append(day)
+
+    # Handle top-level entity merge
+    top_file = os.path.join(state.journal_root, "entities.md")
+
+    # First remove source from top-level if it exists
+    modify_entity_in_file(
+        top_file, source_type, source_name, None, "remove", require_match=False
+    )
+
+    # Ensure target exists in top-level (if source was top-level, promote target)
+    _total, target_results = search_entities(
+        "", limit=1, etype=target_type, name=target_name
+    )
+    if target_results and not target_results[0]["metadata"].get("top", False):
+        # Target exists but is not top-level, check if source was top-level
+        source_was_top = any(r["metadata"].get("top", False) for r in source_results)
+        if source_was_top:
+            # Promote target to top-level with source's description if available
+            source_desc = next(
+                (r["text"] for r in source_results if r["metadata"].get("top", False)),
+                target_name
+            )
+            update_top_entry(state.journal_root, target_type, target_name, source_desc)
+
+    if failed_days:
+        logging.info(
+            f"Entity merge '{source_type}: {source_name}' -> '{target_type}: {target_name}' "
+            f"failed for days: {failed_days}"
+        )
+
+    reload_entities()
+
+    return jsonify({
+        "status": "ok",
+        "successful_days": successful_days,
+        "failed_days": failed_days,
+        "message": f"Merged {len(successful_days)} occurrences"
+    })
 
 
 @bp.route("/entities/api/remove", methods=["POST"])
