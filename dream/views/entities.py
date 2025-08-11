@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Dict, List
 
@@ -178,15 +179,31 @@ def api_modify_entity() -> Any:
     etype = payload.get("type")
     name = payload.get("name")
     new_name = payload.get("new_name") if action == "rename" else None
+
+    successful_days = []
+    failed_days = []
+
     for day in days:
-        modify_entity_file(state.journal_root, day, etype, name, new_name, action)
+        success = modify_entity_file(state.journal_root, day, etype, name, new_name, action)
+        if success:
+            successful_days.append(day)
+        else:
+            failed_days.append(day)
+
     if action == "rename" and new_name:
         top_file = os.path.join(state.journal_root, "entities.md")
-        try:
-            modify_entity_in_file(
-                top_file, etype, name, new_name, "rename", require_match=False
-            )
-        except Exception:
-            pass
+        success = modify_entity_in_file(
+            top_file, etype, name, new_name, "rename", require_match=False
+        )
+        if not success:
+            logging.info(f"Entity '{etype}: {name}' not found in top-level entities.md, skipping top-level rename")
+
+    if failed_days:
+        logging.info(f"Entity '{etype}: {name}' operation '{action}' failed for days: {failed_days}")
+
     reload_entities()
-    return jsonify({"status": "ok"})
+    return jsonify({
+        "status": "ok",
+        "successful_days": successful_days,
+        "failed_days": failed_days
+    })

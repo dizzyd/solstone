@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import time
@@ -106,7 +107,7 @@ def modify_entity_in_file(
     """Remove or rename an entity entry in an entities.md file."""
     if not os.path.isfile(file_path):
         if require_match:
-            raise ValueError(f"entities.md not found at {file_path}")
+            logging.warning(f"entities.md not found at {file_path}")
         return False
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -120,10 +121,12 @@ def modify_entity_in_file(
             matches.append((idx, desc))
     if len(matches) == 0:
         if require_match:
-            raise ValueError(f"No match found for '{etype}: {name}' in {file_path}")
+            logging.warning(f"No match found for '{etype}: {name}' in {file_path}")
         return False
     if len(matches) > 1:
-        raise ValueError(f"Multiple matches found for '{etype}: {name}' in {file_path}")
+        logging.warning(f"Multiple matches found for '{etype}: {name}' in {file_path}, using first match")
+        # Use the first match instead of failing
+        matches = [matches[0]]
     idx, desc = matches[0]
     newline = "\n" if lines[idx].endswith("\n") else ""
     if operation == "remove":
@@ -145,13 +148,18 @@ def modify_entity_file(
     name: str,
     new_name: Optional[str] = None,
     operation: str = "remove",
-) -> None:
-    """Remove or rename an entity entry in a day's ``entities.md`` file."""
+) -> bool:
+    """Remove or rename an entity entry in a day's ``entities.md`` file.
+
+    Returns True if the operation was successful, False otherwise.
+    """
     file_path = os.path.join(journal, day, "entities.md")
-    modify_entity_in_file(
+    success = modify_entity_in_file(
         file_path, etype, name, new_name, operation, require_match=True
     )
-    log_entity_operation(journal, operation, day, etype, name, new_name)
+    if success:
+        log_entity_operation(journal, operation, day, etype, name, new_name)
+    return success
 
 
 def update_top_entry(journal: str, etype: str, name: str, desc: str) -> None:
