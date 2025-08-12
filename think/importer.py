@@ -89,6 +89,23 @@ def split_audio(path: str, out_dir: str, start: dt.datetime) -> None:
         logger.info(f"Added audio segment to journal: {dest}")
 
 
+def has_video_stream(path: str) -> bool:
+    """Check if a media file contains video streams."""
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        return False
+
+    # Check if we can actually read a frame
+    has_video = False
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_count > 0:
+        ret, frame = cap.read()
+        has_video = ret and frame is not None
+
+    cap.release()
+    return has_video
+
+
 def process_video(path: str, out_dir: str, start: dt.datetime, sample_s: float) -> None:
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
@@ -295,7 +312,10 @@ def main() -> None:
     if args.split:
         split_audio(args.media, day_dir, base_dt)
     if args.see:
-        process_video(args.media, day_dir, base_dt, args.see_sample)
+        if has_video_stream(args.media):
+            process_video(args.media, day_dir, base_dt, args.see_sample)
+        else:
+            logger.info(f"No video stream found in {args.media}, skipping video processing")
 
 
 if __name__ == "__main__":
