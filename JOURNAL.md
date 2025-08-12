@@ -78,9 +78,8 @@ Required fields:
 - `description` – detailed explanation of the matter's scope and purpose
 
 Optional fields:
-- `status` – current state (e.g., "active", "completed", "paused", "cancelled")
-- `priority` – importance level (e.g., "low", "medium", "high", "critical")
-- `tags` – array of relevant keywords for categorization and search
+- `status` – current state (e.g., "active", "archived")
+- `priority` – importance level (e.g., "low", "medium", "high")
 
 #### Matter activity log
 
