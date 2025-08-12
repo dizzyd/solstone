@@ -135,7 +135,7 @@ def import_list() -> Any:
         return jsonify([])
 
     # Iterate through each import folder
-    for import_folder in sorted(imports_dir.iterdir(), reverse=True):
+    for import_folder in imports_dir.iterdir():
         if not import_folder.is_dir():
             continue
 
@@ -151,6 +151,7 @@ def import_list() -> Any:
 
         # Read import.json if it exists
         import_json = import_folder / "import.json"
+        task_id = None
         if import_json.exists():
             try:
                 with open(import_json, "r", encoding="utf-8") as f:
@@ -160,9 +161,21 @@ def import_list() -> Any:
                     import_data["mime_type"] = import_meta.get("mime_type", "")
                     import_data["domain"] = import_meta.get("domain")
                     import_data["user_timestamp"] = import_meta.get("user_timestamp")
+                    task_id = import_meta.get("task_id")
+                    import_data["task_id"] = task_id
+                    # Use upload_timestamp if available for better sorting
+                    if "upload_timestamp" in import_meta:
+                        import_data["imported_at"] = import_meta["upload_timestamp"] / 1000  # Convert ms to seconds
+                    else:
+                        import_data["imported_at"] = import_folder.stat().st_ctime
             except Exception:
-                pass
+                import_data["imported_at"] = import_folder.stat().st_ctime
+        else:
+            import_data["imported_at"] = import_folder.stat().st_ctime
 
+        # Check task status if we have a task_id
+        import_data["status"] = "pending"  # Default status
+        
         # Read imported.json if it exists (processing results)
         imported_json = import_folder / "imported.json"
         if imported_json.exists():
@@ -172,6 +185,7 @@ def import_list() -> Any:
                     import_data["processed"] = True
                     import_data["total_files_created"] = imported_meta.get("total_files_created", 0)
                     import_data["target_day"] = imported_meta.get("target_day")
+                    import_data["status"] = "success"  # Has imported.json = successful
 
                     # Calculate duration from imported files
                     if imported_meta.get("all_created_files"):
@@ -194,10 +208,31 @@ def import_list() -> Any:
                                 import_data["duration_minutes"] = duration_minutes
             except Exception:
                 import_data["processed"] = False
+                # If task was started but no imported.json, it likely failed
+                if task_id:
+                    import_data["status"] = "failed"
         else:
             import_data["processed"] = False
+            # Check if task was started but didn't produce results
+            if task_id:
+                # Check for task exit code by looking at task history
+                from dream.tasks import task_manager
+                task = task_manager.tasks.get(task_id)
+                if task:
+                    if task.exit_code is not None and task.exit_code != 0:
+                        import_data["status"] = "failed"
+                    elif task.exit_code == 0:
+                        import_data["status"] = "success"
+                    else:
+                        import_data["status"] = "running"
+                else:
+                    # Task was started but no longer in memory, likely failed
+                    import_data["status"] = "failed"
 
         imports.append(import_data)
+
+    # Sort by imported_at (newest first)
+    imports.sort(key=lambda x: x.get("imported_at", 0), reverse=True)
 
     return jsonify(imports)
 
@@ -232,6 +267,7 @@ def import_detail_api(timestamp: str) -> Any:
         "import_json": None,
         "imported_json": None,
         "revai_json": None,
+        "has_summary": False,
     }
 
     # Read import.json
@@ -261,7 +297,39 @@ def import_detail_api(timestamp: str) -> Any:
         except Exception:
             pass
 
+    # Check if summary.md exists
+    summary_path = import_dir / "summary.md"
+    if summary_path.exists():
+        result["has_summary"] = True
+
     return jsonify(result)
+
+
+@bp.route("/import/api/<timestamp>/summary")
+def import_summary_api(timestamp: str) -> Any:
+    """Get the summary HTML for a specific import."""
+    if not state.journal_root:
+        return jsonify({"error": "JOURNAL_PATH not set"}), 500
+
+    import_dir = Path(state.journal_root) / "imports" / timestamp
+    if not import_dir.exists():
+        return jsonify({"error": "Import not found"}), 404
+
+    summary_path = import_dir / "summary.md"
+    if not summary_path.exists():
+        return jsonify({"html": "<div class='no-data'>No summary available</div>", "has_summary": False})
+
+    try:
+        with open(summary_path, "r", encoding="utf-8") as f:
+            summary_md = f.read()
+        
+        # Render markdown to HTML server-side
+        import markdown  # type: ignore
+        html_output = markdown.markdown(summary_md, extensions=["extra", "codehilite", "fenced_code", "tables"])
+        
+        return jsonify({"html": html_output, "has_summary": True})
+    except Exception as e:
+        return jsonify({"error": str(e), "html": "<div class='no-data'>Error loading summary</div>", "has_summary": False})
 
 
 @bp.route("/import/api/start", methods=["POST"])

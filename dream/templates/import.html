@@ -194,13 +194,28 @@ function loadImports(){
     html += '</tr></thead><tbody>';
     
     imports.forEach(imp => {
-      const createdAt = new Date(imp.created_at * 1000).toLocaleString();
+      // Use imported_at timestamp for display
+      const importedAt = imp.imported_at ? new Date(imp.imported_at * 1000).toLocaleString() : new Date(imp.created_at * 1000).toLocaleString();
       const targetDay = imp.target_day ? imp.target_day.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '-';
-      const statusClass = imp.processed ? 'success' : 'pending';
-      const statusText = imp.processed ? 'Completed' : 'Pending';
+      
+      // Determine status class and text based on new status field
+      let statusClass, statusText;
+      if (imp.status === 'success') {
+        statusClass = 'success';
+        statusText = 'Completed';
+      } else if (imp.status === 'failed') {
+        statusClass = 'failed';
+        statusText = 'Failed';
+      } else if (imp.status === 'running') {
+        statusClass = 'pending';
+        statusText = 'Running';
+      } else {
+        statusClass = 'pending';
+        statusText = 'Pending';
+      }
       
       html += `<tr onclick="window.location.href='/import/${imp.timestamp}'">`;
-      html += `<td>${createdAt}</td>`;
+      html += `<td>${importedAt}</td>`;
       html += `<td>${imp.original_filename || 'Unknown'}</td>`;
       html += `<td class="file-size">${formatFileSize(imp.file_size || 0)}</td>`;
       html += `<td>`;
