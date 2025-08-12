@@ -153,3 +153,11 @@ Guide for updating:
 
 - Streamlined domain creation by auto-generating handles from titles and hiding the description field.
 - Removed descriptions from the domains list view.
+
+## 2025-08-12
+
+- Added "source" column to think/indexer transcripts to track origin of text (e.g., 'mic', 'sys', 'monitor_1')
+- Audio transcripts now extract source from the JSON "source" field alongside "text"
+- Screen diff transcripts extract source from filename pattern (e.g., '123456_monitor_1_diff.json' → 'monitor_1')
+- Added optional --source filter to transcript search for filtering results by source
+- Search results now display source in brackets (e.g., [mic], [sys], [monitor_1])

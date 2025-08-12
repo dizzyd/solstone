@@ -56,7 +56,7 @@ SCHEMAS = {
         "CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, mtime INTEGER)",
         """
         CREATE VIRTUAL TABLE IF NOT EXISTS transcripts_text USING fts5(
-            content, path UNINDEXED, day UNINDEXED, time UNINDEXED, type UNINDEXED
+            content, path UNINDEXED, day UNINDEXED, time UNINDEXED, type UNINDEXED, source UNINDEXED
         )
         """,
     ],

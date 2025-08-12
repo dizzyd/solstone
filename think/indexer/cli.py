@@ -19,7 +19,9 @@ def _display_search_results(results: List[Dict[str, str]]) -> None:
         meta = r.get("metadata", {})
         snippet = r["text"]
         label = meta.get("topic") or meta.get("time") or ""
-        print(f"{idx}. {meta.get('day')} {label}: {snippet}")
+        source = meta.get("source")
+        source_str = f" [{source}]" if source else ""
+        print(f"{idx}. {meta.get('day')} {label}{source_str}: {snippet}")
 
 
 def main() -> None:
@@ -50,6 +52,10 @@ def main() -> None:
     parser.add_argument(
         "--day",
         help="Limit transcript query to a specific YYYYMMDD day",
+    )
+    parser.add_argument(
+        "--source",
+        help="Filter transcript results by source (e.g., 'mic', 'sys', 'monitor_1')",
     )
     parser.add_argument(
         "-q",
@@ -123,7 +129,7 @@ def main() -> None:
 
         if args.index == "transcripts":
             search_func = search_transcripts
-            query_kwargs = {"day": args.day}
+            query_kwargs = {"day": args.day, "source": args.source}
         elif args.index == "events":
             search_func = search_events
             query_kwargs = {}

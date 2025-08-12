@@ -232,7 +232,7 @@ def convert_revai_to_sunstone(revai_json: dict) -> list:
                     # Create entry
                     entry = {
                         "start": start_time,
-                        "source": "mic",
+                        "source": "import",
                         "speaker": speaker,
                         "text": current_text.strip(),
                     }
@@ -241,9 +241,9 @@ def convert_revai_to_sunstone(revai_json: dict) -> list:
                     if confidences:
                         avg_confidence = sum(confidences) / len(confidences)
                         if avg_confidence < 0.7:
-                            entry["description"] = "low confidence transcription"
+                            entry["description"] = "low confidence"
                         elif avg_confidence > 0.95:
-                            entry["description"] = "clear and confident speech"
+                            entry["description"] = "clear"
 
                     result.append(entry)
 

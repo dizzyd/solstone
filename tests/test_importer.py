@@ -111,7 +111,7 @@ def test_importer_audio_transcribe(tmp_path, monkeypatch):
     assert len(chunk1) == 2
     assert chunk1[0]["text"] == "Hello world."
     assert chunk1[0]["speaker"] == 1  # Rev uses 0-based, we use 1-based
-    assert chunk1[0]["source"] == "mic"
+    assert chunk1[0]["source"] == "import"
     assert chunk1[0]["start"] == "00:00:00"
     assert chunk1[1]["text"] == "This is a test."
 
