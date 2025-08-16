@@ -44,11 +44,13 @@ class ToolExecutor:
 
     async def execute_tool(self, tool_use: ToolUseBlock) -> dict:
         """Execute ``tool_use`` and return a Claude ``tool_result`` block."""
+        call_id = tool_use.id  # Use Claude's tool_use_id as call_id
         self.callback.emit(
             {
                 "event": "tool_start",
                 "tool": tool_use.name,
                 "args": tool_use.input,
+                "call_id": call_id,
             }
         )
 
@@ -93,6 +95,7 @@ class ToolExecutor:
                     "event": "tool_end",
                     "tool": tool_use.name,
                     "result": result_data,
+                    "call_id": call_id,
                 }
             )
             content = (
@@ -104,6 +107,7 @@ class ToolExecutor:
                     "event": "tool_end",
                     "tool": tool_use.name,
                     "result": {"error": str(exc)},
+                    "call_id": call_id,
                 }
             )
             content = f"Error: {exc}"

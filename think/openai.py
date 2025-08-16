@@ -43,7 +43,7 @@ from .agents import JSONEventCallback, ThinkingEvent
 from .models import GPT_5
 
 DEFAULT_MODEL = os.getenv("OPENAI_AGENT_MODEL", GPT_5)
-DEFAULT_MAX_TOKENS = int(os.getenv("OPENAI_AGENT_MAX_TOKENS", "1024"))
+DEFAULT_MAX_TOKENS = int(os.getenv("OPENAI_AGENT_MAX_TOKENS", "8192"))
 DEFAULT_MAX_TURNS = int(os.getenv("OPENAI_AGENT_MAX_TURNS", "32"))
 
 LOG = logging.getLogger("think.openai")

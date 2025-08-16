@@ -43,11 +43,19 @@ class ToolLoggingHooks:
 
     def attach(self, session: Any) -> None:
         original = session.call_tool
+        
+        # Simple counter to generate unique call IDs for Google backend
+        import time
+        call_counter = 0
 
         async def wrapped(name: str, arguments: dict | None = None, **kwargs) -> Any:
-            self.writer.emit({"event": "tool_start", "tool": name, "args": arguments})
+            nonlocal call_counter
+            call_counter += 1
+            call_id = f"google_{int(time.time()*1000)}_{call_counter}"
+            
+            self.writer.emit({"event": "tool_start", "tool": name, "args": arguments, "call_id": call_id})
             result = await original(name=name, arguments=arguments, **kwargs)
-            self.writer.emit({"event": "tool_end", "tool": name, "result": result})
+            self.writer.emit({"event": "tool_end", "tool": name, "result": result, "call_id": call_id})
             return result
 
         session.call_tool = wrapped  # type: ignore[assignment]

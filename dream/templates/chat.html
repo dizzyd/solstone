@@ -16,8 +16,12 @@ body {height:100vh; overflow:hidden;}
 #messages .tool-placard{background:#e3f2fd;border:1px solid #2196f3;border-radius:6px;padding:0.4em 0.6em;margin-bottom:0.5em;font-size:0.8em;max-width:60%;align-self:flex-start;cursor:help;position:relative;}
 #messages .tool-placard:hover{background:#bbdefb;}
 #messages .tool-placard .tool-name{font-weight:bold;color:#1976d2;}
+#messages .tool-placard .tool-status{font-size:0.9em;color:#666;margin-left:0.5em;}
+#messages .tool-placard.completed{background:#e8f5e9;border-color:#4caf50;}
+#messages .tool-placard.completed .tool-name{color:#2e7d32;}
 #messages .tool-placard .tool-tooltip{visibility:hidden;background:#333;color:#fff;text-align:left;border-radius:4px;padding:0.5em;position:absolute;z-index:1000;bottom:125%;left:0;min-width:300px;max-width:500px;font-size:0.75em;font-family:monospace;white-space:pre-wrap;opacity:0;transition:opacity 0.3s;}
 #messages .tool-placard:hover .tool-tooltip{visibility:visible;opacity:1;}
+#messages .agent-update{background:#fff3e0;border:1px solid #ff9800;border-radius:6px;padding:0.4em 0.6em;margin-bottom:0.5em;font-size:0.8em;max-width:60%;align-self:flex-start;color:#e65100;font-style:italic;}
 #messages .thinking-card{background:#f8f4ff;border:1px solid #9c27b0;border-radius:6px;padding:0.5em 0.75em;margin-bottom:0.75em;font-size:0.85em;max-width:80%;align-self:flex-start;cursor:pointer;}
 #messages .thinking-card:hover{background:#f3e5f5;}
 #messages .thinking-card .thinking-label{font-weight:bold;color:#7b1fa2;margin-bottom:0.25em;}
@@ -104,14 +108,22 @@ function addEventCard(text, url){
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
 }
 
-function addToolPlacard(toolName, args){
+// Track tool calls by ID to update them when complete
+const toolPlacards = {};
+
+function addToolPlacard(toolName, args, callId){
   const div=document.createElement('div');
   div.className='tool-placard';
   
   const nameSpan=document.createElement('span');
   nameSpan.className='tool-name';
-  nameSpan.textContent=toolName;
+  nameSpan.textContent='🔧 ' + toolName;
   div.appendChild(nameSpan);
+  
+  const statusSpan=document.createElement('span');
+  statusSpan.className='tool-status';
+  statusSpan.textContent='(running...)';
+  div.appendChild(statusSpan);
   
   if(args){
     const tooltip=document.createElement('div');
@@ -120,6 +132,37 @@ function addToolPlacard(toolName, args){
     div.appendChild(tooltip);
   }
   
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop=messagesDiv.scrollHeight;
+  
+  // Store reference to update later
+  if(callId){
+    toolPlacards[callId] = {div, statusSpan};
+  }
+  return div;
+}
+
+function completeToolPlacard(callId, result){
+  if(toolPlacards[callId]){
+    const {div, statusSpan} = toolPlacards[callId];
+    div.classList.add('completed');
+    statusSpan.textContent = '✓';
+    
+    // Add result to tooltip if exists
+    const tooltip = div.querySelector('.tool-tooltip');
+    if(tooltip && result){
+      const resultText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+      tooltip.textContent += '\n\n=== Result ===\n' + resultText;
+    }
+    
+    delete toolPlacards[callId];
+  }
+}
+
+function addAgentUpdate(agentName){
+  const div=document.createElement('div');
+  div.className='agent-update';
+  div.textContent=`→ Switched to ${agentName} agent`;
   messagesDiv.appendChild(div);
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
 }
@@ -233,11 +276,17 @@ function handleHistoricalEvent(event){
       addEventCard('Search '+event.args.query,url);
     } else {
       // Handle all other tools with placards
-      addToolPlacard(event.tool, event.args);
+      addToolPlacard(event.tool, event.args, event.call_id);
     }
+  } else if(event.event === 'tool_end'){
+    // Update tool placard to show completion
+    completeToolPlacard(event.call_id, event.result);
   } else if(event.event === 'thinking'){
     // Handle thinking events
     addThinkingCard(event.summary, event.model || 'unknown');
+  } else if(event.event === 'agent_updated'){
+    // Handle agent switch events
+    addAgentUpdate(event.agent || 'unknown');
   }
 }
 
@@ -277,11 +326,17 @@ if(isHistorical){
         addEventCard('Search '+e.args.query,url);
       } else {
         // Handle all other tools with placards
-        addToolPlacard(e.tool, e.args);
+        addToolPlacard(e.tool, e.args, e.call_id);
       }
+    } else if(e.event==='tool_end'){
+      // Update tool placard to show completion
+      completeToolPlacard(e.call_id, e.result);
     } else if(e.event==='thinking'){
       // Handle thinking events
       addThinkingCard(e.summary, e.model || 'unknown');
+    } else if(e.event==='agent_updated'){
+      // Handle agent switch events
+      addAgentUpdate(e.agent || 'unknown');
     }
   });
 

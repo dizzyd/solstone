@@ -21,6 +21,7 @@ class ToolStartEvent(TypedDict):
     ts: int
     tool: str
     args: Optional[dict[str, Any]]
+    call_id: Optional[str]  # Unique ID to pair with tool_end event
 
 
 class ToolEndEvent(TypedDict):
@@ -30,6 +31,7 @@ class ToolEndEvent(TypedDict):
     ts: int
     tool: str
     result: Any
+    call_id: Optional[str]  # Matches the call_id from tool_start
 
 
 class StartEvent(TypedDict):
