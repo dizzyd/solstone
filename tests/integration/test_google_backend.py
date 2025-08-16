@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
+from think.models import GEMINI_FLASH
+
 
 def get_fixtures_env():
     """Load the fixtures/.env file and return the environment."""
@@ -82,7 +84,7 @@ def test_google_backend_real_api():
             env["JOURNAL_PATH"] = journal_path
             env["GOOGLE_API_KEY"] = api_key
             # Use the default model (or override for testing)
-            # env["GOOGLE_AGENT_MODEL"] = "gemini-2.0-flash-exp"  # Uncomment to use specific model
+            # Using default model
             env["GOOGLE_AGENT_MAX_TOKENS"] = "100"
             env["GOOGLE_AGENT_MAX_TURNS"] = "1"
             
@@ -122,7 +124,7 @@ def test_google_backend_real_api():
             assert start_event["event"] == "start"
             assert start_event["prompt"] == "what is 1+1? Just give me the number."
             # Check the model - should be either the default or the one we set
-            expected_model = env.get("GOOGLE_AGENT_MODEL", "gemini-2.5-flash")
+            expected_model = env.get("GOOGLE_AGENT_MODEL", GEMINI_FLASH)
             assert start_event["model"] == expected_model
             assert start_event["persona"] == "default"
             assert isinstance(start_event["ts"], int)
@@ -206,7 +208,7 @@ def test_google_backend_with_verbose():
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal_path
             env["GOOGLE_API_KEY"] = api_key
-            env["GOOGLE_AGENT_MODEL"] = "gemini-2.0-flash-exp"
+            # Use default model
             env["GOOGLE_AGENT_MAX_TOKENS"] = "100"
             env["GOOGLE_AGENT_MAX_TURNS"] = "1"
             
@@ -253,8 +255,8 @@ def test_google_backend_with_verbose():
 
 @pytest.mark.integration
 @pytest.mark.requires_api
-def test_google_backend_with_thinking():
-    """Test Google backend with thinking model (if available)."""
+def test_google_backend_with_reasoning():
+    """Test Google backend with reasoning task."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
     
     if not fixtures_env:
@@ -300,7 +302,7 @@ def test_google_backend_with_thinking():
             env["JOURNAL_PATH"] = journal_path
             env["GOOGLE_API_KEY"] = api_key
             # Use gemini-2.0-flash-thinking-exp if available
-            env["GOOGLE_AGENT_MODEL"] = "gemini-2.0-flash-thinking-exp-01-21"
+            # Use default model (thinking capabilities may vary)
             env["GOOGLE_AGENT_MAX_TOKENS"] = "200"
             env["GOOGLE_AGENT_MAX_TURNS"] = "1"
             

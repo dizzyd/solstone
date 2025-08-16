@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
+from think.models import CLAUDE_SONNET_4, CLAUDE_HAIKU_3_5
+
 
 def get_fixtures_env():
     """Load the fixtures/.env file and return the environment."""
@@ -82,7 +84,7 @@ def test_anthropic_backend_real_api():
             env["JOURNAL_PATH"] = journal_path
             env["ANTHROPIC_API_KEY"] = api_key
             # Use the default model (or override with haiku for testing)
-            # env["ANTHROPIC_AGENT_MODEL"] = "claude-3-5-haiku-20241022"  # Uncomment to use haiku
+            # Using default model
             env["ANTHROPIC_AGENT_MAX_TOKENS"] = "100"
             env["ANTHROPIC_AGENT_MAX_TURNS"] = "1"
             
@@ -122,7 +124,7 @@ def test_anthropic_backend_real_api():
             assert start_event["event"] == "start"
             assert start_event["prompt"] == "what is 1+1? Just give me the number."
             # Check the model - should be either the default or the one we set
-            expected_model = env.get("ANTHROPIC_AGENT_MODEL", "claude-sonnet-4-20250514")
+            expected_model = env.get("ANTHROPIC_AGENT_MODEL", CLAUDE_SONNET_4)
             assert start_event["model"] == expected_model
             assert start_event["persona"] == "default"
             assert isinstance(start_event["ts"], int)
@@ -203,7 +205,7 @@ def test_anthropic_backend_with_verbose():
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal_path
             env["ANTHROPIC_API_KEY"] = api_key
-            env["ANTHROPIC_AGENT_MODEL"] = "claude-3-5-haiku-20241022"
+            # Use default model
             env["ANTHROPIC_AGENT_MAX_TOKENS"] = "100"
             env["ANTHROPIC_AGENT_MAX_TURNS"] = "1"
             
@@ -250,8 +252,8 @@ def test_anthropic_backend_with_verbose():
 
 @pytest.mark.integration
 @pytest.mark.requires_api
-def test_anthropic_backend_with_sonnet():
-    """Test Anthropic backend with Claude 3.5 Sonnet model."""
+def test_anthropic_backend_with_max_turns():
+    """Test Anthropic backend with multiple turns enabled."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
     
     if not fixtures_env:
@@ -296,7 +298,7 @@ def test_anthropic_backend_with_sonnet():
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal_path
             env["ANTHROPIC_API_KEY"] = api_key
-            env["ANTHROPIC_AGENT_MODEL"] = "claude-3-5-sonnet-20241022"
+            # Use default model with more tokens for complex reasoning
             env["ANTHROPIC_AGENT_MAX_TOKENS"] = "200"
             env["ANTHROPIC_AGENT_MAX_TURNS"] = "1"
             
