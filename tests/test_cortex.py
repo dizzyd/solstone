@@ -237,7 +237,7 @@ def test_handle_spawn(mock_thread, mock_popen, cortex_server, mock_journal):
     call_args = mock_popen.call_args
     cmd = call_args[0][0]
 
-    assert "think.agents" in cmd
+    assert "think-agents" in cmd
     assert "--backend" in cmd
     assert "openai" in cmd
     assert "--model" in cmd

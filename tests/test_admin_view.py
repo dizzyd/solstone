@@ -65,13 +65,7 @@ def test_admin_actions(monkeypatch, tmp_path):
     with review.app.test_request_context("/admin/api/reindex", method="POST"):
         resp = review.reindex()
     assert resp.json["status"] == "ok"
-    assert [
-        sys.executable,
-        "-m",
-        "think.indexer",
-        "--rescan-all",
-        "--verbose",
-    ] in called
+    assert ["think-indexer", "--rescan-all", "--verbose"] in called
 
     called.clear()
     with review.app.test_request_context("/admin/api/summary", method="POST"):
