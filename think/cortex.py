@@ -248,9 +248,7 @@ class CortexServer:
         # Spawn the agent process
         try:
             cmd = [
-                sys.executable,
-                "-m",
-                "think.agents",
+                "think-agents",
                 "--backend",
                 backend,
                 "--persona",
@@ -359,23 +357,36 @@ class CortexServer:
             if exit_code is not None:
                 self.logger.info(f"Agent {agent.agent_id} exited with code {exit_code}")
 
-                # Create finish event
-                finish_event = {
-                    "event": "finish" if exit_code == 0 else "error",
-                    "ts": int(time.time() * 1000),
-                    "exit_code": exit_code,
-                }
-
-                # Store in memory
+                # Check if agent already emitted a finish event
+                has_finish_event = False
                 with agent.lock:
-                    agent.events.append(finish_event)
+                    for event in agent.events:
+                        if event.get("event") in ["finish", "error"]:
+                            has_finish_event = True
+                            break
 
-                # Write to log file
-                try:
-                    with open(agent.log_path, "a") as f:
-                        f.write(json.dumps(finish_event) + "\n")
-                except Exception as e:
-                    self.logger.warning(f"Failed to write finish event: {e}")
+                # If no finish event was emitted, create one
+                if not has_finish_event:
+                    self.logger.warning(
+                        f"Agent {agent.agent_id} exited without emitting finish event"
+                    )
+                    finish_event = {
+                        "event": "error",
+                        "ts": int(time.time() * 1000),
+                        "exit_code": exit_code,
+                        "message": f"Agent exited with code {exit_code} without emitting finish event",
+                    }
+
+                    # Store in memory
+                    with agent.lock:
+                        agent.events.append(finish_event)
+
+                    # Write to log file
+                    try:
+                        with open(agent.log_path, "a") as f:
+                            f.write(json.dumps(finish_event) + "\n")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to write finish event: {e}")
 
             with self.lock:
                 if agent.agent_id in self.running_agents:

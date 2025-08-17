@@ -10,4 +10,5 @@ logs/
 .coverage
 fixtures/journal/agents/*.jsonl
 .deps-installed
+.package-installed
 *.sqlite
