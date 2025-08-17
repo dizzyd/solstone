@@ -763,7 +763,7 @@ def upload_attachment(domain_name: str, matter_id: str) -> Any:
         log_entry = {
             "timestamp": datetime.now().isoformat() + "Z",
             "type": "attachment",
-            "description": f"Uploaded attachment: {filename}",
+            "message": f"Uploaded attachment: {filename}",
             "user": "system",
         }
 
@@ -841,7 +841,7 @@ def update_attachment_metadata(domain_name: str, matter_id: str) -> Any:
         log_entry = {
             "timestamp": datetime.now().isoformat() + "Z",
             "type": "update",
-            "description": f"Updated attachment metadata: {title}",
+            "message": f"Updated attachment metadata: {title}",
             "user": "system",
         }
 
@@ -919,7 +919,7 @@ def update_matter(domain_name: str, matter_id: str) -> Any:
             log_entry = {
                 "timestamp": datetime.now().isoformat() + "Z",
                 "type": "update",
-                "description": f"Updated {', '.join(changes)}",
+                "message": f"Updated {', '.join(changes)}",
                 "user": "system",
             }
 
@@ -993,7 +993,7 @@ def create_objective(domain_name: str, matter_id: str) -> Any:
         log_entry = {
             "timestamp": datetime.now().isoformat() + "Z",
             "type": "created",
-            "description": f"Created objective: {objective_name}",
+            "message": f"Created objective: {objective_name}",
             "user": "system",
         }
 

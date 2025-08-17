@@ -117,12 +117,12 @@ def test_get_matter_comprehensive():
             {
                 "timestamp": "2025-01-01T12:00:00Z",
                 "type": "created",
-                "description": "Matter created",
+                "message": "Matter created",
             },
             {
                 "timestamp": "2025-01-01T12:30:00Z",
                 "type": "progress",
-                "description": "Started work",
+                "message": "Started work",
             },
         ]
         (matter_path / "activity_log.jsonl").write_text(
@@ -516,7 +516,7 @@ def test_create_objective_api():
                 ]
                 assert len(log_entries) == 1
                 assert log_entries[0]["type"] == "created"
-                assert "test_implementation" in log_entries[0]["description"]
+                assert "test_implementation" in log_entries[0]["message"]
 
 
 def test_create_objective_validation():

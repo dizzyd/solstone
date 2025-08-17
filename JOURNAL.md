@@ -85,7 +85,16 @@ Optional fields:
 
 #### Matter activity log
 
-The `activity_log.jsonl` file maintains a chronological record of all matter-related activities in JSON Lines format. The specific format and fields will be defined separately.
+The `activity_log.jsonl` file maintains a chronological record of all matter-related activities in JSON Lines format. Each line is a JSON object with the following fields plus any other fields relevant to that type:
+
+```json
+{
+  "timestamp": 1755450767962,  // epoch ms
+  "type": "update",                      // Event type
+  "message": "Updated matter status",    // Human-readable description of the activity
+
+}
+```
 
 #### Matter attachments
 

@@ -801,7 +801,7 @@
               {% if log_entry.type %}
               <span class="log-type log-type-{{ log_entry.type }}">{{ log_entry.type }}</span>
               {% endif %}
-              {{ log_entry.description or log_entry.message or 'No description' }}
+              {{ log_entry.message or log_entry.description or 'No message' }}
               {% if log_entry.user %}
               <small style="color: #adb5bd; margin-left: 0.5rem;">— {{ log_entry.user }}</small>
               {% endif %}
