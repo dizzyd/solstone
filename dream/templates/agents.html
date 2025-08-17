@@ -5,6 +5,57 @@
 <style>
 .container { padding: 0 1em; }
 
+/* Tab Navigation */
+.tab-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+
+.tab-button {
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #666;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.tab-button:hover {
+  color: #007bff;
+  background: #f8f9ff;
+}
+
+.tab-button.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  font-weight: 500;
+}
+
+/* Tab Content */
+.tab-container {
+  min-height: 400px;
+}
+
+.main-tab-content {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+
+.main-tab-content.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Agent Cards */
 .agent-cards {
   display: grid;
@@ -73,13 +124,13 @@
 /* Input Form */
 .input-area {
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 1rem;
   margin-bottom: 2rem;
 }
 
 .input-area textarea {
-  flex: 1;
+  width: 100%;
   padding: 0.75rem;
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -95,6 +146,7 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 1.2rem;
+  align-self: flex-start;
 }
 
 .input-area button:disabled {
@@ -438,30 +490,50 @@ tr a:hover {
 {% block body %}
 <div class="container">
   
-  <!-- Agent Selection Cards -->
-  <div id="agentCards" class="agent-cards"></div>
-  
-  <!-- Input Form -->
-  <form id="agentForm" class="input-area">
-    <textarea id="agentInput" rows="3" placeholder="Describe what you want to accomplish..."></textarea>
-    <button type="submit">✨ Create Plan</button>
-  </form>
-  
-  <!-- Planning Status -->
-  <div id="planningStatus" class="planning-status">
-    <div>🧠 Creating execution plan...</div>
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-button active" onclick="switchMainTab('create')">Create</button>
+    <button class="tab-button" onclick="switchMainTab('log')">Log</button>
+    <button class="tab-button" onclick="switchMainTab('agents')">Agents</button>
   </div>
   
-  <!-- Session History -->
-  <table id="agentTable"></table>
-  
-  <!-- Pagination -->
-  <div id="pagination" class="pagination" style="display: none;">
-    <button id="prevBtn" onclick="changePage(-1)">Previous</button>
-    <div class="page-info">
-      <span id="pageInfo">Page 1 of 1</span>
+  <!-- Tab Content -->
+  <div class="tab-container">
+    
+    <!-- Create Tab -->
+    <div id="createTab" class="main-tab-content active">
+      <!-- Input Form -->
+      <form id="agentForm" class="input-area">
+        <textarea id="agentInput" rows="5" placeholder="Describe what you want to accomplish..."></textarea>
+        <button type="submit">✨ Create Plan</button>
+      </form>
+      
+      <!-- Planning Status -->
+      <div id="planningStatus" class="planning-status">
+        <div>🧠 Creating execution plan...</div>
+      </div>
     </div>
-    <button id="nextBtn" onclick="changePage(1)">Next</button>
+    
+    <!-- Log Tab -->
+    <div id="logTab" class="main-tab-content">
+      <!-- Session History -->
+      <table id="agentTable"></table>
+      
+      <!-- Pagination -->
+      <div id="pagination" class="pagination" style="display: none;">
+        <button id="prevBtn" onclick="changePage(-1)">Previous</button>
+        <div class="page-info">
+          <span id="pageInfo">Page 1 of 1</span>
+        </div>
+        <button id="nextBtn" onclick="changePage(1)">Next</button>
+      </div>
+    </div>
+    
+    <!-- Agents Tab -->
+    <div id="agentsTab" class="main-tab-content">
+      <div id="agentCards" class="agent-cards"></div>
+    </div>
+    
   </div>
 </div>
 
@@ -544,6 +616,31 @@ tr a:hover {
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
 let availableAgents = [];
+let currentMainTab = 'create';
+
+// Switch between main tabs
+function switchMainTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.tab-button').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Update tab content
+  document.querySelectorAll('.main-tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+  document.getElementById(tabName + 'Tab').classList.add('active');
+  
+  currentMainTab = tabName;
+  
+  // Load data for the selected tab if needed
+  if (tabName === 'log' && !document.getElementById('agentTable').children.length) {
+    loadAgentSessions();
+  } else if (tabName === 'agents' && !document.getElementById('agentCards').children.length) {
+    loadAvailableAgents();
+  }
+}
 
 // Load available agents and render cards
 function loadAvailableAgents() {
@@ -940,8 +1037,7 @@ function hideConnectionWarning() {
   }
 }
 
-// Initialize
-loadAvailableAgents();
-loadAgentSessions();
+// Initialize - Don't load data until tabs are clicked
+// The Create tab is shown by default, other tabs load data on demand
 </script>
 {% endblock %}
