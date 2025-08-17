@@ -16,7 +16,7 @@ The `domains/` directory provides a way to organize journal content by scope or 
 
 ### Domain structure
 
-Each domain is organized as `domains/<domain>/` where `<domain>` is a descriptive short name. Each domain folder contains:
+Each domain is organized as `domains/<domain>/` where `<domain>` is a descriptive short unique name. Each domain folder contains:
 
 - `domain.json` – metadata file with domain title and description.
 - `entities.md` – entities specific to this domain.
@@ -47,17 +47,20 @@ The `entities.md` file follows the same format as the top-level entities file bu
 
 Matters represent specific scoped topics, sub-projects, or focused areas of work within a domain. Each matter is stored as a directory within the domain using an incrementing integer ID system.
 
-#### Matter file structure
+#### Matter Folders Organization
 
-Each matter is organized as `domains/<domain>/matter_X/` where X is an incrementing integer that serves as the matter ID. Within each matter directory:
+Each active matter is organized as `domains/<domain>/matter_X/` where X is an incrementing integer that serves as the matter ID. Archived matters get moved to the `<domain>/archived/matter_X/` location.
+
+The incrementing integer format ensures unique identification and allows for easy ordering by creation sequence, but both active and archived matters must be checked to get the next integer when adding a new matter.
+
+#### Matter directory:
 
 - `matter.json` – matter metadata including title, description, and other properties
 - `activity_log.jsonl` – chronological log of matter-related activities in JSON Lines format
 - `attachments/` – directory containing files and their metadata
 - `objective_<name>/` – individual objective directories containing OBJECTIVE.md and optional OUTCOME.md
 - the directory created/modified timestamps are the source when the matter was first created or last modified
-
-The incrementing integer format ensures unique identification and allows for easy ordering by creation sequence.
+- `.git` - each matter's files and changes are managed via git
 
 #### Matter metadata format
 
@@ -69,7 +72,6 @@ The `matter.json` file contains the matter's core information:
   "description": "Investigating and implementing improvements to reduce API response times",
   "status": "active",
   "priority": "high",
-  "tags": ["performance", "backend", "optimization"]
 }
 ```
 
@@ -90,7 +92,7 @@ The `activity_log.jsonl` file maintains a chronological record of all matter-rel
 The `attachments/` directory contains files relevant to the matter along with their metadata. Each attachment consists of:
 
 - `<filename>.<extension>` – the actual file (document, image, code, etc.)
-- `<filename>.json` – metadata describing the attachment
+- `<filename>.<extension>.json` – metadata describing the attachment
 - The .json file created/modified timestamps represent those values for the attachment relative to the matter
 
 The metadata file format:
@@ -99,20 +101,14 @@ The metadata file format:
 {
   "title": "API Documentation",
   "description": "Complete API reference documentation for the performance optimization work",
-  "size": 2048576,
   "mime_type": "application/pdf",
-  "tags": ["documentation", "api", "reference"]
 }
 ```
 
 Required fields:
 - `title` – human-readable name for the attachment
 - `description` – detailed explanation of the attachment's content and relevance
-
-Optional fields:
-- `size` – file size in bytes
 - `mime_type` – MIME type of the attached file
-- `tags` – array of keywords for categorization
 
 #### Matter objectives
 
@@ -121,7 +117,7 @@ Objectives are specific goals and sub-tasks related to the matter. Each objectiv
 - `OBJECTIVE.md` – markdown file describing the objective, its requirements, and approach
 - `OUTCOME.md` – markdown file describing the results and completion details (present only when objective is completed)
 
-The objective name serves as the unique identifier and should be descriptive yet concise (e.g., `ui_implementation`, `database_optimization`, `api_testing`).
+The objective name serves as the unique identifier and should be descriptive yet concise (e.g., `objective_ui_implementation`, `objective_database_optimization`, `objective_api_testing`).
 
 Example objective structure:
 
