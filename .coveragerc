@@ -1,5 +1,8 @@
 [run]
-include =
-    think/detect_border.py
-    think/crumbs.py
-    see/screen_compare.py
+source = .
+omit =
+    .venv/*
+    */tests/*
+    tests/*
+    */__pycache__/*
+    */site-packages/*
