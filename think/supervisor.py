@@ -38,35 +38,31 @@ def send_notification(message: str, command: str = "notify-send") -> None:
         logging.error("Failed to send notification: %s", exc)
 
 
-def run_process_day(log_path: Path) -> None:
-    """Run ``think.process_day`` and log duration to ``log_path``."""
+def run_process_day() -> None:
+    """Run ``think.process_day`` and log duration."""
     start = time.time()
-    with open(log_path, "ab") as log_file:
-        subprocess.run(
-            [sys.executable, "-m", "think.process_day"],
-            stdout=log_file,
-            stderr=log_file,
-        )
+    subprocess.run(
+        [sys.executable, "-m", "think.process_day"],
+        stdout=None,  # Inherit stdout
+        stderr=None,  # Inherit stderr
+    )
     duration = int(time.time() - start)
     logging.info("think.process_day finished in %s seconds", duration)
 
 
 def start_runners(journal: str, verbose: bool = False) -> list[tuple[subprocess.Popen, str]]:
-    """Launch hear and see runners logging output to supervisor.log."""
-    log_path = Path(journal) / "health" / "supervisor.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    """Launch hear and see runners with output to console."""
     procs = []
     for module in ("hear.runner", "see.runner"):
         cmd = [sys.executable, "-m", module]
         if verbose:
             cmd.append("-v")
-        with open(log_path, "ab") as log_file:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=log_file,
-                stderr=log_file,
-                start_new_session=True,
-            )
+        proc = subprocess.Popen(
+            cmd,
+            stdout=None,  # Inherit stdout
+            stderr=None,  # Inherit stderr
+            start_new_session=True,
+        )
         runner_name = module.split(".")[0]  # "hear" or "see"
         procs.append((proc, runner_name))
     return procs
@@ -74,41 +70,35 @@ def start_runners(journal: str, verbose: bool = False) -> list[tuple[subprocess.
 
 def start_mcp_server(journal: str, verbose: bool = False) -> subprocess.Popen:
     """Launch the MCP tools HTTP server."""
-    log_path = Path(journal) / "health" / "supervisor.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-m", "think.mcp_tools", "--transport", "http"]
     if verbose:
         cmd.append("-v")
-    with open(log_path, "ab") as log_file:
-        env = os.environ.copy()
-        env["JOURNAL_PATH"] = journal
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=log_file,
-            start_new_session=True,
-            env=env,
-        )
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal
+    proc = subprocess.Popen(
+        cmd,
+        stdout=None,  # Inherit stdout
+        stderr=None,  # Inherit stderr
+        start_new_session=True,
+        env=env,
+    )
     return proc
 
 
 def start_cortex_server(journal: str, verbose: bool = False) -> subprocess.Popen:
     """Launch the Cortex WebSocket API server."""
-    log_path = Path(journal) / "health" / "supervisor.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-m", "think.cortex"]
     if verbose:
         cmd.append("-v")
-    with open(log_path, "ab") as log_file:
-        env = os.environ.copy()
-        env["JOURNAL_PATH"] = journal
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=log_file,
-            start_new_session=True,
-            env=env,
-        )
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal
+    proc = subprocess.Popen(
+        cmd,
+        stdout=None,  # Inherit stdout
+        stderr=None,  # Inherit stderr
+        start_new_session=True,
+        env=env,
+    )
     return proc
 
 
@@ -131,7 +121,6 @@ def supervise(
     procs: list[tuple[subprocess.Popen, str]] | None = None,
 ) -> None:
     """Monitor heartbeat files and alert when they become stale."""
-    log_path = Path(journal) / "health" / "supervisor.log"
     last_day = datetime.now().date()
     while True:  # pragma: no cover - loop checked via unit tests by patching
         # Check for runner exits first (immediate alert)
@@ -150,7 +139,7 @@ def supervise(
         else:
             logging.info("Heartbeat OK")
         if daily and datetime.now().date() != last_day:
-            run_process_day(log_path)
+            run_process_day()
             last_day = datetime.now().date()
         time.sleep(interval)
 
@@ -191,15 +180,13 @@ def main() -> None:
     if not journal:
         parser.error("JOURNAL_PATH not set")
 
-    log_path = Path(journal) / "health" / "supervisor.log"
-    handlers: list[logging.Handler] = [logging.FileHandler(log_path, encoding="utf-8")]
-    if args.verbose:
-        handlers.append(logging.StreamHandler())
-
+    # Only log to console
     level = logging.DEBUG if args.debug else logging.INFO
     logging.getLogger().handlers = []
     logging.basicConfig(
-        level=level, handlers=handlers, format="%(asctime)s %(levelname)s %(message)s"
+        level=level,
+        handlers=[logging.StreamHandler()],
+        format="%(asctime)s %(levelname)s %(message)s"
     )
 
     os.environ.setdefault("SUNSTONE_MCP_URL", "http://127.0.0.1:6270/mcp")

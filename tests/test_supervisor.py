@@ -44,18 +44,21 @@ def test_start_runners(tmp_path, monkeypatch):
 
     def fake_popen(cmd, stdout=None, stderr=None, start_new_session=False):
         started.append(
-            (cmd, getattr(stdout, "name", None), getattr(stderr, "name", None))
+            (cmd, stdout, stderr)
         )
         return DummyProc()
 
     monkeypatch.setattr(mod.subprocess, "Popen", fake_popen)
 
     procs = mod.start_runners(str(tmp_path))
-    log_path = tmp_path / "health" / "supervisor.log"
-    assert log_path.is_file()
+    # No longer creating log file, output goes to console (None)
     assert len(procs) == 2
     assert any("hear.runner" in c[0] for c in started)
     assert any("see.runner" in c[0] for c in started)
+    # Check that stdout and stderr are None (inherit from parent)
+    for cmd, stdout, stderr in started:
+        assert stdout is None
+        assert stderr is None
 
 
 def test_main_no_runners(tmp_path, monkeypatch):
@@ -97,7 +100,6 @@ def test_main_no_daily(tmp_path, monkeypatch):
 
 def test_run_process_day(tmp_path, monkeypatch):
     mod = importlib.import_module("think.supervisor")
-    log_path = tmp_path / "supervisor.log"
 
     commands = []
 
@@ -105,9 +107,7 @@ def test_run_process_day(tmp_path, monkeypatch):
         returncode = 0
 
     def fake_run(cmd, stdout=None, stderr=None):
-        commands.append((cmd, getattr(stdout, "name", None)))
-        if stdout:
-            stdout.write(b"done")
+        commands.append((cmd, stdout, stderr))
         return DummyResult()
 
     monkeypatch.setattr(mod.subprocess, "run", fake_run)
@@ -120,9 +120,10 @@ def test_run_process_day(tmp_path, monkeypatch):
         mod.logging, "info", lambda msg, *a: messages.append(msg % a if a else msg)
     )
 
-    log_path.parent.mkdir(exist_ok=True)
-    mod.run_process_day(log_path)
+    mod.run_process_day()  # No longer takes log_path parameter
 
     assert commands[0][0][2] == "think.process_day"
-    assert log_path.read_bytes() == b"done"
+    # Check that stdout and stderr are None (inherit from parent)
+    assert commands[0][1] is None
+    assert commands[0][2] is None
     assert any("seconds" in m for m in messages)
