@@ -1,5 +1,7 @@
 import importlib
 import json
+import os
+from pathlib import Path
 
 
 def test_agents_list_all(monkeypatch, tmp_path):
@@ -111,3 +113,42 @@ def test_agents_list_historical_only(monkeypatch, tmp_path):
     # Check counts
     assert resp.json["live_count"] == 0
     assert resp.json["historical_count"] == 2
+
+
+def test_agents_list_with_real_fixtures(monkeypatch):
+    """Test listing agents from actual fixture files."""
+    review = importlib.import_module("dream")
+    
+    # Use the real fixtures directory
+    fixtures_path = Path(__file__).parent.parent / "fixtures" / "journal"
+    if not fixtures_path.exists():
+        import pytest
+        pytest.skip("Fixtures directory not found")
+    
+    review.journal_root = str(fixtures_path)
+    
+    # Mock cortex client as unavailable
+    monkeypatch.setattr(
+        "dream.cortex_client.get_global_cortex_client", lambda: None
+    )
+    monkeypatch.setattr("time.time", lambda: 1755392200)  # Time after all fixtures
+    
+    with review.app.test_request_context("/agents/api/list?type=historical"):
+        resp = review.agents_list()
+    
+    # Should have loaded agents from fixtures
+    assert resp.json["historical_count"] > 0
+    agents = resp.json["agents"]
+    
+    # Verify agent structure
+    if agents:
+        agent = agents[0]
+        assert "id" in agent
+        assert "prompt" in agent
+        assert "model" in agent
+        assert "persona" in agent
+        assert "status" in agent
+        assert agent["is_live"] is False
+        
+        # Check status values are correct
+        assert agent["status"] in ["finished", "error", "interrupted"]

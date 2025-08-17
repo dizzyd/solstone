@@ -660,7 +660,7 @@ tr a:hover {
       <!-- Live Agents Section -->
       <div id="liveAgentsSection">
         <div class="section-header">
-          <span>🟢 Live Agents</span>
+          <span>Live</span>
           <span class="count" id="liveCount">0</span>
         </div>
         <table id="liveAgentTable"></table>
@@ -672,12 +672,12 @@ tr a:hover {
       <!-- Historical Agents Section -->
       <div id="historicalAgentsSection">
         <div class="section-header">
-          <span>📚 Historical Agents</span>
+          <span>Completed</span>
           <span class="count" id="historicalCount">0</span>
         </div>
         <table id="historicalAgentTable"></table>
         <div id="historicalEmpty" class="empty-state" style="display: none;">
-          No historical agent runs found
+          No completed agent runs found
         </div>
       </div>
       
@@ -1038,58 +1038,8 @@ async function savePersonaChanges() {
   }
 }
 
-// Form submission
-document.getElementById('agentForm').onsubmit = function(e) {
-  e.preventDefault();
-  
-  const input = document.getElementById('agentInput');
-  if (!input.value.trim()) {
-    showError('Please describe what you want to accomplish.');
-    return;
-  }
-  
-  // Start planning process
-  createPlan(input.value.trim());
-};
-
-// Create plan from user input
-async function createPlan(userRequest) {
-  const form = document.getElementById('agentForm');
-  const status = document.getElementById('planningStatus');
-  
-  // Show busy state
-  form.classList.add('busy');
-  status.classList.add('show');
-  
-  try {
-    const response = await fetch('{{ url_for('agents.create_plan') }}', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        request: userRequest,
-        model: '' // Uses Gemini Pro by default
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to create plan');
-    }
-    
-    // Show planning modal with the plan
-    showPlanningModal(data.plan);
-    
-  } catch (error) {
-    showError('Error creating plan: ' + error.message);
-  } finally {
-    // Remove busy state
-    form.classList.remove('busy');
-    status.classList.remove('show');
-  }
-}
+// Form submission - removed as agentForm doesn't exist in this template
+// The create persona functionality is handled by createPersonaForm instead
 
 // Show planning modal with plan
 function showPlanningModal(plan) {
