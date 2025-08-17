@@ -88,8 +88,9 @@ def agent_content(agent_id: str) -> object:
 
 @bp.route("/agents/api/list")
 def agents_list() -> object:
-    """Get list of agents via cortex WebSocket API with pagination."""
-    # Get pagination parameters
+    """Get list of live agents from Cortex and historical agents from journal."""
+    # Get type parameter (live, historical, or all)
+    agent_type = request.args.get("type", "all")
     limit = int(request.args.get("limit", 10))
     offset = int(request.args.get("offset", 0))
 
@@ -97,43 +98,103 @@ def agents_list() -> object:
     limit = max(1, min(limit, 100))  # Limit between 1-100
     offset = max(0, offset)
 
-    # Try to get cortex client
-    from ..cortex_client import get_global_cortex_client
-
-    client = get_global_cortex_client()
-
-    if not client:
-        return jsonify({"error": "Could not connect to cortex server"}), 503
-
-    # Use cortex WebSocket API
-    response = client.list_agents(limit=limit, offset=offset)
-    if not response:
-        return jsonify({"error": "Failed to get response from cortex server"}), 503
-
-    agents = response.get("agents", [])
-    pagination_info = response.get("pagination", {})
-
-    # Transform cortex format to match expected frontend format
-    items = []
-    for agent in agents:
-        start_ms = agent.get("started_at", 0)
-        start = start_ms / 1000
-        metadata = agent.get("metadata", {})
-
-        items.append(
-            {
-                "id": agent.get("id", ""),
-                "start": start,
-                "since": time_since(start),
-                "model": metadata.get("model", ""),
-                "persona": metadata.get("persona", ""),
-                "prompt": metadata.get("prompt", ""),
-                "status": agent.get("status", "unknown"),
-                "pid": agent.get("pid"),
-            }
-        )
-
-    return jsonify({"agents": items, "pagination": pagination_info})
+    live_agents = []
+    historical_agents = []
+    
+    # Get live agents from Cortex if requested
+    if agent_type in ["live", "all"]:
+        from ..cortex_client import get_global_cortex_client
+        client = get_global_cortex_client()
+        
+        if client:
+            response = client.list_agents(limit=100, offset=0)  # Get all live agents
+            if response:
+                agents = response.get("agents", [])
+                for agent in agents:
+                    start_ms = agent.get("started_at", 0)
+                    start = start_ms / 1000
+                    metadata = agent.get("metadata", {})
+                    
+                    live_agents.append({
+                        "id": agent.get("id", ""),
+                        "start": start,
+                        "since": time_since(start),
+                        "model": metadata.get("model", ""),
+                        "persona": metadata.get("persona", ""),
+                        "prompt": metadata.get("prompt", ""),
+                        "status": agent.get("status", "running"),
+                        "pid": agent.get("pid"),
+                        "is_live": True
+                    })
+    
+    # Get historical agents from journal if requested
+    if agent_type in ["historical", "all"]:
+        agents_dir = _agents_dir()
+        if agents_dir and os.path.exists(agents_dir):
+            # Get all .jsonl files
+            jsonl_files = [f for f in os.listdir(agents_dir) if f.endswith(".jsonl")]
+            
+            for jsonl_file in jsonl_files:
+                agent_id = jsonl_file[:-6]  # Remove .jsonl extension
+                
+                # Skip if this is a live agent
+                if any(a["id"] == agent_id for a in live_agents):
+                    continue
+                    
+                agent_path = os.path.join(agents_dir, jsonl_file)
+                try:
+                    # Read first and last lines to get metadata
+                    with open(agent_path, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                        if lines:
+                            first_event = json.loads(lines[0])
+                            last_event = json.loads(lines[-1]) if len(lines) > 1 else first_event
+                            
+                            # Extract metadata from events
+                            start_ms = first_event.get("ts", int(agent_id))
+                            start = start_ms / 1000
+                            
+                            # Determine status from last event
+                            status = "finished"
+                            if last_event.get("event") == "error":
+                                status = "error"
+                            elif last_event.get("event") != "finish":
+                                status = "interrupted"
+                            
+                            historical_agents.append({
+                                "id": agent_id,
+                                "start": start,
+                                "since": time_since(start),
+                                "model": first_event.get("model", ""),
+                                "persona": first_event.get("persona", "default"),
+                                "prompt": first_event.get("prompt", ""),
+                                "status": status,
+                                "pid": None,
+                                "is_live": False
+                            })
+                except Exception:
+                    # Skip malformed files
+                    continue
+    
+    # Combine and sort by timestamp (newest first)
+    all_agents = live_agents + historical_agents
+    all_agents.sort(key=lambda x: x["start"], reverse=True)
+    
+    # Apply pagination
+    total = len(all_agents)
+    paginated = all_agents[offset:offset + limit]
+    
+    return jsonify({
+        "agents": paginated,
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": offset + limit < total
+        },
+        "live_count": len(live_agents),
+        "historical_count": len(historical_agents)
+    })
 
 
 @bp.route("/agents/api/plan", methods=["POST"])

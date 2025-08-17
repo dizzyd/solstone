@@ -1,7 +1,9 @@
 import importlib
+import json
 
 
-def test_agents_list(monkeypatch, tmp_path):
+def test_agents_list_all(monkeypatch, tmp_path):
+    """Test listing both live and historical agents."""
     from unittest.mock import Mock
 
     review = importlib.import_module("dream")
@@ -9,7 +11,14 @@ def test_agents_list(monkeypatch, tmp_path):
     agents_dir.mkdir(parents=True)
     review.journal_root = str(tmp_path)
 
-    # Mock cortex client to return expected data
+    # Create a historical agent file
+    historical_file = agents_dir / "200000.jsonl"
+    historical_file.write_text(
+        json.dumps({"event": "start", "ts": 200000, "prompt": "historical test", "model": "gpt-4", "persona": "default"}) + "\n" +
+        json.dumps({"event": "finish", "ts": 201000, "result": "done"})
+    )
+
+    # Mock cortex client to return live agent data
     mock_client = Mock()
     mock_client.list_agents.return_value = {
         "agents": [
@@ -21,31 +30,84 @@ def test_agents_list(monkeypatch, tmp_path):
                 "metadata": {"prompt": "hi", "persona": "p", "model": "m"},
             }
         ],
-        "pagination": {"limit": 10, "offset": 0, "total": 1},
+        "pagination": {"limit": 100, "offset": 0, "total": 1},
     }
 
     # Mock the cortex client getter
     monkeypatch.setattr(
         "dream.cortex_client.get_global_cortex_client", lambda: mock_client
     )
-    monkeypatch.setattr("time.time", lambda: 160)
+    monkeypatch.setattr("time.time", lambda: 300)  # 300 seconds after start
 
-    with review.app.test_request_context("/agents/api/list"):
+    with review.app.test_request_context("/agents/api/list?type=all"):
         resp = review.agents_list()
 
-    expected_response = {
-        "agents": [
-            {
-                "id": "100000",
-                "start": 100.0,
-                "since": "1 minute ago",
-                "model": "m",
-                "persona": "p",
-                "prompt": "hi",
-                "status": "running",
-                "pid": 12345,
-            }
-        ],
-        "pagination": {"limit": 10, "offset": 0, "total": 1},
-    }
-    assert resp.json == expected_response
+    # Check response structure
+    assert "agents" in resp.json
+    assert "pagination" in resp.json
+    assert "live_count" in resp.json
+    assert "historical_count" in resp.json
+
+    agents = resp.json["agents"]
+    assert len(agents) == 2  # 1 live + 1 historical
+
+    # Check live agent
+    live_agent = next((a for a in agents if a["id"] == "100000"), None)
+    assert live_agent is not None
+    assert live_agent["is_live"] is True
+    assert live_agent["status"] == "running"
+    assert live_agent["pid"] == 12345
+
+    # Check historical agent
+    hist_agent = next((a for a in agents if a["id"] == "200000"), None)
+    assert hist_agent is not None
+    assert hist_agent["is_live"] is False
+    assert hist_agent["status"] == "finished"
+    assert hist_agent["pid"] is None
+
+    # Check counts
+    assert resp.json["live_count"] == 1
+    assert resp.json["historical_count"] == 1
+
+
+def test_agents_list_historical_only(monkeypatch, tmp_path):
+    """Test listing only historical agents when cortex is unavailable."""
+    review = importlib.import_module("dream")
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True)
+    review.journal_root = str(tmp_path)
+
+    # Create historical agent files
+    historical_file1 = agents_dir / "200000.jsonl"
+    historical_file1.write_text(
+        json.dumps({"event": "start", "ts": 200000, "prompt": "test 1", "model": "gpt-4", "persona": "default"}) + "\n" +
+        json.dumps({"event": "finish", "ts": 201000})
+    )
+
+    historical_file2 = agents_dir / "300000.jsonl"
+    historical_file2.write_text(
+        json.dumps({"event": "start", "ts": 300000, "prompt": "test 2", "model": "gpt-3.5", "persona": "custom"}) + "\n" +
+        json.dumps({"event": "error", "ts": 301000, "error": "failed"})
+    )
+
+    # Mock cortex client as unavailable
+    monkeypatch.setattr(
+        "dream.cortex_client.get_global_cortex_client", lambda: None
+    )
+    monkeypatch.setattr("time.time", lambda: 400)
+
+    with review.app.test_request_context("/agents/api/list?type=historical"):
+        resp = review.agents_list()
+
+    agents = resp.json["agents"]
+    assert len(agents) == 2
+
+    # Check they're sorted by timestamp (newest first)
+    assert agents[0]["id"] == "300000"
+    assert agents[0]["status"] == "error"
+    assert agents[1]["id"] == "200000"
+    assert agents[1]["status"] == "finished"
+
+    # Check counts
+    assert resp.json["live_count"] == 0
+    assert resp.json["historical_count"] == 2

@@ -262,9 +262,43 @@ tr a:hover {
   color: #721c24;
 }
 
+.status-interrupted {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
 .status-unknown {
   background-color: #e2e3e5;
   color: #383d41;
+}
+
+/* Section headers for agent log */
+.section-header {
+  margin: 2rem 0 1rem 0;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid #007bff;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-header .count {
+  font-size: 0.9rem;
+  font-weight: normal;
+  color: #666;
+  background: #f8f9fa;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-style: italic;
 }
 
 /* Pagination */
@@ -623,8 +657,29 @@ tr a:hover {
     
     <!-- Log Tab -->
     <div id="logTab" class="main-tab-content active">
-      <!-- Session History -->
-      <table id="agentTable"></table>
+      <!-- Live Agents Section -->
+      <div id="liveAgentsSection">
+        <div class="section-header">
+          <span>🟢 Live Agents</span>
+          <span class="count" id="liveCount">0</span>
+        </div>
+        <table id="liveAgentTable"></table>
+        <div id="liveEmpty" class="empty-state" style="display: none;">
+          No agents currently running
+        </div>
+      </div>
+      
+      <!-- Historical Agents Section -->
+      <div id="historicalAgentsSection">
+        <div class="section-header">
+          <span>📚 Historical Agents</span>
+          <span class="count" id="historicalCount">0</span>
+        </div>
+        <table id="historicalAgentTable"></table>
+        <div id="historicalEmpty" class="empty-state" style="display: none;">
+          No historical agent runs found
+        </div>
+      </div>
       
       <!-- Pagination -->
       <div id="pagination" class="pagination" style="display: none;">
@@ -776,10 +831,14 @@ function switchMainTab(tabName) {
   currentMainTab = tabName;
   
   // Load data for the selected tab if needed
-  if (tabName === 'log' && !document.getElementById('agentTable').children.length) {
+  if (tabName === 'log') {
     loadAgentSessions();
-  } else if (tabName === 'agents' && !document.getElementById('agentCards').children.length) {
-    loadAvailableAgents();
+    startAutoRefresh();
+  } else if (tabName === 'agents') {
+    stopAutoRefresh();
+    if (!document.getElementById('agentCards').children.length) {
+      loadAvailableAgents();
+    }
   }
 }
 
@@ -1213,7 +1272,7 @@ function buildRow(a) {
 
 function loadAgentSessions(page = 0) {
   const offset = page * pageSize;
-  fetch(`{{ url_for('agents.agents_list') }}?limit=${pageSize}&offset=${offset}`)
+  fetch(`{{ url_for('agents.agents_list') }}?type=all&limit=${pageSize}&offset=${offset}`)
     .then(r => {
       if (!r.ok) {
         throw new Error(`HTTP ${r.status}: ${r.statusText}`);
@@ -1228,23 +1287,52 @@ function loadAgentSessions(page = 0) {
       
       const agents = data.agents || [];
       const pagination = data.pagination;
+      const liveCount = data.live_count || 0;
+      const historicalCount = data.historical_count || 0;
       
-      const table = document.getElementById('agentTable');
-      table.innerHTML = '<tr><th>Status & Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
+      // Separate live and historical agents
+      const liveAgents = agents.filter(a => a.is_live);
+      const historicalAgents = agents.filter(a => !a.is_live);
       
-      if (agents.length > 0) {
-        agents.forEach(a => table.appendChild(buildRow(a)));
+      // Update counts
+      document.getElementById('liveCount').textContent = liveCount;
+      document.getElementById('historicalCount').textContent = historicalCount;
+      
+      // Update live agents table
+      const liveTable = document.getElementById('liveAgentTable');
+      const liveEmpty = document.getElementById('liveEmpty');
+      
+      if (liveAgents.length > 0) {
+        liveTable.innerHTML = '<tr><th>Status & Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
+        liveAgents.forEach(a => liveTable.appendChild(buildRow(a)));
+        liveTable.style.display = 'table';
+        liveEmpty.style.display = 'none';
       } else {
-        const noDataRow = document.createElement('tr');
-        noDataRow.innerHTML = '<td colspan="4" style="text-align: center; color: #666;">No agents found</td>';
-        table.appendChild(noDataRow);
+        liveTable.style.display = 'none';
+        liveEmpty.style.display = 'block';
+      }
+      
+      // Update historical agents table
+      const histTable = document.getElementById('historicalAgentTable');
+      const histEmpty = document.getElementById('historicalEmpty');
+      
+      if (historicalAgents.length > 0) {
+        histTable.innerHTML = '<tr><th>Status & Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
+        historicalAgents.forEach(a => histTable.appendChild(buildRow(a)));
+        histTable.style.display = 'table';
+        histEmpty.style.display = 'none';
+      } else {
+        histTable.style.display = 'none';
+        histEmpty.style.display = 'block';
       }
       
       // Update pagination if available
-      if (pagination) {
+      if (pagination && pagination.total > pagination.limit) {
         currentPage = Math.floor(pagination.offset / pagination.limit);
         totalAgents = pagination.total;
         updatePagination(pagination);
+      } else {
+        document.getElementById('pagination').style.display = 'none';
       }
       
       // Hide any previous error warnings
@@ -1252,17 +1340,53 @@ function loadAgentSessions(page = 0) {
     })
     .catch(err => {
       console.error('Failed to load agents:', err);
-      showConnectionWarning(err.message);
       
-      // Clear the table and show error
-      const table = document.getElementById('agentTable');
-      table.innerHTML = '<tr><th>Status & Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
-      const errorRow = document.createElement('tr');
-      errorRow.innerHTML = '<td colspan="4" style="text-align: center; color: #dc3545;">Connection error - cortex service unavailable</td>';
-      table.appendChild(errorRow);
-      
-      // Hide pagination on error
-      document.getElementById('pagination').style.display = 'none';
+      // Still try to load historical agents even if cortex is down
+      fetch(`{{ url_for('agents.agents_list') }}?type=historical&limit=${pageSize}&offset=${offset}`)
+        .then(r => r.json())
+        .then(data => {
+          const historicalAgents = data.agents || [];
+          const historicalCount = data.historical_count || 0;
+          
+          // Update historical count
+          document.getElementById('historicalCount').textContent = historicalCount;
+          
+          // Clear live agents section
+          document.getElementById('liveCount').textContent = '0';
+          document.getElementById('liveAgentTable').style.display = 'none';
+          document.getElementById('liveEmpty').style.display = 'block';
+          
+          // Update historical agents table
+          const histTable = document.getElementById('historicalAgentTable');
+          const histEmpty = document.getElementById('historicalEmpty');
+          
+          if (historicalAgents.length > 0) {
+            histTable.innerHTML = '<tr><th>Status & Started</th><th>Model</th><th>Persona</th><th>Prompt</th></tr>';
+            historicalAgents.forEach(a => histTable.appendChild(buildRow(a)));
+            histTable.style.display = 'table';
+            histEmpty.style.display = 'none';
+          } else {
+            histTable.style.display = 'none';
+            histEmpty.style.display = 'block';
+          }
+          
+          // Update pagination
+          if (data.pagination && data.pagination.total > data.pagination.limit) {
+            updatePagination(data.pagination);
+          } else {
+            document.getElementById('pagination').style.display = 'none';
+          }
+        })
+        .catch(() => {
+          // Total failure - clear everything
+          document.getElementById('liveCount').textContent = '0';
+          document.getElementById('historicalCount').textContent = '0';
+          document.getElementById('liveAgentTable').style.display = 'none';
+          document.getElementById('liveEmpty').style.display = 'block';
+          document.getElementById('historicalAgentTable').style.display = 'none';
+          document.getElementById('historicalEmpty').style.display = 'block';
+          document.getElementById('pagination').style.display = 'none';
+        });
     });
 }
 
@@ -1493,7 +1617,41 @@ window.onclick = function(event) {
   }
 };
 
-// Initialize - Don't load data until tabs are clicked
-// The Log tab is shown by default now
+// Auto-refresh live agents
+let refreshInterval = null;
+
+function startAutoRefresh() {
+  // Refresh every 5 seconds if on the log tab
+  if (currentMainTab === 'log' && !refreshInterval) {
+    refreshInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        // Only refresh the current page
+        loadAgentSessions(currentPage);
+      }
+    }, 5000);
+  }
+}
+
+function stopAutoRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+}
+
+// Start/stop refresh based on tab
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    stopAutoRefresh();
+  } else if (currentMainTab === 'log') {
+    startAutoRefresh();
+  }
+});
+
+// Initialize - The Log tab is shown by default now
+setTimeout(() => {
+  loadAgentSessions();
+  startAutoRefresh();
+}, 100);
 </script>
 {% endblock %}
