@@ -333,6 +333,7 @@ async def run_agent(
     except Exception as exc:
         trace = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         cb.emit({"event": "error", "error": str(exc), "trace": trace, "ts": _now_ms()})
+        setattr(exc, "_evented", True)
         raise
     finally:
         # IMPORTANT: Don't explicitly close the SQLiteSession while streaming;

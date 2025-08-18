@@ -363,7 +363,7 @@ class CortexServer:
                         "event": "error",
                         "ts": int(time.time() * 1000),
                         "exit_code": exit_code,
-                        "message": f"Agent exited with code {exit_code} without emitting finish event",
+                        "error": f"Agent exited with code {exit_code} without emitting finish event",
                     }
 
                     # Store in memory
@@ -399,44 +399,53 @@ class CortexServer:
                     )
 
     def _monitor_stderr(self, agent: RunningAgent) -> None:
-        """Monitor agent stderr and broadcast errors to watchers."""
+        """Monitor agent stderr and collect errors for final reporting."""
         if not agent.process.stderr:
             return
 
+        stderr_lines = []
         try:
             for line in agent.process.stderr:
                 if not line:
                     continue
-
-                # Log to cortex server's stderr
-                self.logger.error(f"Agent {agent.agent_id} stderr: {line.strip()}")
-
-                # Create error event
-                error_event = {
-                    "event": "error",
-                    "ts": int(time.time() * 1000),
-                    "message": line.strip(),
-                    "source": "stderr",
-                }
-
-                # Store in memory
-                with agent.lock:
-                    agent.events.append(error_event)
-
-                # Broadcast to watchers
-                self._broadcast_agent_event(agent.agent_id, error_event)
-
-                # Also write to the agent's log file
-                try:
-                    with open(agent.log_path, "a") as f:
-                        f.write(json.dumps(error_event) + "\n")
-                except Exception as e:
-                    self.logger.warning(f"Failed to write stderr to log: {e}")
+                stripped = line.strip()
+                if stripped:
+                    stderr_lines.append(stripped)
+                    # Log to cortex server's stderr for debugging
+                    self.logger.debug(f"Agent {agent.agent_id} stderr: {stripped}")
 
         except Exception as e:
             self.logger.error(
                 f"Error monitoring stderr for agent {agent.agent_id}: {e}"
             )
+        finally:
+            # If there was stderr output and the process exited with an error,
+            # send a consolidated error event
+            if stderr_lines:
+                exit_code = agent.process.poll()
+                if exit_code is not None and exit_code != 0:
+                    # Create consolidated error event
+                    error_event = {
+                        "event": "error",
+                        "ts": int(time.time() * 1000),
+                        "error": "Process failed with stderr output",
+                        "trace": "\n".join(stderr_lines),
+                        "exit_code": exit_code,
+                    }
+
+                    # Store in memory
+                    with agent.lock:
+                        agent.events.append(error_event)
+
+                    # Broadcast to watchers
+                    self._broadcast_agent_event(agent.agent_id, error_event)
+
+                    # Write to the agent's log file
+                    try:
+                        with open(agent.log_path, "a") as f:
+                            f.write(json.dumps(error_event) + "\n")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to write stderr event to log: {e}")
 
     # Remove _tail_agent_log method as stdout monitoring replaces it
 
