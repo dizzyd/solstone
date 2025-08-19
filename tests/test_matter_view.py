@@ -49,7 +49,7 @@ def test_matter_detail_route_validation():
                 del sys.modules["dream.views.domains"]
 
             # Test get_domains function
-            from think.utils import get_domains
+            from think.domains import get_domains
 
             domains = get_domains()
             assert "test-domain" in domains

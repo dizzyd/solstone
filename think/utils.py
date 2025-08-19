@@ -155,52 +155,6 @@ def get_topics() -> dict[str, dict[str, object]]:
     return topics
 
 
-def get_domains() -> dict[str, dict[str, object]]:
-    """Return available domains with metadata.
-
-    Each key is the domain name. The value contains the domain metadata
-    from domain.json including title, description, and the domain path.
-    """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    domains_dir = Path(journal) / "domains"
-    domains: dict[str, dict[str, object]] = {}
-
-    if not domains_dir.exists():
-        return domains
-
-    for domain_path in sorted(domains_dir.iterdir()):
-        if not domain_path.is_dir():
-            continue
-
-        domain_name = domain_path.name
-        domain_json = domain_path / "domain.json"
-
-        if not domain_json.exists():
-            continue
-
-        try:
-            with open(domain_json, "r", encoding="utf-8") as f:
-                domain_data = json.load(f)
-
-            if isinstance(domain_data, dict):
-                domain_info = {
-                    "path": str(domain_path),
-                    "title": domain_data.get("title", domain_name),
-                    "description": domain_data.get("description", ""),
-                    "color": domain_data.get("color", ""),
-                    "emoji": domain_data.get("emoji", ""),
-                }
-                domains[domain_name] = domain_info
-        except Exception as exc:  # pragma: no cover - metadata optional
-            logging.debug("Error reading %s: %s", domain_json, exc)
-
-    return domains
-
-
 def agent_instructions(persona: str = "default") -> Tuple[str, str, dict[str, object]]:
     """Return system instruction, initial user context and metadata for ``persona``."""
 
@@ -226,6 +180,23 @@ def agent_instructions(persona: str = "default") -> Tuple[str, str, dict[str, ob
             entities = ent_path.read_text(encoding="utf-8").strip()
             if entities:
                 extra_parts.append("## Well-Known Entities\n" + entities)
+
+        # Add domains to agent instructions
+        try:
+            from think.domains import get_domains
+            domains = get_domains()
+            if domains:
+                lines = ["## Domains"]
+                for name, info in sorted(domains.items()):
+                    title = str(info.get("title", name))
+                    desc = str(info.get("description", ""))
+                    if desc:
+                        lines.append(f"* Domain: `{name}`: {title} - {desc}")
+                    else:
+                        lines.append(f"* Domain: `{name}`: {title}")
+                extra_parts.append("\n".join(lines))
+        except Exception as exc:
+            logging.debug("Error loading domains: %s", exc)
 
     topics = get_topics()
     if topics:

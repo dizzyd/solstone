@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 from fastmcp.resources import FileResource, TextResource
 
 from think.cluster import cluster_range
+from think.domains import domain_summary
 from think.indexer import search_events as search_events_impl
 from think.indexer import search_summaries as search_summaries_impl
 from think.indexer import search_transcripts as search_transcripts_impl
@@ -204,6 +205,61 @@ def search_events(
         return {
             "error": f"Failed to search events: {exc}",
             "suggestion": "try adjusting the query or filters",
+        }
+
+
+@mcp.tool
+def get_domain(domain: str) -> dict[str, Any]:
+    """Get a comprehensive summary of a domain including its metadata, entities, and matters.
+
+    This tool generates a formatted markdown summary for a specified domain in the journal.
+    The summary includes the domain's title, description, tracked entities,
+    and all matters organized by their status (active, archived).
+    Use this when you need an overview of a domain's current state, its associated entities,
+    and the matters being tracked within it.
+
+    Args:
+        domain: The domain name to retrieve the summary for
+
+    Returns:
+        Dictionary containing:
+        - domain: The domain name that was queried
+        - summary: Formatted markdown text with the complete domain summary including:
+            - Domain title
+            - Domain description
+            - List of tracked entities
+            - Matters grouped by status with priority indicators
+
+    Examples:
+        - get_domain("personal")
+        - get_domain("work_projects")
+        - get_domain("research")
+
+    Raises:
+        If the domain doesn't exist or JOURNAL_PATH is not set, returns an error dictionary
+        with an error message and suggestion for resolution.
+    """
+    try:
+        # Get the domain summary markdown
+        summary_text = domain_summary(domain)
+        return {
+            "domain": domain,
+            "summary": summary_text
+        }
+    except FileNotFoundError:
+        return {
+            "error": f"Domain '{domain}' not found",
+            "suggestion": "verify the domain name exists or check JOURNAL_PATH is set correctly"
+        }
+    except RuntimeError as exc:
+        return {
+            "error": str(exc),
+            "suggestion": "ensure JOURNAL_PATH environment variable is set"
+        }
+    except Exception as exc:
+        return {
+            "error": f"Failed to get domain summary: {exc}",
+            "suggestion": "check that the domain exists and has valid metadata"
         }
 
 
