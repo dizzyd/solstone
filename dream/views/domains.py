@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from datetime import datetime
@@ -12,6 +11,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from think.domains import get_domains, get_matter, get_matters
 from think.indexer import search_entities
+from ..cortex_utils import run_agent_via_cortex
 
 bp = Blueprint("domains", __name__, template_folder="../templates")
 
@@ -401,18 +401,13 @@ def generate_domain_description(domain_name: str) -> Any:
 
 Generate a clear, engaging 1-2 sentence description that captures the essence and purpose of this domain. The description should help users understand what they'll find in this domain and be appropriate for a personal knowledge management system."""
 
-        # Import and run the Google agent
-        from think.google import run_agent
-
-        # Run the agent synchronously using asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            description = loop.run_until_complete(
-                run_agent(prompt, persona="domain_describe", max_tokens=2048)
-            )
-        finally:
-            loop.close()
+        # Use Cortex to generate description
+        description = run_agent_via_cortex(
+            prompt=prompt,
+            persona="domain_describe",
+            backend="google",
+            timeout=60,  # 1 minute for description generation
+        )
 
         return jsonify({"success": True, "description": description.strip()})
 
@@ -517,18 +512,13 @@ def generate_entity_description(domain_name: str) -> Any:
 
 Generate a clear, concise description (1-2 sentences) that captures what this {entity_type.lower()} is and why it's relevant. The description should be appropriate for a personal knowledge management system and help users understand the entity's significance or role."""
 
-        # Import and run the Google agent
-        from think.google import run_agent
-
-        # Run the agent synchronously using asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            description = loop.run_until_complete(
-                run_agent(prompt, persona="domain_describe", max_tokens=1024)
-            )
-        finally:
-            loop.close()
+        # Use Cortex to generate description
+        description = run_agent_via_cortex(
+            prompt=prompt,
+            persona="domain_describe",
+            backend="google",
+            timeout=60,  # 1 minute for description generation
+        )
 
         return jsonify({"success": True, "description": description.strip()})
 

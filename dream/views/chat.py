@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import threading
-from typing import Any, List, Optional
+from typing import Any
 
 import markdown  # type: ignore
 from flask import Blueprint, jsonify, render_template, request
 
 from .. import state
-from ..cortex_client import get_global_cortex_client
+from ..cortex_utils import run_agent_via_cortex
 from ..push import push_server
 
 
@@ -19,79 +18,6 @@ def _push_event(event: dict) -> None:
 
 
 bp = Blueprint("chat", __name__, template_folder="../templates")
-
-# Global state for current chat session
-_current_agent_id: Optional[str] = None
-_agent_result: Optional[str] = None
-_agent_finished: threading.Event = threading.Event()
-_lock = threading.Lock()
-
-
-def _handle_cortex_event(event: dict) -> None:
-    """Handle events from cortex agent."""
-    global _agent_result
-
-    # Forward to push server
-    _push_event(event)
-
-    # Check if agent finished or errored
-    event_type = event.get("event")
-    if event_type == "finish":
-        with _lock:
-            _agent_result = event.get("result", "")
-            _agent_finished.set()
-    elif event_type == "error":
-        with _lock:
-            # Format error message with details
-            error_msg = event.get("error", "Unknown error")
-            trace = event.get("trace", "")
-            _agent_result = f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```" if trace else f"❌ **Error**: {error_msg}"
-            _agent_finished.set()
-
-
-def ask_agent_via_cortex(prompt: str, attachments: List[str], backend: str) -> str:
-    """Send prompt to cortex for agent processing."""
-    global _agent_result
-
-    # Reset state
-    with _lock:
-        _agent_result = None
-        _agent_finished.clear()
-
-    # Get cortex client
-    client = get_global_cortex_client()
-    if not client:
-        raise Exception("Could not connect to cortex server")
-
-    # Set up event callback
-    client.set_event_callback(_handle_cortex_event)
-
-    # Prepare full prompt
-    full_prompt = "\n".join([prompt] + attachments) if attachments else prompt
-
-    # Spawn agent via cortex
-    agent_id = client.spawn_agent(
-        prompt=full_prompt,
-        backend=backend,
-        persona="default",
-    )
-
-    if not agent_id:
-        raise Exception("Failed to spawn agent")
-
-    # Attach to the spawned agent to receive events
-    if not client.attach_agent(agent_id):
-        raise Exception(f"Failed to attach to agent {agent_id}")
-
-    # Wait for agent to finish (with timeout)
-    timeout = 300  # 5 minutes
-    if not _agent_finished.wait(timeout):
-        raise Exception("Agent timed out")
-
-    with _lock:
-        result = _agent_result or "No result received"
-
-    return result
 
 
 @bp.route("/chat")
@@ -119,7 +45,15 @@ def send_message() -> Any:
         return resp
 
     try:
-        result = ask_agent_via_cortex(message, attachments, backend)
+        # Use the shared utility with event forwarding to push server
+        result = run_agent_via_cortex(
+            prompt=message,
+            attachments=attachments,
+            backend=backend,
+            persona="default",
+            timeout=300,  # 5 minutes for chat
+            on_event=_push_event,  # Forward events to push server
+        )
         # Render markdown to HTML server-side
         html_result = markdown.markdown(result, extensions=["extra"])
         return jsonify(text=result, html=html_result)
@@ -167,7 +101,11 @@ def agent_events(agent_id: str) -> Any:
                     # Format error message
                     error_msg = event.get("error", "Unknown error")
                     trace = event.get("trace", "")
-                    error_text = f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```" if trace else f"❌ **Error**: {error_msg}"
+                    error_text = (
+                        f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                        if trace
+                        else f"❌ **Error**: {error_msg}"
+                    )
                     event["html"] = markdown.markdown(error_text, extensions=["extra"])
                     event["result"] = error_text  # Add result field for consistency
 
@@ -187,7 +125,11 @@ def agent_events(agent_id: str) -> Any:
                     # Format error message for history
                     error_msg = event.get("error", "Unknown error")
                     trace = event.get("trace", "")
-                    error_text = f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```" if trace else f"❌ **Error**: {error_msg}"
+                    error_text = (
+                        f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                        if trace
+                        else f"❌ **Error**: {error_msg}"
+                    )
                     html_result = markdown.markdown(error_text, extensions=["extra"])
                     history.append(
                         {"role": "assistant", "text": error_text, "html": html_result}
