@@ -4,8 +4,8 @@
 {% block head %}
 <style>
 body {height:100vh; overflow:hidden;}
-.container {height:100vh; display:flex; flex-direction:column; position:relative; padding:0 1em;}
-#messages {flex:1; overflow-y:auto; padding:1em; padding-bottom:0; display:flex; flex-direction:column;}
+.container {height:100vh; display:flex; flex-direction:column; position:relative; padding:0 1em; box-sizing:border-box;}
+#messages {flex:1; overflow-y:auto; padding:1em; padding-bottom:1em; display:flex; flex-direction:column; min-height:0;}
 .message {margin-bottom:0.75em; padding:0.75em 1em; border-radius:12px; max-width:75%; box-shadow:0 1px 3px rgba(0,0,0,0.1); animation:fadeInUp 0.3s ease-out;}
 .from-user {background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; align-self:flex-end; margin-left:20%;}
 .from-bot {background:#fff; border:1px solid #e0e0e0; align-self:flex-start; margin-right:20%;}
@@ -346,6 +346,9 @@ async function loadHistoricalAgent(agentId){
   }
   const d = await r.json();
   
+  // Update the header with human-friendly info
+  updateHistoricalHeader(agentId, d.events);
+  
   // Process events in chronological order
   // This maintains the proper sequence of messages and tool calls
   for(const event of d.events){
@@ -448,25 +451,85 @@ function handleToolStart(event) {
 
 // Create resource card for get_resource tool
 function createResourceCard(uri) {
+  // Helper to format date from YYYYMMDD to M/D
+  function formatDate(dateStr) {
+    const month = parseInt(dateStr.substring(4, 6), 10);
+    const day = parseInt(dateStr.substring(6, 8), 10);
+    return `${month}/${day}`;
+  }
+  
+  // Helper to format time from HHMMSS to HH:MM
+  function formatTime(timeStr) {
+    const hours = timeStr.substring(0, 2);
+    const minutes = timeStr.substring(2, 4);
+    return `${hours}:${minutes}`;
+  }
+  
   // Parse journal://summary/20250815/meetings format
-  const match = uri.match(/journal:\/\/summary\/(\d{8})\/(.+)/);
-  if(!match) return null;
+  let match = uri.match(/journal:\/\/summary\/(\d{8})\/(.+)/);
+  if(match) {
+    const date = match[1];
+    const topic = match[2];
+    const dateStr = formatDate(date);
+    const topicDisplay = topic.charAt(0).toUpperCase() + topic.slice(1);
+    
+    return {
+      text: `Reading ${topicDisplay} Summary from ${dateStr}`,
+      url: `/calendar/${date}#${topic}`
+    };
+  }
   
-  const date = match[1];
-  const topic = match[2];
+  // Parse journal://raw/20250726/090000/45 format (raw transcripts)
+  match = uri.match(/journal:\/\/raw\/(\d{8})\/(\d{6})\/(\d+)/);
+  if(match) {
+    const date = match[1];
+    const time = match[2];
+    const length = match[3];
+    const dateStr = formatDate(date);
+    const timeStr = formatTime(time);
+    
+    return {
+      text: `Loading ${length}-minute transcript from ${dateStr} at ${timeStr}`,
+      url: `/calendar/${date}`
+    };
+  }
   
-  // Format date as M/D
-  const month = parseInt(date.substring(4, 6), 10);
-  const day = parseInt(date.substring(6, 8), 10);
-  const dateStr = `${month}/${day}`;
+  // Parse journal://media/20250726/audio_090000.flac or screenshot_090000.png format
+  match = uri.match(/journal:\/\/media\/(\d{8})\/(.+)/);
+  if(match) {
+    const date = match[1];
+    const filename = match[2];
+    const dateStr = formatDate(date);
+    
+    // Determine media type from filename
+    let description = filename;
+    if(filename.includes('audio') || filename.endsWith('.flac')) {
+      const timeMatch = filename.match(/(\d{6})/);
+      if(timeMatch) {
+        description = `audio recording from ${formatTime(timeMatch[1])}`;
+      }
+    } else if(filename.includes('screenshot') || filename.endsWith('.png')) {
+      const timeMatch = filename.match(/(\d{6})/);
+      if(timeMatch) {
+        description = `screenshot from ${formatTime(timeMatch[1])}`;
+      }
+    }
+    
+    return {
+      text: `Loading ${description} (${dateStr})`,
+      url: `/calendar/${date}`
+    };
+  }
   
-  // Capitalize first letter of topic
-  const topicDisplay = topic.charAt(0).toUpperCase() + topic.slice(1);
+  // Fallback for unknown journal:// formats
+  if(uri.startsWith('journal://')) {
+    return {
+      text: `Fetching journal resource: ${uri}`,
+      url: '#'
+    };
+  }
   
-  return {
-    text: `Reading ${topicDisplay} Summary from ${dateStr}`,
-    url: `/calendar/${date}#${topic}`
-  };
+  return null;
 }
 
 // Simplified wrapper for historical events
@@ -474,13 +537,57 @@ function handleHistoricalEvent(event) {
   processEvent(event);
 }
 
+// Function to update historical header with run details
+function updateHistoricalHeader(agentId, events) {
+  const notice = document.getElementById('historicalNotice');
+  if (!notice) return;
+  
+  // Find start and finish events to calculate duration
+  const startEvent = events.find(e => e.event === 'start');
+  const finishEvent = events.find(e => e.event === 'finish' || e.event === 'error');
+  
+  if (startEvent && startEvent.ts) {
+    // Format the timestamp as a human-readable date
+    const startDate = new Date(startEvent.ts);
+    const dateStr = startDate.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // Calculate duration if we have both start and finish
+    let durationStr = '';
+    if (finishEvent && finishEvent.ts) {
+      const durationMs = finishEvent.ts - startEvent.ts;
+      const seconds = Math.floor(durationMs / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      
+      if (minutes > 0) {
+        durationStr = ` • Duration: ${minutes}m ${remainingSeconds}s`;
+      } else {
+        durationStr = ` • Duration: ${seconds}s`;
+      }
+    }
+    
+    // Check if it ended in error
+    const errorStatus = finishEvent && finishEvent.event === 'error' ? ' • Status: Failed' : '';
+    
+    notice.innerHTML = `Viewing historical agent run from ${dateStr}${durationStr}${errorStatus} (read-only)`;
+  }
+}
+
 // Disable input and controls if viewing historical agent
 if(isHistorical){
   form.style.display = 'none';
   // Add a notice that this is historical
   const notice = document.createElement('div');
+  notice.id = 'historicalNotice';
   notice.style.cssText = 'background:#fff3cd;border:1px solid #ffeaa7;padding:0.75rem;margin:1rem;border-radius:4px;text-align:center;color:#856404;';
-  notice.textContent = `Viewing historical agent run: ${fragment} (read-only)`;
+  notice.textContent = `Loading historical agent run...`;
   document.querySelector('.container').insertBefore(notice, messagesDiv);
   
   // Add activity indicator to messages div for historical view

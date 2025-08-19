@@ -102,7 +102,7 @@
 /* Tab content */
 .tab-content {
   display: none;
-  padding: 2em 0;
+  padding: 1em 0;
 }
 
 .tab-content.active {
@@ -218,7 +218,7 @@
 }
 
 .entities-section {
-  margin-bottom: 2em;
+  margin-bottom: 1.5em;
 }
 
 .entities-section h3 {
@@ -787,7 +787,6 @@
     <div id="entities-content" style="display: none;">
       <div class="entities-section" id="domain-entities-section">
         <div class="entities-container">
-          <h3>{{ domain_data.title or domain_name }} Entities</h3>
           <table class="entities-table">
             <thead>
               <tr>
@@ -1123,12 +1122,21 @@ function toggleEntityStar(entity, starButton) {
       starButton.className = `star-button ${entity.starred ? 'starred' : 'unstarred'}`;
       starButton.innerHTML = entity.starred ? '★' : '☆';
       
-      // Get current search term to maintain filter
+      // Get search input element
       const searchInput = document.getElementById('entity-search');
-      const currentSearchTerm = searchInput ? searchInput.value.trim() : '';
       
-      // Re-render entities with current search filter
-      renderEntities(currentSearchTerm);
+      // If entity was just starred (added to domain) and there was a search term
+      if (!wasStarred && searchInput && searchInput.value.trim()) {
+        // Clear the search box and refocus it
+        searchInput.value = '';
+        searchInput.focus();
+        // Re-render entities without search filter
+        renderEntities('');
+      } else {
+        // Otherwise maintain current search filter
+        const currentSearchTerm = searchInput ? searchInput.value.trim() : '';
+        renderEntities(currentSearchTerm);
+      }
     } else {
       console.error('Error toggling entity:', data.error);
       alert('Error: ' + (data.error || 'Unknown error'));

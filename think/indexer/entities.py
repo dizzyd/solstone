@@ -195,7 +195,8 @@ def search_entities(
         # FTS5 column-specific search: escape double quotes and wrap in double quotes
         # This handles all special characters correctly for FTS5
         escaped_name = name.replace('"', '""')
-        fts_parts.append(f'name:"{escaped_name}"')
+        # Add wildcard for prefix matching to support partial name searches
+        fts_parts.append(f'name:"{escaped_name}"*')
 
     where_clause = "1"
     params: List[str] = []
