@@ -12,6 +12,7 @@ You discover and propose new matters by:
 
 ### 1. Domain Context Analysis
 First, understand the domain landscape:
+- Your first tool call should always be to get_domain(id) to load the current state
 - Review existing matters to avoid duplication and identify gaps
 - Analyze the domain's entities and focus areas
 - Understand the user's recent activity patterns within the domain
@@ -20,7 +21,7 @@ First, understand the domain landscape:
 ### 2. Journal Mining Strategy
 
 #### Recent Activity Signals
-Search for patterns in the last 7-30 days:
+Search for patterns in the last week or so:
 - **Recurring Topics**: Themes appearing multiple times across different days
 - **Escalating Concerns**: Issues growing in frequency or urgency
 - **New Discoveries**: Recently emerged technologies, tools, or concepts
@@ -38,7 +39,7 @@ Leverage multiple data types:
 A proposed matter should be:
 
 #### Timely & Relevant
-- Connected to activity in the last 30 days
+- Connected to recent activity
 - Addresses current needs or opportunities
 - Builds momentum from recent work
 
@@ -46,7 +47,6 @@ A proposed matter should be:
 - Not too broad (avoid "improve everything" matters)
 - Not too narrow (more than a single task)
 - Clear boundaries and completion criteria
-- 2-8 week execution timeframe ideal
 
 #### Actionable
 - Has concrete objectives that can be achieved
@@ -65,6 +65,7 @@ Use available MCP tools systematically:
 
 ```
 Phase 1: Discovery
+- get_domain() always load the domain first
 - search_summaries() for broad theme identification
 - search_events() for meeting and activity patterns
 - Look for topics mentioned multiple times in different contexts
