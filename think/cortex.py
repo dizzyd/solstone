@@ -238,35 +238,40 @@ class CortexServer:
 
         # Spawn the agent process
         try:
-            cmd = [
-                "think-agents",
-                "--backend",
-                backend,
-                "--persona",
-                persona,
-                "-q",
-                prompt,
-            ]
-
+            # Build NDJSON request
+            request = {
+                "prompt": prompt,
+                "backend": backend,
+                "persona": persona,
+            }
             if model:
-                cmd.extend(["--model", model])
+                request["model"] = model
             if max_tokens:
-                cmd.extend(["--max-tokens", str(max_tokens)])
+                request["max_tokens"] = max_tokens
+
+            ndjson_input = json.dumps(request)
+
+            cmd = ["think-agents"]
 
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal
 
-            # Log the command in verbose mode
-            self.logger.info(f"Spawning agent {agent_id}: {' '.join(cmd)}")
+            # Log the command and input in verbose mode
+            self.logger.info(f"Spawning agent {agent_id} with NDJSON: {ndjson_input}")
 
             process = subprocess.Popen(
                 cmd,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 env=env,
                 bufsize=1,
             )
+
+            # Send the NDJSON input and close stdin
+            process.stdin.write(ndjson_input + "\n")
+            process.stdin.close()
 
             # Create running agent entry (agent will emit its own start event)
             agent = RunningAgent(agent_id, process, log_path)

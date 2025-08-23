@@ -100,14 +100,20 @@ def test_cortex_style_capture():
             f.write(json.dumps(start_event) + "\n")
 
         # Run agent and capture stdout
+        ndjson_input = json.dumps({"prompt": "Say hello", "backend": "openai"})
         proc = subprocess.Popen(
-            [sys.executable, "-m", "think.agents", "-q", "Say hello"],
+            [sys.executable, "-m", "think.agents"],
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=env,
             bufsize=1,  # Line buffering like cortex
         )
+
+        # Send NDJSON input and close stdin
+        proc.stdin.write(ndjson_input + "\n")
+        proc.stdin.close()
 
         # Read stdout and write to log file (like cortex does)
         captured_events = []

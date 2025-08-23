@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -219,6 +220,7 @@ def test_handle_spawn(mock_thread, mock_popen, cortex_server, mock_journal):
     mock_process = MagicMock()
     mock_process.pid = 12345
     mock_process.poll.return_value = None
+    mock_process.stdin = MagicMock()
     mock_popen.return_value = mock_process
 
     ws = MockWebSocket()
@@ -237,13 +239,25 @@ def test_handle_spawn(mock_thread, mock_popen, cortex_server, mock_journal):
     call_args = mock_popen.call_args
     cmd = call_args[0][0]
 
-    assert "think-agents" in cmd
-    assert "--backend" in cmd
-    assert "openai" in cmd
-    assert "--model" in cmd
-    assert "gpt-4" in cmd
-    assert "-q" in cmd
-    assert "Test prompt" in cmd
+    # Should only have the command name now
+    assert cmd == ["think-agents"]
+
+    # Check stdin was configured
+    assert call_args[1]["stdin"] == subprocess.PIPE
+
+    # Check NDJSON was written to stdin
+    mock_process.stdin.write.assert_called_once()
+    written_data = mock_process.stdin.write.call_args[0][0]
+    ndjson_request = json.loads(written_data.strip())
+
+    assert ndjson_request["prompt"] == "Test prompt"
+    assert ndjson_request["backend"] == "openai"
+    assert ndjson_request["model"] == "gpt-4"
+    assert ndjson_request["persona"] == "default"
+    assert ndjson_request["max_tokens"] == 1000
+
+    # Check stdin was closed
+    mock_process.stdin.close.assert_called_once()
 
     # Check response
     assert len(ws.messages) == 1
