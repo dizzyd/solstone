@@ -8,8 +8,11 @@ from types import SimpleNamespace
 import pytest
 
 
-async def run_main(mod, argv):
+async def run_main(mod, argv, stdin_data=None):
     sys.argv = argv
+    if stdin_data:
+        import io
+        sys.stdin = io.StringIO(stdin_data)
     await mod.main_async()
 
 
@@ -104,13 +107,12 @@ def test_openai_main(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "openai"]))
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -155,13 +157,12 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "openai"]))
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -183,7 +184,7 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     assert DummyRunner.called
 
 
-def test_openai_outfile(monkeypatch, tmp_path):
+def test_openai_outfile(monkeypatch, tmp_path, capsys):
     last_kwargs, DummyRunner = _setup_openai_mocks(monkeypatch, tmp_path)
     DummyRunner.events_to_stream = []  # Reset for this test
 
@@ -198,21 +199,18 @@ def test_openai_outfile(monkeypatch, tmp_path):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
     out_file = tmp_path / "out.txt"
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(
-        run_main(
-            mod,
-            ["think-agents", str(task), "-o", str(out_file), "--backend", "openai"],
-        )
-    )
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
-    events = [json.loads(line) for line in out_file.read_text().splitlines()]
+    # Output file functionality was removed in NDJSON-only mode
+    # Check stdout instead
+    out_lines = capsys.readouterr().out.strip().splitlines()
+    events = [json.loads(line) for line in out_lines]
     assert events[0]["event"] == "start"
     assert isinstance(events[0]["ts"], int)
     assert events[0]["prompt"] == "hello"
@@ -252,13 +250,12 @@ def test_openai_thinking_events_stdout(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "openai"]))
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -280,7 +277,7 @@ def test_openai_thinking_events_stdout(monkeypatch, tmp_path, capsys):
     assert DummyRunner.called
 
 
-def test_openai_outfile_error(monkeypatch, tmp_path):
+def test_openai_outfile_error(monkeypatch, tmp_path, capsys):
     last_kwargs, DummyRunner = _setup_openai_mocks(monkeypatch, tmp_path)
 
     # Make the stream_events raise an error
@@ -307,22 +304,19 @@ def test_openai_outfile_error(monkeypatch, tmp_path):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
     out_file = tmp_path / "out.txt"
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
     with pytest.raises(RuntimeError):
-        asyncio.run(
-            run_main(
-                mod,
-                ["think-agents", str(task), "-o", str(out_file), "--backend", "openai"],
-            )
-        )
+        asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
-    events = [json.loads(line) for line in out_file.read_text().splitlines()]
+    # Output file functionality was removed in NDJSON-only mode
+    # Check stdout instead
+    out_lines = capsys.readouterr().out.strip().splitlines()
+    events = [json.loads(line) for line in out_lines]
     assert events[-1]["event"] == "error"
     assert isinstance(events[-1]["ts"], int)
     assert events[-1]["error"] == "boom"
@@ -358,13 +352,12 @@ def test_openai_thinking_events_error(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "openai"]))
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
@@ -419,20 +412,19 @@ def test_openai_tool_call_events(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    task = tmp_path / "task.txt"
-    task.write_text("what's the weather?")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "openai"]))
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "openai"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
 
     # Check start event
     assert events[0]["event"] == "start"
-    assert events[0]["prompt"] == "what's the weather?"
+    assert events[0]["prompt"] == "hello"
 
     # Look for tool_start event
     tool_start_events = [e for e in events if e["event"] == "tool_start"]

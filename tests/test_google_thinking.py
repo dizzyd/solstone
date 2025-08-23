@@ -6,8 +6,11 @@ import types
 from types import SimpleNamespace
 
 
-async def run_main(mod, argv):
+async def run_main(mod, argv, stdin_data=None):
     sys.argv = argv
+    if stdin_data:
+        import io
+        sys.stdin = io.StringIO(stdin_data)
     await mod.main_async()
 
 
@@ -106,13 +109,12 @@ def test_google_thinking_events(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    task = tmp_path / "task.txt"
-    task.write_text("hello")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
-    asyncio.run(run_main(mod, ["think-agents", str(task), "--backend", "google"]))
+    ndjson_input = json.dumps({"prompt": "hello", "backend": "google"})
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
     events = [json.loads(line) for line in out_lines]
