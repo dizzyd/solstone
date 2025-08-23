@@ -57,7 +57,10 @@ def _get_or_create_cache(
     client: genai.Client, model: str, display_name: str, transcript: str
 ) -> str:
     """Return cache name for ``display_name`` creating it with ``transcript`` and
-    :data:`COMMON_SYSTEM_INSTRUCTION` if needed."""
+    :data:`COMMON_SYSTEM_INSTRUCTION` if needed.
+    
+    The cache contains the system instruction + transcript which are identical
+    for all topics on the same day, so display_name should be day-based only."""
 
     for c in client.caches.list():
         if c.model == model and c.display_name == display_name:
@@ -69,7 +72,7 @@ def _get_or_create_cache(
             display_name=display_name,
             system_instruction=COMMON_SYSTEM_INSTRUCTION,
             contents=[transcript],
-            ttl="1200s",
+            ttl="1800s",  # 30 minutes to accommodate multiple topic analyses
         ),
     )
     return cache.name
@@ -252,7 +255,8 @@ def main() -> None:
             return
 
         md_path, json_path = _output_paths(day_dir, topic_basename)
-        cache_display_name = f"{day}_{topic_basename}"
+        # Use day-only cache key so all topics share the same cached transcript
+        cache_display_name = f"{day}"
 
         # Check if markdown file already exists
         md_exists = md_path.exists() and md_path.stat().st_size > 0
