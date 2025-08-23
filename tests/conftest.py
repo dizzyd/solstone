@@ -120,7 +120,15 @@ def add_module_stubs(monkeypatch):
             pass
 
     genai_mod.Client = DummyClient
-    genai_mod.types = types.SimpleNamespace(GenerateContentConfig=lambda **k: None)
+    
+    # Mock Content type for type hints
+    class MockContent:
+        pass
+    
+    genai_mod.types = types.SimpleNamespace(
+        GenerateContentConfig=lambda **k: None,
+        Content=MockContent
+    )
     google_mod.genai = genai_mod
     sys.modules["google"] = google_mod
     sys.modules["google.genai"] = genai_mod
