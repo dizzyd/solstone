@@ -219,124 +219,96 @@ __all__ = [
 
 
 async def main_async() -> None:
-    """Unified CLI for all agent backends."""
+    """NDJSON-based CLI for agent backends."""
 
-    pre_parser = argparse.ArgumentParser(add_help=False)
-    pre_parser.add_argument(
-        "--backend",
-        choices=["openai", "google", "anthropic", "claude"],
-        default="openai",
-        help="Backend provider",
-    )
-    pre_args, _ = pre_parser.parse_known_args()
-
-    if pre_args.backend == "google":
-        from . import google as backend_mod
-    elif pre_args.backend == "anthropic":
-        from . import anthropic as backend_mod
-    elif pre_args.backend == "claude":
-        from . import claude as backend_mod
-    else:
-        from . import openai as backend_mod
-
-    parser = argparse.ArgumentParser(description="Sunstone Agent CLI")
-    parser.add_argument(
-        "task_file",
-        nargs="?",
-        help="Path to .txt file with the request, '-' for stdin or omit for interactive",
-    )
-    parser.add_argument(
-        "--backend",
-        choices=["openai", "google", "anthropic", "claude"],
-        default=pre_args.backend,
-        help="Backend provider",
-    )
-    parser.add_argument(
-        "--model",
-        default=getattr(backend_mod, "DEFAULT_MODEL"),
-        help="Model to use",
-    )
-    parser.add_argument(
-        "--max-tokens",
-        type=int,
-        default=getattr(backend_mod, "DEFAULT_MAX_TOKENS"),
-        help="Maximum tokens for the final response",
-    )
-    parser.add_argument(
-        "-q", "--query", help="Direct prompt text for single query mode"
-    )
-    parser.add_argument(
-        "-o", "--out", help="File path to write the final result or error to"
-    )
-    parser.add_argument(
-        "-p", "--persona", default="default", help="Persona instructions to load"
+    parser = argparse.ArgumentParser(
+        description="Sunstone Agent CLI - Accepts NDJSON input via stdin"
     )
 
     args = setup_cli(parser)
-    out_path = args.out
 
-    app_logger = backend_mod.setup_logging(args.verbose)
-    event_writer = JSONEventWriter(out_path)
+    # Import openai for logging setup
+    from . import openai as openai_mod
+
+    app_logger = openai_mod.setup_logging(args.verbose)
+
+    # Always write to stdout only
+    event_writer = JSONEventWriter(None)
 
     def emit_event(data: Event) -> None:
         if "ts" not in data:
             data["ts"] = int(time.time() * 1000)
         event_writer.emit(data)
 
-    if args.backend == "openai":
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        if api_key:
-            from agents import set_default_openai_key
-
-            set_default_openai_key(api_key)
-
-    if args.query:
-        user_prompt = args.query
-    elif args.task_file is None:
-        user_prompt = None
-    elif args.task_file == "-":
-        user_prompt = sys.stdin.read()
-    else:
-        if not os.path.isfile(args.task_file):
-            parser.error(f"Task file not found: {args.task_file}")
-        app_logger.info("Loading task file %s", args.task_file)
-        user_prompt = Path(args.task_file).read_text(encoding="utf-8")
-
     try:
-        if user_prompt is None:
-            app_logger.info("Starting interactive mode with model %s", args.model)
+        # NDJSON input mode from stdin only
+        app_logger.info("Processing NDJSON input from stdin")
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+
             try:
-                while True:
-                    try:
-                        loop = asyncio.get_event_loop()
-                        prompt = await loop.run_in_executor(
-                            None, lambda: input("chat> ")
-                        )
-                        if not prompt:
-                            continue
-                        await run_agent(
-                            prompt,
-                            backend=args.backend,
-                            model=args.model,
-                            max_tokens=args.max_tokens,
-                            on_event=emit_event,
-                            persona=args.persona,
-                        )
-                    except EOFError:
-                        break
-            except KeyboardInterrupt:
-                pass
-        else:
-            app_logger.debug("Task contents: %s", user_prompt)
-            app_logger.info("Running agent with model %s", args.model)
-            await run_agent(
-                user_prompt,
-                backend=args.backend,
-                model=args.model,
-                max_tokens=args.max_tokens,
-                on_event=emit_event,
-                persona=args.persona,
-            )
+                # Parse NDJSON line
+                request = json.loads(line)
+
+                # Extract parameters
+                prompt = request.get("prompt")
+                if not prompt:
+                    emit_event(
+                        {
+                            "event": "error",
+                            "error": "Missing 'prompt' field in NDJSON input",
+                            "ts": int(time.time() * 1000),
+                        }
+                    )
+                    continue
+
+                # Run agent with provided parameters
+                backend = request.get("backend", "openai")
+                model = request.get("model", "")
+                max_tokens = request.get("max_tokens", 0)
+                persona = request.get("persona", "default")
+
+                # Set OpenAI key if needed
+                if backend == "openai":
+                    api_key = os.getenv("OPENAI_API_KEY", "")
+                    if api_key:
+                        from agents import set_default_openai_key
+
+                        set_default_openai_key(api_key)
+
+                app_logger.debug(
+                    f"Processing request: backend={backend}, model={model}"
+                )
+
+                await run_agent(
+                    prompt,
+                    backend=backend,
+                    model=model or "",
+                    max_tokens=max_tokens or 0,
+                    on_event=emit_event,
+                    persona=persona,
+                )
+
+            except json.JSONDecodeError as e:
+                emit_event(
+                    {
+                        "event": "error",
+                        "error": f"Invalid JSON: {str(e)}",
+                        "ts": int(time.time() * 1000),
+                    }
+                )
+            except Exception as e:
+                emit_event(
+                    {
+                        "event": "error",
+                        "error": str(e),
+                        "trace": traceback.format_exc(),
+                        "ts": int(time.time() * 1000),
+                    }
+                )
+
     except Exception as exc:  # pragma: no cover - unexpected
         err = {
             "event": "error",
