@@ -9,7 +9,7 @@ from google.genai import types
 
 from think.cluster import cluster
 from think.crumbs import CrumbBuilder
-from think.models import GEMINI_FLASH, GEMINI_PRO
+from think.models import GEMINI_FLASH, GEMINI_PRO, gemini_generate
 from think.utils import day_log, day_path, get_topics, setup_cli
 
 COMMON_SYSTEM_INSTRUCTION = "You are an expert productivity analyst tasked with analyzing a full workday transcript containing both audio conversations and screen activity data, segmented into 5-minute chunks. You will be given the transcripts and then following that you will have a detailed user request for how to process them.  Please follow those instructions carefully. Take time to consider all of the nuance of the interactions from the day, deeply think through how best to prioritize the most important aspects and understandings, formulate the best approach for each step of the analysis."
@@ -83,30 +83,30 @@ def send_markdown(
     model: str,
     cache_display_name: str | None = None,
 ) -> str:
-    client = genai.Client(api_key=api_key)
-
-    gen_config_args = {
-        "temperature": 0.3,
-        "max_output_tokens": 8192 * 6,
-        "thinking_config": types.ThinkingConfig(
-            thinking_budget=8192 * 3,
-        ),
-    }
+    client = genai.Client(api_key=api_key) if cache_display_name else None
 
     if cache_display_name:
         cache_name = _get_or_create_cache(client, model, cache_display_name, markdown)
-        gen_config_args["cached_content"] = cache_name
         contents: list[str] = [prompt]
+        return gemini_generate(
+            contents=contents,
+            model=model,
+            temperature=0.3,
+            max_output_tokens=8192 * 6,
+            thinking_budget=8192 * 3,
+            cached_content=cache_name,
+            client=client,
+        )
     else:
-        gen_config_args["system_instruction"] = COMMON_SYSTEM_INSTRUCTION
         contents = [markdown, prompt]
-
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=types.GenerateContentConfig(**gen_config_args),
-    )
-    return response.text
+        return gemini_generate(
+            contents=contents,
+            model=model,
+            temperature=0.3,
+            max_output_tokens=8192 * 6,
+            thinking_budget=8192 * 3,
+            system_instruction=COMMON_SYSTEM_INSTRUCTION,
+        )
 
 
 def send_occurrence(
@@ -131,35 +131,27 @@ def send_occurrence(
     extra_instructions:
         Optional additional instructions prepended to ``markdown``.
     """
-    client = genai.Client(api_key=api_key)
-
-    gen_config_args = {
-        "temperature": 0.3,
-        "max_output_tokens": 8192 * 6,
-        "thinking_config": types.ThinkingConfig(
-            thinking_budget=8192 * 3,
-        ),
-        "response_mime_type": "application/json",
-        "system_instruction": prompt,
-    }
-
     contents = [markdown]
     if extra_instructions:
         contents.insert(0, extra_instructions)
 
-    response = client.models.generate_content(
-        model=model,
+    response_text = gemini_generate(
         contents=contents,
-        config=types.GenerateContentConfig(**gen_config_args),
+        model=model,
+        temperature=0.3,
+        max_output_tokens=8192 * 6,
+        thinking_budget=8192 * 3,
+        system_instruction=prompt,
+        json_output=True,
     )
 
     try:
-        occurrences = json.loads(response.text)
+        occurrences = json.loads(response_text)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON response: {e}: {response.text[:100]}")
+        raise ValueError(f"Invalid JSON response: {e}: {response_text[:100]}")
 
     if not isinstance(occurrences, list):
-        raise ValueError(f"Response is not an array: {response.text[:100]}")
+        raise ValueError(f"Response is not an array: {response_text[:100]}")
 
     return occurrences
 

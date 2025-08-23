@@ -8,6 +8,8 @@ from typing import Dict, List
 
 from google.genai import types
 
+from think.models import gemini_generate
+
 USER_PROMPT = (
     "Process the provided audio clips and output your professional accurate "
     "transcription in the specified JSON format, each clip may contain one or more speakers."
@@ -32,16 +34,15 @@ def transcribe_segments(
             types.Part.from_bytes(data=seg["bytes"], mime_type="audio/flac")
         )
 
-    response = client.models.generate_content(
-        model=model,
+    response_text = gemini_generate(
         contents=contents,
-        config=types.GenerateContentConfig(
-            temperature=0.1,
-            max_output_tokens=8192 * 2,
-            response_mime_type="application/json",
-            system_instruction=prompt_text,
-        ),
+        model=model,
+        temperature=0.1,
+        max_output_tokens=8192 * 2,
+        system_instruction=prompt_text,
+        json_output=True,
+        client=client,
     )
-    result = json.loads(response.text)
+    result = json.loads(response_text)
     logging.info("Transcription result: %s", json.dumps(result, indent=2))
     return result

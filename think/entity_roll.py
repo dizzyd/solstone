@@ -8,11 +8,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
 from think.crumbs import CrumbBuilder
-from think.models import GEMINI_PRO
+from think.models import GEMINI_PRO, gemini_generate
 from think.utils import day_log, day_path, setup_cli
 
 
@@ -99,26 +97,17 @@ def send_to_gemini(
     is_json_mode: bool,
 ) -> Optional[str]:
     """Send markdown content and a prompt to Gemini API."""
-    client = genai.Client(api_key=api_key)
-
     try:
-        generation_config_args = {
-            "temperature": 0.3,
-            "max_output_tokens": 8192 * 2,
-            "thinking_config": types.ThinkingConfig(
-                thinking_budget=8192 * 2,
-            ),
-            "system_instruction": prompt_text,
-        }
-        if is_json_mode:
-            generation_config_args["response_mime_type"] = "application/json"
-
-        response = client.models.generate_content(
+        response_text = gemini_generate(
+            contents=markdown_content,
             model=model_name,
-            contents=[markdown_content],
-            config=types.GenerateContentConfig(**generation_config_args),
+            temperature=0.3,
+            max_output_tokens=8192 * 2,
+            thinking_budget=8192 * 2,
+            system_instruction=prompt_text,
+            json_output=is_json_mode,
         )
-        return response.text
+        return response_text
 
     except Exception as e:
         print(f"Error during Gemini API call: {e}", file=sys.stderr)

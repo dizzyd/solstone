@@ -7,10 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
-from .models import GEMINI_PRO
+from .models import GEMINI_PRO, gemini_generate
 from .utils import create_mcp_client, setup_cli
 
 PROMPT_PATH = Path(__file__).with_name("planner.txt")
@@ -72,18 +70,14 @@ def generate_plan(
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY not set")
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
+    return gemini_generate(
+        contents=request,
         model=model,
-        contents=[request],
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=4096,
-            thinking_config=types.ThinkingConfig(thinking_budget=4096),
-            system_instruction=_load_prompt(),
-        ),
+        temperature=0.3,
+        max_output_tokens=4096,
+        thinking_budget=4096,
+        system_instruction=_load_prompt(),
     )
-    return response.text
 
 
 def parse_args() -> argparse.ArgumentParser:

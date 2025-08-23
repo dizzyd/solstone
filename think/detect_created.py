@@ -10,10 +10,8 @@ from datetime import datetime
 from typing import Optional
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
-from .models import GEMINI_LITE
+from .models import GEMINI_LITE, gemini_generate
 
 
 def _load_system_prompt() -> str:
@@ -96,24 +94,18 @@ def detect_created(
     # Debug: write content to temp file
     _debug_write_content(markdown, path)
 
-    client = genai.Client(api_key=api_key)
-
-    response = client.models.generate_content(
+    response_text = gemini_generate(
+        contents=markdown,
         model=GEMINI_LITE,
-        contents=[markdown],
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=256 + 4096,
-            thinking_config=types.ThinkingConfig(
-                thinking_budget=4096,
-            ),
-            system_instruction=_load_system_prompt(),
-            response_mime_type="application/json",
-        ),
+        temperature=0.3,
+        max_output_tokens=256 + 4096,
+        thinking_budget=4096,
+        system_instruction=_load_system_prompt(),
+        json_output=True,
     )
 
     try:
-        return json.loads(response.text)
+        return json.loads(response_text)
     except json.JSONDecodeError:
         return None
 

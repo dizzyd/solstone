@@ -9,11 +9,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
 from think.crumbs import CrumbBuilder
-from think.models import GEMINI_FLASH
+from think.models import GEMINI_FLASH, gemini_generate
 from think.utils import day_log, day_path, setup_cli
 
 DEFAULT_PROMPT_PATH = os.path.join(os.path.dirname(__file__), "reduce.txt")
@@ -102,8 +100,6 @@ def _get_api_key() -> str:
 
 
 def call_gemini(markdown, prompt, api_key, debug=False):
-    client = genai.Client(api_key=api_key)
-
     if debug:
         logging.debug("\n=== DEBUG: Prompt to Gemini ===")
         logging.debug("System instruction: %s", prompt)
@@ -111,22 +107,20 @@ def call_gemini(markdown, prompt, api_key, debug=False):
         logging.debug(markdown)
         logging.debug("\n=== DEBUG: End of input ===\n")
 
-    response = client.models.generate_content(
+    response_text = gemini_generate(
+        contents=markdown,
         model=GEMINI_FLASH,
-        contents=[markdown],
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=8192 * 2,
-            system_instruction=prompt,
-        ),
+        temperature=0.3,
+        max_output_tokens=8192 * 2,
+        system_instruction=prompt,
     )
 
     if debug:
         logging.debug("\n=== DEBUG: Response from Gemini ===")
-        logging.debug(response.text)
+        logging.debug(response_text)
         logging.debug("\n=== DEBUG: End of response ===\n")
 
-    return response.text
+    return response_text
 
 
 def process_group(

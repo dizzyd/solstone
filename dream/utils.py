@@ -6,11 +6,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from google import genai
-from google.genai import types
-
 from think.indexer import parse_entity_line
-from think.models import GEMINI_FLASH
+from think.models import GEMINI_FLASH, gemini_generate
 from think.utils import get_topics
 
 DATE_RE = re.compile(r"\d{8}")
@@ -201,17 +198,13 @@ def generate_top_summary(info: Dict[str, Any], api_key: str) -> str:
         "Merge the following entity descriptions into one concise summary about"
         " the same length as any individual line. Only return the final merged summary text."
     )
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
+    return gemini_generate(
+        contents=joined,
         model=GEMINI_FLASH,
-        contents=[joined],
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=8192 * 2,
-            system_instruction=prompt,
-        ),
+        temperature=0.3,
+        max_output_tokens=8192 * 2,
+        system_instruction=prompt,
     )
-    return response.text
 
 
 def _combine(day: str, time_str: str) -> str:

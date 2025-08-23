@@ -1,35 +1,24 @@
 import json
 import os
 
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from PIL import ImageDraw
 
-from think.models import GEMINI_FLASH, GEMINI_LITE
+from think.models import GEMINI_FLASH, GEMINI_LITE, gemini_generate
 
-# Module-level globals to store the client and system instruction
-_gemini_client = None
+# Module-level global to store the system instruction
 _system_instruction = None
 
 
 def initialize():
     """
-    Initialize the Gemini API client and load necessary configuration.
-    Sets up the module-level globals.
+    Load the system instruction for Gemini.
+    Sets up the module-level global.
     """
-    global _gemini_client, _system_instruction
+    global _system_instruction
 
     # Skip if already initialized
-    if _gemini_client is not None:
+    if _system_instruction is not None:
         return True
-
-    load_dotenv()
-    GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
-    if not GEMINI_API_KEY:
-        raise ValueError(
-            "GOOGLE_API_KEY not found in environment. Please create a .env file."
-        )
 
     # Load system instruction from external file
     try:
@@ -44,8 +33,7 @@ def initialize():
         )
         return False
 
-    _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    return _gemini_client is not None
+    return _system_instruction is not None
 
 
 def gemini_describe_region(image, box, models=None, entities_text=None):
@@ -56,9 +44,8 @@ def gemini_describe_region(image, box, models=None, entities_text=None):
     Retries with a fallback model if the primary model fails.
     """
     # Ensure the module is initialized
-    if _gemini_client is None:
+    if _system_instruction is None:
         initialize()
-    client = _gemini_client
 
     native_y_min, native_x_min, native_y_max, native_x_max = box
     im_with_box = image.copy()
@@ -88,22 +75,20 @@ def gemini_describe_region(image, box, models=None, entities_text=None):
 
     for model_name in models_to_try:
         try:
-            response = client.models.generate_content(
-                model=model_name,
+            response_text = gemini_generate(
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    temperature=0.5,
-                    max_output_tokens=8192 * 4,
-                    response_mime_type="application/json",
-                    system_instruction=_system_instruction,
-                ),
+                model=model_name,
+                temperature=0.5,
+                max_output_tokens=8192 * 4,
+                system_instruction=_system_instruction,
+                json_output=True,
             )
-            if not response.text:
+            if not response_text:
                 print(
-                    f"Bad response from Gemini API with model {model_name}: {repr(response)}"
+                    f"Bad response from Gemini API with model {model_name}: empty response"
                 )
-            print(response.text)
-            return {"result": json.loads(response.text), "model_used": model_name}
+            print(response_text)
+            return {"result": json.loads(response_text), "model_used": model_name}
         except Exception as e:
             print(f"Error from Gemini API with model {model_name}: {e}")
             if model_name == models_to_try[-1]:  # If it's the last model in the list

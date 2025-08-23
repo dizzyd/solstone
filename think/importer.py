@@ -10,8 +10,6 @@ from datetime import timedelta
 from pathlib import Path
 
 import cv2
-from google import genai
-from google.genai import types
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
@@ -19,7 +17,7 @@ from hear.revai import convert_revai_to_sunstone, transcribe_file
 from see.screen_compare import compare_images
 from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
-from think.models import GEMINI_PRO
+from think.models import GEMINI_PRO, gemini_generate
 from think.utils import setup_cli
 
 try:
@@ -370,16 +368,13 @@ def create_transcript_summary(
             f"Creating summary with Gemini Pro for {len(all_transcripts)} transcript segments"
         )
 
-        # Create Gemini client and generate summary
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
+        # Generate summary using Gemini
+        response_text = gemini_generate(
+            contents=user_message,
             model=GEMINI_PRO,
-            contents=[user_message],
-            config=types.GenerateContentConfig(
-                temperature=0.3,
-                max_output_tokens=8192 * 4,
-                system_instruction=importer_prompt,
-            ),
+            temperature=0.3,
+            max_output_tokens=8192 * 4,
+            system_instruction=importer_prompt,
         )
 
         # Save the summary
@@ -395,7 +390,7 @@ def create_transcript_summary(
             f.write(f"**Segments Processed:** {len(all_transcripts)}\n")
             f.write(f"**Total Entries:** {total_entries}\n\n")
             f.write("---\n\n")
-            f.write(response.text)
+            f.write(response_text)
 
         logger.info(f"Created transcript summary: {summary_path}")
 

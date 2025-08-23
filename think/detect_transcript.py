@@ -8,10 +8,8 @@ import os
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
-from .models import GEMINI_FLASH, GEMINI_PRO
+from .models import GEMINI_FLASH, GEMINI_PRO, gemini_generate
 
 
 def _load_json_prompt() -> str:
@@ -104,21 +102,19 @@ def detect_transcript_segment(text: str, api_key: Optional[str] = None) -> List[
     logging.info(
         f"Starting transcript segmentation with Gemini for: {numbered[:100]}..."
     )
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
+
+    response_text = gemini_generate(
+        contents=numbered,
         model=GEMINI_PRO,
-        contents=[numbered],
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=4096 + 8192,
-            thinking_config=types.ThinkingConfig(thinking_budget=8192),
-            system_instruction=_load_segment_prompt(),
-            response_mime_type="application/json",
-        ),
+        temperature=0.3,
+        max_output_tokens=4096 + 8192,
+        thinking_budget=8192,
+        system_instruction=_load_segment_prompt(),
+        json_output=True,
     )
 
-    logging.info(f"Received response from Gemini: {response.text}")
-    line_numbers = parse_line_numbers(response.text, len(lines))
+    logging.info(f"Received response from Gemini: {response_text}")
+    line_numbers = parse_line_numbers(response_text, len(lines))
     segments = segments_from_lines(lines, line_numbers)
 
     return segments
@@ -137,22 +133,19 @@ def detect_transcript_json(text: str, api_key: Optional[str] = None) -> Optional
             logging.error("GOOGLE_API_KEY not found in environment")
             raise RuntimeError("GOOGLE_API_KEY not set")
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
+    response_text = gemini_generate(
+        contents=text,
         model=GEMINI_FLASH,
-        contents=[text],
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=8192 + 8192,
-            thinking_config=types.ThinkingConfig(thinking_budget=8192),
-            system_instruction=_load_json_prompt(),
-            response_mime_type="application/json",
-        ),
+        temperature=0.3,
+        max_output_tokens=8192 + 8192,
+        thinking_budget=8192,
+        system_instruction=_load_json_prompt(),
+        json_output=True,
     )
 
-    logging.info(f"Received response from Gemini: {response.text[:100]}")
+    logging.info(f"Received response from Gemini: {response_text[:100]}")
     try:
-        result = json.loads(response.text)
+        result = json.loads(response_text)
         logging.info("Successfully converted transcript to JSON")
         return result
     except json.JSONDecodeError:
