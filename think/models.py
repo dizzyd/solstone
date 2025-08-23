@@ -3,7 +3,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Union
 
 from dotenv import load_dotenv
 from google import genai
@@ -32,7 +32,7 @@ def gemini_generate(
     thinking_budget: Optional[int] = None,
     cached_content: Optional[str] = None,
     client: Optional[genai.Client] = None,
-) -> Tuple[str, Optional[Any]]:
+) -> str:
     """
     Simplified wrapper for genai.models.generate_content with common defaults.
     
@@ -62,8 +62,8 @@ def gemini_generate(
     
     Returns
     -------
-    Tuple[str, Optional[Any]]
-        Response text and usage metadata
+    str
+        Response text from the model
     """
     # Get or create client
     if client is None:
@@ -157,7 +157,7 @@ def gemini_generate(
             # Silently fail - logging shouldn't break the main flow
             pass
     
-    return response.text, response.usage_metadata
+    return response.text
 
 
 __all__ = [
