@@ -113,11 +113,8 @@ def domain_summary(domain: str) -> str:
     # Build markdown summary
     lines = []
 
-    # Title with emoji if available
-    if emoji:
-        lines.append(f"# {emoji} {title}")
-    else:
-        lines.append(f"# {title}")
+    # Title without emoji
+    lines.append(f"# {title}")
 
     # Add color as a badge if available
     if color:
@@ -410,10 +407,7 @@ def domain_summaries() -> str:
         description = domain_info.get("description", "")
         
         # Main list item for domain
-        if emoji:
-            lines.append(f"- **{emoji} {title}** (#{domain_name})")
-        else:
-            lines.append(f"- **{title}** (#{domain_name})")
+        lines.append(f"- **{title}** (#{domain_name})")
             
         if description:
             lines.append(f"  {description}")

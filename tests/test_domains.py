@@ -16,8 +16,8 @@ def test_domain_summary_full(monkeypatch):
 
     summary = domain_summary("full-featured")
 
-    # Check title with emoji
-    assert "# 🚀 Full Featured Domain" in summary
+    # Check title without emoji
+    assert "# Full Featured Domain" in summary
 
     # Check description
     assert "**Description:** A domain for testing all features" in summary
@@ -66,8 +66,8 @@ def test_domain_summary_test_domain(monkeypatch):
 
     summary = domain_summary("test-domain")
 
-    # Check title with emoji
-    assert "# 🧪 Test Domain" in summary
+    # Check title without emoji
+    assert "# Test Domain" in summary
 
     # Check description
     assert (
@@ -192,7 +192,7 @@ def test_domain_summaries(monkeypatch):
     assert "## Available Domains" in summary
     
     # Check test-domain is included with hashtag format
-    assert "**🧪 Test Domain** (#test-domain)" in summary
+    assert "**Test Domain** (#test-domain)" in summary
     assert "A test domain for validating matter functionality" in summary
     
     # Check entities are formatted as sub-lists
@@ -231,7 +231,7 @@ def test_domain_summaries_mixed_entities(monkeypatch):
     summary = domain_summaries()
     
     # Test domain should have entities
-    assert "**🧪 Test Domain** (#test-domain)" in summary
+    assert "**Test Domain** (#test-domain)" in summary
     assert "  - **Person**:" in summary
     
     # Minimal domain should not have entity sub-lists
