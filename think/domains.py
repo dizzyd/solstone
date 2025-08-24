@@ -7,13 +7,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
+from think.indexer.entities import parse_entities
 
 
 def get_domains() -> dict[str, dict[str, object]]:
-    """Return available domains with metadata.
+    """Return available domains with metadata and parsed entities.
 
     Each key is the domain name. The value contains the domain metadata
-    from domain.json including title, description, and the domain path.
+    from domain.json including title, description, the domain path, and
+    parsed entities grouped by type.
     """
     load_dotenv()
     journal = os.getenv("JOURNAL_PATH")
@@ -47,7 +49,24 @@ def get_domains() -> dict[str, dict[str, object]]:
                     "description": domain_data.get("description", ""),
                     "color": domain_data.get("color", ""),
                     "emoji": domain_data.get("emoji", ""),
+                    "entities": {},  # Will be populated below
                 }
+                
+                # Parse entities for this domain
+                try:
+                    entity_tuples = parse_entities(str(domain_path))
+                    entities_by_type: dict[str, list[str]] = {}
+                    
+                    for etype, name, desc in entity_tuples:
+                        if etype not in entities_by_type:
+                            entities_by_type[etype] = []
+                        if name not in entities_by_type[etype]:
+                            entities_by_type[etype].append(name)
+                    
+                    domain_info["entities"] = entities_by_type
+                except Exception as exc:
+                    logging.debug("Error parsing entities for %s: %s", domain_name, exc)
+                
                 domains[domain_name] = domain_info
         except Exception as exc:  # pragma: no cover - metadata optional
             logging.debug("Error reading %s: %s", domain_json, exc)
@@ -361,3 +380,55 @@ def get_matter(domain: str, matter_id: str) -> dict[str, Any]:
                     logging.debug("Error reading %s: %s", meta_file, exc)
 
     return result
+
+
+def domain_summaries() -> str:
+    """Generate a formatted list summary of all domains for use in agent prompts.
+    
+    Returns a markdown-formatted string with each domain as a list item including:
+    - Domain name and hashtag ID
+    - Description
+    - Sub-list of entities grouped by type
+    
+    Returns:
+        Formatted markdown string with all domains and their entities
+        
+    Raises:
+        RuntimeError: If JOURNAL_PATH is not set
+    """
+    domains = get_domains()  # This now includes parsed entities
+    if not domains:
+        return "No domains found."
+    
+    lines = []
+    lines.append("## Available Domains\n")
+    
+    for domain_name, domain_info in sorted(domains.items()):
+        # Build domain header with name and hashtag
+        emoji = domain_info.get("emoji", "")
+        title = domain_info.get("title", domain_name)
+        description = domain_info.get("description", "")
+        
+        # Main list item for domain
+        if emoji:
+            lines.append(f"- **{emoji} {title}** (#{domain_name})")
+        else:
+            lines.append(f"- **{title}** (#{domain_name})")
+            
+        if description:
+            lines.append(f"  {description}")
+        
+        # Add entities as sub-list grouped by type (now from get_domains())
+        entities_by_type = domain_info.get("entities", {})
+        if entities_by_type:
+            for entity_type in ["Person", "Company", "Project", "Tool"]:
+                if entity_type in entities_by_type:
+                    entity_list = entities_by_type[entity_type]
+                    if entity_list:
+                        # Format as comma-separated list
+                        entities_str = ", ".join(entity_list)
+                        lines.append(f"  - **{entity_type}**: {entities_str}")
+        
+        lines.append("")  # Empty line between domains
+    
+    return "\n".join(lines).strip()
