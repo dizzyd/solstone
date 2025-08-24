@@ -5,13 +5,12 @@ import sys
 import types
 from types import SimpleNamespace
 
-import pytest
-
 
 async def run_main(mod, argv, stdin_data=None):
     sys.argv = argv
     if stdin_data:
         import io
+
         sys.stdin = io.StringIO(stdin_data)
     await mod.main_async()
 
@@ -140,7 +139,7 @@ def test_google_outfile(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    out_file = tmp_path / "out.txt"
+    # out_file = tmp_path / "out.txt"
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
@@ -192,7 +191,7 @@ def test_google_outfile_error(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    out_file = tmp_path / "out.txt"
+    # out_file = tmp_path / "out.txt"
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")

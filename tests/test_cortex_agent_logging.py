@@ -169,13 +169,14 @@ def test_cortex_style_capture():
                 # Would be logged as error events by cortex
                 for line in stderr_output.strip().split("\n"):
                     if line:
-                        error_event = {
-                            "event": "error",
-                            "ts": int(time.time() * 1000),
-                            "message": line,
-                            "source": "stderr",
-                        }
+                        # error_event = {
+                        #     "event": "error",
+                        #     "ts": int(time.time() * 1000),
+                        #     "message": line,
+                        #     "source": "stderr",
+                        # }
                         # In real cortex, this would be written to log and broadcast
+                        pass
 
 
 if __name__ == "__main__":

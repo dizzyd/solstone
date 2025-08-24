@@ -7,12 +7,11 @@ via the SDK and is used by the ``think-agents`` CLI.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
 import traceback
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from claude_code_sdk import (
     AssistantMessage,

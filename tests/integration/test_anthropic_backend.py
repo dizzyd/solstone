@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -11,7 +10,7 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
-from think.models import CLAUDE_HAIKU_3_5, CLAUDE_SONNET_4
+from think.models import CLAUDE_SONNET_4
 
 
 def get_fixtures_env():

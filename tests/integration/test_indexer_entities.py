@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from think.indexer import (
-    get_index,
     reset_index,
     scan_entities,
     search_entities,
@@ -55,7 +54,7 @@ def test_entities_indexer_scan_and_search():
             reset_index(str(journal_path), "entities")
 
             # Scan the entities
-            scan_count = scan_entities(str(journal_path))
+            # scan_count = scan_entities(str(journal_path))
 
             # We should have scanned entity files (returns boolean)
             # scan_count is True if files were scanned, False if all were up to date

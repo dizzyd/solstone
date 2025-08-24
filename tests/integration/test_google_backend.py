@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -349,7 +348,7 @@ def test_google_backend_with_reasoning():
             events = [json.loads(line) for line in stdout_lines if line]
 
             # Check for thinking events (may be present with thinking models)
-            thinking_events = [e for e in events if e.get("event") == "thinking"]
+            # thinking_events = [e for e in events if e.get("event") == "thinking"]
             # With thinking models, we might get thinking events
 
             # Verify the answer is correct

@@ -2,7 +2,6 @@ import contextlib
 import json
 import os
 import subprocess
-import sys
 import threading
 import time
 from typing import Callable, Optional

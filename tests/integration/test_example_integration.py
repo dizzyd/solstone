@@ -1,7 +1,5 @@
 """Example integration test to demonstrate the structure."""
 
-from pathlib import Path
-
 import pytest
 
 

@@ -6,8 +6,6 @@ import os
 import sqlite3
 from typing import Any, Dict, List
 
-import sqlite_utils
-
 from .core import _scan_files, get_index
 from .summaries import find_summary_files
 

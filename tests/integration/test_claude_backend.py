@@ -3,15 +3,13 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
-import time
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
 
-from think.models import CLAUDE_HAIKU_3_5, CLAUDE_SONNET_4
+from think.models import CLAUDE_SONNET_4
 
 
 def get_fixtures_env():
@@ -237,8 +235,8 @@ def test_claude_backend_with_tool_calls():
                     continue
 
         # Look for tool events (optional - Claude might just respond without tools)
-        tool_start_events = [e for e in events if e.get("event") == "tool_start"]
-        tool_end_events = [e for e in events if e.get("event") == "tool_end"]
+        # tool_start_events = [e for e in events if e.get("event") == "tool_start"]
+        # tool_end_events = [e for e in events if e.get("event") == "tool_end"]
 
         # Tool events are optional in this backend
         # The important thing is that the finish event contains the correct response
@@ -336,7 +334,7 @@ def test_claude_backend_with_thinking():
                     continue
 
         # Check for thinking events (may or may not have them depending on model)
-        thinking_events = [e for e in events if e.get("event") == "thinking"]
+        # thinking_events = [e for e in events if e.get("event") == "thinking"]
         # We don't assert on thinking events since they're optional
 
         # Check finish event

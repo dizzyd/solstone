@@ -5,13 +5,12 @@ import sys
 import types
 from types import SimpleNamespace
 
-import pytest
-
 
 async def run_main(mod, argv, stdin_data=None):
     sys.argv = argv
     if stdin_data:
         import io
+
         sys.stdin = io.StringIO(stdin_data)
     await mod.main_async()
 
@@ -107,7 +106,6 @@ def test_openai_main(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
@@ -157,7 +155,6 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
@@ -199,7 +196,7 @@ def test_openai_outfile(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    out_file = tmp_path / "out.txt"
+    # out_file = tmp_path / "out.txt"
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
@@ -249,7 +246,6 @@ def test_openai_thinking_events_stdout(monkeypatch, tmp_path, capsys):
     agents_dir.mkdir()
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
-
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
@@ -304,7 +300,7 @@ def test_openai_outfile_error(monkeypatch, tmp_path, capsys):
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
 
-    out_file = tmp_path / "out.txt"
+    # out_file = tmp_path / "out.txt"
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
@@ -350,7 +346,6 @@ def test_openai_thinking_events_error(monkeypatch, tmp_path, capsys):
     agents_dir.mkdir()
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
-
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")
@@ -410,7 +405,6 @@ def test_openai_tool_call_events(monkeypatch, tmp_path, capsys):
     agents_dir.mkdir()
     mcp_uri_file = agents_dir / "mcp.uri"
     mcp_uri_file.write_text("http://localhost:5173/mcp")
-
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("OPENAI_API_KEY", "x")

@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from google import genai
 from google.genai import types
 
 from think.models import GEMINI_FLASH, GEMINI_LITE, gemini_generate

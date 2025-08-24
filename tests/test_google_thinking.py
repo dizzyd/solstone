@@ -10,6 +10,7 @@ async def run_main(mod, argv, stdin_data=None):
     sys.argv = argv
     if stdin_data:
         import io
+
         sys.stdin = io.StringIO(stdin_data)
     await mod.main_async()
 

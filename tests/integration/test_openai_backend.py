@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -335,7 +334,7 @@ def test_openai_backend_with_thinking():
             events = [json.loads(line) for line in stdout_lines if line]
 
             # Check for thinking events (may not be present with gpt-4o-mini)
-            thinking_events = [e for e in events if e.get("event") == "thinking"]
+            # thinking_events = [e for e in events if e.get("event") == "thinking"]
             # Note: With gpt-4o-mini, we likely won't get thinking events
             # This is just to demonstrate the test structure
 

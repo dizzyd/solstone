@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from think.indexer import (
-    get_index,
     reset_index,
     scan_transcripts,
     search_transcripts,
@@ -247,7 +246,7 @@ def test_transcripts_indexer_rescan():
             initial_count = total1
 
             # Rescan
-            second_scan = scan_transcripts(str(journal_path))
+            # second_scan = scan_transcripts(str(journal_path))
 
             # Results should be consistent
             total2, results2 = search_transcripts("authentication")

@@ -5,8 +5,6 @@ import sys
 import types
 from types import SimpleNamespace
 
-import pytest
-
 from think.models import CLAUDE_SONNET_4
 
 
@@ -14,6 +12,7 @@ async def run_main(mod, argv, stdin_data=None):
     sys.argv = argv
     if stdin_data:
         import io
+
         sys.stdin = io.StringIO(stdin_data)
     await mod.main_async()
 
@@ -58,12 +57,12 @@ def _setup_anthropic_stub(monkeypatch, error=False, with_thinking=False):
 
     anthropic_stub.Anthropic = DummyClient
     anthropic_stub.AsyncAnthropic = DummyClient  # Add async version
-    
+
     # Add types to the types module
     anthropic_types_stub.MessageParam = dict
     anthropic_types_stub.ToolParam = dict
     anthropic_types_stub.ToolUseBlock = SimpleNamespace
-    
+
     # Add types as a submodule
     anthropic_stub.types = anthropic_types_stub
 

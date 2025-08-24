@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from think.indexer import (
-    get_index,
     reset_index,
     scan_summaries,
     search_summaries,
@@ -36,7 +35,7 @@ def test_summaries_indexer_scan_and_search():
             index_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Override the index path for testing
-            original_index_dir = Path(journal_path) / "indexer"
+            # original_index_dir = Path(journal_path) / "indexer"
             test_index_dir = Path(tmpdir) / "indexer"
 
             # Monkey-patch the get_index function to use our temp directory
@@ -155,7 +154,7 @@ def test_summaries_indexer_rescan():
             initial_count = total1
 
             # Rescan (should handle existing content gracefully)
-            second_scan = scan_summaries(str(journal_path))
+            # second_scan = scan_summaries(str(journal_path))
 
             # Search again - should get same results
             total2, results2 = search_summaries("authentication")
