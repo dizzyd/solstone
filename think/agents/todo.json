@@ -1,0 +1,24 @@
+{
+  "title": "TODO Task Manager",
+  "description": "Intelligent daily task list generator that mines journal data and carries forward commitments",
+  "capabilities": [
+    "Analyzes yesterday's TODO.md for incomplete items",
+    "Mines journal for emerging priorities and commitments",
+    "Intelligently prioritizes based on urgency, impact, and effort",
+    "Schedules tasks realistically based on energy patterns",
+    "Tracks recurring tasks and patterns",
+    "Surfaces hidden action items from meetings and discussions"
+  ],
+  "tools_required": [
+    "search_summaries",
+    "search_transcripts", 
+    "search_events",
+    "get_resource"
+  ],
+  "input_context": [
+    "yesterday's TODO.md",
+    "current date/time",
+    "journal access via MCP tools"
+  ],
+  "output": "Daily TODO.md file formatted per JOURNAL.md specification"
+}
