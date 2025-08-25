@@ -322,6 +322,7 @@ async def get_resource(uri: str) -> object:
     - ``journal://summary/{day}/{topic}`` — markdown topic summaries
     - ``journal://raw/{day}/{time}/{length}`` — raw transcripts for a time range
     - ``journal://media/{day}/{name}`` — raw FLAC or PNG media files
+    - ``journal://todo/{day}`` — daily TODO.md task tracking file
 
     Args:
         uri: Resource URI to fetch.
@@ -440,6 +441,45 @@ def get_media(day: str, name: str) -> FileResource:
         description=f"Raw media file from {day}",
         mime_type=mime,
         path=abs_path,
+    )
+
+
+@mcp.resource("journal://todo/{day}")
+def get_todo(day: str) -> TextResource:
+    """Return the TODO.md file for a specific day.
+    
+    This resource provides access to the daily task tracking file which contains
+    two sections: "Today" for current day tasks with timestamps, and "Future" 
+    for upcoming tasks with target dates. Tasks can be marked as completed [x], 
+    uncompleted [ ], or cancelled with strikethrough formatting.
+    
+    Args:
+        day: Day in YYYYMMDD format
+        
+    Returns:
+        TextResource containing the TODO.md content for the specified day,
+        or a message indicating the file doesn't exist.
+    """
+    journal = os.getenv("JOURNAL_PATH", "journal")
+    todo_path = Path(journal) / day / "TODO.md"
+    
+    if not todo_path.is_file():
+        # Check if the day folder exists
+        day_path = Path(journal) / day
+        if not day_path.is_dir():
+            text = f"# TODO for {day}\n\nDay folder {day} does not exist."
+        else:
+            # Return empty TODO template if file doesn't exist
+            text = f"# TODO for {day}\n\n## Today\n\n(No tasks yet)\n\n## Future\n\n(No future tasks)"
+    else:
+        text = todo_path.read_text(encoding="utf-8")
+    
+    return TextResource(
+        uri=f"journal://todo/{day}",
+        name=f"TODO: {day}",
+        description=f"Task tracking for {day}",
+        mime_type="text/markdown",
+        text=text,
     )
 
 
