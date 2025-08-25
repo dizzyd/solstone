@@ -167,3 +167,76 @@ def test_get_todos_json_serializable(mock_journal):
         parsed = json.loads(json_str)
         assert parsed["today"][0]["type"] == "Meeting"
         assert parsed["future"][0]["type"] == "Goal"
+
+
+def test_get_todos_handles_various_time_formats(tmp_path):
+    """Test that various time formats are handled correctly."""
+    day_dir = tmp_path / "20250124"
+    day_dir.mkdir()
+    todo_file = day_dir / "TODO.md"
+    todo_file.write_text("""# Today
+- [ ] **Task**: Morning task (09:01)
+- [ ] **Meeting**: Noon meeting (12:00)
+- [ ] **Review**: Afternoon review (14:33)
+- [ ] **Task**: Late night work (23:59)
+- [ ] **Fix**: Midnight task (00:00)
+- [ ] **Task**: Invalid time (25:00)
+- [ ] **Task**: No time at all
+
+# Future
+""")
+    
+    with patch.dict("os.environ", {"JOURNAL_PATH": str(tmp_path)}):
+        todos = get_todos("20250124")
+        
+        assert todos is not None
+        assert len(todos["today"]) == 7
+        
+        # Valid times should be preserved
+        assert todos["today"][0]["time"] == "09:01"
+        assert todos["today"][1]["time"] == "12:00"
+        assert todos["today"][2]["time"] == "14:33"
+        assert todos["today"][3]["time"] == "23:59"
+        assert todos["today"][4]["time"] == "00:00"
+        
+        # Invalid time (25:00) should not be parsed as time
+        assert todos["today"][5]["time"] is None
+        assert "25:00" in todos["today"][5]["description"]
+        
+        # No time should result in None
+        assert todos["today"][6]["time"] is None
+
+
+def test_timestamp_preserves_domain_tags(tmp_path):
+    """Test that timestamps work correctly with domain tags."""
+    day_dir = tmp_path / "20250124"
+    day_dir.mkdir()
+    todo_file = day_dir / "TODO.md"
+    todo_file.write_text("""# Today
+- [ ] **Task**: Task with domain #hear (10:30)
+- [ ] **Meeting**: Meeting without time #dream
+- [ ] **Review**: Review with both #think (14:45)
+
+# Future
+""")
+    
+    with patch.dict("os.environ", {"JOURNAL_PATH": str(tmp_path)}):
+        todos = get_todos("20250124")
+        
+        assert todos is not None
+        assert len(todos["today"]) == 3
+        
+        # Domain and time should both be extracted
+        assert todos["today"][0]["domain"] == "hear"
+        assert todos["today"][0]["time"] == "10:30"
+        assert todos["today"][0]["description"] == "Task with domain"
+        
+        # Domain without time
+        assert todos["today"][1]["domain"] == "dream"
+        assert todos["today"][1]["time"] is None
+        assert todos["today"][1]["description"] == "Meeting without time"
+        
+        # Both domain and time
+        assert todos["today"][2]["domain"] == "think"
+        assert todos["today"][2]["time"] == "14:45"
+        assert todos["today"][2]["description"] == "Review with both"

@@ -46,31 +46,31 @@
 .todo-item {
   display: flex;
   align-items: start;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
-  background: #f8f9fa;
-  border-radius: 8px;
-  transition: background-color 0.2s;
+  margin-bottom: 0.125rem;
   position: relative;
 }
 
-.todo-item:hover {
+.todo-item-inner {
+  display: flex;
+  align-items: start;
+  padding: 0.375rem 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+  flex: 1;
+}
+
+.todo-item:hover .todo-item-inner {
   background: #e9ecef;
 }
 
-.todo-item.completed {
+.todo-item.completed .todo-item-inner {
   opacity: 0.7;
   background: #e8f5e9;
 }
 
 .todo-item.cancelled {
-  opacity: 0.5;
-  background: #ffebee;
-}
-
-.todo-item.cancelled .todo-description,
-.todo-item.cancelled .todo-type {
-  text-decoration: line-through;
+  display: none;
 }
 
 .todo-checkbox {
@@ -133,7 +133,15 @@
 
 .todo-time {
   color: #6c757d;
-  font-family: monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.875rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: 0.5rem;
+}
+
+.todo-item:hover .todo-time {
+  opacity: 0.7;
 }
 
 .todo-date {
@@ -142,16 +150,14 @@
 }
 
 .todo-delete {
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
   color: #dc3545;
   cursor: pointer;
   font-size: 1.2rem;
   opacity: 0;
   transition: opacity 0.2s;
-  padding: 0.25rem;
+  padding: 0.5rem;
+  margin-left: 0.5rem;
+  align-self: center;
 }
 
 .todo-item:hover .todo-delete {
@@ -180,11 +186,12 @@
 .new-todo-item {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.125rem;
+}
+
+.new-todo-item .todo-item-inner {
   background: #fff;
   border: 2px dashed #ced4da;
-  border-radius: 8px;
 }
 
 .new-todo-item .todo-checkbox {
@@ -274,8 +281,8 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .todo-item {
-    padding: 0.5rem 0.75rem;
+  .todo-item-inner {
+    padding: 0.3rem 0.75rem;
   }
   
   .todo-content {
@@ -286,6 +293,11 @@
   
   .todo-delete {
     opacity: 1;
+  }
+  
+  /* Show timestamps on mobile since hover isn't reliable */
+  .todo-time {
+    opacity: 0.5;
   }
 }
 </style>
@@ -311,21 +323,23 @@
           {% if todos and todos.today %}
             {% for item in todos.today %}
               <li class="todo-item {% if item.completed %}completed{% elif item.cancelled %}cancelled{% endif %}" data-index="{{ loop.index0 }}">
-                <input type="checkbox" 
-                       class="todo-checkbox" 
-                       {% if item.completed %}checked{% endif %}
-                       onchange="toggleCompleted('today', {{ loop.index0 }}, this.checked)">
-                <div class="todo-content">
-                  <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
-                  <span class="todo-description" onclick="editTodo(this, 'today', {{ loop.index0 }})">{{ item.description }}</span>
-                  {% if item.domain %}
-                    <span class="todo-domain domain-{{ item.domain }}">{{ item.domain }}</span>
-                  {% endif %}
-                  {% if item.time %}
-                    <span class="todo-time">{{ item.time }}</span>
-                  {% endif %}
+                <div class="todo-item-inner">
+                  <input type="checkbox" 
+                         class="todo-checkbox" 
+                         {% if item.completed %}checked{% endif %}
+                         onchange="toggleCompleted('today', {{ loop.index0 }}, this.checked)">
+                  <div class="todo-content">
+                    <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
+                    <span class="todo-description" onclick="editTodo(this, 'today', {{ loop.index0 }})">{{ item.description }}</span>
+                    {% if item.domain %}
+                      <span class="todo-domain domain-{{ item.domain }}">{{ item.domain }}</span>
+                    {% endif %}
+                    {% if item.time %}
+                      <span class="todo-time" data-time="{{ item.time }}">{{ item.time }}</span>
+                    {% endif %}
+                  </div>
                 </div>
-                <span class="todo-delete" onclick="toggleCancelled('today', {{ loop.index0 }})" title="Strike out">🗑️</span>
+                <span class="todo-delete" onclick="toggleCancelled('today', {{ loop.index0 }})" title="Delete">🗑️</span>
               </li>
             {% endfor %}
           {% endif %}
@@ -355,21 +369,23 @@
           {% if todos and todos.future %}
             {% for item in todos.future %}
               <li class="todo-item {% if item.completed %}completed{% elif item.cancelled %}cancelled{% endif %}" data-index="{{ loop.index0 }}">
-                <input type="checkbox" 
-                       class="todo-checkbox" 
-                       {% if item.completed %}checked{% endif %}
-                       onchange="toggleCompleted('future', {{ loop.index0 }}, this.checked)">
-                <div class="todo-content">
-                  <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
-                  <span class="todo-description" onclick="editTodo(this, 'future', {{ loop.index0 }})">{{ item.description }}</span>
-                  {% if item.domain %}
-                    <span class="todo-domain domain-{{ item.domain }}">{{ item.domain }}</span>
-                  {% endif %}
-                  {% if item.date %}
-                    <span class="todo-date">{{ item.date }}</span>
-                  {% endif %}
+                <div class="todo-item-inner">
+                  <input type="checkbox" 
+                         class="todo-checkbox" 
+                         {% if item.completed %}checked{% endif %}
+                         onchange="toggleCompleted('future', {{ loop.index0 }}, this.checked)">
+                  <div class="todo-content">
+                    <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
+                    <span class="todo-description" onclick="editTodo(this, 'future', {{ loop.index0 }})">{{ item.description }}</span>
+                    {% if item.domain %}
+                      <span class="todo-domain domain-{{ item.domain }}">{{ item.domain }}</span>
+                    {% endif %}
+                    {% if item.date %}
+                      <span class="todo-date">{{ item.date }}</span>
+                    {% endif %}
+                  </div>
                 </div>
-                <span class="todo-delete" onclick="toggleCancelled('future', {{ loop.index0 }})" title="Strike out">🗑️</span>
+                <span class="todo-delete" onclick="toggleCancelled('future', {{ loop.index0 }})" title="Delete">🗑️</span>
               </li>
             {% endfor %}
           {% endif %}
@@ -400,8 +416,30 @@
 const day = '{{ day }}';
 let generationAgent = null;
 
+// Format time from 24hr to friendly 12hr format (e.g., "14:30" -> "2:30p")
+function formatFriendlyTime(timeStr) {
+  if (!timeStr) return '';
+  
+  const [hours, minutes] = timeStr.split(':').map(n => parseInt(n, 10));
+  if (isNaN(hours) || isNaN(minutes)) return timeStr;
+  
+  const period = hours >= 12 ? 'p' : 'a';
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  
+  return `${displayHours}:${minutes.toString().padStart(2, '0')}${period}`;
+}
+
 // Check for active generation on page load
 window.addEventListener('DOMContentLoaded', async () => {
+  // Format all timestamps to friendly format
+  document.querySelectorAll('.todo-time').forEach(timeElem => {
+    const timeStr = timeElem.dataset.time || timeElem.textContent;
+    const friendlyTime = formatFriendlyTime(timeStr);
+    if (friendlyTime && friendlyTime !== timeStr) {
+      timeElem.textContent = friendlyTime;
+    }
+  });
+  
   await checkGenerationStatus();
 });
 
@@ -570,15 +608,12 @@ function toggleCompleted(section, index, checked) {
 
 function toggleCancelled(section, index) {
   const item = document.querySelector(`#${section}-list .todo-item[data-index="${index}"]`);
-  const isCancelled = item.classList.contains('cancelled');
   
-  updateTodo(section, index, 'cancelled', !isCancelled).then(success => {
+  // Always set as cancelled (delete)
+  updateTodo(section, index, 'cancelled', true).then(success => {
     if (success) {
-      if (isCancelled) {
-        item.classList.remove('cancelled');
-      } else {
-        item.classList.add('cancelled');
-      }
+      item.classList.add('cancelled');
+      // Item will be hidden by CSS
     }
   });
 }
@@ -644,12 +679,14 @@ function addNewTodo(section) {
   const newItem = document.createElement('li');
   newItem.className = 'new-todo-item';
   newItem.innerHTML = `
-    <input type="checkbox" class="todo-checkbox" disabled>
-    <div class="todo-content" style="width: 100%;">
-      <input type="text" 
-             class="todo-input" 
-             placeholder="Enter task (optional format: 'type: description #domain')"
-             id="new-todo-input">
+    <div class="todo-item-inner">
+      <input type="checkbox" class="todo-checkbox" disabled>
+      <div class="todo-content" style="width: 100%;">
+        <input type="text" 
+               class="todo-input" 
+               placeholder="Enter task (optional format: 'type: description #domain')"
+               id="new-todo-input">
+      </div>
     </div>
   `;
   

@@ -131,9 +131,14 @@ def calendar_todos_page(day: str) -> Any:
                 todo_type = "Task"
                 description = text
 
+            # Get current time for new items
+            from datetime import datetime
+
+            current_time = datetime.now().strftime("%H:%M")
+
             # Format the new line
             if section == "today":
-                new_line = f"- [ ] **{todo_type}**: {description}\n"
+                new_line = f"- [ ] **{todo_type}**: {description} ({current_time})\n"
             else:  # future
                 new_line = f"- [ ] **{todo_type}**: {description}\n"
 
@@ -181,6 +186,11 @@ def calendar_todos_page(day: str) -> Any:
             content = todo_path.read_text()
             lines = content.splitlines(keepends=True)
 
+            # Get current time for timestamp update
+            from datetime import datetime
+
+            current_time = datetime.now().strftime("%H:%M")
+
             # Find and update the specific line
             current_section = None
             todo_count = -1
@@ -193,6 +203,16 @@ def calendar_todos_page(day: str) -> Any:
                 elif current_section == section and line.strip().startswith("- ["):
                     todo_count += 1
                     if todo_count == index:
+                        # For 'today' section, update timestamp on any modification
+                        if current_section == "today":
+                            # Remove old timestamp if present
+                            lines[i] = (
+                                re.sub(
+                                    r"\s*\(\d{1,2}:\d{2}\)\s*$", "", lines[i].rstrip()
+                                )
+                                + "\n"
+                            )
+
                         if field == "completed":
                             if value:
                                 lines[i] = lines[i].replace("- [ ]", "- [x]", 1)
@@ -220,6 +240,11 @@ def calendar_todos_page(day: str) -> Any:
                             match = re.match(r"(- \[.\] )(.*)", lines[i])
                             if match:
                                 lines[i] = match.group(1) + value + "\n"
+
+                        # Add timestamp for 'today' section items (unless cancelled)
+                        if current_section == "today" and field != "cancelled":
+                            lines[i] = lines[i].rstrip() + f" ({current_time})\n"
+
                         break
 
             todo_path.write_text("".join(lines))
