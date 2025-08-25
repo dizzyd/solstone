@@ -167,6 +167,10 @@ def supervise(
 ) -> None:
     """Monitor heartbeat files and alert when they become stale."""
     last_day = datetime.now().date()
+    alert_state = {}  # Track {issue_key: (last_alert_time, backoff_seconds)}
+    initial_backoff = 60  # Start with 1 minute
+    max_backoff = 3600  # Max 1 hour between alerts
+    
     while True:  # pragma: no cover - loop checked via unit tests by patching
         # Check for runner exits first (immediate alert)
         if procs:
@@ -174,15 +178,50 @@ def supervise(
             if exited:
                 msg = f"Runner process exited: {', '.join(sorted(exited))}"
                 logging.error(msg)
-                send_notification(msg, command)
+                exit_key = ("runner_exit", tuple(sorted(exited)))
+                now = time.time()
+                
+                if exit_key in alert_state:
+                    last_time, backoff = alert_state[exit_key]
+                    if now - last_time >= backoff:
+                        send_notification(msg, command)
+                        # Double the backoff for next time, up to max
+                        alert_state[exit_key] = (now, min(backoff * 2, max_backoff))
+                        logging.info(f"Alert sent, next backoff: {min(backoff * 2, max_backoff)}s")
+                    else:
+                        remaining = int(backoff - (now - last_time))
+                        logging.info(f"Suppressing alert, next in {remaining}s")
+                else:
+                    send_notification(msg, command)
+                    alert_state[exit_key] = (now, initial_backoff)
 
         stale = check_health(journal, threshold)
         if stale:
             msg = f"Journaling offline: {', '.join(sorted(stale))}"
             logging.warning(msg)
-            send_notification(msg, command)
+            
+            # Apply exponential backoff
+            stale_key = ("stale", tuple(sorted(stale)))
+            now = time.time()
+            
+            if stale_key in alert_state:
+                last_time, backoff = alert_state[stale_key]
+                if now - last_time >= backoff:
+                    send_notification(msg, command)
+                    # Double the backoff for next time, up to max
+                    alert_state[stale_key] = (now, min(backoff * 2, max_backoff))
+                    logging.info(f"Alert sent, next backoff: {min(backoff * 2, max_backoff)}s")
+                else:
+                    remaining = int(backoff - (now - last_time))
+                    logging.info(f"Suppressing alert, next in {remaining}s")
+            else:
+                send_notification(msg, command)
+                alert_state[stale_key] = (now, initial_backoff)
         else:
             logging.info("Heartbeat OK")
+            # Clear alert state for stale services when they recover
+            alert_state = {k: v for k, v in alert_state.items() if k[0] != "stale"}
+            
         if daily and datetime.now().date() != last_day:
             if run_process_day():
                 spawn_scheduled_agents(journal)
