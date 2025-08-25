@@ -491,15 +491,24 @@ def get_todos(day: str) -> dict[str, list[dict[str, Any]]] | None:
                 # Parse based on section
                 if current_section == "today":
                     # Today format: description #optional-domain-tag (HH:MM)
-                    time_match = re.search(r"\((\d{2}:\d{2})\)$", remainder)
+                    # Match time only if it's a valid hour:minute format at the very end
+                    # Hours can be 00-23 or 01-12 (with optional leading zero)
+                    time_match = re.search(r"\(([0-2]?\d:[0-5]\d)\)\s*$", remainder)
                     if time_match:
+                        # Validate hour is in valid range (00-23)
                         time_str = time_match.group(1)
-                        remainder = remainder[: time_match.start()].strip()
+                        hour = int(time_str.split(':')[0])
+                        if hour <= 23:
+                            remainder = remainder[: time_match.start()].strip()
+                        else:
+                            time_str = None
                     else:
                         time_str = None
 
                     # Extract domain tag if present
-                    domain_match = re.search(r"#(\S+)", remainder)
+                    # Domain tags should be #word with alphanumeric/hyphen/underscore only
+                    # and should be preceded by whitespace to avoid matching issue numbers
+                    domain_match = re.search(r"\s#([a-zA-Z][a-zA-Z0-9_-]*)\b", remainder)
                     if domain_match:
                         domain = domain_match.group(1)
                         description = remainder[: domain_match.start()].strip()
@@ -529,7 +538,9 @@ def get_todos(day: str) -> dict[str, list[dict[str, Any]]] | None:
                         date_str = None
 
                     # Extract domain tag if present
-                    domain_match = re.search(r"#(\S+)", remainder)
+                    # Domain tags should be #word with alphanumeric/hyphen/underscore only
+                    # and should be preceded by whitespace to avoid matching issue numbers
+                    domain_match = re.search(r"\s#([a-zA-Z][a-zA-Z0-9_-]*)\b", remainder)
                     if domain_match:
                         domain = domain_match.group(1)
                         description = remainder[: domain_match.start()].strip()
