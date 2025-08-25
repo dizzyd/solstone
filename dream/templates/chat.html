@@ -324,7 +324,7 @@ function addMessage(text, cls, isHtml=false, rawMarkdown=null){
     // Add copy button for bot messages
     const copyBtn = document.createElement('button');
     copyBtn.className = 'copy-markdown-btn';
-    copyBtn.innerHTML = '📋 Copy';
+    copyBtn.innerHTML = '📋';
     copyBtn.onclick = (e) => {
       e.stopPropagation();
       copyMessageMarkdown(div, copyBtn);
@@ -345,19 +345,19 @@ function copyMessageMarkdown(messageDiv, copyBtn) {
   
   navigator.clipboard.writeText(markdown).then(() => {
     // Show success feedback
-    copyBtn.innerHTML = '✓ Copied';
+    copyBtn.innerHTML = '✓';
     copyBtn.classList.add('copied');
     
     // Reset after 2 seconds
     setTimeout(() => {
-      copyBtn.innerHTML = '📋 Copy';
+      copyBtn.innerHTML = '📋';
       copyBtn.classList.remove('copied');
     }, 2000);
   }).catch(err => {
     console.error('Failed to copy:', err);
-    copyBtn.innerHTML = '❌ Failed';
+    copyBtn.innerHTML = '❌';
     setTimeout(() => {
-      copyBtn.innerHTML = '📋 Copy';
+      copyBtn.innerHTML = '📋';
     }, 2000);
   });
 }
