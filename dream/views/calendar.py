@@ -92,15 +92,142 @@ def calendar_transcript_page(day: str) -> str:
     )
 
 
-@bp.route("/calendar/<day>/todos")
-def calendar_todos_page(day: str) -> str:
-    """Render TODO viewer for a specific day."""
+@bp.route("/calendar/<day>/todos", methods=["GET", "POST"])
+def calendar_todos_page(day: str) -> Any:
+    """Render TODO viewer or handle TODO updates for a specific day."""
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
     from think.utils import get_todos
 
+    # Handle POST requests for TODO updates
+    if request.method == "POST":
+        import json
+        from pathlib import Path
+
+        data = request.get_json()
+        action = data.get("action")
+
+        day_dir = Path(os.path.join(state.journal_root, day))
+        todo_path = day_dir / "TODO.md"
+
+        # Create directory if it doesn't exist
+        day_dir.mkdir(exist_ok=True)
+
+        if action == "add":
+            section = data.get("section", "today")
+            text = data.get("text", "").strip()
+
+            if not text:
+                return jsonify({"success": False, "error": "Empty text"}), 400
+
+            # Parse the text for type prefix
+            type_match = re.match(r"^(\w+):\s*(.+)", text)
+            if type_match:
+                todo_type = type_match.group(1).capitalize()
+                description = type_match.group(2)
+            else:
+                todo_type = "Task"
+                description = text
+
+            # Format the new line
+            if section == "today":
+                new_line = f"- [ ] **{todo_type}**: {description}\n"
+            else:  # future
+                new_line = f"- [ ] **{todo_type}**: {description}\n"
+
+            # Read existing content or create new
+            if todo_path.exists():
+                content = todo_path.read_text()
+            else:
+                content = "# Today\n\n# Future\n"
+
+            # Find the section and append
+            lines = content.splitlines(keepends=True)
+            new_lines = []
+            in_section = False
+            added = False
+
+            for i, line in enumerate(lines):
+                new_lines.append(line)
+                if line.strip() == f"# {section.capitalize()}":
+                    in_section = True
+                elif in_section and not added:
+                    # Add before next section or at end of current section
+                    if i + 1 < len(lines) and lines[i + 1].strip().startswith("#"):
+                        new_lines.insert(-1, new_line)
+                        added = True
+                    elif i == len(lines) - 1:
+                        new_lines.append(new_line)
+                        added = True
+
+            if not added:
+                # Section might be at the end
+                new_lines.append(new_line)
+
+            todo_path.write_text("".join(new_lines))
+            return jsonify({"success": True})
+
+        elif action == "update":
+            index = data.get("index")
+            section = data.get("section")
+            field = data.get("field")
+            value = data.get("value")
+
+            if not todo_path.exists():
+                return jsonify({"success": False, "error": "TODO.md not found"}), 404
+
+            content = todo_path.read_text()
+            lines = content.splitlines(keepends=True)
+
+            # Find and update the specific line
+            current_section = None
+            todo_count = -1
+
+            for i, line in enumerate(lines):
+                if line.strip() == "# Today":
+                    current_section = "today"
+                elif line.strip() == "# Future":
+                    current_section = "future"
+                elif current_section == section and line.strip().startswith("- ["):
+                    todo_count += 1
+                    if todo_count == index:
+                        if field == "completed":
+                            if value:
+                                lines[i] = lines[i].replace("- [ ]", "- [x]", 1)
+                            else:
+                                lines[i] = lines[i].replace("- [x]", "- [ ]", 1)
+                        elif field == "cancelled":
+                            # Toggle strikethrough
+                            if value:
+                                # Add strikethrough after checkbox
+                                match = re.match(r"(- \[.\] )(.*)", lines[i])
+                                if match and not match.group(2).startswith("~~"):
+                                    lines[i] = (
+                                        match.group(1)
+                                        + "~~"
+                                        + match.group(2).rstrip()
+                                        + "~~\n"
+                                    )
+                            else:
+                                # Remove strikethrough
+                                lines[i] = re.sub(
+                                    r"(- \[.\] )~~(.+?)~~", r"\1\2", lines[i]
+                                )
+                        elif field == "text":
+                            # Update the entire text after checkbox
+                            match = re.match(r"(- \[.\] )(.*)", lines[i])
+                            if match:
+                                lines[i] = match.group(1) + value + "\n"
+                        break
+
+            todo_path.write_text("".join(lines))
+            return jsonify({"success": True})
+
+        return jsonify({"success": False, "error": "Invalid action"}), 400
+
+    # GET request - render the page
     todos = get_todos(day)
     title = format_date(day)
     prev_day, next_day = adjacent_days(state.journal_root, day)

@@ -17,6 +17,24 @@
   margin-bottom: 1.5rem;
   padding-bottom: 0.5rem;
   border-bottom: 2px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.add-todo-btn {
+  font-size: 1rem;
+  padding: 0.25rem 0.75rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-todo-btn:hover {
+  background: #218838;
 }
 
 .todo-list {
@@ -33,6 +51,7 @@
   background: #f8f9fa;
   border-radius: 8px;
   transition: background-color 0.2s;
+  position: relative;
 }
 
 .todo-item:hover {
@@ -47,6 +66,10 @@
 .todo-item.cancelled {
   opacity: 0.5;
   background: #ffebee;
+}
+
+.todo-item.cancelled .todo-description,
+.todo-item.cancelled .todo-type {
   text-decoration: line-through;
 }
 
@@ -56,6 +79,7 @@
   margin-right: 1rem;
   margin-top: 2px;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .todo-content {
@@ -87,6 +111,13 @@
   flex: 1;
   color: #212529;
   min-width: 200px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.todo-description:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .todo-meta {
@@ -115,6 +146,62 @@
 .todo-date {
   color: #6c757d;
   font-weight: 500;
+}
+
+.todo-delete {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #dc3545;
+  cursor: pointer;
+  font-size: 1.2rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 0.25rem;
+}
+
+.todo-item:hover .todo-delete {
+  opacity: 0.7;
+}
+
+.todo-delete:hover {
+  opacity: 1 !important;
+}
+
+.todo-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.todo-input:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.new-todo-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: #fff;
+  border: 2px dashed #ced4da;
+  border-radius: 8px;
+}
+
+.new-todo-item .todo-checkbox {
+  visibility: hidden;
+}
+
+.edit-mode {
+  padding: 0;
+  background: transparent;
+  border: 1px solid #80bdff;
 }
 
 .no-todos {
@@ -163,6 +250,10 @@
   .todo-description {
     margin-top: 0.25rem;
   }
+  
+  .todo-delete {
+    opacity: 1;
+  }
 }
 </style>
 {% endblock %}
@@ -176,22 +267,25 @@
         url_for('calendar.calendar_todos_page', day=day)) }}
   
   <div class="todos-container">
-    {% if todos %}
+    {% if todos or true %}
       <!-- Today Section -->
-      <div class="todos-section">
-        <h2>Today</h2>
-        {% if todos.today %}
-          <ul class="todo-list">
+      <div class="todos-section" data-section="today">
+        <h2>
+          Today
+          <button class="add-todo-btn" onclick="addNewTodo('today')">+ Add</button>
+        </h2>
+        <ul class="todo-list" id="today-list">
+          {% if todos and todos.today %}
             {% for item in todos.today %}
-              <li class="todo-item {% if item.completed %}completed{% elif item.cancelled %}cancelled{% endif %}">
+              <li class="todo-item {% if item.completed %}completed{% elif item.cancelled %}cancelled{% endif %}" data-index="{{ loop.index0 }}">
                 <input type="checkbox" 
                        class="todo-checkbox" 
-                       {% if item.completed %}checked{% endif %} 
-                       disabled>
+                       {% if item.completed %}checked{% endif %}
+                       onchange="toggleCompleted('today', {{ loop.index0 }}, this.checked)">
                 <div class="todo-content">
                   <div class="todo-main">
                     <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
-                    <span class="todo-description">{{ item.description }}</span>
+                    <span class="todo-description" onclick="editTodo(this, 'today', {{ loop.index0 }})">{{ item.description }}</span>
                   </div>
                   <div class="todo-meta">
                     {% if item.domain %}
@@ -202,11 +296,13 @@
                     {% endif %}
                   </div>
                 </div>
+                <span class="todo-delete" onclick="toggleCancelled('today', {{ loop.index0 }})" title="Strike out">🗑️</span>
               </li>
             {% endfor %}
-          </ul>
-        {% else %}
-          <div class="no-todos">
+          {% endif %}
+        </ul>
+        {% if not todos or not todos.today %}
+          <div class="no-todos" id="today-empty">
             <div class="no-todos-icon">📋</div>
             <p>No tasks for today</p>
           </div>
@@ -214,20 +310,23 @@
       </div>
       
       <!-- Future Section -->
-      <div class="todos-section">
-        <h2>Future</h2>
-        {% if todos.future %}
-          <ul class="todo-list">
+      <div class="todos-section" data-section="future">
+        <h2>
+          Future
+          <button class="add-todo-btn" onclick="addNewTodo('future')">+ Add</button>
+        </h2>
+        <ul class="todo-list" id="future-list">
+          {% if todos and todos.future %}
             {% for item in todos.future %}
-              <li class="todo-item {% if item.completed %}completed{% elif item.cancelled %}cancelled{% endif %}">
+              <li class="todo-item {% if item.completed %}completed{% elif item.cancelled %}cancelled{% endif %}" data-index="{{ loop.index0 }}">
                 <input type="checkbox" 
                        class="todo-checkbox" 
-                       {% if item.completed %}checked{% endif %} 
-                       disabled>
+                       {% if item.completed %}checked{% endif %}
+                       onchange="toggleCompleted('future', {{ loop.index0 }}, this.checked)">
                 <div class="todo-content">
                   <div class="todo-main">
                     <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
-                    <span class="todo-description">{{ item.description }}</span>
+                    <span class="todo-description" onclick="editTodo(this, 'future', {{ loop.index0 }})">{{ item.description }}</span>
                   </div>
                   <div class="todo-meta">
                     {% if item.domain %}
@@ -238,11 +337,13 @@
                     {% endif %}
                   </div>
                 </div>
+                <span class="todo-delete" onclick="toggleCancelled('future', {{ loop.index0 }})" title="Strike out">🗑️</span>
               </li>
             {% endfor %}
-          </ul>
-        {% else %}
-          <div class="no-todos">
+          {% endif %}
+        </ul>
+        {% if not todos or not todos.future %}
+          <div class="no-todos" id="future-empty">
             <div class="no-todos-icon">🗓️</div>
             <p>No future tasks scheduled</p>
           </div>
@@ -257,4 +358,216 @@
     {% endif %}
   </div>
 </div>
+
+<script>
+const day = '{{ day }}';
+
+async function updateTodo(section, index, field, value) {
+  try {
+    const response = await fetch(`/calendar/${day}/todos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'update',
+        section: section,
+        index: index,
+        field: field,
+        value: value
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Update failed');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating todo:', error);
+    alert('Failed to update todo');
+    return false;
+  }
+}
+
+async function addTodo(section, text) {
+  try {
+    const response = await fetch(`/calendar/${day}/todos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'add',
+        section: section,
+        text: text
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Add failed');
+    }
+    
+    // Reload the page to show the new item
+    window.location.reload();
+    return true;
+  } catch (error) {
+    console.error('Error adding todo:', error);
+    alert('Failed to add todo');
+    return false;
+  }
+}
+
+function toggleCompleted(section, index, checked) {
+  const item = document.querySelector(`#${section}-list .todo-item[data-index="${index}"]`);
+  
+  updateTodo(section, index, 'completed', checked).then(success => {
+    if (success) {
+      if (checked) {
+        item.classList.add('completed');
+      } else {
+        item.classList.remove('completed');
+      }
+    } else {
+      // Revert checkbox state on failure
+      const checkbox = item.querySelector('.todo-checkbox');
+      checkbox.checked = !checked;
+    }
+  });
+}
+
+function toggleCancelled(section, index) {
+  const item = document.querySelector(`#${section}-list .todo-item[data-index="${index}"]`);
+  const isCancelled = item.classList.contains('cancelled');
+  
+  updateTodo(section, index, 'cancelled', !isCancelled).then(success => {
+    if (success) {
+      if (isCancelled) {
+        item.classList.remove('cancelled');
+      } else {
+        item.classList.add('cancelled');
+      }
+    }
+  });
+}
+
+function editTodo(element, section, index) {
+  const currentText = element.textContent;
+  const todoItem = element.closest('.todo-item');
+  const todoMain = element.closest('.todo-main');
+  const todoType = todoMain.querySelector('.todo-type').textContent.replace(':', '');
+  
+  // Create input field
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'todo-input edit-mode';
+  input.value = `**${todoType}**: ${currentText}`;
+  
+  // Replace the main div with input
+  const originalContent = todoMain.innerHTML;
+  todoMain.innerHTML = '';
+  todoMain.appendChild(input);
+  
+  input.focus();
+  input.select();
+  
+  const saveEdit = async () => {
+    const newValue = input.value.trim();
+    if (newValue && newValue !== `**${todoType}**: ${currentText}`) {
+      const success = await updateTodo(section, index, 'text', newValue);
+      if (success) {
+        // Parse the new value to update display
+        const match = newValue.match(/\*\*([^*]+)\*\*:\s*(.*)/);
+        if (match) {
+          const newType = match[1];
+          const newDesc = match[2];
+          todoMain.innerHTML = `
+            <span class="todo-type type-${newType.toLowerCase()}">${newType}</span>
+            <span class="todo-description" onclick="editTodo(this, '${section}', ${index})">${newDesc}</span>
+          `;
+        } else {
+          // If format is wrong, just show as task
+          todoMain.innerHTML = `
+            <span class="todo-type type-task">Task</span>
+            <span class="todo-description" onclick="editTodo(this, '${section}', ${index})">${newValue}</span>
+          `;
+        }
+      } else {
+        todoMain.innerHTML = originalContent;
+      }
+    } else {
+      todoMain.innerHTML = originalContent;
+    }
+  };
+  
+  input.addEventListener('blur', saveEdit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      todoMain.innerHTML = originalContent;
+    }
+  });
+}
+
+function addNewTodo(section) {
+  const list = document.getElementById(`${section}-list`);
+  const emptyMessage = document.getElementById(`${section}-empty`);
+  
+  // Hide empty message if it exists
+  if (emptyMessage) {
+    emptyMessage.style.display = 'none';
+  }
+  
+  // Create new todo item with input
+  const newItem = document.createElement('li');
+  newItem.className = 'new-todo-item';
+  newItem.innerHTML = `
+    <input type="checkbox" class="todo-checkbox" disabled>
+    <div class="todo-content" style="width: 100%;">
+      <input type="text" 
+             class="todo-input" 
+             placeholder="Enter task (optional format: 'type: description #domain')"
+             id="new-todo-input">
+    </div>
+  `;
+  
+  // Insert at the beginning of the list
+  if (list.firstChild) {
+    list.insertBefore(newItem, list.firstChild);
+  } else {
+    list.appendChild(newItem);
+  }
+  
+  const input = document.getElementById('new-todo-input');
+  input.focus();
+  
+  const saveNewTodo = async () => {
+    const text = input.value.trim();
+    if (text) {
+      await addTodo(section, text);
+    } else {
+      newItem.remove();
+      // Show empty message again if no items
+      if (list.children.length === 0 && emptyMessage) {
+        emptyMessage.style.display = 'block';
+      }
+    }
+  };
+  
+  input.addEventListener('blur', saveNewTodo);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      newItem.remove();
+      if (list.children.length === 0 && emptyMessage) {
+        emptyMessage.style.display = 'block';
+      }
+    }
+  });
+}
+</script>
 {% endblock %}
