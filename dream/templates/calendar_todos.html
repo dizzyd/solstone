@@ -627,13 +627,21 @@ function editTodo(element, section, index) {
   const todoItem = element.closest('.todo-item');
   const todoContent = element.closest('.todo-content');
   const todoTypeElement = todoContent.querySelector('.todo-type');
+  const todoDomainElement = todoContent.querySelector('.todo-domain');
   const todoType = todoTypeElement ? todoTypeElement.textContent.replace(':', '') : null;
+  const todoDomain = todoDomainElement ? todoDomainElement.textContent : null;
   
   // Create input field
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'todo-input edit-mode';
-  input.value = todoType ? `**${todoType}**: ${currentText}` : currentText;
+  
+  // Build the input value with type prefix and domain hashtag
+  let inputValue = todoType ? `**${todoType}**: ${currentText}` : currentText;
+  if (todoDomain) {
+    inputValue += ` #${todoDomain}`;
+  }
+  input.value = inputValue;
   
   // Save original content
   const originalContent = todoContent.innerHTML;
@@ -647,7 +655,10 @@ function editTodo(element, section, index) {
   
   const saveEdit = async () => {
     const newValue = input.value.trim();
-    const originalValue = todoType ? `**${todoType}**: ${currentText}` : currentText;
+    let originalValue = todoType ? `**${todoType}**: ${currentText}` : currentText;
+    if (todoDomain) {
+      originalValue += ` #${todoDomain}`;
+    }
     if (newValue && newValue !== originalValue) {
       const success = await updateTodo(section, index, 'text', newValue);
       if (success) {
