@@ -103,7 +103,6 @@ def calendar_todos_page(day: str) -> Any:
 
     # Handle POST requests for TODO updates
     if request.method == "POST":
-        import json
         from pathlib import Path
 
         data = request.get_json()
@@ -122,13 +121,19 @@ def calendar_todos_page(day: str) -> Any:
             if not text:
                 return jsonify({"success": False, "error": "Empty text"}), 400
 
-            # Parse the text for type prefix
-            type_match = re.match(r"^(\w+):\s*(.+)", text)
-            if type_match:
-                todo_type = type_match.group(1).capitalize()
-                description = type_match.group(2)
+            # Parse the text for type prefix (either **Type**: prefix or Type: prefix)
+            type_match_bold = re.match(r"^\*\*(\w+)\*\*:\s*(.+)", text)
+            type_match_plain = re.match(r"^(\w+):\s*(.+)", text)
+            if type_match_bold:
+                todo_type = type_match_bold.group(1).capitalize()
+                description = type_match_bold.group(2)
+                has_type = True
+            elif type_match_plain:
+                todo_type = type_match_plain.group(1).capitalize()
+                description = type_match_plain.group(2)
+                has_type = True
             else:
-                todo_type = "Task"
+                has_type = False
                 description = text
 
             # Get current time for new items
@@ -137,10 +142,16 @@ def calendar_todos_page(day: str) -> Any:
             current_time = datetime.now().strftime("%H:%M")
 
             # Format the new line
-            if section == "today":
-                new_line = f"- [ ] **{todo_type}**: {description} ({current_time})\n"
-            else:  # future
-                new_line = f"- [ ] **{todo_type}**: {description}\n"
+            if has_type:
+                if section == "today":
+                    new_line = f"- [ ] **{todo_type}**: {description} ({current_time})\n"
+                else:  # future
+                    new_line = f"- [ ] **{todo_type}**: {description}\n"
+            else:
+                if section == "today":
+                    new_line = f"- [ ] {description} ({current_time})\n"
+                else:  # future
+                    new_line = f"- [ ] {description}\n"
 
             # Read existing content or create new
             if todo_path.exists():

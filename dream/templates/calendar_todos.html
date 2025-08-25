@@ -329,7 +329,9 @@
                          {% if item.completed %}checked{% endif %}
                          onchange="toggleCompleted('today', {{ loop.index0 }}, this.checked)">
                   <div class="todo-content">
+                    {% if item.type %}
                     <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
+                    {% endif %}
                     <span class="todo-description" onclick="editTodo(this, 'today', {{ loop.index0 }})">{{ item.description }}</span>
                     {% if item.domain %}
                       <span class="todo-domain domain-{{ item.domain }}">{{ item.domain }}</span>
@@ -375,7 +377,9 @@
                          {% if item.completed %}checked{% endif %}
                          onchange="toggleCompleted('future', {{ loop.index0 }}, this.checked)">
                   <div class="todo-content">
+                    {% if item.type %}
                     <span class="todo-type type-{{ item.type|lower }}">{{ item.type }}</span>
+                    {% endif %}
                     <span class="todo-description" onclick="editTodo(this, 'future', {{ loop.index0 }})">{{ item.description }}</span>
                     {% if item.domain %}
                       <span class="todo-domain domain-{{ item.domain }}">{{ item.domain }}</span>
@@ -622,13 +626,14 @@ function editTodo(element, section, index) {
   const currentText = element.textContent;
   const todoItem = element.closest('.todo-item');
   const todoContent = element.closest('.todo-content');
-  const todoType = todoContent.querySelector('.todo-type').textContent.replace(':', '');
+  const todoTypeElement = todoContent.querySelector('.todo-type');
+  const todoType = todoTypeElement ? todoTypeElement.textContent.replace(':', '') : null;
   
   // Create input field
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'todo-input edit-mode';
-  input.value = `**${todoType}**: ${currentText}`;
+  input.value = todoType ? `**${todoType}**: ${currentText}` : currentText;
   
   // Save original content
   const originalContent = todoContent.innerHTML;
@@ -642,7 +647,8 @@ function editTodo(element, section, index) {
   
   const saveEdit = async () => {
     const newValue = input.value.trim();
-    if (newValue && newValue !== `**${todoType}**: ${currentText}`) {
+    const originalValue = todoType ? `**${todoType}**: ${currentText}` : currentText;
+    if (newValue && newValue !== originalValue) {
       const success = await updateTodo(section, index, 'text', newValue);
       if (success) {
         // Reload to get updated metadata

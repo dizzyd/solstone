@@ -480,13 +480,15 @@ def get_todos(day: str) -> dict[str, list[dict[str, Any]]] | None:
                             else cancelled_content
                         )
 
-                # Parse the type (bold text)
+                # Parse the type (bold text) if present, otherwise use the whole line
                 type_match = re.match(r"\*\*([^*]+)\*\*:\s*(.*)", line)
-                if not type_match:
-                    continue
-
-                todo_type = type_match.group(1)
-                remainder = type_match.group(2)
+                if type_match:
+                    todo_type = type_match.group(1)
+                    remainder = type_match.group(2)
+                else:
+                    # No type prefix, use default type and entire line as description
+                    todo_type = None
+                    remainder = line
 
                 # Parse based on section
                 if current_section == "today":
