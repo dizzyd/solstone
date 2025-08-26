@@ -227,9 +227,11 @@ def test_handle_spawn(mock_thread, mock_popen, cortex_server, mock_journal):
     spawn_request = {
         "prompt": "Test prompt",
         "backend": "openai",
-        "model": "gpt-4",
         "persona": "default",
-        "max_tokens": 1000,
+        "config": {
+            "model": "gpt-4",
+            "max_tokens": 1000,
+        },
     }
 
     cortex_server._handle_spawn(ws, spawn_request)

@@ -205,9 +205,8 @@ class CortexServer:
         """Handle spawn new agent request."""
         prompt = req.get("prompt", "")
         backend = req.get("backend", "openai")
-        model = req.get("model", "")
         persona = req.get("persona", "default")
-        max_tokens = req.get("max_tokens", 0)
+        config = req.get("config", {})
 
         if not prompt:
             self._send_error(ws, "prompt is required")
@@ -237,14 +236,7 @@ class CortexServer:
 
         # Spawn the agent process
         try:
-            # Build NDJSON request
-            # Build config dict for model and max_tokens
-            config = {}
-            if model:
-                config["model"] = model
-            if max_tokens:
-                config["max_tokens"] = max_tokens
-
+            # Build NDJSON request with config
             request = {
                 "prompt": prompt,
                 "backend": backend,

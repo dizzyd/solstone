@@ -1180,6 +1180,11 @@ async function startAgent() {
   const maxTokens = parseInt(document.getElementById('maxTokens').value) || 0;
   const persona = document.getElementById('agentPersona').value;
   
+  // Build config object
+  const config = {};
+  if (model) config.model = model;
+  if (maxTokens) config.max_tokens = maxTokens;
+  
   const startBtn = document.getElementById('startAgentBtn');
   startBtn.disabled = true;
   startBtn.textContent = '🚀 Starting...';
@@ -1193,8 +1198,7 @@ async function startAgent() {
       body: JSON.stringify({
         plan: plan,
         backend: backend,
-        model: model,
-        max_tokens: maxTokens,
+        config: config,
         persona: persona
       })
     });

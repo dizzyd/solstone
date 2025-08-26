@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .cortex_client import get_global_cortex_client
 
@@ -44,6 +44,7 @@ class CortexAgentRunner:
         prompt: str,
         persona: str = "default",
         backend: str = "openai",
+        config: Optional[Dict[str, Any]] = None,
         attachments: Optional[List[str]] = None,
         on_event: Optional[Callable[[dict], None]] = None,
     ) -> str:
@@ -53,6 +54,7 @@ class CortexAgentRunner:
             prompt: The prompt to send to the agent
             persona: The persona to use (default: "default")
             backend: The backend to use (default: "openai")
+            config: Optional configuration dictionary for the agent
             attachments: Optional list of attachments to include with prompt
             on_event: Optional callback for all events (in addition to internal handling)
 
@@ -92,6 +94,7 @@ class CortexAgentRunner:
             prompt=full_prompt,
             backend=backend,
             persona=persona,
+            config=config or {},
         )
 
         if not agent_id:

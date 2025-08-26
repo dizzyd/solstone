@@ -338,7 +338,7 @@ Write the generated TODO list to the file at: {day}/TODO.md"""
         prompt=prompt,
         persona="todo",
         backend="openai",  # Use configured backend
-        model="",  # Use default model for persona
+        config={},  # Use default config for persona
     )
 
     if not agent_id:

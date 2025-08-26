@@ -65,9 +65,8 @@ class CortexClient:
         self,
         prompt: str,
         backend: str = "openai",
-        model: str = "",
         persona: str = "default",
-        max_tokens: int = 0,
+        config: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
         """Spawn a new agent and return agent_id (synchronous)."""
         if not self.connected or not self._loop:
@@ -78,12 +77,8 @@ class CortexClient:
             "prompt": prompt,
             "backend": backend,
             "persona": persona,
+            "config": config or {},
         }
-
-        if model:
-            request["model"] = model
-        if max_tokens:
-            request["max_tokens"] = max_tokens
 
         # Clear previous response
         self._responses.clear()
