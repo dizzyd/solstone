@@ -29,9 +29,7 @@ from .agents import JSONEventCallback, ThinkingEvent
 from .models import CLAUDE_SONNET_4
 from .utils import agent_instructions
 
-# Default values are now handled internally
 _DEFAULT_MODEL = CLAUDE_SONNET_4
-_DEFAULT_MAX_TOKENS = 8096 * 2
 
 
 def setup_logging(verbose: bool) -> logging.Logger:
@@ -52,24 +50,32 @@ async def run_agent(
 
     Args:
         prompt: The prompt to run
-        config: Configuration dictionary (supports 'model', 'max_tokens', 'max_turns', etc.)
+        config: Configuration dictionary (supports 'model', 'max_tokens', 'max_turns', 'domain', etc.)
         on_event: Optional event callback
         persona: Persona instructions to load
     """
     # Extract config values with defaults
     config = config or {}
     model = config.get("model", _DEFAULT_MODEL)
-    # max_tokens is not used by Claude Code SDK, but we extract it for future compatibility
-    # max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
-    max_turns = config.get("max_turns", 3)  # Default for Claude Code
+    max_turns = config.get("max_turns", 32)
 
     callback = JSONEventCallback(on_event)
 
     try:
+        # Require domain in config
+        domain = config.get("domain")
+        if not domain:
+            raise ValueError("config must include 'domain' value")
+
         # Get journal path for file permissions
         journal_path = os.getenv("JOURNAL_PATH")
         if not journal_path:
             raise RuntimeError("JOURNAL_PATH not set")
+
+        # Resolve domain path and ensure it exists
+        domain_path = os.path.join(journal_path, "domains", domain)
+        if not os.path.isdir(domain_path):
+            raise ValueError(f"Domain directory does not exist: {domain_path}")
 
         callback.emit(
             {
@@ -95,14 +101,14 @@ async def run_agent(
         options = ClaudeCodeOptions(
             system_prompt=system_instruction,
             model=model,
-            # Allow file operations and git commands in journal directory
+            # Allow file operations and git commands in domain directory
             allowed_tools=[
-                f"Read({journal_path}/**)",
-                f"Write({journal_path}/**)",
-                f"Edit({journal_path}/**)",
-                f"MultiEdit({journal_path}/**)",
-                f"LS({journal_path}/**)",
-                f"Glob({journal_path}/**)",
+                f"Read({domain_path}/**)",
+                f"Write({domain_path}/**)",
+                f"Edit({domain_path}/**)",
+                f"MultiEdit({domain_path}/**)",
+                f"LS({domain_path}/**)",
+                f"Glob({domain_path}/**)",
                 "Bash(git:*)",
                 "Bash(ls:*)",
                 "Bash(cat:*)",
