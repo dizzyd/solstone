@@ -143,6 +143,15 @@
   font-size: 1.2rem;
 }
 
+/* Topic card with colored indicator */
+.topic-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
 
 /* Input Form */
 .input-area {
@@ -961,8 +970,32 @@ function renderCards(items, containerId, itemType, createModalFunc) {
     card.dataset.itemType = itemType;
     card.title = item.description; // Set description as tooltip
     
+    // Add color border and hover effects for topics
+    if (itemType === 'topic' && item.color) {
+      card.style.borderLeftWidth = '4px';
+      card.style.borderLeftColor = item.color;
+      
+      // Set hover color to match topic color
+      card.addEventListener('mouseenter', () => {
+        card.style.borderColor = item.color;
+        card.style.boxShadow = `0 2px 8px ${item.color}33`; // 33 = 20% opacity in hex
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        card.style.borderColor = '#e0e0e0';
+        card.style.borderLeftColor = item.color; // Keep left border colored
+        card.style.boxShadow = '';
+      });
+    }
+    
+    // Create title with color indicator for topics
+    let titleHtml = item.title;
+    if (itemType === 'topic' && item.color) {
+      titleHtml = `<span class="topic-indicator" style="background-color: ${item.color}"></span>${item.title}`;
+    }
+    
     card.innerHTML = `
-      <h3>${item.title}</h3>
+      <h3>${titleHtml}</h3>
     `;
     
     // Create chat link for agents only

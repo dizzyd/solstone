@@ -34,8 +34,28 @@ def _list_items(item_type: str) -> list[dict[str, object]]:
         item_type: Either 'agents' or 'topics'
     
     Returns:
-        List of items with id, title, and description
+        List of items with id, title, and description (and color for topics)
     """
+    # Special handling for topics to get colors from get_topics()
+    if item_type == "topics":
+        from think.utils import get_topics
+        
+        topics = get_topics()
+        items: list[dict[str, object]] = []
+        
+        for name, info in topics.items():
+            item = {
+                "id": name,
+                "title": info.get("title", name),
+                "description": info.get("description", ""),
+                "color": info.get("color", "#007bff")
+            }
+            items.append(item)
+        
+        items.sort(key=lambda x: x.get("title", ""))
+        return items
+    
+    # Standard handling for agents
     items_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "..", "think", item_type
     )
