@@ -64,6 +64,12 @@ def test_claude_backend_real_sdk():
 
     agents_dir = journal_dir / "agents"
     agents_dir.mkdir(exist_ok=True)
+    
+    # Create test-domain directory for Claude backend
+    domains_dir = journal_dir / "domains"
+    domains_dir.mkdir(exist_ok=True)
+    test_domain_dir = domains_dir / "test-domain"
+    test_domain_dir.mkdir(exist_ok=True)
 
     # Create a temporary directory for task file
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -88,7 +94,8 @@ def test_claude_backend_real_sdk():
             "persona": "default",
             "config": {
                 "model": CLAUDE_SONNET_4,
-                "max_tokens": 100
+                "max_tokens": 100,
+                "domain": "test-domain"  # Claude backend requires a domain
             }
         })
 
@@ -190,6 +197,12 @@ def test_claude_backend_with_tool_calls():
 
     agents_dir = journal_dir / "agents"
     agents_dir.mkdir(exist_ok=True)
+    
+    # Create test-domain directory for Claude backend
+    domains_dir = journal_dir / "domains"
+    domains_dir.mkdir(exist_ok=True)
+    test_domain_dir = domains_dir / "test-domain"
+    test_domain_dir.mkdir(exist_ok=True)
 
     # Create a temporary directory for task file
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -217,7 +230,8 @@ def test_claude_backend_with_tool_calls():
             "persona": "default",
             "config": {
                 "model": CLAUDE_SONNET_4,
-                "max_tokens": 200
+                "max_tokens": 200,
+                "domain": "test-domain"  # Claude backend requires a domain
             }
         })
 
@@ -302,6 +316,12 @@ def test_claude_backend_with_thinking():
 
     agents_dir = journal_dir / "agents"
     agents_dir.mkdir(exist_ok=True)
+    
+    # Create test-domain directory for Claude backend
+    domains_dir = journal_dir / "domains"
+    domains_dir.mkdir(exist_ok=True)
+    test_domain_dir = domains_dir / "test-domain"
+    test_domain_dir.mkdir(exist_ok=True)
 
     # Create a temporary directory for task file
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -326,7 +346,8 @@ def test_claude_backend_with_thinking():
             "persona": "default",
             "config": {
                 "model": CLAUDE_SONNET_4,
-                "max_tokens": 200
+                "max_tokens": 200,
+                "domain": "test-domain"  # Claude backend requires a domain
             }
         })
 
