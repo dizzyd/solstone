@@ -72,10 +72,6 @@ def test_openai_backend_real_api():
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
 
-            # Create task file with simple math question
-            task_file = tmpdir / "task.txt"
-            task_file.write_text("what is 1+1? Just give me the number.")
-
             # Prepare environment with fixtures values
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal_path
@@ -85,12 +81,25 @@ def test_openai_backend_real_api():
             env["OPENAI_AGENT_MAX_TOKENS"] = "100"
             env["OPENAI_AGENT_MAX_TURNS"] = "1"
 
+            # Create NDJSON input
+            ndjson_input = json.dumps({
+                "prompt": "what is 1+1? Just give me the number.",
+                "backend": "openai",
+                "persona": "default",
+                "config": {
+                    "model": "gpt-4o-mini",
+                    "max_tokens": 100,
+                    "max_turns": 1
+                }
+            })
+
             # Run the think-agents command
-            cmd = ["think-agents", str(task_file), "--backend", "openai"]
+            cmd = ["think-agents"]
 
             result = subprocess.run(
                 cmd,
                 env=env,
+                input=ndjson_input,
                 capture_output=True,
                 text=True,
                 timeout=30,  # 30 second timeout for API call
@@ -202,10 +211,6 @@ def test_openai_backend_with_verbose():
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
 
-            # Create task file
-            task_file = tmpdir / "task.txt"
-            task_file.write_text("what is 2+2? Just give me the number.")
-
             # Prepare environment
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal_path
@@ -214,17 +219,23 @@ def test_openai_backend_with_verbose():
             env["OPENAI_AGENT_MAX_TOKENS"] = "100"
             env["OPENAI_AGENT_MAX_TURNS"] = "1"
 
+            # Create NDJSON input
+            ndjson_input = json.dumps({
+                "prompt": "what is 2+2? Just give me the number.",
+                "backend": "openai",
+                "persona": "default",
+                "config": {
+                    "model": "gpt-4o-mini",
+                    "max_tokens": 100,
+                    "max_turns": 1
+                }
+            })
+
             # Run with verbose flag
-            cmd = [
-                "think-agents",
-                str(task_file),
-                "--backend",
-                "openai",
-                "-v",  # Verbose flag
-            ]
+            cmd = ["think-agents", "-v"]
 
             result = subprocess.run(
-                cmd, env=env, capture_output=True, text=True, timeout=30
+                cmd, env=env, input=ndjson_input, capture_output=True, text=True, timeout=30
             )
 
             # With verbose, we might have debug output in stdout mixed with JSON
@@ -304,12 +315,6 @@ def test_openai_backend_with_thinking():
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
 
-            # Create a simpler task (complex ones sometimes fail to get a response)
-            task_file = tmpdir / "task.txt"
-            task_file.write_text(
-                "What is the square root of 16? Just the number please."
-            )
-
             # Prepare environment
             env = os.environ.copy()
             env["JOURNAL_PATH"] = journal_path
@@ -320,11 +325,23 @@ def test_openai_backend_with_thinking():
             env["OPENAI_AGENT_MAX_TOKENS"] = "200"
             env["OPENAI_AGENT_MAX_TURNS"] = "1"
 
+            # Create NDJSON input
+            ndjson_input = json.dumps({
+                "prompt": "What is the square root of 16? Just the number please.",
+                "backend": "openai",
+                "persona": "default",
+                "config": {
+                    "model": "gpt-4o-mini",
+                    "max_tokens": 200,
+                    "max_turns": 1
+                }
+            })
+
             # Run the command
-            cmd = ["think-agents", str(task_file), "--backend", "openai"]
+            cmd = ["think-agents"]
 
             result = subprocess.run(
-                cmd, env=env, capture_output=True, text=True, timeout=30
+                cmd, env=env, input=ndjson_input, capture_output=True, text=True, timeout=30
             )
 
             assert result.returncode == 0

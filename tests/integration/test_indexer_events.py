@@ -55,7 +55,7 @@ def test_events_indexer_scan_and_search():
             reset_index(str(journal_path), "events")
 
             # Scan the events
-            # scan_count = scan_events(str(journal_path))
+            scan_count = scan_events(str(journal_path))
 
             # We should have scanned event files (occurrences.json, ponder_meetings.json)
             # scan_count is True if files were scanned, False if all were up to date
@@ -223,7 +223,7 @@ def test_events_indexer_rescan():
 
             # Initial scan
             reset_index(str(journal_path), "events")
-            # first_scan = scan_events(str(journal_path))
+            first_scan = scan_events(str(journal_path))
             # first_scan is boolean - just continue
 
             # Search for content
@@ -232,7 +232,7 @@ def test_events_indexer_rescan():
             assert initial_count > 0, "Should find Team sync initially"
 
             # Rescan (should handle existing content gracefully)
-            # second_scan = scan_events(str(journal_path))
+            second_scan = scan_events(str(journal_path))
 
             # Results should be consistent
             total2, results2 = search_events("Team sync")

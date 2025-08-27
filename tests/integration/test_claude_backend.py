@@ -69,10 +69,6 @@ def test_claude_backend_real_sdk():
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
-        # Create task file with simple math question
-        task_file = tmpdir / "task.txt"
-        task_file.write_text("what is 2+2? Just give me the number.")
-
         # Prepare environment with fixtures values
         env = os.environ.copy()
         env["JOURNAL_PATH"] = journal_path
@@ -85,12 +81,24 @@ def test_claude_backend_real_sdk():
         env["CLAUDE_AGENT_MODEL"] = CLAUDE_SONNET_4
         env["CLAUDE_AGENT_MAX_TOKENS"] = "100"
 
+        # Create NDJSON input
+        ndjson_input = json.dumps({
+            "prompt": "what is 2+2? Just give me the number.",
+            "backend": "claude",
+            "persona": "default",
+            "config": {
+                "model": CLAUDE_SONNET_4,
+                "max_tokens": 100
+            }
+        })
+
         # Run the think-agents command
-        cmd = ["think-agents", str(task_file), "--backend", "claude"]
+        cmd = ["think-agents"]
 
         result = subprocess.run(
             cmd,
             env=env,
+            input=ndjson_input,
             capture_output=True,
             text=True,
             timeout=60,  # 60 second timeout for SDK call
@@ -191,10 +199,6 @@ def test_claude_backend_with_tool_calls():
         test_file = journal_dir / "test_file.txt"
         test_file.write_text("Hello from test file!")
 
-        # Create task file that will trigger tool use
-        task_file = tmpdir / "task.txt"
-        task_file.write_text(f"Read the file at {test_file} and tell me what it says.")
-
         # Prepare environment
         env = os.environ.copy()
         env["JOURNAL_PATH"] = journal_path
@@ -206,12 +210,24 @@ def test_claude_backend_with_tool_calls():
         env["CLAUDE_AGENT_MODEL"] = CLAUDE_SONNET_4
         env["CLAUDE_AGENT_MAX_TOKENS"] = "200"
 
+        # Create NDJSON input
+        ndjson_input = json.dumps({
+            "prompt": f"Read the file at {test_file} and tell me what it says.",
+            "backend": "claude",
+            "persona": "default",
+            "config": {
+                "model": CLAUDE_SONNET_4,
+                "max_tokens": 200
+            }
+        })
+
         # Run the think-agents command with verbose flag to get tool events
-        cmd = ["think-agents", str(task_file), "--backend", "claude", "-v"]
+        cmd = ["think-agents", "-v"]
 
         result = subprocess.run(
             cmd,
             env=env,
+            input=ndjson_input,
             capture_output=True,
             text=True,
             timeout=60,
@@ -291,12 +307,6 @@ def test_claude_backend_with_thinking():
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
-        # Create task file with a problem that might trigger thinking
-        task_file = tmpdir / "task.txt"
-        task_file.write_text(
-            "Think step by step: If I have 3 apples and give away 1, how many do I have left? Just give the number."
-        )
-
         # Prepare environment
         env = os.environ.copy()
         env["JOURNAL_PATH"] = journal_path
@@ -309,12 +319,24 @@ def test_claude_backend_with_thinking():
         env["CLAUDE_AGENT_MODEL"] = CLAUDE_SONNET_4
         env["CLAUDE_AGENT_MAX_TOKENS"] = "200"
 
+        # Create NDJSON input
+        ndjson_input = json.dumps({
+            "prompt": "Think step by step: If I have 3 apples and give away 1, how many do I have left? Just give the number.",
+            "backend": "claude",
+            "persona": "default",
+            "config": {
+                "model": CLAUDE_SONNET_4,
+                "max_tokens": 200
+            }
+        })
+
         # Run the think-agents command
-        cmd = ["think-agents", str(task_file), "--backend", "claude"]
+        cmd = ["think-agents"]
 
         result = subprocess.run(
             cmd,
             env=env,
+            input=ndjson_input,
             capture_output=True,
             text=True,
             timeout=60,
