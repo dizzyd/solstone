@@ -148,8 +148,9 @@ async def run_agent(
     model = config.get("model", _DEFAULT_MODEL)
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
     max_turns = config.get("max_turns", _DEFAULT_MAX_TURNS)
+    disable_mcp = config.get("disable_mcp", False)
 
-    LOG.info("Running agent with model %s", model)
+    LOG.info("Running agent with model %s (MCP: %s)", model, "disabled" if disable_mcp else "enabled")
     cb = JSONEventCallback(on_event)
     cb.emit(
         {
@@ -169,22 +170,25 @@ async def run_agent(
         # Avoid unsupported reasoning params to prevent 400s.
     )
 
-    # Read MCP server URL from journal
-    journal_path = os.getenv("JOURNAL_PATH")
-    if not journal_path:
-        raise RuntimeError("JOURNAL_PATH not set")
-    uri_file = Path(journal_path) / "agents" / "mcp.uri"
-    if not uri_file.exists():
-        raise RuntimeError(f"MCP server URI file not found: {uri_file}")
-    http_uri_raw = uri_file.read_text().strip()
-    if not http_uri_raw:
-        raise RuntimeError("MCP server URI file is empty")
-    http_uri = _normalize_streamable_http_uri(http_uri_raw)
+    # Initialize MCP server only if not disabled
+    mcp_server = None
+    if not disable_mcp:
+        # Read MCP server URL from journal
+        journal_path = os.getenv("JOURNAL_PATH")
+        if not journal_path:
+            raise RuntimeError("JOURNAL_PATH not set")
+        uri_file = Path(journal_path) / "agents" / "mcp.uri"
+        if not uri_file.exists():
+            raise RuntimeError(f"MCP server URI file not found: {uri_file}")
+        http_uri_raw = uri_file.read_text().strip()
+        if not http_uri_raw:
+            raise RuntimeError("MCP server URI file is empty")
+        http_uri = _normalize_streamable_http_uri(http_uri_raw)
 
-    mcp_server = MCPServerStreamableHttp(
-        params={"url": http_uri},
-        cache_tools_list=True,
-    )
+        mcp_server = MCPServerStreamableHttp(
+            params={"url": http_uri},
+            cache_tools_list=True,
+        )
 
     # Use your repo's persona utility
     system_instruction, extra_context, _ = agent_instructions(persona)
@@ -198,13 +202,26 @@ async def run_agent(
     session = SQLiteSession("sunstone_oneshot")
 
     try:
-        async with mcp_server:
+        # Handle MCP server context manager conditionally
+        if mcp_server:
+            mcp_context = mcp_server
+        else:
+            # Create a dummy context manager when MCP is disabled
+            from contextlib import asynccontextmanager
+            @asynccontextmanager
+            async def dummy_context():
+                yield
+            mcp_context = dummy_context()
+        
+        async with mcp_context:
+            # Create agent with or without MCP servers
+            mcp_servers_list = [mcp_server] if mcp_server else []
             agent = Agent(
                 name="SunstoneCLI",
                 instructions=f"{system_instruction}\n\n{extra_context}".strip(),
                 model=model,
                 model_settings=model_settings,
-                mcp_servers=[mcp_server],
+                mcp_servers=mcp_servers_list,
             )
 
             result = Runner.run_streamed(

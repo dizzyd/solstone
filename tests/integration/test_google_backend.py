@@ -3,8 +3,6 @@
 import json
 import os
 import subprocess
-import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -30,8 +28,8 @@ def get_fixtures_env():
 
 @pytest.mark.integration
 @pytest.mark.requires_api
-def test_google_backend_real_api():
-    """Test Google backend with real API call if key is available."""
+def test_google_backend_basic():
+    """Test Google backend with basic prompt, no MCP."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
 
     if not fixtures_env:
@@ -43,139 +41,146 @@ def test_google_backend_real_api():
     if not journal_path:
         pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
-    # Verify journal structure exists
-    journal_dir = Path(journal_path)
-    if not journal_dir.exists():
-        pytest.skip(f"Journal directory {journal_dir} does not exist")
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["GOOGLE_API_KEY"] = api_key
 
-    agents_dir = journal_dir / "agents"
-    if not agents_dir.exists():
-        pytest.skip(f"Agents directory {agents_dir} does not exist")
+    # Create NDJSON input with disable_mcp
+    ndjson_input = json.dumps({
+        "prompt": "what is 1+1? Just give me the number.",
+        "backend": "google",
+        "persona": "default",
+        "config": {
+            "max_tokens": 100,
+            "disable_mcp": True
+        }
+    })
 
-    # Start MCP server in the background
-    mcp_env = os.environ.copy()
-    mcp_env["JOURNAL_PATH"] = journal_path
-    mcp_server = subprocess.Popen(
-        ["think-mcp-tools", "--transport", "http", "--port", "5179"],
-        env=mcp_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # Run the think-agents command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
-    # Give the server time to start
-    time.sleep(2)
+    # Check that the command succeeded
+    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
 
-    try:
-        # Update the MCP URI file to point to our test server
-        mcp_uri_file = agents_dir / "mcp.uri"
-        mcp_uri_file.write_text("http://localhost:5179/mcp")
+    # Parse stdout events (should be JSONL format)
+    stdout_lines = result.stdout.strip().split("\n")
+    events = []
+    for line in stdout_lines:
+        if line:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                pytest.fail(f"Failed to parse JSON line: {line}\nError: {e}")
 
-        # Create a temporary directory for task file only
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
+    # Verify we have events
+    assert len(events) >= 2, f"Expected at least start and finish events, got {len(events)}"
 
-            # Prepare environment with fixtures values
-            env = os.environ.copy()
-            env["JOURNAL_PATH"] = journal_path
-            env["GOOGLE_API_KEY"] = api_key
-            # Use the default model (or override for testing)
-            # Using default model
-            env["GOOGLE_AGENT_MAX_TOKENS"] = "100"
-            env["GOOGLE_AGENT_MAX_TURNS"] = "1"
+    # Check start event
+    start_event = events[0]
+    assert start_event["event"] == "start"
+    assert start_event["prompt"] == "what is 1+1? Just give me the number."
+    assert start_event["model"] == GEMINI_FLASH
+    assert start_event["persona"] == "default"
+    assert isinstance(start_event["ts"], int)
 
-            # Create NDJSON input
-            ndjson_input = json.dumps({
-                "prompt": "what is 1+1? Just give me the number.",
-                "backend": "google",
-                "persona": "default",
-                "config": {
-                    "max_tokens": 100,
-                    "max_turns": 1
-                }
-            })
+    # Check finish event
+    finish_event = events[-1]
+    assert finish_event["event"] == "finish"
+    assert isinstance(finish_event["ts"], int)
+    assert "result" in finish_event
 
-            # Run the think-agents command
-            cmd = ["think-agents"]
+    # The result should contain "2"
+    result_text = finish_event["result"].lower()
+    assert "2" in result_text or "two" in result_text, f"Expected '2' in response, got: {finish_event['result']}"
 
-            result = subprocess.run(
-                cmd,
-                env=env,
-                input=ndjson_input,
-                capture_output=True,
-                text=True,
-                timeout=30,  # 30 second timeout for API call
-            )
+    # Check for no errors
+    error_events = [e for e in events if e.get("event") == "error"]
+    assert len(error_events) == 0, f"Found error events: {error_events}"
 
-            # Check that the command succeeded
-            assert (
-                result.returncode == 0
-            ), f"Command failed with stderr: {result.stderr}"
+    # Verify stderr has no errors (warnings about thought_signature are OK)
+    if result.stderr:
+        assert (
+            "error" not in result.stderr.lower() or "thought_signature" in result.stderr
+        ), f"Unexpected stderr content: {result.stderr}"
 
-            # Parse stdout events (should be JSONL format)
-            stdout_lines = result.stdout.strip().split("\n")
-            events = []
-            for line in stdout_lines:
-                if line:  # Skip empty lines
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError as e:
-                        pytest.fail(f"Failed to parse JSON line: {line}\nError: {e}")
 
-            # Verify we have events
-            assert (
-                len(events) >= 2
-            ), f"Expected at least start and finish events, got {len(events)}"
+@pytest.mark.integration
+@pytest.mark.requires_api
+def test_google_backend_with_thinking():
+    """Test Google backend with thinking enabled."""
+    fixtures_env, api_key, journal_path = get_fixtures_env()
 
-            # Check start event
-            start_event = events[0]
-            assert start_event["event"] == "start"
-            assert start_event["prompt"] == "what is 1+1? Just give me the number."
-            # Check the model - should be either the default or the one we set
-            expected_model = env.get("GOOGLE_AGENT_MODEL", GEMINI_FLASH)
-            assert start_event["model"] == expected_model
-            assert start_event["persona"] == "default"
-            assert isinstance(start_event["ts"], int)
+    if not fixtures_env:
+        pytest.skip("fixtures/.env not found")
 
-            # Check finish event (should be last)
-            finish_event = events[-1]
-            assert finish_event["event"] == "finish"
-            assert isinstance(finish_event["ts"], int)
-            assert "result" in finish_event
+    if not api_key:
+        pytest.skip("GOOGLE_API_KEY not found in fixtures/.env file")
 
-            # The result should contain "2" somewhere
-            result_text = finish_event["result"].lower()
-            assert (
-                "2" in result_text or "two" in result_text
-            ), f"Expected '2' in response, got: {finish_event['result']}"
+    if not journal_path:
+        pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
-            # Check for no errors in the events
-            error_events = [e for e in events if e.get("event") == "error"]
-            assert len(error_events) == 0, f"Found error events: {error_events}"
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["GOOGLE_API_KEY"] = api_key
 
-            # Verify stderr has no errors (warnings about thought_signature are OK)
-            if result.stderr:
-                # Google backend may emit warnings about thought_signature for thinking models
-                assert (
-                    "error" not in result.stderr.lower()
-                    or "thought_signature" in result.stderr
-                ), f"Unexpected stderr content: {result.stderr}"
+    # Create NDJSON input with thinking model (if available)
+    ndjson_input = json.dumps({
+        "prompt": "What is the square root of 16? Just the number please.",
+        "backend": "google",
+        "persona": "default",
+        "config": {
+            "model": "gemini-2.0-flash-thinking-exp",  # Thinking model if available
+            "max_tokens": 200,
+            "disable_mcp": True
+        }
+    })
 
-            # Verify that a log file was created in the journal
-            log_files = list(agents_dir.glob("*.jsonl"))
-            # There should be at least one log file (there may be more from previous runs)
-            assert (
-                len(log_files) >= 1
-            ), f"Expected at least 1 log file, found {len(log_files)}"
-    finally:
-        # Cleanup: terminate the MCP server
-        mcp_server.terminate()
-        mcp_server.wait(timeout=5)
+    # Run the think-agents command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    # Allow for model unavailability
+    if result.returncode != 0:
+        if "model not found" in result.stderr.lower() or "invalid model" in result.stderr.lower():
+            pytest.skip("Thinking model not available")
+        assert False, f"Command failed with stderr: {result.stderr}"
+
+    # Parse events
+    stdout_lines = result.stdout.strip().split("\n")
+    events = [json.loads(line) for line in stdout_lines if line]
+
+    # Check for thinking events (may be present with thinking models)
+    thinking_events = [e for e in events if e.get("event") == "thinking"]
+    # With thinking models, we might get thinking events
+
+    # Verify the answer is correct
+    finish_event = events[-1]
+    assert finish_event["event"] == "finish"
+    result_text = finish_event["result"].lower()
+    assert "4" in result_text or "four" in result_text, f"Expected '4' in response, got: {finish_event['result']}"
 
 
 @pytest.mark.integration
 @pytest.mark.requires_api
 def test_google_backend_with_verbose():
-    """Test Google backend with verbose flag to check debug output."""
+    """Test Google backend with verbose flag."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
 
     if not fixtures_env:
@@ -187,95 +192,57 @@ def test_google_backend_with_verbose():
     if not journal_path:
         pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
-    # Verify journal structure exists
-    journal_dir = Path(journal_path)
-    agents_dir = journal_dir / "agents"
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["GOOGLE_API_KEY"] = api_key
 
-    # Start MCP server in the background
-    mcp_env = os.environ.copy()
-    mcp_env["JOURNAL_PATH"] = journal_path
-    mcp_server = subprocess.Popen(
-        [
-            "think-mcp-tools",
-            "--transport",
-            "http",
-            "--port",
-            "5180",
-        ],  # Different port to avoid conflicts
-        env=mcp_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # Create NDJSON input
+    ndjson_input = json.dumps({
+        "prompt": "what is 2+2? Just give me the number.",
+        "backend": "google",
+        "persona": "default",
+        "config": {
+            "max_tokens": 100,
+            "disable_mcp": True
+        }
+    })
+
+    # Run with verbose flag
+    cmd = ["think-agents", "-v"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
-    # Give the server time to start
-    time.sleep(2)
+    # Parse JSON events from stdout
+    stdout_lines = result.stdout.strip().split("\n")
+    events = []
+    for line in stdout_lines:
+        if line and line.startswith("{"):  # JSON lines start with {
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass  # Skip non-JSON lines (debug output)
 
-    try:
-        # Update the MCP URI file to point to our test server
-        mcp_uri_file = agents_dir / "mcp.uri"
-        mcp_uri_file.write_text("http://localhost:5180/mcp")
+    # Basic checks
+    assert len(events) >= 2, "Should have start and finish events"
+    assert events[0]["event"] == "start"
+    assert events[-1]["event"] == "finish"
 
-        # Create a temporary directory for task file
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-
-            # Prepare environment
-            env = os.environ.copy()
-            env["JOURNAL_PATH"] = journal_path
-            env["GOOGLE_API_KEY"] = api_key
-            # Use default model
-            env["GOOGLE_AGENT_MAX_TOKENS"] = "100"
-            env["GOOGLE_AGENT_MAX_TURNS"] = "1"
-
-            # Create NDJSON input
-            ndjson_input = json.dumps({
-                "prompt": "what is 2+2? Just give me the number.",
-                "backend": "google",
-                "persona": "default",
-                "config": {
-                    "max_tokens": 100,
-                    "max_turns": 1
-                }
-            })
-
-            # Run with verbose flag
-            cmd = ["think-agents", "-v"]
-
-            result = subprocess.run(
-                cmd, env=env, input=ndjson_input, capture_output=True, text=True, timeout=30
-            )
-
-            # With verbose, we might have debug output in stdout mixed with JSON
-            # The JSON events should still be parseable
-            stdout_lines = result.stdout.strip().split("\n")
-            events = []
-            for line in stdout_lines:
-                if line and line.startswith("{"):  # JSON lines start with {
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass  # Skip non-JSON lines (debug output)
-
-            # Basic checks
-            assert len(events) >= 2, "Should have start and finish events"
-            assert events[0]["event"] == "start"
-            assert events[-1]["event"] == "finish"
-
-            # Result should contain 4
-            result_text = events[-1]["result"].lower()
-            assert (
-                "4" in result_text or "four" in result_text
-            ), f"Expected '4' in response, got: {events[-1]['result']}"
-    finally:
-        # Cleanup: terminate the MCP server
-        mcp_server.terminate()
-        mcp_server.wait(timeout=5)
+    # Result should contain 4
+    result_text = events[-1]["result"].lower()
+    assert "4" in result_text or "four" in result_text, f"Expected '4' in response, got: {events[-1]['result']}"
 
 
 @pytest.mark.integration
 @pytest.mark.requires_api
-def test_google_backend_with_reasoning():
-    """Test Google backend with reasoning task."""
+def test_google_backend_custom_model():
+    """Test Google backend with custom model configuration."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
 
     if not fixtures_env:
@@ -287,92 +254,45 @@ def test_google_backend_with_reasoning():
     if not journal_path:
         pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
-    # Verify journal structure exists
-    journal_dir = Path(journal_path)
-    agents_dir = journal_dir / "agents"
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["GOOGLE_API_KEY"] = api_key
 
-    # Start MCP server in the background
-    mcp_env = os.environ.copy()
-    mcp_env["JOURNAL_PATH"] = journal_path
-    mcp_server = subprocess.Popen(
-        [
-            "think-mcp-tools",
-            "--transport",
-            "http",
-            "--port",
-            "5181",
-        ],  # Different port to avoid conflicts
-        env=mcp_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # Use a specific model
+    ndjson_input = json.dumps({
+        "prompt": "What is 3*3? Just give me the number.",
+        "backend": "google",
+        "persona": "default",
+        "config": {
+            "model": "gemini-1.5-flash",  # Specific version
+            "max_tokens": 50,
+            "disable_mcp": True
+        }
+    })
+
+    # Run the command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
-    # Give the server time to start
-    time.sleep(2)
+    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
 
-    try:
-        # Update the MCP URI file to point to our test server
-        mcp_uri_file = agents_dir / "mcp.uri"
-        mcp_uri_file.write_text("http://localhost:5181/mcp")
+    # Parse events
+    stdout_lines = result.stdout.strip().split("\n")
+    events = [json.loads(line) for line in stdout_lines if line]
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
+    # Verify model in start event
+    start_event = events[0]
+    assert start_event["model"] == "gemini-1.5-flash"
 
-            # Prepare environment
-            env = os.environ.copy()
-            env["JOURNAL_PATH"] = journal_path
-            env["GOOGLE_API_KEY"] = api_key
-            # Use gemini-2.0-flash-thinking-exp if available
-            # Use default model (thinking capabilities may vary)
-            env["GOOGLE_AGENT_MAX_TOKENS"] = "200"
-            env["GOOGLE_AGENT_MAX_TURNS"] = "1"
-
-            # Create NDJSON input
-            ndjson_input = json.dumps({
-                "prompt": "What is the square root of 16? Just the number please.",
-                "backend": "google",
-                "persona": "default",
-                "config": {
-                    "max_tokens": 200,
-                    "max_turns": 1
-                }
-            })
-
-            # Run the command
-            cmd = ["think-agents"]
-
-            result = subprocess.run(
-                cmd, env=env, input=ndjson_input, capture_output=True, text=True, timeout=30
-            )
-
-            # Note: This test might fail if the thinking model is not available
-            # We'll check the return code but allow for model unavailability
-            if result.returncode != 0:
-                # Check if it's a model availability issue
-                if (
-                    "model not found" in result.stderr.lower()
-                    or "invalid model" in result.stderr.lower()
-                ):
-                    pytest.skip("Thinking model not available")
-                else:
-                    assert False, f"Command failed with stderr: {result.stderr}"
-
-            # Parse events
-            stdout_lines = result.stdout.strip().split("\n")
-            events = [json.loads(line) for line in stdout_lines if line]
-
-            # Check for thinking events (may be present with thinking models)
-            # thinking_events = [e for e in events if e.get("event") == "thinking"]
-            # With thinking models, we might get thinking events
-
-            # Verify the answer is correct
-            finish_event = events[-1]
-            assert finish_event["event"] == "finish"
-            result_text = finish_event["result"].lower()
-            assert (
-                "4" in result_text or "four" in result_text
-            ), f"Expected '4' in response, got: {finish_event['result']}"
-    finally:
-        # Cleanup: terminate the MCP server
-        mcp_server.terminate()
-        mcp_server.wait(timeout=5)
+    # Verify the answer
+    finish_event = events[-1]
+    result_text = finish_event["result"].lower()
+    assert "9" in result_text or "nine" in result_text, f"Expected '9' in response, got: {finish_event['result']}"

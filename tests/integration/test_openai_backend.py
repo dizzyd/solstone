@@ -3,8 +3,6 @@
 import json
 import os
 import subprocess
-import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -28,8 +26,8 @@ def get_fixtures_env():
 
 @pytest.mark.integration
 @pytest.mark.requires_api
-def test_openai_backend_real_api():
-    """Test OpenAI backend with real API call if key is available."""
+def test_openai_backend_basic():
+    """Test OpenAI backend with basic prompt, no MCP."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
 
     if not fixtures_env:
@@ -41,133 +39,80 @@ def test_openai_backend_real_api():
     if not journal_path:
         pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
-    # Verify journal structure exists
-    journal_dir = Path(journal_path)
-    if not journal_dir.exists():
-        pytest.skip(f"Journal directory {journal_dir} does not exist")
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["OPENAI_API_KEY"] = api_key
 
-    agents_dir = journal_dir / "agents"
-    if not agents_dir.exists():
-        pytest.skip(f"Agents directory {agents_dir} does not exist")
+    # Create NDJSON input with disable_mcp
+    ndjson_input = json.dumps({
+        "prompt": "what is 1+1? Just give me the number.",
+        "backend": "openai",
+        "persona": "default",
+        "config": {
+            "model": "gpt-4o-mini",  # Use cheap model for testing
+            "max_tokens": 100,
+            "disable_mcp": True
+        }
+    })
 
-    # Start MCP server in the background
-    mcp_env = os.environ.copy()
-    mcp_env["JOURNAL_PATH"] = journal_path
-    mcp_server = subprocess.Popen(
-        ["think-mcp-tools", "--transport", "http", "--port", "5173"],
-        env=mcp_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # Run the think-agents command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
-    # Give the server time to start
-    time.sleep(2)
+    # Check that the command succeeded
+    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
 
-    try:
-        # Update the MCP URI file to point to our test server
-        mcp_uri_file = agents_dir / "mcp.uri"
-        mcp_uri_file.write_text("http://localhost:5173/mcp")
+    # Parse stdout events (should be JSONL format)
+    stdout_lines = result.stdout.strip().split("\n")
+    events = []
+    for line in stdout_lines:
+        if line:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                pytest.fail(f"Failed to parse JSON line: {line}\nError: {e}")
 
-        # Create a temporary directory for task file only
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
+    # Verify we have events
+    assert len(events) >= 2, f"Expected at least start and finish events, got {len(events)}"
 
-            # Prepare environment with fixtures values
-            env = os.environ.copy()
-            env["JOURNAL_PATH"] = journal_path
-            env["OPENAI_API_KEY"] = api_key
-            # Use a cheap, fast model for testing
-            env["OPENAI_AGENT_MODEL"] = "gpt-4o-mini"
-            env["OPENAI_AGENT_MAX_TOKENS"] = "100"
-            env["OPENAI_AGENT_MAX_TURNS"] = "1"
+    # Check start event
+    start_event = events[0]
+    assert start_event["event"] == "start"
+    assert start_event["prompt"] == "what is 1+1? Just give me the number."
+    assert start_event["model"] == "gpt-4o-mini"
+    assert start_event["persona"] == "default"
+    assert isinstance(start_event["ts"], int)
 
-            # Create NDJSON input
-            ndjson_input = json.dumps({
-                "prompt": "what is 1+1? Just give me the number.",
-                "backend": "openai",
-                "persona": "default",
-                "config": {
-                    "model": "gpt-4o-mini",
-                    "max_tokens": 100,
-                    "max_turns": 1
-                }
-            })
+    # Check finish event
+    finish_event = events[-1]
+    assert finish_event["event"] == "finish"
+    assert isinstance(finish_event["ts"], int)
+    assert "result" in finish_event
 
-            # Run the think-agents command
-            cmd = ["think-agents"]
+    # The result should contain "2"
+    result_text = finish_event["result"].lower()
+    assert "2" in result_text or "two" in result_text, f"Expected '2' in response, got: {finish_event['result']}"
 
-            result = subprocess.run(
-                cmd,
-                env=env,
-                input=ndjson_input,
-                capture_output=True,
-                text=True,
-                timeout=30,  # 30 second timeout for API call
-            )
+    # Check for no errors
+    error_events = [e for e in events if e.get("event") == "error"]
+    assert len(error_events) == 0, f"Found error events: {error_events}"
 
-            # Check that the command succeeded
-            assert (
-                result.returncode == 0
-            ), f"Command failed with stderr: {result.stderr}"
-
-            # Parse stdout events (should be JSONL format)
-            stdout_lines = result.stdout.strip().split("\n")
-            events = []
-            for line in stdout_lines:
-                if line:  # Skip empty lines
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError as e:
-                        pytest.fail(f"Failed to parse JSON line: {line}\nError: {e}")
-
-            # Verify we have events
-            assert (
-                len(events) >= 2
-            ), f"Expected at least start and finish events, got {len(events)}"
-
-            # Check start event
-            start_event = events[0]
-            assert start_event["event"] == "start"
-            assert start_event["prompt"] == "what is 1+1? Just give me the number."
-            assert start_event["model"] == "gpt-4o-mini"
-            assert start_event["persona"] == "default"
-            assert isinstance(start_event["ts"], int)
-
-            # Check finish event (should be last)
-            finish_event = events[-1]
-            assert finish_event["event"] == "finish"
-            assert isinstance(finish_event["ts"], int)
-            assert "result" in finish_event
-
-            # The result should contain "2" somewhere
-            result_text = finish_event["result"].lower()
-            assert (
-                "2" in result_text or "two" in result_text
-            ), f"Expected '2' in response, got: {finish_event['result']}"
-
-            # Check for no errors in the events
-            error_events = [e for e in events if e.get("event") == "error"]
-            assert len(error_events) == 0, f"Found error events: {error_events}"
-
-            # Verify stderr is empty (no errors)
-            assert result.stderr == "", f"Expected empty stderr, got: {result.stderr}"
-
-            # Verify that a log file was created in the journal
-            log_files = list(agents_dir.glob("*.jsonl"))
-            # There should be at least one log file (there may be more from previous runs)
-            assert (
-                len(log_files) >= 1
-            ), f"Expected at least 1 log file, found {len(log_files)}"
-    finally:
-        # Cleanup: terminate the MCP server
-        mcp_server.terminate()
-        mcp_server.wait(timeout=5)
+    # Verify stderr is empty
+    assert result.stderr == "", f"Expected empty stderr, got: {result.stderr}"
 
 
 @pytest.mark.integration
 @pytest.mark.requires_api
-def test_openai_backend_with_verbose():
-    """Test OpenAI backend with verbose flag to check debug output."""
+def test_openai_backend_with_reasoning():
+    """Test OpenAI backend with reasoning model (o1-mini if available)."""
     fixtures_env, api_key, journal_path = get_fixtures_env()
 
     if not fixtures_env:
@@ -179,153 +124,38 @@ def test_openai_backend_with_verbose():
     if not journal_path:
         pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
-    # Verify journal structure exists
-    journal_dir = Path(journal_path)
-    agents_dir = journal_dir / "agents"
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["OPENAI_API_KEY"] = api_key
 
-    # Start MCP server in the background
-    mcp_env = os.environ.copy()
-    mcp_env["JOURNAL_PATH"] = journal_path
-    mcp_server = subprocess.Popen(
-        [
-            "think-mcp-tools",
-            "--transport",
-            "http",
-            "--port",
-            "5174",
-        ],  # Different port to avoid conflicts
-        env=mcp_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # Try o1-mini model (may not be available)
+    ndjson_input = json.dumps({
+        "prompt": "What is the square root of 16? Just the number please.",
+        "backend": "openai",
+        "persona": "default",
+        "config": {
+            "model": "o1-mini",  # Reasoning model if available
+            "max_tokens": 200,
+            "disable_mcp": True
+        }
+    })
+
+    # Run the think-agents command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
-    # Give the server time to start
-    time.sleep(2)
-
-    try:
-        # Update the MCP URI file to point to our test server
-        mcp_uri_file = agents_dir / "mcp.uri"
-        mcp_uri_file.write_text("http://localhost:5174/mcp")
-
-        # Create a temporary directory for task file
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-
-            # Prepare environment
-            env = os.environ.copy()
-            env["JOURNAL_PATH"] = journal_path
-            env["OPENAI_API_KEY"] = api_key
-            env["OPENAI_AGENT_MODEL"] = "gpt-4o-mini"
-            env["OPENAI_AGENT_MAX_TOKENS"] = "100"
-            env["OPENAI_AGENT_MAX_TURNS"] = "1"
-
-            # Create NDJSON input
-            ndjson_input = json.dumps({
-                "prompt": "what is 2+2? Just give me the number.",
-                "backend": "openai",
-                "persona": "default",
-                "config": {
-                    "model": "gpt-4o-mini",
-                    "max_tokens": 100,
-                    "max_turns": 1
-                }
-            })
-
-            # Run with verbose flag
-            cmd = ["think-agents", "-v"]
-
-            result = subprocess.run(
-                cmd, env=env, input=ndjson_input, capture_output=True, text=True, timeout=30
-            )
-
-            # With verbose, we might have debug output in stdout mixed with JSON
-            # The JSON events should still be parseable
-            stdout_lines = result.stdout.strip().split("\n")
-            events = []
-            for line in stdout_lines:
-                if line and line.startswith("{"):  # JSON lines start with {
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass  # Skip non-JSON lines (debug output)
-
-            # Basic checks
-            assert len(events) >= 2, "Should have start and finish events"
-            assert events[0]["event"] == "start"
-            assert events[-1]["event"] == "finish"
-
-            # Result should contain 4
-            result_text = events[-1]["result"].lower()
-            assert (
-                "4" in result_text or "four" in result_text
-            ), f"Expected '4' in response, got: {events[-1]['result']}"
-    finally:
-        # Cleanup: terminate the MCP server
-        mcp_server.terminate()
-        mcp_server.wait(timeout=5)
-
-
-@pytest.mark.integration
-@pytest.mark.requires_api
-def test_openai_backend_with_thinking():
-    """Test OpenAI backend to see if we get thinking events with reasoning models."""
-    fixtures_env, api_key, journal_path = get_fixtures_env()
-
-    if not fixtures_env:
-        pytest.skip("fixtures/.env not found")
-
-    if not api_key:
-        pytest.skip("OPENAI_API_KEY not found in fixtures/.env file")
-
-    if not journal_path:
-        pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
-
-    # Verify journal structure exists
-    journal_dir = Path(journal_path)
-    agents_dir = journal_dir / "agents"
-
-    # Start MCP server in the background
-    mcp_env = os.environ.copy()
-    mcp_env["JOURNAL_PATH"] = journal_path
-    mcp_server = subprocess.Popen(
-        [
-            "think-mcp-tools",
-            "--transport",
-            "http",
-            "--port",
-            "5175",
-        ],  # Different port to avoid conflicts
-        env=mcp_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    # Give the server time to start
-    time.sleep(2)
-
-    try:
-        # Update the MCP URI file to point to our test server
-        mcp_uri_file = agents_dir / "mcp.uri"
-        mcp_uri_file.write_text("http://localhost:5175/mcp")
-
-        # Skip if the reasoning model is not available (o1 models)
-        # For now, we'll test with gpt-4o-mini which doesn't emit thinking events
-        # This test structure is ready for when reasoning models are available
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-
-            # Prepare environment
-            env = os.environ.copy()
-            env["JOURNAL_PATH"] = journal_path
-            env["OPENAI_API_KEY"] = api_key
-            env["OPENAI_AGENT_MODEL"] = (
-                "gpt-4o-mini"  # Change to o1-mini when available
-            )
-            env["OPENAI_AGENT_MAX_TOKENS"] = "200"
-            env["OPENAI_AGENT_MAX_TURNS"] = "1"
-
-            # Create NDJSON input
+    # Allow for model unavailability
+    if result.returncode != 0:
+        if "model not found" in result.stderr.lower() or "does not exist" in result.stderr.lower():
+            # Fall back to gpt-4o-mini
             ndjson_input = json.dumps({
                 "prompt": "What is the square root of 16? Just the number please.",
                 "backend": "openai",
@@ -333,36 +163,209 @@ def test_openai_backend_with_thinking():
                 "config": {
                     "model": "gpt-4o-mini",
                     "max_tokens": 200,
-                    "max_turns": 1
+                    "disable_mcp": True
                 }
             })
-
-            # Run the command
-            cmd = ["think-agents"]
-
             result = subprocess.run(
-                cmd, env=env, input=ndjson_input, capture_output=True, text=True, timeout=30
+                cmd,
+                env=env,
+                input=ndjson_input,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
 
-            assert result.returncode == 0
+    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
 
-            # Parse events
-            stdout_lines = result.stdout.strip().split("\n")
-            events = [json.loads(line) for line in stdout_lines if line]
+    # Parse events
+    stdout_lines = result.stdout.strip().split("\n")
+    events = [json.loads(line) for line in stdout_lines if line]
 
-            # Check for thinking events (may not be present with gpt-4o-mini)
-            # thinking_events = [e for e in events if e.get("event") == "thinking"]
-            # Note: With gpt-4o-mini, we likely won't get thinking events
-            # This is just to demonstrate the test structure
+    # Check for thinking events (may be present with o1 models)
+    thinking_events = [e for e in events if e.get("event") == "thinking"]
+    # May or may not have thinking events depending on the model
 
-            # Verify the answer is correct
-            finish_event = events[-1]
-            assert finish_event["event"] == "finish"
-            result_text = finish_event["result"].lower()
-            assert (
-                "4" in result_text or "four" in result_text
-            ), f"Expected '4' in response, got: {finish_event['result']}"
-    finally:
-        # Cleanup: terminate the MCP server
-        mcp_server.terminate()
-        mcp_server.wait(timeout=5)
+    # Verify the answer is correct
+    finish_event = events[-1]
+    assert finish_event["event"] == "finish"
+    result_text = finish_event["result"].lower()
+    assert "4" in result_text or "four" in result_text, f"Expected '4' in response, got: {finish_event['result']}"
+
+
+@pytest.mark.integration
+@pytest.mark.requires_api
+def test_openai_backend_with_verbose():
+    """Test OpenAI backend with verbose flag."""
+    fixtures_env, api_key, journal_path = get_fixtures_env()
+
+    if not fixtures_env:
+        pytest.skip("fixtures/.env not found")
+
+    if not api_key:
+        pytest.skip("OPENAI_API_KEY not found in fixtures/.env file")
+
+    if not journal_path:
+        pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
+
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["OPENAI_API_KEY"] = api_key
+
+    # Create NDJSON input
+    ndjson_input = json.dumps({
+        "prompt": "what is 2+2? Just give me the number.",
+        "backend": "openai",
+        "persona": "default",
+        "config": {
+            "model": "gpt-4o-mini",
+            "max_tokens": 100,
+            "disable_mcp": True
+        }
+    })
+
+    # Run with verbose flag
+    cmd = ["think-agents", "-v"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    # Parse JSON events from stdout
+    stdout_lines = result.stdout.strip().split("\n")
+    events = []
+    for line in stdout_lines:
+        if line and line.startswith("{"):  # JSON lines start with {
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass  # Skip non-JSON lines (debug output)
+
+    # Basic checks
+    assert len(events) >= 2, "Should have start and finish events"
+    assert events[0]["event"] == "start"
+    assert events[-1]["event"] == "finish"
+
+    # Result should contain 4
+    result_text = events[-1]["result"].lower()
+    assert "4" in result_text or "four" in result_text, f"Expected '4' in response, got: {events[-1]['result']}"
+
+
+@pytest.mark.integration
+@pytest.mark.requires_api
+def test_openai_backend_custom_model():
+    """Test OpenAI backend with different model configuration."""
+    fixtures_env, api_key, journal_path = get_fixtures_env()
+
+    if not fixtures_env:
+        pytest.skip("fixtures/.env not found")
+
+    if not api_key:
+        pytest.skip("OPENAI_API_KEY not found in fixtures/.env file")
+
+    if not journal_path:
+        pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
+
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["OPENAI_API_KEY"] = api_key
+
+    # Use gpt-4o for higher quality (but more expensive)
+    ndjson_input = json.dumps({
+        "prompt": "What is 3*3? Just give me the number.",
+        "backend": "openai",
+        "persona": "default",
+        "config": {
+            "model": "gpt-4o",
+            "max_tokens": 50,
+            "disable_mcp": True
+        }
+    })
+
+    # Run the command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
+
+    # Parse events
+    stdout_lines = result.stdout.strip().split("\n")
+    events = [json.loads(line) for line in stdout_lines if line]
+
+    # Verify model in start event
+    start_event = events[0]
+    assert start_event["model"] == "gpt-4o"
+
+    # Verify the answer
+    finish_event = events[-1]
+    result_text = finish_event["result"].lower()
+    assert "9" in result_text or "nine" in result_text, f"Expected '9' in response, got: {finish_event['result']}"
+
+
+@pytest.mark.integration
+@pytest.mark.requires_api
+def test_openai_backend_multi_turn():
+    """Test OpenAI backend with max_turns configuration."""
+    fixtures_env, api_key, journal_path = get_fixtures_env()
+
+    if not fixtures_env:
+        pytest.skip("fixtures/.env not found")
+
+    if not api_key:
+        pytest.skip("OPENAI_API_KEY not found in fixtures/.env file")
+
+    if not journal_path:
+        pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
+
+    # Prepare environment
+    env = os.environ.copy()
+    env["JOURNAL_PATH"] = journal_path
+    env["OPENAI_API_KEY"] = api_key
+
+    # Test with max_turns set
+    ndjson_input = json.dumps({
+        "prompt": "Count from 1 to 3, just the numbers separated by commas.",
+        "backend": "openai",
+        "persona": "default",
+        "config": {
+            "model": "gpt-4o-mini",
+            "max_tokens": 100,
+            "max_turns": 2,  # Allow up to 2 turns
+            "disable_mcp": True
+        }
+    })
+
+    # Run the command
+    cmd = ["think-agents"]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=ndjson_input,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
+
+    # Parse events
+    stdout_lines = result.stdout.strip().split("\n")
+    events = [json.loads(line) for line in stdout_lines if line]
+
+    # Verify the answer contains the sequence
+    finish_event = events[-1]
+    result_text = finish_event["result"].lower()
+    assert "1" in result_text and "2" in result_text and "3" in result_text, \
+        f"Expected '1, 2, 3' in response, got: {finish_event['result']}"

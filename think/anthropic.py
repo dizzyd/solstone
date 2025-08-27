@@ -164,6 +164,7 @@ async def run_agent(
     model = config.get("model", _DEFAULT_MODEL)
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
     thinking_budget_tokens = config.get("thinking_budget_tokens", None)
+    disable_mcp = config.get("disable_mcp", False)
 
     callback = JSONEventCallback(on_event)
 
@@ -184,74 +185,143 @@ async def run_agent(
             }
         )
 
-        async with create_mcp_client() as mcp:
-            system_instruction, first_user, _ = agent_instructions(persona)
-            tools = await _get_mcp_tools(mcp)
-            tool_executor = ToolExecutor(mcp, callback)
+        # Get system instruction (always needed)
+        system_instruction, first_user, _ = agent_instructions(persona)
+        
+        # Build initial messages
+        messages: list[MessageParam] = []
+        if first_user:
+            messages.append({"role": "user", "content": first_user})
+        messages.append({"role": "user", "content": prompt})
 
-            # Build initial messages
-            messages: list[MessageParam] = []
-            if first_user:
-                messages.append({"role": "user", "content": first_user})
-            messages.append({"role": "user", "content": prompt})
+        # Initialize tools and executor based on disable_mcp flag
+        if not disable_mcp:
+            async with create_mcp_client() as mcp:
+                tools = await _get_mcp_tools(mcp)
+                tool_executor = ToolExecutor(mcp, callback)
 
-            while True:
-                # Configure thinking for supported models
-                thinking_config = None
-                if model in [
-                    "claude-opus-4-20250514",
-                    "claude-sonnet-4-20250514",
-                    "claude-sonnet-3-7-20241124",
-                ]:
-                    # Use config value if provided, otherwise calculate default
-                    budget_tokens = (
-                        thinking_budget_tokens
-                        if thinking_budget_tokens is not None
-                        else min(10000, max_tokens - 1000)
-                    )  # Reserve some tokens for final response
+                while True:
+                    # Configure thinking for supported models
+                    thinking_config = None
+                    if model in [
+                        "claude-opus-4-20250514",
+                        "claude-sonnet-4-20250514",
+                        "claude-sonnet-3-7-20241124",
+                    ]:
+                        # Use config value if provided, otherwise calculate default
+                        if thinking_budget_tokens is not None:
+                            budget_tokens = thinking_budget_tokens
+                        elif max_tokens >= 2048:
+                            # Only enable thinking if we have enough tokens
+                            budget_tokens = min(10000, max_tokens - 1000)
+                        else:
+                            # Skip thinking for small token limits
+                            thinking_config = None
+                            budget_tokens = None
+                        
+                        if budget_tokens is not None:
+                            thinking_config = {
+                                "type": "enabled",
+                                "budget_tokens": budget_tokens,
+                            }
+
+                    # Only include tools parameter if we have tools
+                    create_params = {
+                        "model": model,
+                        "max_tokens": max_tokens,
+                        "system": system_instruction,
+                        "messages": messages,
+                    }
+                    if tools:
+                        create_params["tools"] = tools
+                    if thinking_config is not None:
+                        create_params["thinking"] = thinking_config
+                    
+                    response = await client.messages.create(**create_params)
+
+                    tool_uses = []
+                    final_text = ""
+                    for block in response.content:
+                        if getattr(block, "type", None) == "text":
+                            final_text += block.text
+                        elif getattr(block, "type", None) == "tool_use":
+                            tool_uses.append(block)
+                        elif getattr(block, "type", None) == "thinking":
+                            # Emit thinking event with the reasoning content
+                            thinking_event: ThinkingEvent = {
+                                "event": "thinking",
+                                "ts": int(time.time() * 1000),
+                                "summary": block.thinking,
+                                "model": model,
+                            }
+                            callback.emit(thinking_event)
+
+                    messages.append({"role": "assistant", "content": response.content})
+
+                    if not tool_uses:
+                        callback.emit({"event": "finish", "result": final_text})
+                        return final_text
+
+                    results = []
+                    for tool_use in tool_uses:
+                        result = await tool_executor.execute_tool(tool_use)
+                        results.append(result)
+
+                    messages.append({"role": "user", "content": results})
+        else:
+            # No MCP tools - single response only
+            # Configure thinking for supported models
+            thinking_config = None
+            if model in [
+                "claude-opus-4-20250514",
+                "claude-sonnet-4-20250514",
+                "claude-sonnet-3-7-20241124",
+            ]:
+                # Use config value if provided, otherwise calculate default
+                if thinking_budget_tokens is not None:
+                    budget_tokens = thinking_budget_tokens
+                elif max_tokens >= 2048:
+                    # Only enable thinking if we have enough tokens
+                    budget_tokens = min(10000, max_tokens - 1000)
+                else:
+                    # Skip thinking for small token limits
+                    thinking_config = None
+                    budget_tokens = None
+                
+                if budget_tokens is not None:
                     thinking_config = {
                         "type": "enabled",
                         "budget_tokens": budget_tokens,
                     }
 
-                response = await client.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    system=system_instruction,
-                    messages=messages,
-                    tools=tools if tools else None,
-                    thinking=thinking_config,
-                )
+            # Create params without tools parameter when MCP is disabled
+            create_params = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "system": system_instruction,
+                "messages": messages,
+            }
+            if thinking_config is not None:
+                create_params["thinking"] = thinking_config
+            
+            response = await client.messages.create(**create_params)
 
-                tool_uses = []
-                final_text = ""
-                for block in response.content:
-                    if getattr(block, "type", None) == "text":
-                        final_text += block.text
-                    elif getattr(block, "type", None) == "tool_use":
-                        tool_uses.append(block)
-                    elif getattr(block, "type", None) == "thinking":
-                        # Emit thinking event with the reasoning content
-                        thinking_event: ThinkingEvent = {
-                            "event": "thinking",
-                            "ts": int(time.time() * 1000),
-                            "summary": block.thinking,
-                            "model": model,
-                        }
-                        callback.emit(thinking_event)
+            final_text = ""
+            for block in response.content:
+                if getattr(block, "type", None) == "text":
+                    final_text += block.text
+                elif getattr(block, "type", None) == "thinking":
+                    # Emit thinking event with the reasoning content
+                    thinking_event: ThinkingEvent = {
+                        "event": "thinking",
+                        "ts": int(time.time() * 1000),
+                        "summary": block.thinking,
+                        "model": model,
+                    }
+                    callback.emit(thinking_event)
 
-                messages.append({"role": "assistant", "content": response.content})
-
-                if not tool_uses:
-                    callback.emit({"event": "finish", "result": final_text})
-                    return final_text
-
-                results = []
-                for tool_use in tool_uses:
-                    result = await tool_executor.execute_tool(tool_use)
-                    results.append(result)
-
-                messages.append({"role": "user", "content": results})
+            callback.emit({"event": "finish", "result": final_text})
+            return final_text
     except Exception as exc:
         callback.emit(
             {
