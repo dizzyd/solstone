@@ -594,3 +594,114 @@ def test_handle_list_invalid_pagination(cortex_server):
     response = json.loads(ws.messages[0])
     assert response["type"] == "error"
     assert "Invalid limit or offset" in response["message"]
+
+
+@patch("think.cortex.get_personas")
+def test_check_for_handoff_from_request(mock_get_personas, cortex_server):
+    """Test handoff detection from original request."""
+    from think.cortex import RunningAgent
+
+    # Create agent with handoff in request
+    mock_process = MagicMock()
+    request = {
+        "prompt": "Test",
+        "persona": "test",
+        "handoff": {"persona": "matter_editor", "domain": "test"},
+    }
+    agent = RunningAgent("123", mock_process, Path("/tmp/test.jsonl"), request=request)
+
+    handoff = cortex_server._check_for_handoff(agent)
+    assert handoff is not None
+    assert handoff["persona"] == "matter_editor"
+    assert handoff["domain"] == "test"
+
+    # Should not call get_personas when request has handoff
+    mock_get_personas.assert_not_called()
+
+
+@patch("think.cortex.get_personas")
+def test_check_for_handoff_from_persona(mock_get_personas, cortex_server):
+    """Test handoff detection from persona default."""
+    from think.cortex import RunningAgent
+
+    # Mock persona with default handoff
+    mock_get_personas.return_value = {
+        "test": {
+            "title": "Test",
+            "config": {"handoff": {"persona": "todo", "max_turns": 5}},
+        }
+    }
+
+    # Create agent without handoff in request
+    mock_process = MagicMock()
+    request = {"prompt": "Test", "persona": "test"}
+    agent = RunningAgent("123", mock_process, Path("/tmp/test.jsonl"), request=request)
+
+    handoff = cortex_server._check_for_handoff(agent)
+    assert handoff is not None
+    assert handoff["persona"] == "todo"
+    assert handoff["max_turns"] == 5
+
+
+@patch("think.cortex.get_personas")
+def test_check_for_handoff_request_overrides_persona(mock_get_personas, cortex_server):
+    """Test that request handoff takes precedence over persona default."""
+    from think.cortex import RunningAgent
+
+    # Mock persona with default handoff
+    mock_get_personas.return_value = {
+        "test": {
+            "title": "Test",
+            "config": {"handoff": {"persona": "todo"}},
+        }
+    }
+
+    # Create agent with different handoff in request
+    mock_process = MagicMock()
+    request = {
+        "prompt": "Test",
+        "persona": "test",
+        "handoff": {"persona": "matter_editor"},  # Should override persona default
+    }
+    agent = RunningAgent("123", mock_process, Path("/tmp/test.jsonl"), request=request)
+
+    handoff = cortex_server._check_for_handoff(agent)
+    assert handoff is not None
+    assert handoff["persona"] == "matter_editor"  # Request wins
+
+    # Should not call get_personas when request has handoff
+    mock_get_personas.assert_not_called()
+
+
+@patch("think.cortex.subprocess.Popen")
+@patch("think.cortex.threading.Thread")
+def test_spawn_handoff_agent(mock_thread, mock_popen, cortex_server, mock_journal):
+    """Test spawning a handoff agent."""
+    mock_process = MagicMock()
+    mock_process.pid = 12345
+    mock_process.poll.return_value = None
+    mock_process.stdin = MagicMock()
+    mock_popen.return_value = mock_process
+
+    handoff = {"persona": "matter_editor", "domain": "test", "max_turns": 10}
+    parent_result = "Create a new matter for AI safety research"
+
+    cortex_server._spawn_handoff_agent("parent123", parent_result, handoff)
+
+    # Check subprocess was called
+    mock_popen.assert_called_once()
+    call_args = mock_popen.call_args
+
+    # Check NDJSON input was written
+    mock_process.stdin.write.assert_called_once()
+    written_data = mock_process.stdin.write.call_args[0][0]
+    request = json.loads(written_data.strip())
+
+    assert request["prompt"] == parent_result  # Parent's result becomes prompt
+    assert request["persona"] == "matter_editor"
+    assert request["config"]["domain"] == "test"
+    assert request["config"]["max_turns"] == 10
+    assert request["handoff_from"] == "parent123"  # Tracks lineage
+
+    # Check monitoring threads were started
+    assert mock_thread.call_count == 2  # stdout and stderr monitors
