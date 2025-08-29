@@ -30,7 +30,9 @@ sunstone/
 │   ├── templates/  # Jinja2 HTML templates
 │   └── views/      # Flask view modules
 ├── tests/          # Comprehensive pytest test suites
+│   └── integration/# Integration test suite
 ├── fixtures/       # Test data and examples
+│   └── journal/    # Mock journal structure for testing
 ├── Makefile        # Build and development automation
 ├── pyproject.toml  # Package configuration and dependencies
 ├── JOURNAL.md      # Journal directory structure documentation
@@ -90,8 +92,11 @@ sunstone/
 ### Test Framework
 * **Framework**: pytest with coverage reporting
 * **Structure**: Tests in `tests/` mirroring source structure
+  - Unit tests in `tests/` root directory
+  - Integration tests in `tests/integration/` subdirectory
 * **Naming**: Test files prefixed with `test_`, functions with `test_`
 * **Fixtures**: Shared fixtures in `tests/conftest.py`
+* **Test Data**: The `fixtures/journal/` directory contains a comprehensive mock journal structure that mimics real journal data for testing, including sample domains, matters, agents, inbox messages, and indexed data
 
 ### Running Tests
 ```bash
