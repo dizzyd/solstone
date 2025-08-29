@@ -1,4 +1,4 @@
-"""Synchronous wrapper for the async Cortex client for use in Flask apps."""
+"""Flask-specific synchronous utilities for Cortex agent interactions."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import asyncio
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
-from .cortex_client import CortexClient as AsyncCortexClient
-from .cortex_client import run_agent as async_run_agent
-from .cortex_client import run_agent_with_events as async_run_agent_with_events
+from think.cortex_client import CortexClient as AsyncCortexClient
+from think.cortex_client import run_agent as async_run_agent
+from think.cortex_client import run_agent_with_events as async_run_agent_with_events
 
 
 class SyncCortexClient:

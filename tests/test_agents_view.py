@@ -45,7 +45,7 @@ def test_agents_list_all(monkeypatch, tmp_path):
 
     # Mock the cortex client getter
     monkeypatch.setattr(
-        "think.cortex_client_sync.get_global_cortex_client", lambda: mock_client
+        "dream.cortex_utils.get_global_cortex_client", lambda: mock_client
     )
     monkeypatch.setattr("time.time", lambda: 300)  # 300 seconds after start
 
@@ -119,9 +119,7 @@ def test_agents_list_historical_only(monkeypatch, tmp_path):
     )
 
     # Mock cortex client as unavailable
-    monkeypatch.setattr(
-        "think.cortex_client_sync.get_global_cortex_client", lambda: None
-    )
+    monkeypatch.setattr("dream.cortex_utils.get_global_cortex_client", lambda: None)
     monkeypatch.setattr("time.time", lambda: 400)
 
     with review.app.test_request_context("/agents/api/list?type=historical"):
@@ -155,9 +153,7 @@ def test_agents_list_with_real_fixtures(monkeypatch):
     review.journal_root = str(fixtures_path)
 
     # Mock cortex client as unavailable
-    monkeypatch.setattr(
-        "think.cortex_client_sync.get_global_cortex_client", lambda: None
-    )
+    monkeypatch.setattr("dream.cortex_utils.get_global_cortex_client", lambda: None)
     monkeypatch.setattr("time.time", lambda: 1755392200)  # Time after all fixtures
 
     with review.app.test_request_context("/agents/api/list?type=historical"):
