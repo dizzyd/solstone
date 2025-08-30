@@ -40,7 +40,7 @@ sunstone/
 ├── CHANGELOG.md    # Version history & release notes
 ├── CRUMBS.md       # Crumb file format specification
 ├── CORTEX.md       # Agent system documentation
-└── AGENTS.md       # Development guidelines (this file)
+└── CLAUDE.md       # Development guidelines (this file)
 ```
 
 ### Package Organization
@@ -49,7 +49,56 @@ sunstone/
 * **Imports**: Use absolute imports (e.g., `from hear.capture import record_audio`)
 * **Entry Points**: Defined in `pyproject.toml` under `[project.scripts]`
 * **Journal**: Data stored under `JOURNAL_PATH` environment variable location
-* **Calling**: When calling other modules as a separate process always use their command name and never call using `python -m ...`
+* **Calling**: When calling other modules as a separate process always use their command name and never call using `python -m ...` (e.g., use `think-indexer`, NOT `python -m think.indexer`)
+
+---
+
+## 🏛️ Architecture & Data Flow
+
+**Pipeline**: `hear/see` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `dream` (web UI)
+
+---
+
+## 🔌 Critical Integration Points
+
+* **JOURNAL_PATH**: Central to all operations - set via environment
+* **Cortex**: WebSocket server spawns agents, captures stdout events → `.jsonl` files  
+* **MCP Tools**: HTTP server provides journal search/retrieval (check `agents/mcp.uri`)
+* **Flask/Async**: Use `dream.cortex_utils` for sync wrappers in Flask views
+
+---
+
+## 🤖 Agent System Patterns
+
+```python
+# Async (in think/ modules)
+from think.cortex_client import run_agent
+result = await run_agent(prompt, persona="default", backend="openai")
+
+# Sync (in dream/ views)  
+from dream.cortex_utils import run_agent_via_cortex
+result = run_agent_via_cortex(prompt, on_event=lambda e: push_server.push(e))
+```
+
+**Event flow**: Agent stdout → Cortex → `.jsonl` + WebSocket broadcast
+
+**Essential utilities**: Always check `think.utils` for common operations (setup_cli, day_path, parse_time_range, etc.) and `think.crumbs` for dependency tracking.
+
+---
+
+## 🧪 Testing with Fixtures
+
+```python
+# Use comprehensive mock journal data for testing
+os.environ["JOURNAL_PATH"] = "fixtures/journal"
+# Now all journal operations work with test data
+```
+
+---
+
+## 🔍 Service Discovery
+
+Services write URIs at startup: `agents/cortex.uri`, `agents/mcp.uri`. Check these files for service endpoints.
 
 ---
 
@@ -139,7 +188,7 @@ make clean      # Remove build artifacts
 ## 📝 Important Development Notes
 
 ### Environment Management
-* **JOURNAL_PATH**: Always available via environment after `setup_cli()`
+* **JOURNAL_PATH**: MUST call `setup_cli()` first in any CLI tool, or manually use `load_dotenv()` - then available via environment
 * **API Keys**: Store in `.env` file, never commit to repository
 * **Configuration**: Use `python-dotenv` for environment variables
 
@@ -175,9 +224,6 @@ make full
 
 # Development environment
 make dev
-
-# Update dependencies
-make update-deps
 ```
 
 ---
