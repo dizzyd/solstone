@@ -104,6 +104,7 @@
           </label>
           <button class="btn" id="requestBtn">Load Transcript</button>
           <button class="btn" id="mediaBtn" style="display:none">Load Media</button>
+          <button class="btn" id="downloadBtn" style="display:none">Download Audio</button>
         </div>
       </div>
       <div class="panel" id="panel"></div>
@@ -145,6 +146,8 @@
   const panel = document.getElementById('panel');
   const requestBtn = document.getElementById('requestBtn');
   const mediaBtn = document.getElementById('mediaBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const audioCheck = document.getElementById('audioCheck');
   
   const zoomRoot = document.getElementById('zoomTimeline');
   const zoomGrid = zoomRoot.querySelector('.zoom-grid');
@@ -441,6 +444,8 @@
         // Show and update zoom timeline after loading transcript
         zoomRoot.classList.add('active');
         mediaBtn.style.display = 'block'; // Show media button when zoom timeline is active
+        // Show download button only if audio is enabled
+        downloadBtn.style.display = audio ? 'block' : 'none';
         zoomStart = range.start;
         zoomEnd = range.end;
         zoomHeight = zoomRoot.clientHeight;
@@ -469,6 +474,29 @@
       .catch(() => {
         panel.innerHTML = '<p>Error loading media files.</p>';
       });
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const start = hhmmss(zoomRange.start);
+    const end = hhmmss(zoomRange.end);
+    
+    // Create download URL
+    const downloadUrl = `/calendar/api/download_audio/${day}?start=${start}&end=${end}`;
+    
+    // Trigger download
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = ''; // Let server set the filename
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+
+  // Update download button visibility when audio checkbox changes
+  audioCheck.addEventListener('change', () => {
+    if (zoomRoot.classList.contains('active')) {
+      downloadBtn.style.display = audioCheck.checked ? 'block' : 'none';
+    }
   });
 
   function renderMediaFiles(mediaFiles) {
