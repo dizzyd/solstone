@@ -668,8 +668,6 @@ Please analyze the description and:
         # Configure for claude backend with domain access
         config = {
             "domain": domain_name,
-            "model": "claude-3-5-sonnet-20241022",
-            "max_turns": 10,
         }
 
         # Spawn the agent and get the agent_id
