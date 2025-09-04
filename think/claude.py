@@ -12,7 +12,15 @@ import logging
 import os
 import time
 import traceback
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+
+# Add local claude installation to PATH if it exists
+_claude_bin = Path.home() / ".claude" / "local" / "node_modules" / ".bin"
+if _claude_bin.exists():
+    current_path = os.environ.get("PATH", "")
+    if str(_claude_bin) not in current_path:
+        os.environ["PATH"] = f"{_claude_bin}:{current_path}"
 
 from claude_code_sdk import (
     AssistantMessage,
