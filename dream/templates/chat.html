@@ -429,8 +429,19 @@ async function loadHistoricalAgent(agentId){
   }
   const d = await r.json();
   
-  // Update the header with human-friendly info
-  updateHistoricalHeader(agentId, d.events);
+  // Check if this is a live agent from Cortex vs historical from file
+  if(d.source === 'cortex') {
+    // This is a live agent - hide the historical notice
+    const notice = document.getElementById('historicalNotice');
+    if(notice) {
+      notice.style.display = 'none';
+    }
+    // Show the form for live agents
+    form.style.display = '';
+  } else {
+    // Update the header with human-friendly info for historical agents
+    updateHistoricalHeader(agentId, d.events);
+  }
   
   // Process events in chronological order
   // This maintains the proper sequence of messages and tool calls
