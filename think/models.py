@@ -17,9 +17,8 @@ GPT_5 = "gpt-5"
 GPT_5_MINI = "gpt-5-mini"
 GPT_5_NANO = "gpt-5-nano"
 
-CLAUDE_OPUS_4 = "claude-opus-4-20250514"
-CLAUDE_SONNET_4 = "claude-sonnet-4-20250514"
-CLAUDE_HAIKU_3_5 = "claude-3-5-haiku-latest"
+CLAUDE_OPUS_4 = "claude-opus-4-1"
+CLAUDE_SONNET_4 = "claude-sonnet-4"
 
 
 def gemini_generate(
