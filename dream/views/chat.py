@@ -8,7 +8,7 @@ import markdown  # type: ignore
 from flask import Blueprint, jsonify, render_template, request
 
 from .. import state
-from ..cortex_utils import run_agent_via_cortex
+from ..cortex_utils import get_global_cortex_client, run_agent_via_cortex
 from ..push import push_server
 
 
@@ -77,11 +77,87 @@ def chat_history() -> Any:
 
 @bp.route("/chat/api/agent/<agent_id>")
 def agent_events(agent_id: str) -> Any:
-    """Return events from a historical agent run."""
+    """Return events from an agent run - either from Cortex if running, or from log file."""
 
     if not state.journal_root:
         return jsonify({"error": "Journal root not configured"}), 500
 
+    # First, try to check if the agent is still running in Cortex
+    cortex_client = get_global_cortex_client()
+    if cortex_client:
+        try:
+            # Get list of running agents from Cortex
+            agent_list = cortex_client.list_agents(limit=100, offset=0)
+            if agent_list and "agents" in agent_list:
+                # Check if our agent is in the running list
+                for agent in agent_list["agents"]:
+                    if agent.get("id") == agent_id and agent.get("status") == "running":
+                        # Agent is still running - attach to it for live events
+                        events = []
+                        history = []
+
+                        def collect_event(event: dict) -> None:
+                            """Collect events from Cortex."""
+                            # Add HTML rendering for finish and error events
+                            if event.get("event") == "finish":
+                                result_text = event.get("result", "")
+                                event["html"] = markdown.markdown(result_text, extensions=["extra"])
+                            elif event.get("event") == "error":
+                                # Format error message
+                                error_msg = event.get("error", "Unknown error")
+                                trace = event.get("trace", "")
+                                error_text = (
+                                    f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                                    if trace
+                                    else f"❌ **Error**: {error_msg}"
+                                )
+                                event["html"] = markdown.markdown(error_text, extensions=["extra"])
+                                event["result"] = error_text
+
+                            events.append(event)
+
+                            # Build chat history for display
+                            if event.get("event") == "start":
+                                history.append({"role": "user", "text": event.get("prompt", "")})
+                            elif event.get("event") == "finish":
+                                result_text = event.get("result", "")
+                                html_result = markdown.markdown(result_text, extensions=["extra"])
+                                history.append(
+                                    {"role": "assistant", "text": result_text, "html": html_result}
+                                )
+                            elif event.get("event") == "error":
+                                error_msg = event.get("error", "Unknown error")
+                                trace = event.get("trace", "")
+                                error_text = (
+                                    f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                                    if trace
+                                    else f"❌ **Error**: {error_msg}"
+                                )
+                                html_result = markdown.markdown(error_text, extensions=["extra"])
+                                history.append(
+                                    {"role": "assistant", "text": error_text, "html": html_result}
+                                )
+
+                        # Use sync wrapper to attach and get events
+                        import asyncio
+                        from think.cortex_client import CortexClient as AsyncCortexClient
+
+                        async def get_events():
+                            async with AsyncCortexClient() as client:
+                                await client.attach(agent_id, collect_event)
+
+                        try:
+                            # Run the async attachment
+                            asyncio.run(get_events())
+                            return jsonify(events=events, history=history, source="cortex")
+                        except Exception:
+                            # Fall through to file-based loading
+                            pass
+        except Exception:
+            # If Cortex connection fails, fall through to file-based loading
+            pass
+
+    # Fall back to reading from the log file
     agents_dir = os.path.join(state.journal_root, "agents")
     agent_file = os.path.join(agents_dir, f"{agent_id}.jsonl")
 
@@ -143,7 +219,7 @@ def agent_events(agent_id: str) -> Any:
     except Exception as e:
         return jsonify({"error": f"Failed to read agent file: {str(e)}"}), 500
 
-    return jsonify(events=events, history=history)
+    return jsonify(events=events, history=history, source="file")
 
 
 @bp.route("/chat/api/clear", methods=["POST"])
