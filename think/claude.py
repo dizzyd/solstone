@@ -14,6 +14,7 @@ import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+from dotenv import load_dotenv
 
 # Add local claude installation to PATH if it exists
 _claude_bin = Path.home() / ".claude" / "local" / "node_modules" / ".bin"
@@ -81,6 +82,7 @@ async def run_agent(
             raise ValueError("config must include 'domain' value")
 
         # Get journal path for file permissions
+        load_dotenv()
         journal_path = os.getenv("JOURNAL_PATH")
         if not journal_path:
             raise RuntimeError("JOURNAL_PATH not set")
@@ -89,16 +91,6 @@ async def run_agent(
         domain_path = os.path.join(journal_path, "domains", domain)
         if not os.path.isdir(domain_path):
             raise ValueError(f"Domain directory does not exist: {domain_path}")
-
-        callback.emit(
-            {
-                "event": "start",
-                "prompt": prompt,
-                "persona": persona,
-                "model": model,
-                "backend": "claude",
-            }
-        )
 
         # Load persona instructions from agents directory
         agents_dir = os.path.join(os.path.dirname(__file__), "agents")
@@ -128,6 +120,18 @@ async def run_agent(
             raise RuntimeError(
                 f"Failed to load persona instructions from {instructions_path}: {exc}"
             )
+
+        callback.emit(
+            {
+                "event": "start",
+                "prompt": prompt,
+                "persona": persona,
+                "model": model,
+                "backend": "claude",
+                "domain": domain,
+                "domain_path": domain_path,
+            }
+        )
 
         # Use the prompt directly without persona modifications
         combined_prompt = prompt
