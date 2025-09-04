@@ -92,67 +92,76 @@ def agent_events(agent_id: str) -> Any:
                 # Check if our agent is in the running list
                 for agent in agent_list["agents"]:
                     if agent.get("id") == agent_id and agent.get("status") == "running":
-                        # Agent is still running - attach to it for live events
+                        # Agent is still running - get historical events and mark as live
+                        # The client should connect via SSE for live updates
+
+                        # First check if there's a log file with historical events
+                        agents_dir = os.path.join(state.journal_root, "agents")
+                        agent_file = os.path.join(agents_dir, f"{agent_id}.jsonl")
+
                         events = []
                         history = []
 
-                        def collect_event(event: dict) -> None:
-                            """Collect events from Cortex."""
-                            # Add HTML rendering for finish and error events
-                            if event.get("event") == "finish":
-                                result_text = event.get("result", "")
-                                event["html"] = markdown.markdown(result_text, extensions=["extra"])
-                            elif event.get("event") == "error":
-                                # Format error message
-                                error_msg = event.get("error", "Unknown error")
-                                trace = event.get("trace", "")
-                                error_text = (
-                                    f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                                    if trace
-                                    else f"❌ **Error**: {error_msg}"
-                                )
-                                event["html"] = markdown.markdown(error_text, extensions=["extra"])
-                                event["result"] = error_text
+                        # Read any events that have already been written to disk
+                        if os.path.isfile(agent_file):
+                            try:
+                                with open(agent_file, "r", encoding="utf-8") as f:
+                                    for line in f:
+                                        event = json.loads(line.strip())
+                                        if not event:
+                                            continue
 
-                            events.append(event)
+                                        # Add HTML rendering for finish and error events
+                                        if event.get("event") == "finish":
+                                            result_text = event.get("result", "")
+                                            event["html"] = markdown.markdown(result_text, extensions=["extra"])
+                                        elif event.get("event") == "error":
+                                            # Format error message
+                                            error_msg = event.get("error", "Unknown error")
+                                            trace = event.get("trace", "")
+                                            error_text = (
+                                                f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                                                if trace
+                                                else f"❌ **Error**: {error_msg}"
+                                            )
+                                            event["html"] = markdown.markdown(error_text, extensions=["extra"])
+                                            event["result"] = error_text
 
-                            # Build chat history for display
-                            if event.get("event") == "start":
-                                history.append({"role": "user", "text": event.get("prompt", "")})
-                            elif event.get("event") == "finish":
-                                result_text = event.get("result", "")
-                                html_result = markdown.markdown(result_text, extensions=["extra"])
-                                history.append(
-                                    {"role": "assistant", "text": result_text, "html": html_result}
-                                )
-                            elif event.get("event") == "error":
-                                error_msg = event.get("error", "Unknown error")
-                                trace = event.get("trace", "")
-                                error_text = (
-                                    f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                                    if trace
-                                    else f"❌ **Error**: {error_msg}"
-                                )
-                                html_result = markdown.markdown(error_text, extensions=["extra"])
-                                history.append(
-                                    {"role": "assistant", "text": error_text, "html": html_result}
-                                )
+                                        events.append(event)
 
-                        # Use sync wrapper to attach and get events
-                        import asyncio
-                        from think.cortex_client import CortexClient as AsyncCortexClient
+                                        # Build chat history for display
+                                        if event.get("event") == "start":
+                                            history.append({"role": "user", "text": event.get("prompt", "")})
+                                        elif event.get("event") == "finish":
+                                            result_text = event.get("result", "")
+                                            html_result = markdown.markdown(result_text, extensions=["extra"])
+                                            history.append(
+                                                {"role": "assistant", "text": result_text, "html": html_result}
+                                            )
+                                        elif event.get("event") == "error":
+                                            error_msg = event.get("error", "Unknown error")
+                                            trace = event.get("trace", "")
+                                            error_text = (
+                                                f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                                                if trace
+                                                else f"❌ **Error**: {error_msg}"
+                                            )
+                                            html_result = markdown.markdown(error_text, extensions=["extra"])
+                                            history.append(
+                                                {"role": "assistant", "text": error_text, "html": html_result}
+                                            )
+                            except Exception:
+                                pass
 
-                        async def get_events():
-                            async with AsyncCortexClient() as client:
-                                await client.attach(agent_id, collect_event)
-
-                        try:
-                            # Run the async attachment
-                            asyncio.run(get_events())
-                            return jsonify(events=events, history=history, source="cortex")
-                        except Exception:
-                            # Fall through to file-based loading
-                            pass
+                        # Return with source='cortex' to indicate it's live
+                        # Include the agent_id so client can subscribe to updates
+                        return jsonify(
+                            events=events,
+                            history=history,
+                            source="cortex",
+                            agent_id=agent_id,
+                            is_running=True
+                        )
         except Exception:
             # If Cortex connection fails, fall through to file-based loading
             pass

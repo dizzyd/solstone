@@ -223,6 +223,10 @@ async def run_agent_with_events(
 
         async def handle_event(event: dict):
             nonlocal result, error
+            # Add agent_id to event if not present
+            if "agent_id" not in event:
+                event["agent_id"] = agent_id
+
             # Forward to user callback
             if asyncio.iscoroutinefunction(on_event):
                 await on_event(event)

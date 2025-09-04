@@ -430,14 +430,39 @@ async function loadHistoricalAgent(agentId){
   const d = await r.json();
   
   // Check if this is a live agent from Cortex vs historical from file
-  if(d.source === 'cortex') {
+  if(d.source === 'cortex' && d.is_running) {
     // This is a live agent - hide the historical notice
     const notice = document.getElementById('historicalNotice');
     if(notice) {
       notice.style.display = 'none';
     }
-    // Show the form for live agents
+    // Show the form for live agents (but keep it disabled since we're observing)
     form.style.display = '';
+    input.disabled = true;
+    input.placeholder = 'Viewing live agent run (read-only)...';
+    
+    // Subscribe to live updates via SSE for this agent
+    if(d.agent_id) {
+      // Track that we're watching a specific agent
+      window.watchingAgentId = d.agent_id;
+      responseInProgress = true;  // Keep activity indicator visible
+      
+      // Listen for events from this specific agent
+      appEvents.listen('chat', e => {
+        // Only process events for the agent we're watching
+        if(window.watchingAgentId && e.agent_id === window.watchingAgentId) {
+          processEvent(e);
+          
+          // Check if agent finished
+          if(e.event === 'finish' || e.event === 'error') {
+            responseInProgress = false;
+            window.watchingAgentId = null;
+            // Update UI to show it's completed
+            input.placeholder = 'Agent run completed (read-only)';
+          }
+        }
+      });
+    }
   } else {
     // Update the header with human-friendly info for historical agents
     updateHistoricalHeader(agentId, d.events);
