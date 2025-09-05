@@ -14,6 +14,7 @@ import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+
 from dotenv import load_dotenv
 
 # Add local claude installation to PATH if it exists

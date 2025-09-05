@@ -258,7 +258,7 @@ def add_module_stubs(request, monkeypatch):
 
             def join(self, *a, **k):
                 pass
-            
+
             def is_alive(self):
                 return False
 

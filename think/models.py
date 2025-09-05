@@ -18,7 +18,7 @@ GPT_5_MINI = "gpt-5-mini"
 GPT_5_NANO = "gpt-5-nano"
 
 CLAUDE_OPUS_4 = "claude-opus-4-1"
-CLAUDE_SONNET_4 = "claude-sonnet-4"
+CLAUDE_SONNET_4 = "claude-sonnet-4-0"
 
 
 def gemini_generate(
@@ -212,6 +212,5 @@ __all__ = [
     "GPT_5_NANO",
     "CLAUDE_OPUS_4",
     "CLAUDE_SONNET_4",
-    "CLAUDE_HAIKU_3_5",
     "gemini_generate",
 ]

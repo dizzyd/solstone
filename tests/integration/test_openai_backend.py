@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
+from think.models import GPT_5, GPT_5_MINI
+
 
 def get_fixtures_env():
     """Load the fixtures/.env file and return the environment."""
@@ -51,7 +53,7 @@ def test_openai_backend_basic():
             "backend": "openai",
             "persona": "default",
             "config": {
-                "model": "gpt-4o-mini",  # Use cheap model for testing
+                "model": GPT_5_MINI,  # Use cheap model for testing
                 "max_tokens": 100,
                 "disable_mcp": True,
             },
@@ -91,7 +93,7 @@ def test_openai_backend_basic():
     start_event = events[0]
     assert start_event["event"] == "start"
     assert start_event["prompt"] == "what is 1+1? Just give me the number."
-    assert start_event["model"] == "gpt-4o-mini"
+    assert start_event["model"] == GPT_5_MINI
     assert start_event["persona"] == "default"
     assert isinstance(start_event["ts"], int)
 
@@ -135,14 +137,14 @@ def test_openai_backend_with_reasoning():
     env["JOURNAL_PATH"] = journal_path
     env["OPENAI_API_KEY"] = api_key
 
-    # Try o1-mini model (may not be available)
+    # Use standard model since o1 models are not supported with Responses API
     ndjson_input = json.dumps(
         {
             "prompt": "What is the square root of 16? Just the number please.",
             "backend": "openai",
             "persona": "default",
             "config": {
-                "model": "o1-mini",  # Reasoning model if available
+                "model": GPT_5_MINI,
                 "max_tokens": 200,
                 "disable_mcp": True,
             },
@@ -159,34 +161,6 @@ def test_openai_backend_with_reasoning():
         text=True,
         timeout=30,
     )
-
-    # Allow for model unavailability
-    if result.returncode != 0:
-        if (
-            "model not found" in result.stderr.lower()
-            or "does not exist" in result.stderr.lower()
-        ):
-            # Fall back to gpt-4o-mini
-            ndjson_input = json.dumps(
-                {
-                    "prompt": "What is the square root of 16? Just the number please.",
-                    "backend": "openai",
-                    "persona": "default",
-                    "config": {
-                        "model": "gpt-4o-mini",
-                        "max_tokens": 200,
-                        "disable_mcp": True,
-                    },
-                }
-            )
-            result = subprocess.run(
-                cmd,
-                env=env,
-                input=ndjson_input,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
 
     assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
 
@@ -296,7 +270,7 @@ def test_openai_backend_custom_model():
             "prompt": "What is 3*3? Just give me the number.",
             "backend": "openai",
             "persona": "default",
-            "config": {"model": "gpt-4o", "max_tokens": 50, "disable_mcp": True},
+            "config": {"model": GPT_5, "max_tokens": 50, "disable_mcp": True},
         }
     )
 
@@ -319,14 +293,16 @@ def test_openai_backend_custom_model():
 
     # Verify model in start event
     start_event = events[0]
-    assert start_event["model"] == "gpt-4o"
+    assert start_event["model"] == GPT_5
 
     # Verify the answer
     finish_event = events[-1]
-    result_text = finish_event["result"].lower()
+    assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
+    assert "result" in finish_event, f"No result in finish event: {finish_event}"
+    result_text = finish_event.get("result", "").lower()
     assert (
         "9" in result_text or "nine" in result_text
-    ), f"Expected '9' in response, got: {finish_event['result']}"
+    ), f"Expected '9' in response, got: {finish_event.get('result', '')}"
 
 
 @pytest.mark.integration
@@ -356,7 +332,7 @@ def test_openai_backend_multi_turn():
             "backend": "openai",
             "persona": "default",
             "config": {
-                "model": "gpt-4o-mini",
+                "model": GPT_5_MINI,
                 "max_tokens": 100,
                 "max_turns": 2,  # Allow up to 2 turns
                 "disable_mcp": True,
@@ -383,6 +359,10 @@ def test_openai_backend_multi_turn():
 
     # Verify the answer contains the sequence
     finish_event = events[-1]
+    assert (
+        finish_event["event"] == "finish"
+    ), f"Expected finish event, got: {finish_event}"
+    assert "result" in finish_event, f"No result in finish event: {finish_event}"
     result_text = finish_event["result"].lower()
     assert (
         "1" in result_text and "2" in result_text and "3" in result_text

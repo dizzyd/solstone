@@ -140,9 +140,9 @@ def test_anthropic_backend_with_thinking():
             "backend": "anthropic",
             "persona": "default",
             "config": {
-                "model": "claude-sonnet-3-7-20241124",  # Model that supports thinking
+                "model": CLAUDE_SONNET_4,
                 "max_tokens": 200,
-                "thinking_budget_tokens": 1000,
+                "thinking_budget_tokens": 1024,  # Minimum required for thinking
                 "disable_mcp": True,
             },
         }
@@ -268,7 +268,7 @@ def test_anthropic_backend_custom_model():
             "backend": "anthropic",
             "persona": "default",
             "config": {
-                "model": "claude-3-haiku-20240307",
+                "model": CLAUDE_SONNET_4,
                 "max_tokens": 50,
                 "disable_mcp": True,
             },
@@ -294,7 +294,7 @@ def test_anthropic_backend_custom_model():
 
     # Verify model in start event
     start_event = events[0]
-    assert start_event["model"] == "claude-3-haiku-20240307"
+    assert start_event["model"] == CLAUDE_SONNET_4
 
     # Verify the answer
     finish_event = events[-1]

@@ -619,7 +619,7 @@ def create_matter(domain_name: str) -> Any:
     description = data.get("description", "").strip()
     if not description:
         return jsonify({"error": "Matter description is required"}), 400
-    
+
     # Title is optional - AI will generate one if not provided
     title = data.get("title", "").strip()
 

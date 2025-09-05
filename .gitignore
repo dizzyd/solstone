@@ -13,3 +13,4 @@ fixtures/journal/tokens/*.json
 .deps-installed
 .package-installed
 *.sqlite
+*.log
