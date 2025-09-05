@@ -142,11 +142,28 @@ def agent_content(agent_id: str) -> object:
     return jsonify(response), status
 
 
+@bp.route("/agents/api/live")
+def agents_live() -> object:
+    """Get list of only live/running agents."""
+    return _get_agents_list("live")
+
+
+@bp.route("/agents/api/historical")
+def agents_historical() -> object:
+    """Get list of only historical/completed agents."""
+    return _get_agents_list("historical")
+
+
 @bp.route("/agents/api/list")
 def agents_list() -> object:
-    """Get list of live agents from Cortex and historical agents from journal."""
+    """Get list of agents - unified implementation using CortexClient."""
     # Get type parameter (live, historical, or all)
     agent_type = request.args.get("type", "all")
+    return _get_agents_list(agent_type)
+
+
+def _get_agents_list(agent_type: str) -> object:
+    """Internal helper to get agents list."""
     limit = int(request.args.get("limit", 10))
     offset = int(request.args.get("offset", 0))
 
@@ -154,134 +171,43 @@ def agents_list() -> object:
     limit = max(1, min(limit, 100))  # Limit between 1-100
     offset = max(0, offset)
 
-    live_agents = []
-    historical_agents = []
+    # Get agents from unified CortexClient
+    from ..cortex_utils import get_global_cortex_client
+    from think.utils import get_personas, time_since
 
-    # Load persona metadata once for efficiency
-    from think.utils import get_personas
+    client = get_global_cortex_client()
+    if not client:
+        return jsonify({
+            "agents": [],
+            "pagination": {"limit": limit, "offset": offset, "total": 0, "has_more": False},
+            "live_count": 0,
+            "historical_count": 0,
+        })
 
+    # Get all agents using enhanced list_agents
+    response = client.list_agents(limit=limit, offset=offset, agent_type=agent_type)
+    if not response:
+        return jsonify({
+            "agents": [],
+            "pagination": {"limit": limit, "offset": offset, "total": 0, "has_more": False},
+            "live_count": 0,
+            "historical_count": 0,
+        })
+
+    # Load persona titles for display
     personas = get_personas()
     persona_titles = {pid: p["title"] for pid, p in personas.items()}
 
-    # Get live agents from Cortex if requested
-    if agent_type in ["live", "all"]:
-        from ..cortex_utils import get_global_cortex_client
+    # Format agents for display
+    agents = response.get("agents", [])
+    for agent in agents:
+        persona_id = agent.get("persona", "default")
+        agent["persona_title"] = persona_titles.get(persona_id, persona_id)
+        agent["since"] = time_since(agent["start"])
+        # Keep backward compatibility
+        agent["pid"] = None  # We don't track PIDs in the new system
 
-        client = get_global_cortex_client()
-
-        if client:
-            response = client.list_agents(limit=100, offset=0)  # Get all live agents
-            if response:
-                agents = response.get("agents", [])
-                for agent in agents:
-                    start_ms = agent.get("started_at", 0)
-                    start = start_ms / 1000
-                    metadata = agent.get("metadata", {})
-
-                    persona_id = metadata.get("persona", "default")
-                    # Calculate runtime in seconds for live agents (ongoing)
-                    runtime_seconds = time.time() - start if start > 0 else 0
-                    live_agents.append(
-                        {
-                            "id": agent.get("id", ""),
-                            "start": start,
-                            "since": time_since(start),
-                            "runtime_seconds": runtime_seconds,
-                            "model": metadata.get("model", ""),
-                            "persona": persona_id,
-                            "persona_title": persona_titles.get(persona_id, persona_id),
-                            "prompt": metadata.get("prompt", ""),
-                            "status": agent.get("status", "running"),
-                            "pid": agent.get("pid"),
-                            "is_live": True,
-                        }
-                    )
-
-    # Get historical agents from journal if requested
-    if agent_type in ["historical", "all"]:
-        agents_dir = _agents_dir()
-        if agents_dir and os.path.exists(agents_dir):
-            # Get all .jsonl files
-            jsonl_files = [f for f in os.listdir(agents_dir) if f.endswith(".jsonl")]
-
-            for jsonl_file in jsonl_files:
-                agent_id = jsonl_file[:-6]  # Remove .jsonl extension
-
-                # Skip if this is a live agent
-                if any(a["id"] == agent_id for a in live_agents):
-                    continue
-
-                agent_path = os.path.join(agents_dir, jsonl_file)
-                try:
-                    # Read first and last lines to get metadata
-                    with open(agent_path, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-                        if lines:
-                            first_event = json.loads(lines[0])
-                            last_event = (
-                                json.loads(lines[-1]) if len(lines) > 1 else first_event
-                            )
-
-                            # Extract metadata from events
-                            start_ms = first_event.get("ts", int(agent_id))
-                            start = start_ms / 1000
-
-                            # Get end time from last event
-                            end_ms = last_event.get("ts", start_ms)
-                            end = end_ms / 1000
-                            # Calculate runtime in seconds
-                            runtime_seconds = end - start if end >= start else 0
-
-                            # Determine status from last event
-                            status = "finished"
-                            if last_event.get("event") == "error":
-                                status = "error"
-                            elif last_event.get("event") != "finish":
-                                status = "interrupted"
-
-                            persona_id = first_event.get("persona", "default")
-                            historical_agents.append(
-                                {
-                                    "id": agent_id,
-                                    "start": start,
-                                    "since": time_since(start),
-                                    "runtime_seconds": runtime_seconds,
-                                    "model": first_event.get("model", ""),
-                                    "persona": persona_id,
-                                    "persona_title": persona_titles.get(
-                                        persona_id, persona_id
-                                    ),
-                                    "prompt": first_event.get("prompt", ""),
-                                    "status": status,
-                                    "pid": None,
-                                    "is_live": False,
-                                }
-                            )
-                except Exception:
-                    # Skip malformed files
-                    continue
-
-    # Combine and sort by timestamp (newest first)
-    all_agents = live_agents + historical_agents
-    all_agents.sort(key=lambda x: x["start"], reverse=True)
-
-    # Apply pagination
-    total = len(all_agents)
-    paginated = all_agents[offset : offset + limit]
-
-    return jsonify(
-        {
-            "agents": paginated,
-            "pagination": {
-                "limit": limit,
-                "offset": offset,
-                "total": total,
-                "has_more": offset + limit < total,
-            },
-            "live_count": len(live_agents),
-            "historical_count": len(historical_agents),
-        }
-    )
+    return jsonify(response)
 
 
 @bp.route("/agents/api/plan", methods=["POST"])

@@ -6,7 +6,7 @@ from simple_websocket import ConnectionClosed
 
 
 class PushServer:
-    """Simple global event WebSocket for the dream app."""
+    """Simple event WebSocket that broadcasts all events to all clients."""
 
     def __init__(self, path: str = "/ws/events") -> None:
         self.path = path
@@ -18,6 +18,7 @@ class PushServer:
             self.clients.append(ws)
             try:
                 while ws.connected:
+                    # Just keep connection alive, no need for subscriptions
                     ws.receive(timeout=1)
             except ConnectionClosed:
                 pass
@@ -29,6 +30,7 @@ class PushServer:
         pass
 
     def push(self, event: dict) -> None:
+        """Push event to all connected clients."""
         msg = json.dumps(event)
         for ws in list(self.clients):
             try:

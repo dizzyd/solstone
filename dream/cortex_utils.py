@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from think.cortex_client import CortexClient as AsyncCortexClient
+from think.cortex_client import SimpleAgentWatcher
 from think.cortex_client import run_agent as async_run_agent
 from think.cortex_client import run_agent_with_events as async_run_agent_with_events
 
@@ -17,15 +20,20 @@ class SyncCortexClient:
     def __init__(self, journal_path: Optional[str] = None):
         self.journal_path = journal_path
         self.client = AsyncCortexClient(journal_path)
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._thread: Optional[threading.Thread] = None
+        # Create the event loop and thread once during initialization
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+        self._initialized = True
 
     def _ensure_loop(self):
-        """Ensure async event loop is running."""
-        if self._loop is None or not self._loop.is_running():
-            self._loop = asyncio.new_event_loop()
-            self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
-            self._thread.start()
+        """Ensure async event loop is running (now just checks it's still alive)."""
+        if not self._initialized:
+            raise RuntimeError("SyncCortexClient not properly initialized")
+        if self._loop is None:
+            raise RuntimeError("Event loop was cleaned up but client is still in use")
+        if not self._loop.is_running():
+            raise RuntimeError("Event loop stopped unexpectedly")
 
     def _run_async(self, coro):
         """Run an async coroutine and return the result."""
@@ -55,12 +63,19 @@ class SyncCortexClient:
         )
 
     def list_agents(
-        self, limit: int = 10, offset: int = 0, include_active: bool = True
+        self, 
+        limit: int = 10, 
+        offset: int = 0, 
+        include_active: bool = True,
+        agent_type: str = "all"
     ) -> Dict[str, Any]:
-        """List agents with pagination."""
+        """List agents with pagination and filtering."""
         return self._run_async(
             self.client.list_agents(
-                limit=limit, offset=offset, include_active=include_active
+                limit=limit, 
+                offset=offset, 
+                include_active=include_active,
+                agent_type=agent_type
             )
         )
 
@@ -127,11 +142,14 @@ class SyncCortexClient:
         )
 
     def cleanup(self) -> None:
-        """Clean up the event loop."""
-        if self._loop:
+        """Clean up the event loop and thread."""
+        if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1)
+        self._loop = None
+        self._thread = None
+        self._initialized = False
 
 
 # Global client instance for Flask app
@@ -161,6 +179,56 @@ def get_global_cortex_client(
                 return None
 
         return _sync_client
+
+
+def cleanup_global_cortex_client() -> None:
+    """Clean up the global cortex client instance.
+    
+    This should be called when the Flask app is shutting down to properly
+    clean up the event loop and thread resources.
+    """
+    global _sync_client
+    
+    with _client_lock:
+        if _sync_client is not None:
+            _sync_client.cleanup()
+            _sync_client = None
+
+
+# Global agent watcher - much simpler!
+_agent_watcher_task = None
+
+
+def start_global_agent_watcher(callback: Callable[[dict], None]) -> None:
+    """Start the global agent watcher that broadcasts all events.
+    
+    Args:
+        callback: Function to call with ALL agent events
+    """
+    global _agent_watcher_task
+    
+    if _agent_watcher_task is not None:
+        return  # Already running
+        
+    journal_path = os.getenv("JOURNAL_PATH", ".")
+    agents_dir = Path(journal_path) / "agents"
+    
+    # Get the global client's event loop
+    client = get_global_cortex_client()
+    if not client or not client._loop:
+        raise RuntimeError("Cortex client not initialized")
+        
+    # Create and start watcher in the existing event loop
+    async def run_watcher():
+        watcher = SimpleAgentWatcher(agents_dir, callback)
+        await watcher.start()
+        # Keep watcher alive
+        while True:
+            await asyncio.sleep(60)
+            
+    _agent_watcher_task = asyncio.run_coroutine_threadsafe(
+        run_watcher(), client._loop
+    )
 
 
 def run_agent_via_cortex(

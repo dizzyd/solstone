@@ -62,10 +62,26 @@ def create_app(journal: str = "", password: str = "") -> Flask:
     task_runner.register(sock)
     push_server.register(sock)
 
+    # Register cleanup for cortex client on app teardown
+    @app.teardown_appcontext
+    def cleanup_cortex(exception=None):
+        from .cortex_utils import cleanup_global_cortex_client
+        cleanup_global_cortex_client()
+
     if journal:
         state.journal_root = journal
         task_manager.load_cached()
         state.occurrences_index = build_occurrence_index(journal)
+        
+        # Start the global agent watcher to broadcast all events
+        from .cortex_utils import start_global_agent_watcher
+        try:
+            def broadcast_agent_event(event):
+                """Broadcast all agent events to all connected clients."""
+                push_server.push({"view": "agents", **event})
+            start_global_agent_watcher(broadcast_agent_event)
+        except Exception:
+            pass  # Watcher is optional
     return app
 
 

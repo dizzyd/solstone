@@ -218,10 +218,22 @@ function addEventCard(text, url){
 }
 
 // Track tool calls by ID to update them when complete
+// Limit to prevent memory leaks
 const toolPlacards = {};
+const MAX_TOOL_PLACARDS = 100;
 
 // Track agent switches - only show when switching between agents
 let previousAgent = null;
+
+// Clean up old tool placards when limit reached
+function cleanupOldPlacards() {
+  const keys = Object.keys(toolPlacards);
+  if (keys.length > MAX_TOOL_PLACARDS) {
+    // Remove oldest entries (first half)
+    const toRemove = keys.slice(0, Math.floor(keys.length / 2));
+    toRemove.forEach(key => delete toolPlacards[key]);
+  }
+}
 
 function addToolPlacard(toolName, args, callId){
   const div=document.createElement('div');
@@ -251,6 +263,7 @@ function addToolPlacard(toolName, args, callId){
   // Store reference to update later
   if(callId){
     toolPlacards[callId] = {div, statusSpan};
+    cleanupOldPlacards();  // Clean up if too many
   }
   return div;
 }
@@ -379,6 +392,8 @@ document.getElementById('inputArea').onsubmit=async e=>{
   
   // Clear previous messages for fresh one-shot conversation
   messagesDiv.innerHTML='';
+  // Clear tool placard references to prevent memory leaks
+  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
   
   // Reset agent tracking when starting new conversation
   previousAgent = null;
@@ -730,6 +745,8 @@ if(isHistorical){
   document.getElementById('clearBtn').onclick=async()=>{
     await fetch(clearUrl,{method:'POST'});
     messagesDiv.innerHTML='';
+  // Clear tool placard references to prevent memory leaks
+  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
     messagesDiv.appendChild(activityIndicator);  // Re-add activity indicator
     previousAgent = null;  // Reset agent tracking
     responseInProgress = false;  // Reset response state
@@ -740,6 +757,8 @@ if(isHistorical){
   backendSelect.addEventListener('change', async ()=>{
     await fetch(clearUrl,{method:'POST'});
     messagesDiv.innerHTML='';
+  // Clear tool placard references to prevent memory leaks
+  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
     messagesDiv.appendChild(activityIndicator);  // Re-add activity indicator
     previousAgent = null;  // Reset agent tracking
     responseInProgress = false;  // Reset response state
@@ -789,6 +808,8 @@ if(isHistorical){
       
       // Clear messages when switching personas
       messagesDiv.innerHTML = '';
+      // Clear tool placard references to prevent memory leaks
+      Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
       messagesDiv.appendChild(activityIndicator);
       previousAgent = null;
       responseInProgress = false;

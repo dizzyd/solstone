@@ -14,6 +14,7 @@ from ..push import push_server
 
 def _push_event(event: dict) -> None:
     """Forward agent events to connected chat clients."""
+    # Just broadcast to everyone - clients will filter by agent_id
     push_server.push({"view": "chat", **event})
 
 
@@ -92,8 +93,7 @@ def agent_events(agent_id: str) -> Any:
                 # Check if our agent is in the running list
                 for agent in agent_list["agents"]:
                     if agent.get("id") == agent_id and agent.get("status") == "running":
-                        # Agent is still running - get historical events and mark as live
-                        # The client should connect via SSE for live updates
+                        # Agent is still running - watcher will automatically pick it up
 
                         # First check if there's a log file with historical events
                         agents_dir = os.path.join(state.journal_root, "agents")
