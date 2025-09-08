@@ -101,9 +101,18 @@ class SimpleAgentWatcher:
     async def _scan_active_agents(self):
         """Scan for all active agent files."""
         try:
+            import time
+            current_time = time.time()
+            
             for path in self.agents_dir.glob("*_active.jsonl"):
                 agent_id = path.stem.replace("_active", "")
                 if agent_id not in self.active_agents:
+                    # Check if this is a stale agent before adding
+                    file_mtime = path.stat().st_mtime
+                    if current_time - file_mtime > 300:  # 5 minutes old
+                        self.logger.warning(f"Ignoring stale agent {agent_id} (file not modified for >5 minutes)")
+                        continue
+                    
                     self.active_agents[agent_id] = 0
                     self.logger.info(f"Started watching agent {agent_id}")
         except Exception as e:
@@ -111,8 +120,14 @@ class SimpleAgentWatcher:
 
     async def _poll_agents(self):
         """Poll all active agents for new events."""
+        stale_check_interval = 60  # Check for stale agents every 60 seconds
+        last_stale_check = 0
+        
         while self.running:
             try:
+                import time
+                current_time = time.time()
+                
                 # Check each active agent
                 completed = []
                 for agent_id, last_pos in list(self.active_agents.items()):
@@ -122,8 +137,20 @@ class SimpleAgentWatcher:
                     # Determine current file
                     if active_path.exists():
                         file_path = active_path
+                        
+                        # Check if this agent is stale (no updates for > 5 minutes)
+                        if current_time - last_stale_check > stale_check_interval:
+                            file_mtime = active_path.stat().st_mtime
+                            if current_time - file_mtime > 300:  # 5 minutes
+                                self.logger.warning(f"Agent {agent_id} appears stale, marking as completed")
+                                completed.append(agent_id)
+                                continue
                     elif completed_path.exists():
                         file_path = completed_path
+                        # If we're reading from completed file, mark for removal
+                        # since the agent has already finished
+                        completed.append(agent_id)
+                        continue
                     else:
                         # File disappeared
                         completed.append(agent_id)
@@ -162,11 +189,15 @@ class SimpleAgentWatcher:
                     del self.active_agents[agent_id]
                     self.logger.info(f"Agent {agent_id} completed")
 
+                # Update stale check timestamp if we did a check
+                if current_time - last_stale_check > stale_check_interval:
+                    last_stale_check = current_time
+                
                 # Rescan for new agents periodically
                 await self._scan_active_agents()
 
             except Exception as e:
-                self.logger.error(f"Poll error: {e}")
+                self.logger.error(f"Poll error: {e!r}")
 
             # Poll every 0.5 seconds
             await asyncio.sleep(0.5)

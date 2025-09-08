@@ -116,11 +116,14 @@ class CortexService:
             self.stop()
 
     def _process_existing_active_files(self) -> None:
-        """Process any active files that exist on startup."""
+        """Clean up any stale active files that exist on startup."""
         for file_path in self.agents_dir.glob("*_active.jsonl"):
             agent_id = file_path.stem.replace("_active", "")
-            self.logger.info(f"Found existing active file: {agent_id}")
-            self._handle_active_file(agent_id, file_path)
+            self.logger.warning(f"Found stale active file from previous session: {agent_id}")
+            
+            # Write an error event indicating the agent crashed
+            error_message = "Agent failed due to unexpected Cortex service shutdown"
+            self._write_error_and_complete(file_path, error_message)
 
     def _handle_active_file(self, agent_id: str, file_path: Path) -> None:
         """Handle a newly activated agent request file."""

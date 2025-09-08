@@ -178,3 +178,7 @@ Guide for updating:
 - Added date range filtering support to `think.indexer.transcripts.search_transcripts()` with `start_date` and `end_date` parameters
 - Updated MCP tools `search_transcripts` to support date range queries alongside single day searches
 - Made `day` parameter optional in MCP `search_transcripts` tool to allow searching across all days or date ranges
+
+## 2025-09-07
+
+- Enhanced Cortex service to clean up stale active agent files on startup, marking them as failed due to unexpected shutdown
