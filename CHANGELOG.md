@@ -191,3 +191,5 @@ Guide for updating:
 - Added `cortex_watch()` function to `think/cortex_client.py` for blocking file watch of agent events with efficient tailing using watchfiles
 - Added watchfiles dependency for monitoring file system changes in Cortex agent directory
 - Replaced `tests/test_cortex_client.py` with comprehensive tests for new cortex_client functions
+- Added `run_agent()` function to `think/cortex_client.py` that combines request creation and event watching for synchronous agent execution
+- Simplified `dream/cortex_utils.py` to use the new synchronous `run_agent()` function, removing unnecessary async wrapper infrastructure

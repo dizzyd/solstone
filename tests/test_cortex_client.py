@@ -8,7 +8,7 @@ from threading import Thread
 
 import pytest
 
-from think.cortex_client import cortex_request, cortex_watch
+from think.cortex_client import cortex_request, cortex_watch, run_agent
 
 
 class TestCortexClient:
@@ -59,6 +59,119 @@ class TestCortexClient:
             assert data["backend"] == "google"
             assert "config" not in data
             assert "handoff_from" not in data
+
+    def test_cortex_request_with_handoff(self, tmp_path, monkeypatch):
+        """Test cortex_request with handoff_from parameter."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        active_file = cortex_request(
+            prompt="Continue analysis",
+            persona="reviewer",
+            backend="anthropic",
+            handoff_from="1234567890000"
+        )
+        
+        with open(active_file, "r") as f:
+            data = json.loads(f.readline())
+            assert data["prompt"] == "Continue analysis"
+            assert data["persona"] == "reviewer"
+            assert data["backend"] == "anthropic"
+            assert data["handoff_from"] == "1234567890000"
+
+    def test_cortex_request_file_naming(self, tmp_path, monkeypatch):
+        """Test that cortex_request creates files with correct naming pattern."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        # Create multiple requests
+        files = []
+        for i in range(3):
+            active_file = cortex_request(
+                prompt=f"Test {i}",
+                persona="default",
+                backend="openai"
+            )
+            files.append(active_file)
+            time.sleep(0.002)  # Small delay to ensure different timestamps
+        
+        # Verify all files exist and have unique names
+        assert len(set(files)) == 3
+        for file_path in files:
+            assert Path(file_path).exists()
+            assert file_path.endswith("_active.jsonl")
+            # Extract timestamp from filename
+            filename = Path(file_path).name
+            ts_str = filename.replace("_active.jsonl", "")
+            assert ts_str.isdigit()
+            assert len(ts_str) == 13  # Millisecond timestamp
+
+    def test_cortex_request_creates_agents_dir(self, tmp_path, monkeypatch):
+        """Test that cortex_request creates the agents directory if it doesn't exist."""
+        # Use a fresh path without pre-created agents dir
+        journal_path = tmp_path / "new_journal"
+        monkeypatch.setenv("JOURNAL_PATH", str(journal_path))
+        
+        assert not journal_path.exists()
+        
+        active_file = cortex_request(
+            prompt="Test",
+            persona="default",
+            backend="openai"
+        )
+        
+        # Verify directory was created
+        assert journal_path.exists()
+        assert (journal_path / "agents").exists()
+        assert Path(active_file).exists()
+
+    def test_cortex_request_timestamp_matches_filename(self, tmp_path, monkeypatch):
+        """Test that the timestamp in the request matches the filename."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        active_file = cortex_request(
+            prompt="Test timing",
+            persona="default",
+            backend="openai"
+        )
+        
+        # Extract timestamp from filename
+        filename = Path(active_file).name
+        file_ts = int(filename.replace("_active.jsonl", ""))
+        
+        # Read timestamp from request
+        with open(active_file, "r") as f:
+            data = json.loads(f.readline())
+            request_ts = data["ts"]
+        
+        assert file_ts == request_ts
+
+    def test_cortex_request_atomic_rename(self, tmp_path, monkeypatch):
+        """Test that cortex_request uses atomic rename from pending to active."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        
+        # Monitor for pending files during execution
+        pending_files_seen = []
+        
+        def check_pending():
+            # Quick check for any pending files
+            pending = list(agents_dir.glob("*_pending.jsonl"))
+            if pending:
+                pending_files_seen.extend(pending)
+        
+        # We can't easily catch the pending file in action since rename is atomic,
+        # but we can verify the final state
+        active_file = cortex_request(
+            prompt="Test atomic",
+            persona="default",
+            backend="openai"
+        )
+        
+        # Verify no pending files remain
+        assert len(list(agents_dir.glob("*_pending.jsonl"))) == 0
+        
+        # Verify active file exists
+        assert Path(active_file).exists()
+        assert "_active.jsonl" in active_file
 
     def test_cortex_request_no_journal_path(self):
         """Test cortex_request fails without JOURNAL_PATH."""
@@ -350,6 +463,142 @@ class TestCortexClient:
         try:
             with pytest.raises(ValueError, match="JOURNAL_PATH environment variable not set"):
                 cortex_watch(lambda e: None)
+        finally:
+            if old_path:
+                os.environ["JOURNAL_PATH"] = old_path
+
+    def test_run_agent_basic(self, tmp_path, monkeypatch):
+        """Test run_agent basic functionality."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Track events received by callback
+        received_events = []
+        
+        def event_callback(event):
+            received_events.append(event)
+        
+        def simulate_agent():
+            """Simulate agent execution after request is created."""
+            time.sleep(0.5)  # Let run_agent create request and start watching
+            
+            # Find the active file that was created
+            active_files = list(agents_dir.glob("*_active.jsonl"))
+            assert len(active_files) == 1
+            active_file = active_files[0]
+            
+            # Append events to simulate agent execution
+            with open(active_file, "a") as f:
+                # Write start event
+                ts = int(time.time() * 1000)
+                json.dump({"event": "start", "ts": ts}, f)
+                f.write("\n")
+                
+                time.sleep(0.1)
+                
+                # Write tool event
+                json.dump({"event": "tool_start", "ts": ts + 1, "tool": "search"}, f)
+                f.write("\n")
+                
+                time.sleep(0.1)
+                
+                # Write finish event
+                json.dump({"event": "finish", "ts": ts + 2, "result": "Task completed successfully"}, f)
+                f.write("\n")
+        
+        # Start simulator in background
+        simulator = Thread(target=simulate_agent)
+        simulator.daemon = True
+        simulator.start()
+        
+        # Run the agent
+        result = run_agent(
+            prompt="Test task",
+            persona="default",
+            backend="openai",
+            on_event=event_callback
+        )
+        
+        # Verify result
+        assert result == "Task completed successfully"
+        
+        # Verify events were received
+        assert len(received_events) >= 2  # At least start and finish
+        event_types = [e["event"] for e in received_events]
+        assert "start" in event_types
+        assert "finish" in event_types
+
+    def test_run_agent_with_error(self, tmp_path, monkeypatch):
+        """Test run_agent handling error events."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        def simulate_agent_error():
+            """Simulate agent that encounters an error."""
+            time.sleep(0.5)  # Let run_agent create request and start watching
+            
+            # Find the active file that was created
+            active_files = list(agents_dir.glob("*_active.jsonl"))
+            assert len(active_files) == 1
+            active_file = active_files[0]
+            
+            # Write error event
+            with open(active_file, "a") as f:
+                ts = int(time.time() * 1000)
+                json.dump({"event": "error", "ts": ts, "error": "Something went wrong"}, f)
+                f.write("\n")
+        
+        # Start simulator in background
+        simulator = Thread(target=simulate_agent_error)
+        simulator.daemon = True
+        simulator.start()
+        
+        # Run the agent and expect error
+        with pytest.raises(RuntimeError, match="Agent error: Something went wrong"):
+            run_agent(prompt="Test task", persona="default", backend="openai")
+
+    def test_run_agent_with_journal_path(self, tmp_path):
+        """Test run_agent with explicit journal_path parameter."""
+        # Don't set JOURNAL_PATH in environment
+        old_path = os.environ.pop("JOURNAL_PATH", None)
+        
+        try:
+            agents_dir = tmp_path / "agents"
+            agents_dir.mkdir()
+            
+            def simulate_agent():
+                """Simulate quick agent completion."""
+                time.sleep(0.5)
+                
+                # Find the active file
+                active_files = list(agents_dir.glob("*_active.jsonl"))
+                if len(active_files) == 1:
+                    active_file = active_files[0]
+                    with open(active_file, "a") as f:
+                        ts = int(time.time() * 1000)
+                        json.dump({"event": "finish", "ts": ts, "result": "Done"}, f)
+                        f.write("\n")
+            
+            # Start simulator
+            simulator = Thread(target=simulate_agent)
+            simulator.daemon = True
+            simulator.start()
+            
+            # Run agent with explicit journal_path
+            result = run_agent(
+                prompt="Test",
+                journal_path=str(tmp_path)
+            )
+            
+            assert result == "Done"
+            
+            # Verify JOURNAL_PATH was not left in environment
+            assert "JOURNAL_PATH" not in os.environ
+            
         finally:
             if old_path:
                 os.environ["JOURNAL_PATH"] = old_path
