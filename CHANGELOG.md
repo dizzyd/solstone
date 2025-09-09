@@ -193,3 +193,6 @@ Guide for updating:
 - Replaced `tests/test_cortex_client.py` with comprehensive tests for new cortex_client functions
 - Added `run_agent()` function to `think/cortex_client.py` that combines request creation and event watching for synchronous agent execution
 - Simplified `dream/cortex_utils.py` to use the new synchronous `run_agent()` function, removing unnecessary async wrapper infrastructure
+- Enhanced `cortex_watch()` with FileState dataclass to properly handle atomic file renames by tracking inodes
+- Added partial line buffering to `cortex_watch()` to handle incomplete JSON lines without newlines
+- Added error protection to `cortex_watch()` callback execution, treating exceptions as stop signals

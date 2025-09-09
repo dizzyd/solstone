@@ -3,10 +3,21 @@
 import json
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from watchfiles import Change, watch
+
+
+@dataclass
+class FileState:
+    """Track state of a watched file to handle atomic renames properly."""
+
+    position: int
+    inode: int
+    size: int
+    partial_line: str = ""  # Buffer for incomplete lines
 
 
 def cortex_request(
@@ -17,14 +28,14 @@ def cortex_request(
     config: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Create a Cortex agent request file.
-    
+
     Args:
         prompt: The task or question for the agent
         persona: Agent persona from think/agents/*.txt
         backend: AI backend - openai, google, anthropic, or claude
         handoff_from: Previous agent ID if this is a handoff request
         config: Backend-specific configuration (model, max_tokens, domain for Claude)
-    
+
     Returns:
         Path to the created request file
     """
@@ -32,14 +43,14 @@ def cortex_request(
     journal_path = os.environ.get("JOURNAL_PATH")
     if not journal_path:
         raise ValueError("JOURNAL_PATH environment variable not set")
-    
+
     # Create agents directory if it doesn't exist
     agents_dir = Path(journal_path) / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate timestamp in milliseconds
     ts = int(time.time() * 1000)
-    
+
     # Build request object
     request = {
         "event": "request",
@@ -48,38 +59,38 @@ def cortex_request(
         "backend": backend,
         "persona": persona,
     }
-    
+
     # Add optional fields
     if config:
         request["config"] = config
-    
+
     if handoff_from:
         request["handoff_from"] = handoff_from
-    
+
     # Write to pending file
     pending_file = agents_dir / f"{ts}_pending.jsonl"
     with open(pending_file, "w") as f:
         json.dump(request, f)
         f.write("\n")
-    
+
     # Rename to active to trigger Cortex processing (atomic operation)
     active_file = agents_dir / f"{ts}_active.jsonl"
     pending_file.rename(active_file)
-    
+
     return str(active_file)
 
 
 def cortex_watch(on_event: Callable[[Dict[str, Any]], Optional[bool]]) -> None:
     """Watch for Cortex agent events and emit callbacks.
-    
+
     This function blocks and watches for any *_active.jsonl files in the agents
     directory, efficiently tailing them for new events. When new events are
     written, they are parsed and passed to the on_event callback.
-    
+
     Args:
         on_event: Callback function that receives each event as a dict.
                  Should return False to stop watching, True/None to continue.
-    
+
     The callback receives event dictionaries with at least:
         - event: Event type (request, start, tool_start, tool_end, finish, error, etc.)
         - ts: Millisecond timestamp
@@ -89,73 +100,134 @@ def cortex_watch(on_event: Callable[[Dict[str, Any]], Optional[bool]]) -> None:
     journal_path = os.environ.get("JOURNAL_PATH")
     if not journal_path:
         raise ValueError("JOURNAL_PATH environment variable not set")
-    
+
     agents_dir = Path(journal_path) / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Track file positions to only read new content
-    file_positions: Dict[Path, int] = {}
-    
+
+    # Track file state to handle atomic renames properly
+    file_states: Dict[Path, FileState] = {}
+
     # Initial scan for existing active files
     for active_file in agents_dir.glob("*_active.jsonl"):
         if active_file.is_file():
             # Start from current end of file for existing files
-            file_positions[active_file] = active_file.stat().st_size
-    
+            stat = active_file.stat()
+            file_states[active_file] = FileState(
+                position=stat.st_size, inode=stat.st_ino, size=stat.st_size
+            )
+
     # Watch for changes in the agents directory
     for changes in watch(agents_dir):
         for change_type, path_str in changes:
             path = Path(path_str)
-            
+
             # Only process .jsonl files
             if not path.name.endswith(".jsonl"):
                 continue
-            
+
             # Handle new active files
             if change_type == Change.added and path.name.endswith("_active.jsonl"):
-                # Start reading from beginning for new files
-                file_positions[path] = 0
-            
+                try:
+                    stat = path.stat()
+                    # Check if this is an atomic rename (same inode we've seen before)
+                    existing_state = None
+                    for tracked_path, state in list(file_states.items()):
+                        if state.inode == stat.st_ino:
+                            # This file was renamed, preserve reading position
+                            existing_state = state
+                            # Remove old path entry
+                            del file_states[tracked_path]
+                            break
+
+                    if existing_state:
+                        # File was renamed atomically, continue from last position
+                        file_states[path] = FileState(
+                            position=existing_state.position,
+                            inode=stat.st_ino,
+                            size=stat.st_size,
+                            partial_line=existing_state.partial_line,  # Preserve partial line
+                        )
+                    else:
+                        # Truly new file, start from beginning
+                        file_states[path] = FileState(
+                            position=0, inode=stat.st_ino, size=stat.st_size
+                        )
+                except (OSError, IOError):
+                    pass  # File might have been removed already
+
             # Handle modified files (new content appended)
             if change_type in (Change.added, Change.modified):
-                if path in file_positions or path.name.endswith("_active.jsonl"):
+                if path in file_states or path.name.endswith("_active.jsonl"):
                     # Read new content from last position
                     try:
                         with open(path, "r") as f:
+                            # Get current state or create new one
+                            state = file_states.get(path)
+                            if not state:
+                                stat = path.stat()
+                                state = FileState(
+                                    position=0, inode=stat.st_ino, size=stat.st_size
+                                )
+                                file_states[path] = state
+
                             # Seek to last read position
-                            last_pos = file_positions.get(path, 0)
-                            f.seek(last_pos)
-                            
-                            # Read new lines
-                            for line in f:
+                            f.seek(state.position)
+
+                            # Read new content
+                            new_content = f.read()
+                            if not new_content:
+                                continue
+
+                            # Combine with any partial line from last read
+                            content = state.partial_line + new_content
+
+                            # Split into lines, keeping the last incomplete line
+                            lines = content.split("\n")
+
+                            # If content doesn't end with newline, last element is partial
+                            if not content.endswith("\n"):
+                                state.partial_line = lines[-1]
+                                lines = lines[:-1]
+                            else:
+                                state.partial_line = ""
+
+                            # Process complete lines
+                            for line in lines:
                                 line = line.strip()
                                 if not line:
                                     continue
-                                
+
                                 try:
                                     # Parse JSON event
                                     event = json.loads(line)
-                                    
-                                    # Call the callback
-                                    result = on_event(event)
-                                    
-                                    # If callback returns False, stop watching
-                                    if result is False:
+
+                                    # Call the callback with error protection
+                                    try:
+                                        result = on_event(event)
+
+                                        # If callback returns False, stop watching
+                                        if result is False:
+                                            return
+                                    except Exception:
+                                        # Treat callback errors as request to stop
                                         return
                                 except json.JSONDecodeError:
                                     # Skip malformed JSON lines
                                     continue
-                            
-                            # Update position
-                            file_positions[path] = f.tell()
+
+                            # Update position to end of file
+                            state.position = f.tell()
+                            state.size = f.tell()
                     except (OSError, IOError):
                         # File might have been renamed/removed, remove from tracking
-                        file_positions.pop(path, None)
-            
+                        file_states.pop(path, None)
+
             # Handle renamed/removed files
             if change_type == Change.deleted:
                 # File was likely renamed from active to completed
-                file_positions.pop(path, None)
+                # Don't remove immediately - might be atomic rename
+                # The inode tracking will handle this
+                pass
 
 
 def cortex_run(
@@ -166,20 +238,20 @@ def cortex_run(
     on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> str:
     """Run an agent synchronously and return the result.
-    
+
     This function creates a Cortex request, watches for events, and returns
     the final result when the agent completes.
-    
+
     Args:
         prompt: The task or question for the agent
         persona: Agent persona from think/agents/*.txt (default: "default")
         backend: AI backend - openai, google, anthropic, or claude (default: "openai")
         config: Backend-specific configuration
         on_event: Optional callback for streaming events
-    
+
     Returns:
         The agent's final result text
-        
+
     Raises:
         RuntimeError: If agent errors or times out
     """
@@ -190,18 +262,18 @@ def cortex_run(
         backend=backend,
         config=config,
     )
-    
+
     # Extract agent_id from the filename (timestamp)
     agent_id = Path(active_file).stem.replace("_active", "")
-    
+
     # Track result and errors
     result = None
     error = None
     seen_finish = False
-    
+
     def event_handler(event: Dict[str, Any]) -> Optional[bool]:
         nonlocal result, error, seen_finish
-        
+
         # Check if this event is for our agent
         event_agent_id = event.get("agent_id", "")
         if not event_agent_id:
@@ -210,11 +282,11 @@ def cortex_run(
             pass
         elif event_agent_id != agent_id:
             return True  # Continue watching, not our agent
-        
+
         # Call the user's callback if provided
         if on_event:
             on_event(event)
-        
+
         # Handle finish and error events
         event_type = event.get("event")
         if event_type == "finish":
@@ -225,12 +297,12 @@ def cortex_run(
             error = event.get("error", "Agent error")
             seen_finish = True
             return False  # Stop watching
-        
+
         return True  # Continue watching
-    
+
     # Watch for events
     cortex_watch(event_handler)
-    
+
     # Check results
     if error:
         raise RuntimeError(f"Agent error: {error}")
