@@ -39,7 +39,7 @@ def run_agent_via_cortex(
         attachments: Optional list of attachments to include with prompt
         timeout: Maximum time to wait for completion in seconds (default: 60)
         on_event: Optional callback for agent events
-        journal_path: Optional journal path (uses JOURNAL_PATH env var if not set)
+        journal_path: Optional journal path (deprecated, ignored)
 
     Returns:
         The agent's response text
@@ -60,11 +60,11 @@ def run_agent_via_cortex(
         config["timeout"] = timeout
 
     # Run agent using the synchronous cortex_client function
+    # Note: journal_path parameter is ignored as JOURNAL_PATH is always in environment
     return cortex_run_agent(
         prompt=full_prompt,
         persona=persona,
         backend=backend,
         config=config,
         on_event=on_event,
-        journal_path=journal_path,
     )
