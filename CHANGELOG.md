@@ -208,3 +208,4 @@ Guide for updating:
 - Converted `spawn_scheduled_agents()` from async to synchronous, removing unnecessary asyncio usage
 - Updated `think/README.md` documentation to reflect new cortex_client function-based API
 - Fixed test mocks in `test_supervisor_schedule.py` to match the new cortex_client interface
+- Refactored `tests/test_cortex_client.py` to remove old TestCortexClient class and align tests with the refactored cortex_client module
