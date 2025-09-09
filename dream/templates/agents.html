@@ -1421,8 +1421,8 @@ function loadAgentSessions(page = 0) {
       const historicalCount = data.historical_count || 0;
       
       // Separate live and historical agents
-      const liveAgents = agents.filter(a => a.is_live);
-      const historicalAgents = agents.filter(a => !a.is_live);
+      const liveAgents = agents.filter(a => a.status === 'running');
+      const historicalAgents = agents.filter(a => a.status !== 'running');
       
       // Update counts
       document.getElementById('liveCount').textContent = liveCount;

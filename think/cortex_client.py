@@ -381,19 +381,51 @@ def cortex_agents(
         # Extract agent ID from filename
         agent_id = agent_file.stem.replace("_active", "")
         
-        # Read first line to get request info
+        # Read agent file to get request info and calculate runtime
         try:
             with open(agent_file, "r") as f:
-                first_line = f.readline().strip()
-                if first_line:
-                    request = json.loads(first_line)
-                    if request.get("event") == "request":
-                        all_agents.append({
-                            "id": agent_id,
-                            "persona": request.get("persona", "default"),
-                            "start": request.get("ts", 0),
-                            "status": status,
-                        })
+                lines = f.readlines()
+                if not lines:
+                    continue
+                    
+                # Parse first line (request)
+                first_line = lines[0].strip()
+                if not first_line:
+                    continue
+                    
+                request = json.loads(first_line)
+                if request.get("event") != "request":
+                    continue
+                
+                # Extract basic info
+                agent_info = {
+                    "id": agent_id,
+                    "persona": request.get("persona", "default"),
+                    "start": request.get("ts", 0),
+                    "status": status,
+                    "prompt": request.get("prompt", ""),
+                    "model": request.get("backend", "openai"),  # Backend is the model provider
+                }
+                
+                # For completed agents, find finish event to calculate runtime
+                if status == "completed" and len(lines) > 1:
+                    # Read last few lines to find finish event (reading backwards is more efficient)
+                    for line in reversed(lines[-10:]):  # Check last 10 lines
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            event = json.loads(line)
+                            if event.get("event") == "finish":
+                                end_ts = event.get("ts", 0)
+                                if end_ts and agent_info["start"]:
+                                    # Calculate runtime in seconds
+                                    agent_info["runtime_seconds"] = (end_ts - agent_info["start"]) / 1000.0
+                                break
+                        except json.JSONDecodeError:
+                            continue
+                
+                all_agents.append(agent_info)
         except (json.JSONDecodeError, IOError):
             # Skip malformed files
             continue

@@ -201,3 +201,6 @@ Guide for updating:
 - Added comprehensive tests for `cortex_agents()` function covering pagination, filtering, and edge cases
 - Removed unnecessary global client wrapper functions and cleanup code from dream app
 - Fixed Cortex service to properly reap zombie processes by using `wait()` instead of `poll()` and breaking on finish/error events
+- Fixed Dream agents view JavaScript filtering by non-existent `is_live` field, changed to use `status === 'running'`
+- Enhanced `cortex_agents()` function to extract prompt, model (from backend), and runtime_seconds fields for frontend display
+- Fixed timestamp display showing negative seconds by converting milliseconds to seconds before passing to `time_since()`

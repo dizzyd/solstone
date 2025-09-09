@@ -186,7 +186,8 @@ def _get_agents_list(agent_type: str) -> object:
     for agent in agents:
         persona_id = agent.get("persona", "default")
         agent["persona_title"] = persona_titles.get(persona_id, persona_id)
-        agent["since"] = time_since(agent["start"])
+        # Convert milliseconds to seconds for time_since
+        agent["since"] = time_since(agent["start"] / 1000) if agent.get("start") else "unknown"
         # Keep backward compatibility
         agent["pid"] = None  # We don't track PIDs in the new system
 
