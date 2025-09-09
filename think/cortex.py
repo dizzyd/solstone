@@ -379,6 +379,8 @@ class CortexService:
     ) -> None:
         """Spawn a handoff agent from a completed agent's result."""
         try:
+            from think.cortex_client import cortex_request
+            
             # Extract handoff configuration
             persona = handoff.get("persona", "default")
             backend = handoff.get("backend", "openai")
@@ -391,30 +393,16 @@ class CortexService:
                 if k not in ["persona", "backend", "prompt"]
             }
 
-            # Generate new agent ID
-            agent_id = str(int(time.time() * 1000))
+            # Use cortex_request to create the handoff agent
+            active_path = cortex_request(
+                prompt=prompt,
+                persona=persona,
+                backend=backend,
+                handoff_from=parent_id,
+                config=config if config else None,
+            )
 
-            # Create request file
-            request_path = self.agents_dir / f"{agent_id}_pending.jsonl"
-            request = {
-                "event": "request",
-                "ts": int(agent_id),
-                "prompt": prompt,
-                "backend": backend,
-                "persona": persona,
-                "config": config,
-                "handoff_from": parent_id,
-            }
-
-            # Write request and atomically activate
-            with open(request_path, "w") as f:
-                f.write(json.dumps(request) + "\n")
-
-            # Rename to active (atomic handoff)
-            active_path = self.agents_dir / f"{agent_id}_active.jsonl"
-            request_path.rename(active_path)
-
-            self.logger.info(f"Spawned handoff agent {agent_id} from {parent_id}")
+            self.logger.info(f"Spawned handoff agent {active_path} from {parent_id}")
 
         except Exception as e:
             self.logger.error(f"Failed to spawn handoff agent: {e}")
