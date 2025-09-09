@@ -211,3 +211,4 @@ Guide for updating:
 - Refactored `tests/test_cortex_client.py` to remove old TestCortexClient class and align tests with the refactored cortex_client module
 - Updated `tests/test_agents_view.py` to work with refactored cortex_client functions instead of removed SyncCortexClient class
 - Updated `tests/test_review_chat.py` to set JOURNAL_PATH environment variable for proper cortex_client operation
+- Refactored `tests/integration/test_cortex.py` to use new cortex_client functional API instead of CortexClient class
