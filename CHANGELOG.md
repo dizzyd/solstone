@@ -200,3 +200,4 @@ Guide for updating:
 - Refactored dream app views to use `cortex_agents()` and `cortex_request()` directly instead of wrapper classes
 - Added comprehensive tests for `cortex_agents()` function covering pagination, filtering, and edge cases
 - Removed unnecessary global client wrapper functions and cleanup code from dream app
+- Fixed Cortex service to properly reap zombie processes by using `wait()` instead of `poll()` and breaking on finish/error events

@@ -245,14 +245,17 @@ class CortexService:
                     with open(agent.log_path, "a") as f:
                         f.write(json.dumps(event) + "\n")
 
-                    # Handle finish event
-                    if event.get("event") == "finish":
-                        # Check for handoff
-                        handoff = event.get("handoff")
-                        if handoff:
-                            self._spawn_handoff(
-                                agent.agent_id, event.get("result", ""), handoff
-                            )
+                    # Handle finish or error event
+                    if event.get("event") in ["finish", "error"]:
+                        # Check for handoff (only on finish)
+                        if event.get("event") == "finish":
+                            handoff = event.get("handoff")
+                            if handoff:
+                                self._spawn_handoff(
+                                    agent.agent_id, event.get("result", ""), handoff
+                                )
+                        # Break to trigger cleanup
+                        break
 
                 except json.JSONDecodeError:
                     # Non-JSON output becomes info event
@@ -269,32 +272,31 @@ class CortexService:
                 f"Error monitoring stdout for agent {agent.agent_id}: {e}"
             )
         finally:
-            # Check if process exited
-            exit_code = agent.process.poll()
-            if exit_code is not None:
-                self.logger.info(f"Agent {agent.agent_id} exited with code {exit_code}")
+            # Wait for process to fully exit (reaps zombie)
+            exit_code = agent.process.wait()
+            self.logger.info(f"Agent {agent.agent_id} exited with code {exit_code}")
 
-                # Check if finish event was emitted
-                has_finish = self._has_finish_event(agent.log_path)
+            # Check if finish event was emitted
+            has_finish = self._has_finish_event(agent.log_path)
 
-                if not has_finish:
-                    # Write error event if no finish
-                    error_event = {
-                        "event": "error",
-                        "ts": int(time.time() * 1000),
-                        "error": f"Agent exited with code {exit_code} without finish event",
-                        "exit_code": exit_code,
-                    }
-                    with open(agent.log_path, "a") as f:
-                        f.write(json.dumps(error_event) + "\n")
+            if not has_finish:
+                # Write error event if no finish
+                error_event = {
+                    "event": "error",
+                    "ts": int(time.time() * 1000),
+                    "error": f"Agent exited with code {exit_code} without finish event",
+                    "exit_code": exit_code,
+                }
+                with open(agent.log_path, "a") as f:
+                    f.write(json.dumps(error_event) + "\n")
 
-                # Complete the file (rename from _active.jsonl to .jsonl)
-                self._complete_agent_file(agent.agent_id, agent.log_path)
+            # Complete the file (rename from _active.jsonl to .jsonl)
+            self._complete_agent_file(agent.agent_id, agent.log_path)
 
-                # Remove from running agents
-                with self.lock:
-                    if agent.agent_id in self.running_agents:
-                        del self.running_agents[agent.agent_id]
+            # Remove from running agents
+            with self.lock:
+                if agent.agent_id in self.running_agents:
+                    del self.running_agents[agent.agent_id]
 
     def _monitor_stderr(self, agent: AgentProcess) -> None:
         """Monitor agent stderr for errors."""
