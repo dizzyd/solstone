@@ -310,12 +310,8 @@ def generate_todos(day: str) -> Any:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    # Import cortex client
-    from ..cortex_utils import get_global_cortex_client
-
-    client = get_global_cortex_client()
-    if not client:
-        return jsonify({"error": "Cortex service not available"}), 503
+    # Import cortex functions
+    from think.cortex_client import cortex_request
 
     # Get yesterday's TODO if it exists
     from datetime import datetime, timedelta
@@ -345,16 +341,19 @@ Yesterday's TODO.md content:
 Please analyze recent journal entries and generate an appropriate TODO.md file.
 Write the generated TODO list to the file at: {day}/TODO.md"""
 
-    # Spawn agent with TODO persona
-    agent_id = client.spawn_agent(
-        prompt=prompt,
-        persona="todo",
-        backend="openai",  # Use configured backend
-        config={},  # Use default config for persona
-    )
-
-    if not agent_id:
-        return jsonify({"error": "Failed to spawn agent"}), 500
+    # Spawn agent with TODO persona using cortex_request
+    try:
+        active_file = cortex_request(
+            prompt=prompt,
+            persona="todo",
+            backend="openai",  # Use configured backend
+            config={},  # Use default config for persona
+        )
+        # Extract agent ID from filename
+        from pathlib import Path as PathLib
+        agent_id = PathLib(active_file).stem.replace("_active", "")
+    except Exception as e:
+        return jsonify({"error": f"Failed to spawn agent: {str(e)}"}), 500
 
     # Store agent ID for this day's generation (in memory for now)
     if not hasattr(state, "todo_generation_agents"):
@@ -383,8 +382,8 @@ def todo_generation_status(day: str) -> Any:
 
     # Check agent status
     import os
-
-    from ..cortex_utils import get_global_cortex_client
+    from pathlib import Path
+    from think.cortex_client import cortex_agents
 
     # First check if agent exists in journal (finished)
     agents_dir = os.path.join(state.journal_root, "agents")
@@ -392,8 +391,6 @@ def todo_generation_status(day: str) -> Any:
 
     if os.path.exists(agent_file):
         # Agent has finished, check if TODO was created
-        from pathlib import Path
-
         todo_path = Path(state.journal_root) / day / "TODO.md"
 
         if todo_path.exists():
@@ -412,9 +409,8 @@ def todo_generation_status(day: str) -> Any:
             )
 
     # Check if still running via cortex
-    client = get_global_cortex_client()
-    if client:
-        response = client.list_agents(limit=100, offset=0)
+    try:
+        response = cortex_agents(limit=100, offset=0)
         if response:
             agents = response.get("agents", [])
             for agent in agents:
@@ -422,8 +418,10 @@ def todo_generation_status(day: str) -> Any:
                     return jsonify({"status": "running", "agent_id": agent_id})
             # Agent not in running list, likely finished or errored
             return jsonify({"status": "unknown", "agent_id": agent_id})
+    except Exception:
+        pass
 
-    # No cortex client available, can't check status
+    # Can't check status
     return jsonify({"status": "unknown", "agent_id": agent_id})
 
 

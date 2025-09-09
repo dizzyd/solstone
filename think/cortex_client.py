@@ -310,3 +310,109 @@ def cortex_run(
         return result
     else:
         raise RuntimeError("Agent did not complete properly")
+
+
+def cortex_agents(
+    limit: int = 10,
+    offset: int = 0,
+    agent_type: str = "all",
+) -> Dict[str, Any]:
+    """List agents from the journal with pagination and filtering.
+    
+    Args:
+        limit: Maximum number of agents to return (1-100)
+        offset: Number of agents to skip
+        agent_type: Filter by "live", "historical", or "all"
+    
+    Returns:
+        Dictionary with agents list and pagination info
+    """
+    # Get journal path from environment
+    journal_path = os.environ.get("JOURNAL_PATH")
+    if not journal_path:
+        raise ValueError("JOURNAL_PATH environment variable not set")
+    
+    # Validate parameters
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    
+    agents_dir = Path(journal_path) / "agents"
+    if not agents_dir.exists():
+        return {
+            "agents": [],
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+                "total": 0,
+                "has_more": False,
+            },
+            "live_count": 0,
+            "historical_count": 0,
+        }
+    
+    # Collect all agent files
+    all_agents = []
+    live_count = 0
+    historical_count = 0
+    
+    for agent_file in agents_dir.glob("*.jsonl"):
+        # Determine status from filename
+        is_active = "_active.jsonl" in agent_file.name
+        is_pending = "_pending.jsonl" in agent_file.name
+        
+        # Skip pending files
+        if is_pending:
+            continue
+            
+        status = "running" if is_active else "completed"
+        
+        # Count by type
+        if status == "running":
+            live_count += 1
+        else:
+            historical_count += 1
+        
+        # Filter by requested type
+        if agent_type == "live" and status != "running":
+            continue
+        if agent_type == "historical" and status != "completed":
+            continue
+        
+        # Extract agent ID from filename
+        agent_id = agent_file.stem.replace("_active", "")
+        
+        # Read first line to get request info
+        try:
+            with open(agent_file, "r") as f:
+                first_line = f.readline().strip()
+                if first_line:
+                    request = json.loads(first_line)
+                    if request.get("event") == "request":
+                        all_agents.append({
+                            "id": agent_id,
+                            "persona": request.get("persona", "default"),
+                            "start": request.get("ts", 0),
+                            "status": status,
+                        })
+        except (json.JSONDecodeError, IOError):
+            # Skip malformed files
+            continue
+    
+    # Sort by start time (newest first)
+    all_agents.sort(key=lambda x: x["start"], reverse=True)
+    
+    # Apply pagination
+    total = len(all_agents)
+    paginated = all_agents[offset : offset + limit]
+    
+    return {
+        "agents": paginated,
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": (offset + limit) < total,
+        },
+        "live_count": live_count,
+        "historical_count": historical_count,
+    }

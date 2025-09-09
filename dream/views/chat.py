@@ -8,7 +8,7 @@ import markdown  # type: ignore
 from flask import Blueprint, jsonify, render_template, request
 
 from .. import state
-from ..cortex_utils import get_global_cortex_client, run_agent_via_cortex
+from ..cortex_utils import run_agent_via_cortex
 from ..push import push_server
 
 
@@ -84,15 +84,15 @@ def agent_events(agent_id: str) -> Any:
         return jsonify({"error": "Journal root not configured"}), 500
 
     # First, try to check if the agent is still running in Cortex
-    cortex_client = get_global_cortex_client()
-    if cortex_client:
-        try:
-            # Get list of running agents from Cortex
-            agent_list = cortex_client.list_agents(limit=100, offset=0)
-            if agent_list and "agents" in agent_list:
-                # Check if our agent is in the running list
-                for agent in agent_list["agents"]:
-                    if agent.get("id") == agent_id and agent.get("status") == "running":
+    from think.cortex_client import cortex_agents
+    
+    try:
+        # Get list of running agents from Cortex
+        agent_list = cortex_agents(limit=100, offset=0)
+        if agent_list and "agents" in agent_list:
+            # Check if our agent is in the running list
+            for agent in agent_list["agents"]:
+                if agent.get("id") == agent_id and agent.get("status") == "running":
                         # Agent is still running - watcher will automatically pick it up
 
                         # First check if there's a log file with historical events
@@ -187,9 +187,9 @@ def agent_events(agent_id: str) -> Any:
                             agent_id=agent_id,
                             is_running=True,
                         )
-        except Exception:
-            # If Cortex connection fails, fall through to file-based loading
-            pass
+    except Exception:
+        # If Cortex connection fails, fall through to file-based loading
+        pass
 
     # Fall back to reading from the log file
     agents_dir = os.path.join(state.journal_root, "agents")

@@ -8,7 +8,7 @@ from threading import Thread
 
 import pytest
 
-from think.cortex_client import cortex_request, cortex_watch, cortex_run
+from think.cortex_client import cortex_request, cortex_watch, cortex_run, cortex_agents
 
 
 class TestCortexClient:
@@ -560,4 +560,261 @@ class TestCortexClient:
         # Run the agent and expect error
         with pytest.raises(RuntimeError, match="Agent error: Something went wrong"):
             cortex_run(prompt="Test task", persona="default", backend="openai")
+
+    def test_cortex_agents_empty(self, tmp_path, monkeypatch):
+        """Test cortex_agents with no agents."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        result = cortex_agents()
+        
+        assert result["agents"] == []
+        assert result["pagination"]["total"] == 0
+        assert result["pagination"]["has_more"] is False
+        assert result["live_count"] == 0
+        assert result["historical_count"] == 0
+
+    def test_cortex_agents_with_active(self, tmp_path, monkeypatch):
+        """Test cortex_agents with active (running) agents."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Create active agent files
+        ts1 = int(time.time() * 1000)
+        ts2 = ts1 + 1000
+        
+        active_file1 = agents_dir / f"{ts1}_active.jsonl"
+        with open(active_file1, "w") as f:
+            json.dump({"event": "request", "ts": ts1, "prompt": "Task 1", "persona": "default", "backend": "openai"}, f)
+            f.write("\n")
+        
+        active_file2 = agents_dir / f"{ts2}_active.jsonl"
+        with open(active_file2, "w") as f:
+            json.dump({"event": "request", "ts": ts2, "prompt": "Task 2", "persona": "tester", "backend": "google"}, f)
+            f.write("\n")
+        
+        result = cortex_agents()
+        
+        assert len(result["agents"]) == 2
+        assert result["live_count"] == 2
+        assert result["historical_count"] == 0
+        
+        # Check agents are sorted by newest first
+        assert result["agents"][0]["id"] == str(ts2)
+        assert result["agents"][0]["persona"] == "tester"
+        assert result["agents"][0]["status"] == "running"
+        
+        assert result["agents"][1]["id"] == str(ts1)
+        assert result["agents"][1]["persona"] == "default"
+        assert result["agents"][1]["status"] == "running"
+
+    def test_cortex_agents_with_completed(self, tmp_path, monkeypatch):
+        """Test cortex_agents with completed (historical) agents."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Create completed agent files (no _active suffix)
+        ts1 = int(time.time() * 1000)
+        ts2 = ts1 + 1000
+        
+        completed_file1 = agents_dir / f"{ts1}.jsonl"
+        with open(completed_file1, "w") as f:
+            json.dump({"event": "request", "ts": ts1, "prompt": "Old task", "persona": "reviewer", "backend": "anthropic"}, f)
+            f.write("\n")
+            json.dump({"event": "finish", "ts": ts1 + 100, "result": "Done"}, f)
+            f.write("\n")
+        
+        completed_file2 = agents_dir / f"{ts2}.jsonl"
+        with open(completed_file2, "w") as f:
+            json.dump({"event": "request", "ts": ts2, "prompt": "Another old task", "persona": "default", "backend": "openai"}, f)
+            f.write("\n")
+        
+        result = cortex_agents()
+        
+        assert len(result["agents"]) == 2
+        assert result["live_count"] == 0
+        assert result["historical_count"] == 2
+        
+        # All should be completed
+        for agent in result["agents"]:
+            assert agent["status"] == "completed"
+
+    def test_cortex_agents_mixed(self, tmp_path, monkeypatch):
+        """Test cortex_agents with both active and completed agents."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Create mix of active and completed
+        ts1 = int(time.time() * 1000)
+        ts2 = ts1 + 1000
+        ts3 = ts1 + 2000
+        
+        # Active agent
+        active_file = agents_dir / f"{ts1}_active.jsonl"
+        with open(active_file, "w") as f:
+            json.dump({"event": "request", "ts": ts1, "prompt": "Running", "persona": "default", "backend": "openai"}, f)
+            f.write("\n")
+        
+        # Completed agents
+        completed_file1 = agents_dir / f"{ts2}.jsonl"
+        with open(completed_file1, "w") as f:
+            json.dump({"event": "request", "ts": ts2, "prompt": "Done 1", "persona": "reviewer", "backend": "anthropic"}, f)
+            f.write("\n")
+        
+        completed_file2 = agents_dir / f"{ts3}.jsonl"
+        with open(completed_file2, "w") as f:
+            json.dump({"event": "request", "ts": ts3, "prompt": "Done 2", "persona": "tester", "backend": "google"}, f)
+            f.write("\n")
+        
+        result = cortex_agents()
+        
+        assert len(result["agents"]) == 3
+        assert result["live_count"] == 1
+        assert result["historical_count"] == 2
+
+    def test_cortex_agents_type_filter(self, tmp_path, monkeypatch):
+        """Test cortex_agents with agent_type filtering."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Create mix of active and completed
+        ts1 = int(time.time() * 1000)
+        ts2 = ts1 + 1000
+        
+        active_file = agents_dir / f"{ts1}_active.jsonl"
+        with open(active_file, "w") as f:
+            json.dump({"event": "request", "ts": ts1, "prompt": "Running", "persona": "default"}, f)
+            f.write("\n")
+        
+        completed_file = agents_dir / f"{ts2}.jsonl"
+        with open(completed_file, "w") as f:
+            json.dump({"event": "request", "ts": ts2, "prompt": "Done", "persona": "reviewer"}, f)
+            f.write("\n")
+        
+        # Test live filter
+        result = cortex_agents(agent_type="live")
+        assert len(result["agents"]) == 1
+        assert result["agents"][0]["status"] == "running"
+        
+        # Test historical filter
+        result = cortex_agents(agent_type="historical")
+        assert len(result["agents"]) == 1
+        assert result["agents"][0]["status"] == "completed"
+        
+        # Test all (default)
+        result = cortex_agents(agent_type="all")
+        assert len(result["agents"]) == 2
+
+    def test_cortex_agents_pagination(self, tmp_path, monkeypatch):
+        """Test cortex_agents pagination."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Create multiple agents
+        base_ts = int(time.time() * 1000)
+        for i in range(5):
+            ts = base_ts + (i * 1000)
+            file = agents_dir / f"{ts}.jsonl"
+            with open(file, "w") as f:
+                json.dump({"event": "request", "ts": ts, "prompt": f"Task {i}", "persona": "default"}, f)
+                f.write("\n")
+        
+        # Test limit
+        result = cortex_agents(limit=2)
+        assert len(result["agents"]) == 2
+        assert result["pagination"]["limit"] == 2
+        assert result["pagination"]["total"] == 5
+        assert result["pagination"]["has_more"] is True
+        
+        # Test offset
+        result = cortex_agents(limit=2, offset=2)
+        assert len(result["agents"]) == 2
+        assert result["pagination"]["offset"] == 2
+        assert result["pagination"]["has_more"] is True
+        
+        # Test last page
+        result = cortex_agents(limit=2, offset=4)
+        assert len(result["agents"]) == 1
+        assert result["pagination"]["has_more"] is False
+
+    def test_cortex_agents_limit_validation(self, tmp_path, monkeypatch):
+        """Test cortex_agents limit parameter validation."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        # Test max limit
+        result = cortex_agents(limit=200)
+        assert result["pagination"]["limit"] == 100  # Capped at 100
+        
+        # Test min limit
+        result = cortex_agents(limit=0)
+        assert result["pagination"]["limit"] == 1  # Minimum is 1
+        
+        # Test negative offset becomes 0
+        result = cortex_agents(offset=-10)
+        assert result["pagination"]["offset"] == 0
+
+    def test_cortex_agents_skip_pending(self, tmp_path, monkeypatch):
+        """Test that cortex_agents skips pending files."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        ts = int(time.time() * 1000)
+        
+        # Create pending file (should be ignored)
+        pending_file = agents_dir / f"{ts}_pending.jsonl"
+        with open(pending_file, "w") as f:
+            json.dump({"event": "request", "ts": ts, "prompt": "Pending", "persona": "default"}, f)
+            f.write("\n")
+        
+        # Create active file
+        active_file = agents_dir / f"{ts + 1000}_active.jsonl"
+        with open(active_file, "w") as f:
+            json.dump({"event": "request", "ts": ts + 1000, "prompt": "Active", "persona": "default"}, f)
+            f.write("\n")
+        
+        result = cortex_agents()
+        
+        # Should only see the active file, not pending
+        assert len(result["agents"]) == 1
+        assert result["agents"][0]["id"] == str(ts + 1000)
+
+    def test_cortex_agents_skip_malformed(self, tmp_path, monkeypatch):
+        """Test that cortex_agents skips files with malformed JSON."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        ts = int(time.time() * 1000)
+        
+        # Create file with malformed JSON
+        bad_file = agents_dir / f"{ts}.jsonl"
+        with open(bad_file, "w") as f:
+            f.write("This is not JSON\n")
+        
+        # Create valid file
+        good_file = agents_dir / f"{ts + 1000}.jsonl"
+        with open(good_file, "w") as f:
+            json.dump({"event": "request", "ts": ts + 1000, "prompt": "Valid", "persona": "default"}, f)
+            f.write("\n")
+        
+        result = cortex_agents()
+        
+        # Should only see the valid file
+        assert len(result["agents"]) == 1
+        assert result["agents"][0]["id"] == str(ts + 1000)
+
+    def test_cortex_agents_no_journal_path(self):
+        """Test cortex_agents fails without JOURNAL_PATH."""
+        old_path = os.environ.pop("JOURNAL_PATH", None)
+        try:
+            with pytest.raises(ValueError, match="JOURNAL_PATH environment variable not set"):
+                cortex_agents()
+        finally:
+            if old_path:
+                os.environ["JOURNAL_PATH"] = old_path
 

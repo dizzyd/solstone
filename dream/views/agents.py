@@ -165,36 +165,17 @@ def _get_agents_list(agent_type: str) -> object:
     limit = int(request.args.get("limit", 10))
     offset = int(request.args.get("offset", 0))
 
-    # Validate parameters
+    # Validate parameters - cortex_agents already does this but let's be explicit
     limit = max(1, min(limit, 100))  # Limit between 1-100
     offset = max(0, offset)
 
-    # Get agents from unified CortexClient
-    from ..cortex_utils import get_global_cortex_client
+    # Get agents directly from cortex_agents function
     from ..utils import time_since
+    from think.cortex_client import cortex_agents
     from think.utils import get_personas
 
-    client = get_global_cortex_client()
-    if not client:
-        # This should never happen in normal operation
-        raise RuntimeError("Cortex client not initialized")
-
-    # Get all agents using enhanced list_agents
-    response = client.list_agents(limit=limit, offset=offset, agent_type=agent_type)
-    if not response:
-        return jsonify(
-            {
-                "agents": [],
-                "pagination": {
-                    "limit": limit,
-                    "offset": offset,
-                    "total": 0,
-                    "has_more": False,
-                },
-                "live_count": 0,
-                "historical_count": 0,
-            }
-        )
+    # Get all agents using cortex_agents
+    response = cortex_agents(limit=limit, offset=offset, agent_type=agent_type)
 
     # Load persona titles for display
     personas = get_personas()

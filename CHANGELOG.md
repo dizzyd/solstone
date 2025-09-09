@@ -196,3 +196,7 @@ Guide for updating:
 - Enhanced `cortex_watch()` with FileState dataclass to properly handle atomic file renames by tracking inodes
 - Added partial line buffering to `cortex_watch()` to handle incomplete JSON lines without newlines
 - Added error protection to `cortex_watch()` callback execution, treating exceptions as stop signals
+- Added `cortex_agents()` function to `think/cortex_client.py` for listing agents with pagination and filtering support
+- Refactored dream app views to use `cortex_agents()` and `cortex_request()` directly instead of wrapper classes
+- Added comprehensive tests for `cortex_agents()` function covering pagination, filtering, and edge cases
+- Removed unnecessary global client wrapper functions and cleanup code from dream app

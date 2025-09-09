@@ -633,12 +633,9 @@ def create_matter(domain_name: str) -> Any:
         return jsonify({"error": "Domain not found"}), 404
 
     try:
-        # Get the synchronous Cortex client
-        from ..cortex_utils import get_global_cortex_client
-
-        client = get_global_cortex_client()
-        if not client:
-            return jsonify({"error": "Failed to connect to Cortex server"}), 500
+        # Import cortex request function
+        from think.cortex_client import cortex_request
+        from pathlib import Path as PathLib
 
         # Prepare the prompt for the matter_editor persona
         priority = data.get("priority", "medium")
@@ -670,13 +667,13 @@ Please analyze the description and:
             "domain": domain_name,
         }
 
-        # Spawn the agent and get the agent_id
-        agent_id = client.spawn_agent(
+        # Spawn the agent using cortex_request and get the agent_id
+        active_file = cortex_request(
             prompt=prompt, persona="matter_editor", backend="claude", config=config
         )
-
-        if not agent_id:
-            return jsonify({"error": "Failed to spawn agent"}), 500
+        
+        # Extract agent ID from filename
+        agent_id = PathLib(active_file).stem.replace("_active", "")
 
         return jsonify(
             {
