@@ -1,4 +1,5 @@
 import importlib
+import os
 import time
 
 
@@ -10,8 +11,9 @@ def test_chat_page_renders(tmp_path):
     assert "Chat" in html
 
 
-def test_send_message_no_key(monkeypatch):
+def test_send_message_no_key(monkeypatch, tmp_path):
     review = importlib.import_module("dream")
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with review.app.test_request_context(
@@ -22,8 +24,9 @@ def test_send_message_no_key(monkeypatch):
     assert resp.json == {"error": "GOOGLE_API_KEY not set"}
 
 
-def test_send_message_success(monkeypatch):
+def test_send_message_success(monkeypatch, tmp_path):
     review = importlib.import_module("dream")
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     def dummy_run_agent_via_cortex(
@@ -58,8 +61,9 @@ def test_send_message_success(monkeypatch):
     assert dummy_run_agent_via_cortex.called[2] == "google"
 
 
-def test_send_message_openai(monkeypatch):
+def test_send_message_openai(monkeypatch, tmp_path):
     review = importlib.import_module("dream")
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
     monkeypatch.setenv("OPENAI_API_KEY", "x")
 
@@ -91,8 +95,9 @@ def test_send_message_openai(monkeypatch):
     assert called["backend"] == "openai"
 
 
-def test_send_message_anthropic(monkeypatch):
+def test_send_message_anthropic(monkeypatch, tmp_path):
     review = importlib.import_module("dream")
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
     called = {}
@@ -135,8 +140,9 @@ def test_history_and_clear(monkeypatch):
     assert resp.json == {"ok": True}
 
 
-def test_tool_event_pushed(monkeypatch):
+def test_tool_event_pushed(monkeypatch, tmp_path):
     review = importlib.import_module("dream")
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     events = []

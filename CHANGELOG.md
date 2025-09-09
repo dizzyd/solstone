@@ -209,3 +209,5 @@ Guide for updating:
 - Updated `think/README.md` documentation to reflect new cortex_client function-based API
 - Fixed test mocks in `test_supervisor_schedule.py` to match the new cortex_client interface
 - Refactored `tests/test_cortex_client.py` to remove old TestCortexClient class and align tests with the refactored cortex_client module
+- Updated `tests/test_agents_view.py` to work with refactored cortex_client functions instead of removed SyncCortexClient class
+- Updated `tests/test_review_chat.py` to set JOURNAL_PATH environment variable for proper cortex_client operation
