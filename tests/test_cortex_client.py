@@ -1,555 +1,355 @@
-"""Tests for the Cortex file-based client."""
+"""Tests for cortex_client module."""
 
-from __future__ import annotations
-
-import asyncio
 import json
+import os
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from threading import Thread
 
 import pytest
 
-from think.cortex_client import CortexClient, run_agent, run_agent_with_events
-
-
-@pytest.fixture
-def temp_journal(tmp_path):
-    """Create a temporary journal directory."""
-    journal_path = tmp_path / "journal"
-    journal_path.mkdir()
-    agents_dir = journal_path / "agents"
-    agents_dir.mkdir()
-    return journal_path
-
-
-@pytest.fixture
-def mock_time():
-    """Mock time.time() for consistent agent IDs."""
-    with patch("think.cortex_client.time.time") as mock:
-        mock.return_value = 1234567890.123
-        yield mock
+from think.cortex_client import cortex_request, cortex_watch
 
 
 class TestCortexClient:
-    """Test CortexClient class."""
+    """Test cortex_client functions."""
 
-    def test_init_with_journal_path(self, temp_journal):
-        """Test initialization with explicit journal path."""
-        client = CortexClient(journal_path=str(temp_journal))
-        assert client.journal_path == temp_journal
-        assert client.agents_dir == temp_journal / "agents"
-
-    def test_init_with_env_var(self, temp_journal, monkeypatch):
-        """Test initialization with JOURNAL_PATH env var."""
-        monkeypatch.setenv("JOURNAL_PATH", str(temp_journal))
-        client = CortexClient()
-        assert client.journal_path == temp_journal
-        assert client.agents_dir == temp_journal / "agents"
-
-    def test_init_creates_agents_dir(self, tmp_path):
-        """Test that initialization creates the agents directory."""
-        journal_path = tmp_path / "new_journal"
-        client = CortexClient(journal_path=str(journal_path))
-        assert client.agents_dir.exists()
-
-    @pytest.mark.asyncio
-    async def test_context_manager(self, temp_journal):
-        """Test async context manager."""
-        async with CortexClient(journal_path=str(temp_journal)) as client:
-            assert isinstance(client, CortexClient)
-            assert client.agents_dir.exists()
-
-    @pytest.mark.asyncio
-    async def test_spawn_creates_request_file(self, temp_journal, mock_time):
-        """Test that spawn creates and activates request file."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = await client.spawn(
+    def test_cortex_request(self, tmp_path, monkeypatch):
+        """Test creating a Cortex agent request."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        # Create a request
+        active_file = cortex_request(
             prompt="Test prompt",
-            persona="tester",
+            persona="default",
             backend="openai",
-            config={"model": "gpt-4"},
-            handoff={"persona": "reviewer"},
-            handoff_from="previous_agent",
+            config={"model": "gpt-4o"}
         )
-
-        assert agent_id == "1234567890123"
-
-        # Check that active file exists
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
-        assert active_file.exists()
-
-        # Check request content
+        
+        # Verify file was created
+        assert Path(active_file).exists()
+        assert active_file.endswith("_active.jsonl")
+        
+        # Verify content
         with open(active_file, "r") as f:
-            request = json.loads(f.readline())
+            data = json.loads(f.readline())
+            assert data["event"] == "request"
+            assert data["prompt"] == "Test prompt"
+            assert data["persona"] == "default"
+            assert data["backend"] == "openai"
+            assert data["config"]["model"] == "gpt-4o"
+            assert "ts" in data
 
-        assert request["event"] == "request"
-        assert request["ts"] == 1234567890123
-        assert request["prompt"] == "Test prompt"
-        assert request["persona"] == "tester"
-        assert request["backend"] == "openai"
-        assert request["config"] == {"model": "gpt-4"}
-        assert request["handoff"] == {"persona": "reviewer"}
-        assert request["handoff_from"] == "previous_agent"
-
-    @pytest.mark.asyncio
-    async def test_spawn_minimal_params(self, temp_journal, mock_time):
-        """Test spawn with minimal parameters."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = await client.spawn("Simple prompt")
-
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
+    def test_cortex_request_minimal(self, tmp_path, monkeypatch):
+        """Test cortex_request with minimal parameters."""
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        
+        # Create request with only required params
+        active_file = cortex_request(
+            prompt="Simple test",
+            persona="tester",
+            backend="google"
+        )
+        
         with open(active_file, "r") as f:
-            request = json.loads(f.readline())
+            data = json.loads(f.readline())
+            assert data["prompt"] == "Simple test"
+            assert data["persona"] == "tester"
+            assert data["backend"] == "google"
+            assert "config" not in data
+            assert "handoff_from" not in data
 
-        assert request["prompt"] == "Simple prompt"
-        assert request["persona"] == "default"
-        assert request["backend"] == "openai"
-        assert request["config"] == {}
-        assert "handoff" not in request
-        assert "handoff_from" not in request
+    def test_cortex_request_no_journal_path(self):
+        """Test cortex_request fails without JOURNAL_PATH."""
+        # Temporarily unset JOURNAL_PATH if it exists
+        old_path = os.environ.pop("JOURNAL_PATH", None)
+        try:
+            with pytest.raises(ValueError, match="JOURNAL_PATH environment variable not set"):
+                cortex_request("test", "default", "openai")
+        finally:
+            if old_path:
+                os.environ["JOURNAL_PATH"] = old_path
 
-    @pytest.mark.asyncio
-    async def test_list_agents_empty(self, temp_journal):
-        """Test listing agents when none exist."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        result = await client.list_agents()
-
-        assert result["agents"] == []
-        assert result["pagination"]["total"] == 0
-        assert result["pagination"]["has_more"] is False
-
-    @pytest.mark.asyncio
-    async def test_list_agents_with_files(self, temp_journal):
-        """Test listing agents with various file states."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        # Create some agent files
-        agents_data = [
-            (
-                "1234567890001",
-                "active",
-                {
-                    "event": "request",
-                    "ts": 1234567890001,
-                    "prompt": "Test 1",
-                    "persona": "default",
-                    "backend": "openai",
-                },
-            ),
-            (
-                "1234567890002",
-                "completed",
-                {
-                    "event": "request",
-                    "ts": 1234567890002,
-                    "prompt": "Test 2",
-                    "persona": "tester",
-                    "backend": "google",
-                },
-            ),
-            (
-                "1234567890003",
-                "completed",
-                {
-                    "event": "request",
-                    "ts": 1234567890003,
-                    "prompt": "Test 3",
-                    "persona": "reviewer",
-                    "backend": "anthropic",
-                },
-            ),
-        ]
-
-        for agent_id, status, request in agents_data:
-            if status == "active":
-                file_path = client.agents_dir / f"{agent_id}_active.jsonl"
-            else:
-                file_path = client.agents_dir / f"{agent_id}.jsonl"
-
-            with open(file_path, "w") as f:
-                f.write(json.dumps(request) + "\n")
-
-        result = await client.list_agents(limit=2, offset=0)
-
-        assert len(result["agents"]) == 2
-        assert result["pagination"]["total"] == 3
-        assert result["pagination"]["has_more"] is True
-
-        # Check first agent
-        agent = result["agents"][0]
-        assert agent["status"] in ["running", "completed", "interrupted"]
-        assert agent["persona"] in ["default", "tester", "reviewer"]
-        assert agent["backend"] in ["openai", "google", "anthropic"]
-
-    @pytest.mark.asyncio
-    async def test_list_agents_exclude_active(self, temp_journal):
-        """Test listing agents excluding active ones."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        # Create active and completed files
-        active_file = client.agents_dir / "1234567890001_active.jsonl"
-        completed_file = client.agents_dir / "1234567890002.jsonl"
-
-        for file_path in [active_file, completed_file]:
-            with open(file_path, "w") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "event": "request",
-                            "ts": 1234567890000,
-                            "prompt": "Test",
-                            "persona": "default",
-                            "backend": "openai",
-                        }
-                    )
-                    + "\n"
-                )
-
-        result = await client.list_agents(include_active=False)
-
-        # Should only include completed file
-        assert len(result["agents"]) == 1
-        # File only has request event, so status should be "interrupted"
-        assert result["agents"][0]["status"] == "interrupted"
-
-    @pytest.mark.asyncio
-    async def test_read_events_from_active_file(self, temp_journal):
-        """Test reading events from an active agent file."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        # Create active file with events
-        agent_id = "1234567890001"
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
-
-        events = [
-            {"event": "request", "ts": 1234567890001, "prompt": "Test"},
-            {"event": "start", "ts": 1234567890002, "persona": "default"},
-            {"event": "tool_start", "ts": 1234567890003, "tool": "search"},
-            {
-                "event": "tool_end",
-                "ts": 1234567890004,
-                "tool": "search",
-                "result": "data",
-            },
-            {"event": "finish", "ts": 1234567890005, "result": "Done"},
-        ]
-
-        with open(active_file, "w") as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-
-        # Read events
+    def test_cortex_watch_new_file(self, tmp_path, monkeypatch):
+        """Test cortex_watch detecting and reading new active files."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Track received events
         received_events = []
-        await client.read_events(
-            agent_id, lambda e: received_events.append(e), follow=False
-        )
-
-        assert len(received_events) == 5
+        
+        def callback(event):
+            received_events.append(event)
+            # Stop after receiving finish event
+            if event.get("event") == "finish":
+                return False
+            return True
+        
+        def simulate_agent():
+            """Simulate agent writing events."""
+            time.sleep(0.5)  # Let watcher start
+            
+            # Create new active file
+            ts = int(time.time() * 1000)
+            active_file = agents_dir / f"{ts}_active.jsonl"
+            
+            with open(active_file, "w") as f:
+                # Write request
+                json.dump({"event": "request", "ts": ts, "prompt": "Test"}, f)
+                f.write("\n")
+            
+            time.sleep(0.2)
+            
+            with open(active_file, "a") as f:
+                # Write start
+                json.dump({"event": "start", "ts": ts + 1}, f)
+                f.write("\n")
+            
+            time.sleep(0.2)
+            
+            with open(active_file, "a") as f:
+                # Write finish
+                json.dump({"event": "finish", "ts": ts + 2, "result": "Done"}, f)
+                f.write("\n")
+        
+        # Start simulator in background
+        simulator = Thread(target=simulate_agent)
+        simulator.daemon = True
+        simulator.start()
+        
+        # Watch for events (will block until callback returns False)
+        cortex_watch(callback)
+        
+        # Verify events were received
+        assert len(received_events) == 3
         assert received_events[0]["event"] == "request"
-        assert received_events[-1]["event"] == "finish"
+        assert received_events[1]["event"] == "start"
+        assert received_events[2]["event"] == "finish"
+        assert received_events[2]["result"] == "Done"
 
-    @pytest.mark.asyncio
-    async def test_read_events_from_completed_file(self, temp_journal):
-        """Test reading events from a completed agent file."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        completed_file = client.agents_dir / f"{agent_id}.jsonl"
-
-        events = [
-            {"event": "request", "ts": 1234567890001},
-            {"event": "finish", "ts": 1234567890002, "result": "Completed"},
-        ]
-
-        with open(completed_file, "w") as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-
+    def test_cortex_watch_existing_file(self, tmp_path, monkeypatch):
+        """Test cortex_watch handling existing active files."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Create an existing active file with some events
+        ts = int(time.time() * 1000)
+        active_file = agents_dir / f"{ts}_active.jsonl"
+        
+        with open(active_file, "w") as f:
+            json.dump({"event": "request", "ts": ts, "prompt": "Test"}, f)
+            f.write("\n")
+            json.dump({"event": "start", "ts": ts + 1}, f)
+            f.write("\n")
+        
+        # Track received events
         received_events = []
-        await client.read_events(
-            agent_id, lambda e: received_events.append(e), follow=False
-        )
-
+        
+        def callback(event):
+            received_events.append(event)
+            # Stop after receiving finish event
+            if event.get("event") == "finish":
+                return False
+            return True
+        
+        def append_more_events():
+            """Append more events to existing file."""
+            time.sleep(0.5)  # Let watcher start
+            
+            with open(active_file, "a") as f:
+                # Write tool event
+                json.dump({"event": "tool_start", "ts": ts + 2, "tool": "search"}, f)
+                f.write("\n")
+            
+            time.sleep(0.2)
+            
+            with open(active_file, "a") as f:
+                # Write finish
+                json.dump({"event": "finish", "ts": ts + 3, "result": "Done"}, f)
+                f.write("\n")
+        
+        # Start appender in background
+        appender = Thread(target=append_more_events)
+        appender.daemon = True
+        appender.start()
+        
+        # Watch for events (will only see new events, not existing ones)
+        cortex_watch(callback)
+        
+        # Should only receive the newly appended events
         assert len(received_events) == 2
-        assert received_events[1]["result"] == "Completed"
+        assert received_events[0]["event"] == "tool_start"
+        assert received_events[1]["event"] == "finish"
 
-    @pytest.mark.asyncio
-    async def test_read_events_file_not_found(self, temp_journal):
-        """Test reading events from non-existent agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        with pytest.raises(FileNotFoundError, match="Agent file not found"):
-            await client.read_events("nonexistent", lambda e: None)
-
-    @pytest.mark.asyncio
-    async def test_wait_for_completion_success(self, temp_journal):
-        """Test waiting for agent completion."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
-
-        # Write initial events
-        with open(active_file, "w") as f:
-            f.write(json.dumps({"event": "request", "ts": 1234567890001}) + "\n")
-            f.write(json.dumps({"event": "start", "ts": 1234567890002}) + "\n")
-
-        # Simulate agent completing after a delay
-        async def complete_agent():
-            await asyncio.sleep(0.1)
+    def test_cortex_watch_callback_stops(self, tmp_path, monkeypatch):
+        """Test that cortex_watch stops when callback returns False."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Track received events
+        received_events = []
+        
+        def callback(event):
+            received_events.append(event)
+            # Stop immediately after first event
+            return False
+        
+        def simulate_agent():
+            """Simulate agent writing multiple events."""
+            time.sleep(0.5)  # Let watcher start
+            
+            ts = int(time.time() * 1000)
+            active_file = agents_dir / f"{ts}_active.jsonl"
+            
+            with open(active_file, "w") as f:
+                json.dump({"event": "request", "ts": ts}, f)
+                f.write("\n")
+            
+            time.sleep(0.2)
+            
             with open(active_file, "a") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "event": "finish",
-                            "ts": 1234567890003,
-                            "result": "Task completed",
-                        }
-                    )
-                    + "\n"
-                )
+                json.dump({"event": "start", "ts": ts + 1}, f)
+                f.write("\n")
+                json.dump({"event": "finish", "ts": ts + 2}, f)
+                f.write("\n")
+        
+        # Start simulator in background
+        simulator = Thread(target=simulate_agent)
+        simulator.daemon = True
+        simulator.start()
+        
+        # Watch for events
+        cortex_watch(callback)
+        
+        # Should only receive first event before stopping
+        assert len(received_events) == 1
+        assert received_events[0]["event"] == "request"
 
-        # Start completion in background
-        asyncio.create_task(complete_agent())
+    def test_cortex_watch_handles_malformed_json(self, tmp_path, monkeypatch):
+        """Test that cortex_watch handles malformed JSON gracefully."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Track received events
+        received_events = []
+        
+        def callback(event):
+            received_events.append(event)
+            if event.get("event") == "finish":
+                return False
+            return True
+        
+        def simulate_agent():
+            """Simulate agent with some malformed output."""
+            time.sleep(0.5)  # Let watcher start
+            
+            ts = int(time.time() * 1000)
+            active_file = agents_dir / f"{ts}_active.jsonl"
+            
+            with open(active_file, "w") as f:
+                json.dump({"event": "request", "ts": ts}, f)
+                f.write("\n")
+                f.write("This is not valid JSON\n")  # Malformed line
+                json.dump({"event": "finish", "ts": ts + 1}, f)
+                f.write("\n")
+        
+        # Start simulator in background
+        simulator = Thread(target=simulate_agent)
+        simulator.daemon = True
+        simulator.start()
+        
+        # Watch for events
+        cortex_watch(callback)
+        
+        # Should skip malformed line and continue
+        assert len(received_events) == 2
+        assert received_events[0]["event"] == "request"
+        assert received_events[1]["event"] == "finish"
 
-        # Wait for completion
-        result = await client.wait_for_completion(agent_id, timeout=1)
-        assert result == "Task completed"
+    def test_cortex_watch_multiple_active_files(self, tmp_path, monkeypatch):
+        """Test cortex_watch handling multiple active files."""
+        # Set up test journal path
+        monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        
+        # Track received events
+        received_events = []
+        finish_count = 0
+        
+        def callback(event):
+            nonlocal finish_count
+            received_events.append(event)
+            if event.get("event") == "finish":
+                finish_count += 1
+                # Stop after both agents finish
+                if finish_count >= 2:
+                    return False
+            return True
+        
+        def simulate_multiple_agents():
+            """Simulate multiple agents writing events."""
+            time.sleep(0.5)  # Let watcher start
+            
+            # Create first active file
+            ts1 = int(time.time() * 1000)
+            active_file1 = agents_dir / f"{ts1}_active.jsonl"
+            
+            # Create second active file
+            ts2 = ts1 + 100
+            active_file2 = agents_dir / f"{ts2}_active.jsonl"
+            
+            # Write to both files
+            with open(active_file1, "w") as f:
+                json.dump({"event": "request", "ts": ts1, "agent": "first"}, f)
+                f.write("\n")
+            
+            with open(active_file2, "w") as f:
+                json.dump({"event": "request", "ts": ts2, "agent": "second"}, f)
+                f.write("\n")
+            
+            time.sleep(0.2)
+            
+            # Both agents make progress
+            with open(active_file1, "a") as f:
+                json.dump({"event": "finish", "ts": ts1 + 1, "agent": "first"}, f)
+                f.write("\n")
+            
+            with open(active_file2, "a") as f:
+                json.dump({"event": "finish", "ts": ts2 + 1, "agent": "second"}, f)
+                f.write("\n")
+        
+        # Start simulator in background
+        simulator = Thread(target=simulate_multiple_agents)
+        simulator.daemon = True
+        simulator.start()
+        
+        # Watch for events
+        cortex_watch(callback)
+        
+        # Should receive events from both agents
+        assert len(received_events) == 4  # 2 requests + 2 finishes
+        
+        # Check we got events from both agents
+        agents = {e.get("agent") for e in received_events if "agent" in e}
+        assert agents == {"first", "second"}
 
-    @pytest.mark.asyncio
-    async def test_wait_for_completion_error(self, temp_journal):
-        """Test wait_for_completion with agent error."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
-
-        with open(active_file, "w") as f:
-            f.write(json.dumps({"event": "request", "ts": 1234567890001}) + "\n")
-            f.write(
-                json.dumps(
-                    {"event": "error", "ts": 1234567890002, "error": "Agent failed"}
-                )
-                + "\n"
-            )
-
-        with pytest.raises(RuntimeError, match="Agent error: Agent failed"):
-            await client.wait_for_completion(agent_id)
-
-    @pytest.mark.asyncio
-    async def test_wait_for_completion_timeout(self, temp_journal):
-        """Test wait_for_completion timeout."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
-
-        # Create file with no finish event
-        with open(active_file, "w") as f:
-            f.write(json.dumps({"event": "request", "ts": 1234567890001}) + "\n")
-            f.write(json.dumps({"event": "start", "ts": 1234567890002}) + "\n")
-
-        with pytest.raises(TimeoutError, match="timed out after 0.1 seconds"):
-            await client.wait_for_completion(agent_id, timeout=0.1)
-
-    @pytest.mark.asyncio
-    async def test_get_agent_status_running(self, temp_journal):
-        """Test getting status of running agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        active_file = client.agents_dir / f"{agent_id}_active.jsonl"
-        active_file.touch()
-
-        status = await client.get_agent_status(agent_id)
-        assert status == "running"
-
-    @pytest.mark.asyncio
-    async def test_get_agent_status_completed(self, temp_journal):
-        """Test getting status of completed agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        completed_file = client.agents_dir / f"{agent_id}.jsonl"
-
-        with open(completed_file, "w") as f:
-            f.write(json.dumps({"event": "finish", "ts": 1234567890001}) + "\n")
-
-        status = await client.get_agent_status(agent_id)
-        assert status == "completed"
-
-    @pytest.mark.asyncio
-    async def test_get_agent_status_failed(self, temp_journal):
-        """Test getting status of failed agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        completed_file = client.agents_dir / f"{agent_id}.jsonl"
-
-        with open(completed_file, "w") as f:
-            f.write(json.dumps({"event": "error", "ts": 1234567890001}) + "\n")
-
-        status = await client.get_agent_status(agent_id)
-        assert status == "failed"
-
-    @pytest.mark.asyncio
-    async def test_get_agent_status_not_found(self, temp_journal):
-        """Test getting status of non-existent agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        status = await client.get_agent_status("nonexistent")
-        assert status == "not_found"
-
-    @pytest.mark.asyncio
-    async def test_get_agent_events(self, temp_journal):
-        """Test getting all events for an agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        agent_id = "1234567890001"
-        completed_file = client.agents_dir / f"{agent_id}.jsonl"
-
-        events = [
-            {"event": "request", "ts": 1234567890001},
-            {"event": "start", "ts": 1234567890002},
-            {"event": "finish", "ts": 1234567890003},
-        ]
-
-        with open(completed_file, "w") as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-
-        result = await client.get_agent_events(agent_id)
-
-        assert len(result) == 3
-        assert result[0]["event"] == "request"
-        assert result[2]["event"] == "finish"
-
-    @pytest.mark.asyncio
-    async def test_get_agent_events_not_found(self, temp_journal):
-        """Test getting events for non-existent agent."""
-        client = CortexClient(journal_path=str(temp_journal))
-
-        with pytest.raises(FileNotFoundError, match="Agent file not found"):
-            await client.get_agent_events("nonexistent")
-
-
-class TestHelperFunctions:
-    """Test helper functions."""
-
-    @pytest.mark.asyncio
-    async def test_run_agent(self, temp_journal, mock_time):
-        """Test run_agent helper."""
-        # Create a mock agent file that completes
-        agent_id = "1234567890123"
-        active_file = temp_journal / "agents" / f"{agent_id}_active.jsonl"
-
-        async def simulate_agent():
-            await asyncio.sleep(0.05)
-            with open(active_file, "a") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "event": "finish",
-                            "ts": 1234567890124,
-                            "result": "Test result",
-                        }
-                    )
-                    + "\n"
-                )
-
-        # Start simulation in background
-        asyncio.create_task(simulate_agent())
-
-        result = await run_agent(
-            "Test prompt",
-            journal_path=str(temp_journal),
-            persona="tester",
-            backend="openai",
-        )
-
-        assert result == "Test result"
-
-    @pytest.mark.asyncio
-    async def test_run_agent_with_events(self, temp_journal, mock_time):
-        """Test run_agent_with_events helper."""
-        events_received = []
-
-        def on_event(event):
-            events_received.append(event)
-
-        # Create a mock agent file with events
-        agent_id = "1234567890123"
-        active_file = temp_journal / "agents" / f"{agent_id}_active.jsonl"
-
-        async def simulate_agent():
-            await asyncio.sleep(0.05)
-            with open(active_file, "a") as f:
-                f.write(
-                    json.dumps(
-                        {"event": "tool_start", "ts": 1234567890124, "tool": "search"}
-                    )
-                    + "\n"
-                )
-                f.write(
-                    json.dumps(
-                        {"event": "tool_end", "ts": 1234567890125, "tool": "search"}
-                    )
-                    + "\n"
-                )
-                f.write(
-                    json.dumps(
-                        {"event": "finish", "ts": 1234567890126, "result": "Done"}
-                    )
-                    + "\n"
-                )
-
-        # Start simulation in background
-        asyncio.create_task(simulate_agent())
-
-        result = await run_agent_with_events(
-            "Test prompt", on_event, journal_path=str(temp_journal)
-        )
-
-        assert result == "Done"
-        assert len(events_received) == 4  # request + tool_start + tool_end + finish
-        assert events_received[0]["event"] == "request"
-        assert events_received[1]["event"] == "tool_start"
-        assert events_received[2]["event"] == "tool_end"
-        assert events_received[3]["event"] == "finish"
-        # Check that agent_id was added to events
-        assert all("agent_id" in e for e in events_received)
-
-    @pytest.mark.asyncio
-    async def test_run_agent_with_async_event_handler(self, temp_journal, mock_time):
-        """Test run_agent_with_events with async event handler."""
-        events_received = []
-
-        async def on_event(event):
-            await asyncio.sleep(0.01)  # Simulate async work
-            events_received.append(event)
-
-        agent_id = "1234567890123"
-        active_file = temp_journal / "agents" / f"{agent_id}_active.jsonl"
-
-        async def simulate_agent():
-            await asyncio.sleep(0.05)
-            with open(active_file, "a") as f:
-                f.write(
-                    json.dumps(
-                        {"event": "finish", "ts": 1234567890124, "result": "Done"}
-                    )
-                    + "\n"
-                )
-
-        asyncio.create_task(simulate_agent())
-
-        result = await run_agent_with_events(
-            "Test prompt", on_event, journal_path=str(temp_journal)
-        )
-
-        assert result == "Done"
-        assert len(events_received) == 2  # request + finish
+    def test_cortex_watch_no_journal_path(self):
+        """Test cortex_watch fails without JOURNAL_PATH."""
+        # Temporarily unset JOURNAL_PATH if it exists
+        old_path = os.environ.pop("JOURNAL_PATH", None)
+        try:
+            with pytest.raises(ValueError, match="JOURNAL_PATH environment variable not set"):
+                cortex_watch(lambda e: None)
+        finally:
+            if old_path:
+                os.environ["JOURNAL_PATH"] = old_path

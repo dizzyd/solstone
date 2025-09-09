@@ -188,3 +188,6 @@ Guide for updating:
 - Added `cortex_request()` function to `think/cortex_client.py` for creating Cortex agent request files
 - Enhanced `think/cortex.py` to validate request files and handle errors more gracefully before spawning agents
 - Refactored `think/cortex.py` to use `cortex_request()` for handoff functionality, applying DRY principles
+- Added `cortex_watch()` function to `think/cortex_client.py` for blocking file watch of agent events with efficient tailing using watchfiles
+- Added watchfiles dependency for monitoring file system changes in Cortex agent directory
+- Replaced `tests/test_cortex_client.py` with comprehensive tests for new cortex_client functions

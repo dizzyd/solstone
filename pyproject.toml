@@ -49,6 +49,7 @@ dependencies = [
     "openai-agents>=0.1.0",
     "anthropic",
     "pypdf",
+    "watchfiles",
 ]
 
 [project.optional-dependencies]
