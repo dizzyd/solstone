@@ -145,7 +145,7 @@ def gather_files(day: datetime, day_dirs: Dict[str, str]) -> List[str]:
 
 def scan_day(day: str) -> Dict[str, List[str]]:
     """Return lists of processed and missing entity markdown files."""
-    day_dir = Path(day_path(day))
+    day_dir = day_path(day)
     processed: List[str] = []
     repairable: List[str] = []
     if (day_dir / "entities.md").exists():

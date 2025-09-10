@@ -411,16 +411,8 @@ class CortexService:
         try:
             from think.utils import day_path
 
-            # Use provided day or fall back to current day
-            if day:
-                # day_path validates YYYYMMDD format
-                day_dir = Path(day_path(day))
-            else:
-                # Get current day in YYYYMMDD format
-                today = datetime.now().strftime("%Y%m%d")
-                day_dir = self.journal_path / today
-
-            day_dir.mkdir(parents=True, exist_ok=True)
+            # day_path now handles None for today, creates dir, and returns Path
+            day_dir = day_path(day)
 
             # Write result to save file
             save_path = day_dir / save_filename

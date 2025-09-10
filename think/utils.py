@@ -19,15 +19,40 @@ DATE_RE = re.compile(r"\d{8}")
 AGENT_DIR = Path(__file__).with_name("agents")
 
 
-def day_path(day: str) -> str:
-    """Return absolute path for *day* from ``JOURNAL_PATH`` environment variable."""
+def day_path(day: Optional[str] = None) -> Path:
+    """Return absolute path for a day from ``JOURNAL_PATH`` environment variable.
+    
+    Parameters
+    ----------
+    day : str, optional
+        Day in YYYYMMDD format. If None, uses today's date.
+        
+    Returns
+    -------
+    Path
+        Absolute path to the day directory. Directory is created if it doesn't exist.
+        
+    Raises
+    ------
+    RuntimeError
+        If JOURNAL_PATH is not set.
+    ValueError
+        If day format is invalid.
+    """
     load_dotenv()
     journal = os.getenv("JOURNAL_PATH")
     if not journal:
         raise RuntimeError("JOURNAL_PATH not set")
-    if not DATE_RE.fullmatch(day):
+    
+    # Handle "today" case
+    if day is None:
+        day = datetime.now().strftime("%Y%m%d")
+    elif not DATE_RE.fullmatch(day):
         raise ValueError("day must be in YYYYMMDD format")
-    return os.path.join(journal, day)
+    
+    path = Path(journal) / day
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _append_task_log(dir_path: str | Path, message: str) -> None:
@@ -43,7 +68,7 @@ def _append_task_log(dir_path: str | Path, message: str) -> None:
 
 def day_log(day: str, message: str) -> None:
     """Convenience wrapper to log message for ``day``."""
-    _append_task_log(day_path(day), message)
+    _append_task_log(str(day_path(day)), message)
 
 
 def journal_log(message: str) -> None:
@@ -311,7 +336,7 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
         ``metadata`` contains the parsed JSON data (empty on failure).
     """
 
-    day_dir = Path(day_path(day))
+    day_dir = day_path(day)
     json_path = day_dir / name
 
     if name.endswith("_audio.json"):
@@ -416,7 +441,7 @@ def get_todos(day: str) -> dict[str, list[dict[str, Any]]] | None:
     ...     for item in todos['today']:
     ...         print(f"{item['type']}: {item['description']}")
     """
-    day_dir = Path(day_path(day))
+    day_dir = day_path(day)
     todo_path = day_dir / "TODO.md"
 
     if not todo_path.exists():

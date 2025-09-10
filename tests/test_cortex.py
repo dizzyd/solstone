@@ -647,8 +647,10 @@ def test_save_agent_result(cortex_service, mock_journal):
     """Test saving agent result to file in day directory."""
     # Mock datetime to return a specific date
     test_date = "20240115"
-    with patch("think.cortex.datetime") as mock_datetime:
-        mock_datetime.now.return_value.strftime.return_value = test_date
+    from datetime import datetime as dt
+    mock_dt = dt(2024, 1, 15, 12, 0, 0)
+    with patch("think.utils.datetime") as mock_datetime:
+        mock_datetime.now.return_value = mock_dt
 
         # Test saving result
         agent_id = "test_agent"
@@ -748,8 +750,10 @@ def test_monitor_stdout_with_save(cortex_service, mock_journal):
 
     # Mock datetime for consistent test
     test_date = "20240115"
-    with patch("think.cortex.datetime") as mock_datetime:
-        mock_datetime.now.return_value.strftime.return_value = test_date
+    from datetime import datetime as dt
+    mock_dt = dt(2024, 1, 15, 12, 0, 0)
+    with patch("think.utils.datetime") as mock_datetime:
+        mock_datetime.now.return_value = mock_dt
 
         with patch.object(cortex_service, "_complete_agent_file"):
             with patch.object(cortex_service, "_has_finish_event", return_value=True):

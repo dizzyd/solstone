@@ -97,7 +97,7 @@ def main() -> None:
         end_dt = datetime.strptime(start, "%H%M%S") + timedelta(minutes=length)
         end = end_dt.strftime("%H%M%S")
 
-    day_dir = Path(day_path(day))
+    day_dir = day_path(day)
     files = find_files(day_dir, length, start, end)
 
     if args.dry:

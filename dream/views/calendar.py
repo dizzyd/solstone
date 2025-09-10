@@ -475,7 +475,7 @@ def calendar_transcript_range(day: str) -> Any:
                 day_path,
             )
 
-            day_dir = day_path(day)
+            day_dir = str(day_path(day))
             date_str = _date_str(day_dir)
             start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
             end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
@@ -524,9 +524,11 @@ def calendar_raw_files(day: str) -> Any:
 
     from datetime import datetime
 
-    from think.cluster import _date_str, _load_entries, day_path
+    from think.cluster import _date_str, _load_entries
+    from think.utils import day_path
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
+    # day_path now ensures dir exists, but check anyway
     if not os.path.isdir(day_dir):
         return jsonify({"files": []})
 
@@ -576,10 +578,12 @@ def calendar_media_files(day: str) -> Any:
 
     from datetime import datetime
 
-    from think.cluster import _date_str, _load_entries, day_path
+    from think.cluster import _date_str, _load_entries
+    from think.utils import day_path
     from think.utils import get_raw_file
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
+    # day_path now ensures dir exists, but check anyway
     if not os.path.isdir(day_dir):
         return jsonify({"media": []})
 
@@ -683,9 +687,11 @@ def download_audio(day: str) -> Any:
 
     from flask import Response, send_file
 
-    from think.cluster import _date_str, _load_entries, day_path
+    from think.cluster import _date_str, _load_entries
+    from think.utils import day_path
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
+    # day_path now ensures dir exists, but check anyway
     if not os.path.isdir(day_dir):
         return jsonify({"error": "Day directory not found"}), 404
 

@@ -178,7 +178,8 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
         screen transcripts respectively.
     """
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
+    # day_path now ensures dir exists
     if not os.path.isdir(day_dir):
         return [], []
 
@@ -211,7 +212,8 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
 def cluster(day: str) -> Tuple[str, int]:
     """Return Markdown summary for one day's JSON files and the number processed."""
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
+    # day_path now ensures dir exists, but check anyway for safety
     if not os.path.isdir(day_dir):
         return f"Day folder not found: {day_dir}", 0
 
@@ -236,7 +238,7 @@ def cluster_range(
     if screen not in {"summary", "raw"}:
         raise ValueError("screen must be 'summary' or 'raw'")
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
     date_str = _date_str(day_dir)
     start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
     end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
@@ -265,7 +267,7 @@ def cluster_files(
     if type is not None and type not in {"audio", "screen"}:
         raise ValueError("type must be 'audio', 'screen', or None")
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
     date_str = _date_str(day_dir)
     start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
     end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")

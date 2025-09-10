@@ -29,7 +29,7 @@ def _output_paths(day_dir: os.PathLike[str], basename: str) -> tuple[Path, Path]
 
 def scan_day(day: str) -> dict[str, list[str]]:
     """Return lists of processed and pending ponder markdown files."""
-    day_dir = Path(day_path(day))
+    day_dir = day_path(day)
     pondered: list[str] = []
     unpondered: list[str] = []
     for base in _topic_basenames():
@@ -192,7 +192,7 @@ def main() -> None:
     args = setup_cli(parser)
 
     markdown, file_count = cluster(args.day)
-    day_dir = day_path(args.day)
+    day_dir = str(day_path(args.day))
     topic_basename = Path(args.topic).stem
     topic_meta = get_topics().get(topic_basename, {})
     extra_occ = topic_meta.get("occurrences")

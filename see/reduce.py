@@ -54,7 +54,7 @@ def group_entries(entries):
 
 def scan_day(day: str) -> dict[str, list[str]]:
     """Return lists of processed screen summaries and repairable diff JSON files."""
-    day_dir = Path(day_path(day))
+    day_dir = day_path(day)
     reduced = sorted(p.name for p in day_dir.glob("*_screen.md"))
 
     unreduced: list[str] = []
@@ -237,7 +237,8 @@ def reduce_day(
         always used so ``jobs=1`` still executes via the thread pool.
     """
 
-    day_dir = day_path(day)
+    day_dir = str(day_path(day))
+    # day_path now ensures dir exists
     if not os.path.isdir(day_dir):
         logging.error("Folder not found: %s", day_dir)
         return 0, 0
@@ -310,7 +311,8 @@ def main():
     )
     args = setup_cli(parser)
 
-    day_dir = day_path(args.day)
+    day_dir = str(day_path(args.day))
+    # day_path now ensures dir exists, but check anyway
     if not os.path.isdir(day_dir):
         parser.error(f"Folder not found: {day_dir}")
 
