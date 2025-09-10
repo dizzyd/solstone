@@ -47,6 +47,7 @@ def _list_items(item_type: str) -> list[dict[str, object]]:
                 "title": info.get("title", name),
                 "description": info.get("description", ""),
                 "color": info.get("color", "#007bff"),
+                "disabled": info.get("disabled", False),
             }
             items.append(item)
 
@@ -358,3 +359,34 @@ def update_topic(topic_id: str) -> object:
     """Update a topic's title and content or create a new one."""
     response, status = _update_item("topics", topic_id, request.get_json())
     return jsonify(response), status
+
+
+@bp.route("/agents/api/topics/toggle/<topic_id>", methods=["POST"])
+def toggle_topic(topic_id: str) -> object:
+    """Toggle the disabled state of a topic."""
+    topics_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "..", "think", "topics"
+    )
+    json_path = os.path.join(topics_path, f"{topic_id}.json")
+
+    if not os.path.isfile(json_path):
+        return jsonify({"error": "Topic not found"}), 404
+
+    try:
+        # Read existing JSON file
+        with open(json_path, "r", encoding="utf-8") as f:
+            topic_config = json.load(f)
+
+        # Toggle disabled state
+        topic_config["disabled"] = not topic_config.get("disabled", False)
+
+        # Write back to file
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(topic_config, f, indent=4)
+
+        return jsonify({
+            "success": True,
+            "disabled": topic_config["disabled"]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -21,17 +21,17 @@ AGENT_DIR = Path(__file__).with_name("agents")
 
 def day_path(day: Optional[str] = None) -> Path:
     """Return absolute path for a day from ``JOURNAL_PATH`` environment variable.
-    
+
     Parameters
     ----------
     day : str, optional
         Day in YYYYMMDD format. If None, uses today's date.
-        
+
     Returns
     -------
     Path
         Absolute path to the day directory. Directory is created if it doesn't exist.
-        
+
     Raises
     ------
     RuntimeError
@@ -43,13 +43,13 @@ def day_path(day: Optional[str] = None) -> Path:
     journal = os.getenv("JOURNAL_PATH")
     if not journal:
         raise RuntimeError("JOURNAL_PATH not set")
-    
+
     # Handle "today" case
     if day is None:
         day = datetime.now().strftime("%Y%m%d")
     elif not DATE_RE.fullmatch(day):
         raise ValueError("day must be in YYYYMMDD format")
-    
+
     path = Path(journal) / day
     path.mkdir(parents=True, exist_ok=True)
     return path

@@ -365,7 +365,7 @@ class Transcriber:
         handler.on_created = on_created
 
         from think.utils import day_path
-        
+
         self.observer = None
         current_day: Optional[str] = None
         try:

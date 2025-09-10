@@ -108,6 +108,11 @@
   box-shadow: 0 0 0 1px #007bff;
 }
 
+.agent-card.disabled {
+  opacity: 0.6;
+  background: #f8f8f8;
+}
+
 .agent-card h3 {
   margin: 0 0 0.5rem 0;
   font-size: 1.1rem;
@@ -634,10 +639,9 @@ tr a:hover {
 }
 
 /* Edit Mode Styles */
-.edit-btn {
+.edit-btn, .toggle-btn {
   position: absolute;
   top: 20px;
-  right: 60px;
   background: #007bff;
   color: white;
   border: none;
@@ -646,6 +650,27 @@ tr a:hover {
   cursor: pointer;
   font-size: 0.9rem;
   z-index: 3;
+}
+
+.edit-btn {
+  right: 60px;
+}
+
+.toggle-btn {
+  right: 120px;
+  background: #6c757d;
+}
+
+.toggle-btn:hover {
+  background: #545b62;
+}
+
+.toggle-btn.enable {
+  background: #28a745;
+}
+
+.toggle-btn.enable:hover {
+  background: #218838;
 }
 
 .edit-btn:hover {
@@ -809,6 +834,7 @@ tr a:hover {
 <div id="itemModal" class="modal">
   <div class="modal-content">
     <span class="close" onclick="closeItemModal()">&times;</span>
+    <button id="toggleBtn" class="toggle-btn" style="display: none;" onclick="toggleTopicState()">Disable</button>
     <button id="editBtn" class="edit-btn" onclick="toggleEditMode()">Edit</button>
     <div id="modalHeader" class="modal-header">
       <h3 id="modalTitle"></h3>
@@ -966,6 +992,12 @@ function renderCards(items, containerId, itemType, createModalFunc) {
   items.forEach(item => {
     const card = document.createElement('div');
     card.className = 'agent-card';
+    
+    // Add disabled class for disabled topics
+    if (itemType === 'topic' && item.disabled) {
+      card.className += ' disabled';
+    }
+    
     card.dataset.itemId = item.id;
     card.dataset.itemType = itemType;
     card.title = item.description; // Set description as tooltip
@@ -990,8 +1022,13 @@ function renderCards(items, containerId, itemType, createModalFunc) {
     
     // Create title with color indicator for topics
     let titleHtml = item.title;
-    if (itemType === 'topic' && item.color) {
-      titleHtml = `<span class="topic-indicator" style="background-color: ${item.color}"></span>${item.title}`;
+    if (itemType === 'topic') {
+      if (item.color) {
+        titleHtml = `<span class="topic-indicator" style="background-color: ${item.color}"></span>${item.title}`;
+      }
+      if (item.disabled) {
+        titleHtml += ' <span style="color: #6c757d; font-size: 0.8em;">(disabled)</span>';
+      }
     }
     
     card.innerHTML = `
@@ -1043,8 +1080,20 @@ function viewItemDetails(itemId, itemType, event) {
   
   // Reset edit mode UI
   const editBtn = document.getElementById('editBtn');
+  const toggleBtn = document.getElementById('toggleBtn');
   const saveBtn = document.getElementById('saveBtn');
   const modalHeader = document.getElementById('modalHeader');
+  
+  // Show/hide toggle button for topics only
+  if (itemType === 'topic') {
+    toggleBtn.style.display = 'block';
+    // Update button text based on disabled state
+    const isDisabled = item.disabled || false;
+    toggleBtn.textContent = isDisabled ? 'Enable' : 'Disable';
+    toggleBtn.className = isDisabled ? 'toggle-btn enable' : 'toggle-btn';
+  } else {
+    toggleBtn.style.display = 'none';
+  }
   
   editBtn.style.display = 'block';
   saveBtn.style.display = 'none';
@@ -1874,6 +1923,65 @@ document.addEventListener('visibilitychange', () => {
     startAutoRefresh();
   }
 });
+
+// Toggle topic disabled state
+async function toggleTopicState() {
+  if (!currentEditingItem || currentEditingType !== 'topic') return;
+  
+  const toggleBtn = document.getElementById('toggleBtn');
+  toggleBtn.disabled = true;
+  
+  try {
+    const response = await fetch(`{{ url_for('agents.toggle_topic', topic_id='') }}${currentEditingItem}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Update button text and style
+      const isDisabled = data.disabled;
+      toggleBtn.textContent = isDisabled ? 'Enable' : 'Disable';
+      toggleBtn.className = isDisabled ? 'toggle-btn enable' : 'toggle-btn';
+      
+      // Update the item in availableTopics
+      const topic = availableTopics.find(t => t.id === currentEditingItem);
+      if (topic) {
+        topic.disabled = isDisabled;
+      }
+      
+      // Update the card appearance
+      const card = document.querySelector(`[data-item-id="${currentEditingItem}"][data-item-type="topic"]`);
+      if (card) {
+        if (isDisabled) {
+          card.classList.add('disabled');
+        } else {
+          card.classList.remove('disabled');
+        }
+        
+        // Update title to show disabled state
+        const h3 = card.querySelector('h3');
+        if (h3) {
+          let html = h3.innerHTML;
+          // Remove existing disabled indicator
+          html = html.replace(/ <span style="color: #6c757d; font-size: 0.8em;">\(disabled\)<\/span>/g, '');
+          // Add new indicator if disabled
+          if (isDisabled) {
+            html += ' <span style="color: #6c757d; font-size: 0.8em;">(disabled)</span>';
+          }
+          h3.innerHTML = html;
+        }
+      }
+    } else {
+      showError('Failed to toggle topic: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    showError('Error toggling topic: ' + error.message);
+  } finally {
+    toggleBtn.disabled = false;
+  }
+}
 
 // Initialize - The Log tab is shown by default now
 setTimeout(() => {

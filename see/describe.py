@@ -129,7 +129,7 @@ class Describer:
     def repair_day(self, date_str: str, files: list[str], dry_run: bool = False) -> int:
         """Process ``files`` belonging to ``date_str`` and return the count."""
         from think.utils import day_path
-        
+
         day_dir = day_path(date_str)  # Will create if doesn't exist, returns Path
         if not day_dir.exists():
             logging.error(f"Day directory {day_dir} does not exist")
@@ -217,7 +217,7 @@ class Describer:
         handler.on_moved = on_moved
 
         from think.utils import day_path
-        
+
         self.observer = None
         current_day: Optional[str] = None
         try:

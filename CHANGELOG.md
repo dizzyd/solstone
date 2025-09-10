@@ -240,3 +240,13 @@ Guide for updating:
 - Updated `see/describe.py` `repair_day()` and `start()` methods to use `day_path()` for day directory creation
 - Updated `hear/transcribe.py` `start()` method to use `day_path()` for monitoring loop
 - Updated `hear/capture.py` `save_flac()` method to use `day_path()` for audio file saving
+
+## 2025-09-10
+
+- Added support for disabling topics from daily processing in `think/process_day.py`
+- Topics with `"disabled": true` in their JSON metadata are now skipped during `think-process-day` runs
+- Added `/agents/api/topics/toggle/<topic_id>` endpoint to toggle topic disabled state in `dream/views/agents.py`
+- Enhanced Topics tab in Agents view to visually indicate disabled topics with reduced opacity and "(disabled)" label
+- Added Disable/Enable toggle button in topic modal for easy state management in `dream/templates/agents.html`
+- Updated `_list_items()` in `dream/views/agents.py` to include disabled state when listing topics
+- Applied code formatting to multiple files via Black and isort

@@ -49,6 +49,10 @@ def build_commands(day: str, force: bool, verbose: bool = False) -> list[list[st
 
     topics = get_topics()
     for topic_name, topic_data in topics.items():
+        # Skip disabled topics
+        if topic_data.get("disabled", False):
+            logging.info("Skipping disabled topic: %s", topic_name)
+            continue
         cmd = ["think-ponder", day, "-f", topic_data["path"], "-p"]
         if verbose:
             cmd.append("--verbose")

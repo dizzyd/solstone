@@ -579,8 +579,7 @@ def calendar_media_files(day: str) -> Any:
     from datetime import datetime
 
     from think.cluster import _date_str, _load_entries
-    from think.utils import day_path
-    from think.utils import get_raw_file
+    from think.utils import day_path, get_raw_file
 
     day_dir = str(day_path(day))
     # day_path now ensures dir exists, but check anyway

@@ -60,7 +60,7 @@ def save_cache(images):
 def recent_audio_activity(journal: str, window: int = 120) -> bool:
     """Return True if an *_audio.json file was modified in the last ``window`` seconds."""
     from think.utils import day_path
-    
+
     day_dir = day_path()  # Uses today by default, creates if needed, returns Path
     if not day_dir.exists():
         return False

@@ -190,7 +190,7 @@ class AudioRecorder:
     def save_flac(self, flac_bytes, suffix="_audio"):
         """Save the audio to a dated directory."""
         from think.utils import day_path
-        
+
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
         date_part, time_part = timestamp.split("_", 1)

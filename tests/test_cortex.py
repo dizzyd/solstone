@@ -648,6 +648,7 @@ def test_save_agent_result(cortex_service, mock_journal):
     # Mock datetime to return a specific date
     test_date = "20240115"
     from datetime import datetime as dt
+
     mock_dt = dt(2024, 1, 15, 12, 0, 0)
     with patch("think.utils.datetime") as mock_datetime:
         mock_datetime.now.return_value = mock_dt
@@ -751,6 +752,7 @@ def test_monitor_stdout_with_save(cortex_service, mock_journal):
     # Mock datetime for consistent test
     test_date = "20240115"
     from datetime import datetime as dt
+
     mock_dt = dt(2024, 1, 15, 12, 0, 0)
     with patch("think.utils.datetime") as mock_datetime:
         mock_datetime.now.return_value = mock_dt
