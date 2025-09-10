@@ -264,7 +264,12 @@ class CortexService:
                             )
                             if original_request and original_request.get("save"):
                                 self._save_agent_result(
-                                    agent.agent_id, result, original_request["save"]
+                                    agent.agent_id,
+                                    result,
+                                    original_request["save"],
+                                    original_request.get(
+                                        "day"
+                                    ),  # Pass optional day parameter
                                 )
 
                             # Handle handoff
@@ -400,15 +405,21 @@ class CortexService:
             self.logger.error(f"Failed to write error and complete: {e}")
 
     def _save_agent_result(
-        self, agent_id: str, result: str, save_filename: str
+        self, agent_id: str, result: str, save_filename: str, day: Optional[str] = None
     ) -> None:
-        """Save agent result to a file in the current day directory."""
+        """Save agent result to a file in the specified or current day directory."""
         try:
-            # Get current day in YYYYMMDD format
-            today = datetime.now().strftime("%Y%m%d")
+            from think.utils import day_path
 
-            # Build path to day directory
-            day_dir = self.journal_path / today
+            # Use provided day or fall back to current day
+            if day:
+                # day_path validates YYYYMMDD format
+                day_dir = Path(day_path(day))
+            else:
+                # Get current day in YYYYMMDD format
+                today = datetime.now().strftime("%Y%m%d")
+                day_dir = self.journal_path / today
+
             day_dir.mkdir(parents=True, exist_ok=True)
 
             # Write result to save file

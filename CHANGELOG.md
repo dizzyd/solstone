@@ -227,3 +227,7 @@ Guide for updating:
 - Updated `think/supervisor.py` to pass save field from agent metadata for scheduled agents
 - Enhanced `CORTEX.md` documentation to describe the new save field and Agent Result Saving feature
 - Added comprehensive tests for save functionality including error handling in `tests/test_cortex.py`
+- Enhanced Cortex save functionality to support optional `day` parameter for saving to specific journal day directories
+- Updated `_save_agent_result()` in `think/cortex.py` to use `think.utils.day_path()` for proper YYYYMMDD validation
+- Updated `CORTEX.md` documentation to describe the optional day parameter for Agent Result Saving
+- Added comprehensive test coverage for day parameter including validation and error handling in `tests/test_cortex.py`

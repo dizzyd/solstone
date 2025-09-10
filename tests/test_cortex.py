@@ -1,10 +1,8 @@
 """Tests for the file-based Cortex agent manager."""
 
 import json
-import threading
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -647,8 +645,6 @@ def test_start_with_watchdog(mock_observer_class, cortex_service, mock_journal):
 
 def test_save_agent_result(cortex_service, mock_journal):
     """Test saving agent result to file in day directory."""
-    from datetime import datetime
-
     # Mock datetime to return a specific date
     test_date = "20240115"
     with patch("think.cortex.datetime") as mock_datetime:
@@ -683,10 +679,51 @@ def test_save_agent_result_with_error(cortex_service, mock_journal, caplog):
     assert "Failed to save agent agent_id result" in caplog.text
 
 
+def test_save_agent_result_with_day_parameter(cortex_service, mock_journal):
+    """Test saving agent result to a specific day directory."""
+    # Test saving result with explicit day parameter
+    agent_id = "test_agent"
+    result = "This is the agent result content"
+    save_filename = "test_output.md"
+    specified_day = "20240201"
+
+    cortex_service._save_agent_result(
+        agent_id, result, save_filename, day=specified_day
+    )
+
+    # Check file was created in specified day directory
+    expected_path = mock_journal / specified_day / save_filename
+    assert expected_path.exists()
+    assert expected_path.read_text() == result
+
+    # Check directory was created
+    assert (mock_journal / specified_day).is_dir()
+
+
+def test_save_agent_result_with_invalid_day(cortex_service, mock_journal, caplog):
+    """Test save agent result with invalid day format."""
+    import logging
+
+    # Test with invalid day format
+    agent_id = "test_agent"
+    result = "Test content"
+    save_filename = "output.md"
+    invalid_day = "2024-02-01"  # Wrong format
+
+    with caplog.at_level(logging.ERROR):
+        cortex_service._save_agent_result(
+            agent_id, result, save_filename, day=invalid_day
+        )
+
+    # Check error was logged
+    assert "Failed to save agent test_agent result" in caplog.text
+
+    # File should not exist in invalid path
+    assert not (mock_journal / invalid_day / save_filename).exists()
+
+
 def test_monitor_stdout_with_save(cortex_service, mock_journal):
     """Test monitor_stdout saves result when save field is present."""
-    from datetime import datetime
-
     from think.cortex import AgentProcess
 
     # Create agent with save in request
@@ -722,3 +759,43 @@ def test_monitor_stdout_with_save(cortex_service, mock_journal):
     save_path = mock_journal / test_date / "output.md"
     assert save_path.exists()
     assert save_path.read_text() == "Test result"
+
+
+def test_monitor_stdout_with_save_and_day(cortex_service, mock_journal):
+    """Test monitor_stdout saves result to specific day when day field is present."""
+    from think.cortex import AgentProcess
+
+    # Create agent with save and day in request
+    agent_id = "save_day_test"
+    active_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
+    specified_day = "20240220"
+
+    # Store request with save and day fields
+    cortex_service.agent_requests = {
+        agent_id: {
+            "event": "request",
+            "prompt": "test",
+            "save": "report.md",
+            "day": specified_day,
+        }
+    }
+
+    # Create mock process with stdout
+    mock_process = MagicMock()
+    mock_stdout = [
+        '{"event": "start", "ts": 1000}\n',
+        '{"event": "finish", "ts": 2000, "result": "Daily report content"}\n',
+    ]
+    mock_process.stdout = iter(mock_stdout)
+    mock_process.wait.return_value = 0
+
+    agent = AgentProcess(agent_id, mock_process, active_path)
+
+    with patch.object(cortex_service, "_complete_agent_file"):
+        with patch.object(cortex_service, "_has_finish_event", return_value=True):
+            cortex_service._monitor_stdout(agent)
+
+    # Check result was saved to specified day
+    save_path = mock_journal / specified_day / "report.md"
+    assert save_path.exists()
+    assert save_path.read_text() == "Daily report content"
