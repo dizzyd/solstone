@@ -20,9 +20,9 @@
         url_for('admin.admin_day_page', day=day),
         url_for('calendar.calendar_todos_page', day=day)) }}
   <div class="tabs">
-    <a class="tab active" href="#events" data-target="events">Events</a>
+    <a class="tab active" href="#events" data-target="events" title="Events">Events</a>
     {% for file in files %}
-    <a class="tab" href="#{{ file.topic }}" data-target="{{ file.topic }}" data-color="{{ file.color }}">{{ file.label }}</a>
+    <a class="tab" href="#{{ file.topic }}" data-target="{{ file.topic }}" data-color="{{ file.color }}" title="{{ file.label }}">{{ file.label }}</a>
     {% endfor %}
   </div>
   <div class="content" id="events">

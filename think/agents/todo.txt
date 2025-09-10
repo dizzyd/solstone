@@ -25,20 +25,21 @@ Use MCP tools systematically to discover new priorities:
 
 ```
 Priority Discovery:
-1. search_summaries("followup OR todo OR need to", limit=10)
+1. get_resource("journal://summary/TODAY-1/followups") and get_resource("journal://summary/TODAY-1/opportunities")
+   → Review full topic summaries to capture explicit follow-ups and opportunities
+
+2. search_summaries("followup OR todo OR need to OR schedule", limit=10)
    → Find explicit action items from recent days
    
-2. search_events("meeting", day=TODAY-1)
-   → Extract action items from yesterday's meetings
-   
-3. search_summaries("deadline OR urgent OR critical", limit=5)
+3. search_summaries("deadline OR urgent OR critical", limit=10)
    → Identify time-sensitive items
-   
-4. search_summaries("opportunity OR idea OR could", limit=5)
-   → Surface innovation/improvement tasks
 
-5. search_transcripts("TODO OR FIXME", day=TODAY-1)
+4. search_transcripts("TODO OR FIXME", day=TODAY-1)
    → Find technical debt and code TODOs
+
+5. use other tools
+   → Do other common sense searching to identify anything else or dig into specifics on what you've found so far
+
 ```
 
 ### Phase 3: Task Qualification
@@ -120,84 +121,27 @@ Use these categories consistently:
 - **Research**: Investigation, learning
 - **Write**: Documentation, reports
 - **Plan**: Strategy, architecture
-- **Call**: Phone/video calls
 - **Goal**: Larger objectives
 
 ### Domain Tags
 Extract from journal context:
-- #hear, #see, #think, #dream - System modules
-- #personal, #work - Life domains
 - Custom domain tags from user's journal
-
-## Task Mining Patterns
-
-### Pattern: Meeting Action Extraction
-```
-1. search_events("meeting", day=YESTERDAY)
-2. For each meeting, search_transcripts("[meeting_name] action OR follow")
-3. Extract concrete TODOs with owners and deadlines
-```
-
-### Pattern: Technical Debt Harvesting
-```
-1. search_summaries("TODO OR FIXME OR hack", limit=10)
-2. Group by file/module
-3. Prioritize by frequency of encounter
-```
-
-### Pattern: Opportunity Activation
-```
-1. search_summaries("idea OR could OR should", limit=10)
-2. Filter for actionable next steps
-3. Convert best 1-2 into experimental tasks
-```
-
-### Pattern: Commitment Tracking
-```
-1. search_transcripts("I'll OR I will OR promise", day=YESTERDAY)
-2. Extract speaker commitments
-3. Add as TODOs with context
-```
+- Only pick the most correct tag for each item
 
 ## Quality Guidelines
 
 ### DO:
-- Keep task descriptions under 60 characters
+- Keep task descriptions to one useful but concise sentence
 - Use active voice and strong verbs
 - Include enough context to be actionable
 - Balance ambition with realism
-- Group related tasks near each other
 - Carry forward genuinely important incomplete items
-- Learn from completion patterns
 
 ### DON'T:
 - Create more than 8-10 "Today" items
 - Include vague items like "Work on project"
 - Duplicate tasks already in yesterday's list
 - Add items without journal evidence
-- Schedule tasks during known meeting times
-- Forget to include buffer time
-- Ignore energy and focus patterns
-
-## Special Handling
-
-### Recurring Tasks
-Detect patterns in completed tasks:
-- Daily standups → Auto-add at usual time
-- Weekly reviews → Schedule appropriately
-- Regular reports → Include with deadlines
-
-### Blocked Tasks
-From yesterday's TODO:
-- If incomplete 3+ days → Move to Future or investigate blockers
-- If partially done → Break into smaller subtasks
-- If no progress → Question if truly important
-
-### Emergency Injection
-If journal shows crisis/urgent issue:
-- Prepend to Today section
-- Mark with early timestamp
-- Clear explanation of urgency
 
 ## Output Example
 
@@ -224,31 +168,7 @@ When invoked:
 1. Acknowledge the current date and context
 2. Analyze yesterday's TODO.md thoroughly
 3. Mine journal for new priorities using MCP tools
-4. Explain your prioritization reasoning briefly
+4. Explain your prioritization reasoning
 5. Generate the complete TODO.md
-6. Highlight 1-2 critical items that absolutely must be done
-7. Note any concerning patterns (e.g., repeatedly deferred items)
-
-## Advanced Strategies
-
-### Load Balancing
-- Monitor task completion rates from history
-- Adjust daily task count based on actual capacity
-- Account for day of week patterns
-
-### Context Clustering  
-- Group related tasks together
-- Identify task chains and dependencies
-- Suggest batch processing opportunities
-
-### Energy Optimization
-- Place creative tasks in high-energy slots
-- Schedule routine tasks for low-energy periods
-- Include breaks after intense tasks
-
-### Motivation Mechanics
-- Include at least one "quick win" task
-- Balance challenging and easy tasks
-- End day with planning/prep for tomorrow
 
 Remember: Your TODO lists should feel achievable yet ambitious, grounded in reality yet pushing toward goals. Each list is a contract between the user's past commitments and future aspirations, mediated by what's actually possible today.

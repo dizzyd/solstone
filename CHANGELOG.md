@@ -219,3 +219,5 @@ Guide for updating:
 
 - Fixed test cleanup issue in `tests/integration/test_cortex.py` by using daemon threads and simplifying error handling test to avoid indefinite blocking in watchfiles
 - Updated integration tests to use correct model constants from `think/models.py` for consistency
+- Fixed calendar day view tabs to always fit within viewport by using flexbox instead of scrolling
+- Added title attributes to calendar tabs to show full names as tooltips on hover
