@@ -169,9 +169,10 @@ def _get_agents_list(agent_type: str) -> object:
     offset = max(0, offset)
 
     # Get agents directly from cortex_agents function
-    from ..utils import time_since
     from think.cortex_client import cortex_agents
     from think.utils import get_personas
+
+    from ..utils import time_since
 
     # Get all agents using cortex_agents
     response = cortex_agents(limit=limit, offset=offset, agent_type=agent_type)
@@ -186,7 +187,9 @@ def _get_agents_list(agent_type: str) -> object:
         persona_id = agent.get("persona", "default")
         agent["persona_title"] = persona_titles.get(persona_id, persona_id)
         # Convert milliseconds to seconds for time_since
-        agent["since"] = time_since(agent["start"] / 1000) if agent.get("start") else "unknown"
+        agent["since"] = (
+            time_since(agent["start"] / 1000) if agent.get("start") else "unknown"
+        )
         # Keep backward compatibility
         agent["pid"] = None  # We don't track PIDs in the new system
 

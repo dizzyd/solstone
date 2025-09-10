@@ -40,6 +40,7 @@ The first line of a request file must be a JSON object with `event: "request"`:
     "max_tokens": 8192,             // Optional: token limit
     "domain": "my-project"          // Required for Claude backend only
   },
+  "save": "analysis.md",             // Optional: save result to file in current day directory
   "handoff": {                       // Optional: chain to another agent on completion
     "persona": "reviewer",
     "prompt": "Review the analysis",
@@ -63,6 +64,7 @@ The initial spawn request (first line of file, written by client).
   "backend": "openai",
   "persona": "default",
   "config": {},
+  "save": "output.md",
   "handoff": {},
   "handoff_from": "1234567890122"
 }
@@ -170,6 +172,16 @@ Tool events use `call_id` to pair `tool_start` and `tool_end` events. This allow
 - Concurrent tool executions
 
 The frontend uses this to show real-time status updates as tools execute, changing from "running..." to "✓" when complete.
+
+## Agent Result Saving
+
+When an agent completes successfully, its result can be automatically saved to a file in the journal's current day directory.
+
+- Include a `save` field in the request with the desired filename
+- The result from the `finish` event is written to `<journal>/<current_day>/<filename>`
+- Saving occurs before any handoff processing
+- Save failures are logged but don't interrupt the agent flow
+- Commonly used for scheduled agents that generate daily reports (e.g., TODO.md)
 
 ## Agent Handoff
 

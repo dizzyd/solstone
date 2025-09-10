@@ -71,7 +71,7 @@ def get_agent_status(agent_id: str, journal_path: str):
     completed_file = agents_dir / f"{agent_id}.jsonl"
     if completed_file.exists():
         return "completed"
-    
+
     # Also check for failed files
     for file in agents_dir.glob(f"{agent_id}_*.jsonl"):
         if "_failed" in file.name:
@@ -531,14 +531,14 @@ def test_cortex_error_handling():
 
         # Give Cortex time to process the request
         time.sleep(3)
-        
+
         # Read events directly from the agent file instead of watching
         events = read_agent_file(agent_id, journal_path)
-        
+
         # Check if we got any events
         event_types = [e.get("event") for e in events]
         print(f"Events found in agent file: {event_types}")
-        
+
         # For empty prompt, cortex might not process it at all or might handle it gracefully
         # The test is mainly to ensure cortex doesn't crash with invalid input
 

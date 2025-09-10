@@ -297,7 +297,9 @@ def test_openai_backend_custom_model():
 
     # Verify the answer
     finish_event = events[-1]
-    assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
+    assert (
+        finish_event["event"] == "finish"
+    ), f"Expected finish event, got: {finish_event}"
     assert "result" in finish_event, f"No result in finish event: {finish_event}"
     result_text = finish_event.get("result", "").lower()
     assert (

@@ -238,9 +238,7 @@ def test_spawn_agent_with_handoff_from(mock_popen, cortex_service, mock_journal)
     }
 
     with patch("think.cortex.threading.Thread"):
-        cortex_service._spawn_agent(
-            agent_id, file_path, request
-        )
+        cortex_service._spawn_agent(agent_id, file_path, request)
 
     # Check handoff_from was included in NDJSON
     written_data = mock_process.stdin.write.call_args[0][0]
@@ -476,7 +474,9 @@ def test_spawn_handoff(cortex_service, mock_journal):
     }
 
     with patch("think.cortex_client.cortex_request") as mock_request:
-        mock_request.return_value = mock_journal / "agents" / "987654321000_active.jsonl"
+        mock_request.return_value = (
+            mock_journal / "agents" / "987654321000_active.jsonl"
+        )
         cortex_service._spawn_handoff(parent_id, result, handoff)
 
         # Check cortex_request was called with correct parameters
@@ -643,3 +643,82 @@ def test_start_with_watchdog(mock_observer_class, cortex_service, mock_journal):
 
     # Check existing files were processed
     mock_process.assert_called_once()
+
+
+def test_save_agent_result(cortex_service, mock_journal):
+    """Test saving agent result to file in day directory."""
+    from datetime import datetime
+
+    # Mock datetime to return a specific date
+    test_date = "20240115"
+    with patch("think.cortex.datetime") as mock_datetime:
+        mock_datetime.now.return_value.strftime.return_value = test_date
+
+        # Test saving result
+        agent_id = "test_agent"
+        result = "This is the agent result content"
+        save_filename = "test_output.md"
+
+        cortex_service._save_agent_result(agent_id, result, save_filename)
+
+        # Check file was created in correct location
+        expected_path = mock_journal / test_date / save_filename
+        assert expected_path.exists()
+        assert expected_path.read_text() == result
+
+        # Check directory was created
+        assert (mock_journal / test_date).is_dir()
+
+
+def test_save_agent_result_with_error(cortex_service, mock_journal, caplog):
+    """Test save agent result handles errors gracefully."""
+    import logging
+
+    # Make journal read-only to cause error
+    with patch("builtins.open", side_effect=PermissionError("Cannot write")):
+        with caplog.at_level(logging.ERROR):
+            cortex_service._save_agent_result("agent_id", "result", "output.md")
+
+    # Check error was logged but didn't raise
+    assert "Failed to save agent agent_id result" in caplog.text
+
+
+def test_monitor_stdout_with_save(cortex_service, mock_journal):
+    """Test monitor_stdout saves result when save field is present."""
+    from datetime import datetime
+
+    from think.cortex import AgentProcess
+
+    # Create agent with save in request
+    agent_id = "save_test"
+    active_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
+
+    # Store request with save field
+    cortex_service.agent_requests = {
+        agent_id: {"event": "request", "prompt": "test", "save": "output.md"}
+    }
+
+    # Create mock process with stdout
+    mock_process = MagicMock()
+    mock_stdout = [
+        '{"event": "start", "ts": 1000}\n',
+        '{"event": "finish", "ts": 2000, "result": "Test result"}\n',
+    ]
+    mock_process.stdout = iter(mock_stdout)
+    mock_process.wait.return_value = 0
+
+    agent = AgentProcess(agent_id, mock_process, active_path)
+
+    # Mock datetime for consistent test
+    test_date = "20240115"
+    with patch("think.cortex.datetime") as mock_datetime:
+        mock_datetime.now.return_value.strftime.return_value = test_date
+
+        with patch.object(cortex_service, "_complete_agent_file"):
+            with patch.object(cortex_service, "_has_finish_event", return_value=True):
+                cortex_service._monitor_stdout(agent)
+
+    # Check result was saved
+    save_path = mock_journal / test_date / "output.md"
+    assert save_path.exists()
+    assert save_path.read_text() == "Test result"

@@ -31,8 +31,9 @@ def test_todo_generation_endpoint(client, monkeypatch, tmp_path):
     journal_root.mkdir()
     agents_dir = journal_root / "agents"
     agents_dir.mkdir()
-    
+
     import dream.state as dream_state
+
     monkeypatch.setattr(dream_state, "journal_root", str(journal_root))
     monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
 
@@ -83,8 +84,10 @@ def test_todo_generation_status_endpoint(client, monkeypatch, tmp_path):
     # Test status with agent_id parameter (running - active file exists)
     active_file = agents_dir / "test_agent_123_active.jsonl"
     # Write a proper request event as first line
-    active_file.write_text('{"event": "request", "ts": 1234567890, "prompt": "test", "persona": "todo", "backend": "openai"}\n')
-    
+    active_file.write_text(
+        '{"event": "request", "ts": 1234567890, "prompt": "test", "persona": "todo", "backend": "openai"}\n'
+    )
+
     response = client.get(
         "/calendar/20250101/todos/generation-status?agent_id=test_agent_123"
     )

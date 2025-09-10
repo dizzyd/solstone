@@ -85,7 +85,7 @@ def agent_events(agent_id: str) -> Any:
 
     # First, try to check if the agent is still running in Cortex
     from think.cortex_client import cortex_agents
-    
+
     try:
         # Get list of running agents from Cortex
         agent_list = cortex_agents(limit=100, offset=0)
@@ -93,100 +93,96 @@ def agent_events(agent_id: str) -> Any:
             # Check if our agent is in the running list
             for agent in agent_list["agents"]:
                 if agent.get("id") == agent_id and agent.get("status") == "running":
-                        # Agent is still running - watcher will automatically pick it up
+                    # Agent is still running - watcher will automatically pick it up
 
-                        # First check if there's a log file with historical events
-                        agents_dir = os.path.join(state.journal_root, "agents")
-                        agent_file = os.path.join(agents_dir, f"{agent_id}.jsonl")
+                    # First check if there's a log file with historical events
+                    agents_dir = os.path.join(state.journal_root, "agents")
+                    agent_file = os.path.join(agents_dir, f"{agent_id}.jsonl")
 
-                        events = []
-                        history = []
+                    events = []
+                    history = []
 
-                        # Read any events that have already been written to disk
-                        if os.path.isfile(agent_file):
-                            try:
-                                with open(agent_file, "r", encoding="utf-8") as f:
-                                    for line in f:
-                                        event = json.loads(line.strip())
-                                        if not event:
-                                            continue
+                    # Read any events that have already been written to disk
+                    if os.path.isfile(agent_file):
+                        try:
+                            with open(agent_file, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    event = json.loads(line.strip())
+                                    if not event:
+                                        continue
 
-                                        # Add HTML rendering for finish and error events
-                                        if event.get("event") == "finish":
-                                            result_text = event.get("result", "")
-                                            event["html"] = markdown.markdown(
-                                                result_text, extensions=["extra"]
-                                            )
-                                        elif event.get("event") == "error":
-                                            # Format error message
-                                            error_msg = event.get(
-                                                "error", "Unknown error"
-                                            )
-                                            trace = event.get("trace", "")
-                                            error_text = (
-                                                f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                                                if trace
-                                                else f"❌ **Error**: {error_msg}"
-                                            )
-                                            event["html"] = markdown.markdown(
-                                                error_text, extensions=["extra"]
-                                            )
-                                            event["result"] = error_text
+                                    # Add HTML rendering for finish and error events
+                                    if event.get("event") == "finish":
+                                        result_text = event.get("result", "")
+                                        event["html"] = markdown.markdown(
+                                            result_text, extensions=["extra"]
+                                        )
+                                    elif event.get("event") == "error":
+                                        # Format error message
+                                        error_msg = event.get("error", "Unknown error")
+                                        trace = event.get("trace", "")
+                                        error_text = (
+                                            f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                                            if trace
+                                            else f"❌ **Error**: {error_msg}"
+                                        )
+                                        event["html"] = markdown.markdown(
+                                            error_text, extensions=["extra"]
+                                        )
+                                        event["result"] = error_text
 
-                                        events.append(event)
+                                    events.append(event)
 
-                                        # Build chat history for display
-                                        if event.get("event") == "start":
-                                            history.append(
-                                                {
-                                                    "role": "user",
-                                                    "text": event.get("prompt", ""),
-                                                }
-                                            )
-                                        elif event.get("event") == "finish":
-                                            result_text = event.get("result", "")
-                                            html_result = markdown.markdown(
-                                                result_text, extensions=["extra"]
-                                            )
-                                            history.append(
-                                                {
-                                                    "role": "assistant",
-                                                    "text": result_text,
-                                                    "html": html_result,
-                                                }
-                                            )
-                                        elif event.get("event") == "error":
-                                            error_msg = event.get(
-                                                "error", "Unknown error"
-                                            )
-                                            trace = event.get("trace", "")
-                                            error_text = (
-                                                f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                                                if trace
-                                                else f"❌ **Error**: {error_msg}"
-                                            )
-                                            html_result = markdown.markdown(
-                                                error_text, extensions=["extra"]
-                                            )
-                                            history.append(
-                                                {
-                                                    "role": "assistant",
-                                                    "text": error_text,
-                                                    "html": html_result,
-                                                }
-                                            )
-                            except Exception:
-                                pass
+                                    # Build chat history for display
+                                    if event.get("event") == "start":
+                                        history.append(
+                                            {
+                                                "role": "user",
+                                                "text": event.get("prompt", ""),
+                                            }
+                                        )
+                                    elif event.get("event") == "finish":
+                                        result_text = event.get("result", "")
+                                        html_result = markdown.markdown(
+                                            result_text, extensions=["extra"]
+                                        )
+                                        history.append(
+                                            {
+                                                "role": "assistant",
+                                                "text": result_text,
+                                                "html": html_result,
+                                            }
+                                        )
+                                    elif event.get("event") == "error":
+                                        error_msg = event.get("error", "Unknown error")
+                                        trace = event.get("trace", "")
+                                        error_text = (
+                                            f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
+                                            if trace
+                                            else f"❌ **Error**: {error_msg}"
+                                        )
+                                        html_result = markdown.markdown(
+                                            error_text, extensions=["extra"]
+                                        )
+                                        history.append(
+                                            {
+                                                "role": "assistant",
+                                                "text": error_text,
+                                                "html": html_result,
+                                            }
+                                        )
+                        except Exception:
+                            pass
 
-                        # Return with source='cortex' to indicate it's live
-                        # Include the agent_id so client can subscribe to updates
-                        return jsonify(
-                            events=events,
-                            history=history,
-                            source="cortex",
-                            agent_id=agent_id,
-                            is_running=True,
-                        )
+                    # Return with source='cortex' to indicate it's live
+                    # Include the agent_id so client can subscribe to updates
+                    return jsonify(
+                        events=events,
+                        history=history,
+                        source="cortex",
+                        agent_id=agent_id,
+                        is_running=True,
+                    )
     except Exception:
         # If Cortex connection fails, fall through to file-based loading
         pass

@@ -26,6 +26,7 @@ def cortex_request(
     backend: Optional[str] = None,
     handoff_from: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
+    save: Optional[str] = None,
 ) -> str:
     """Create a Cortex agent request file.
 
@@ -35,6 +36,7 @@ def cortex_request(
         backend: AI backend - openai, google, anthropic, or claude
         handoff_from: Previous agent ID if this is a handoff request
         config: Backend-specific configuration (model, max_tokens, domain for Claude)
+        save: Optional filename to save result to in current day directory
 
     Returns:
         Path to the created request file
@@ -66,6 +68,9 @@ def cortex_request(
 
     if handoff_from:
         request["handoff_from"] = handoff_from
+
+    if save:
+        request["save"] = save
 
     # Write to pending file
     pending_file = agents_dir / f"{ts}_pending.jsonl"
@@ -318,12 +323,12 @@ def cortex_agents(
     agent_type: str = "all",
 ) -> Dict[str, Any]:
     """List agents from the journal with pagination and filtering.
-    
+
     Args:
         limit: Maximum number of agents to return (1-100)
         offset: Number of agents to skip
         agent_type: Filter by "live", "historical", or "all"
-    
+
     Returns:
         Dictionary with agents list and pagination info
     """
@@ -331,11 +336,11 @@ def cortex_agents(
     journal_path = os.environ.get("JOURNAL_PATH")
     if not journal_path:
         raise ValueError("JOURNAL_PATH environment variable not set")
-    
+
     # Validate parameters
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    
+
     agents_dir = Path(journal_path) / "agents"
     if not agents_dir.exists():
         return {
@@ -349,54 +354,54 @@ def cortex_agents(
             "live_count": 0,
             "historical_count": 0,
         }
-    
+
     # Collect all agent files
     all_agents = []
     live_count = 0
     historical_count = 0
-    
+
     for agent_file in agents_dir.glob("*.jsonl"):
         # Determine status from filename
         is_active = "_active.jsonl" in agent_file.name
         is_pending = "_pending.jsonl" in agent_file.name
-        
+
         # Skip pending files
         if is_pending:
             continue
-            
+
         status = "running" if is_active else "completed"
-        
+
         # Count by type
         if status == "running":
             live_count += 1
         else:
             historical_count += 1
-        
+
         # Filter by requested type
         if agent_type == "live" and status != "running":
             continue
         if agent_type == "historical" and status != "completed":
             continue
-        
+
         # Extract agent ID from filename
         agent_id = agent_file.stem.replace("_active", "")
-        
+
         # Read agent file to get request info and calculate runtime
         try:
             with open(agent_file, "r") as f:
                 lines = f.readlines()
                 if not lines:
                     continue
-                    
+
                 # Parse first line (request)
                 first_line = lines[0].strip()
                 if not first_line:
                     continue
-                    
+
                 request = json.loads(first_line)
                 if request.get("event") != "request":
                     continue
-                
+
                 # Extract basic info
                 agent_info = {
                     "id": agent_id,
@@ -404,9 +409,11 @@ def cortex_agents(
                     "start": request.get("ts", 0),
                     "status": status,
                     "prompt": request.get("prompt", ""),
-                    "model": request.get("backend", "openai"),  # Backend is the model provider
+                    "model": request.get(
+                        "backend", "openai"
+                    ),  # Backend is the model provider
                 }
-                
+
                 # For completed agents, find finish event to calculate runtime
                 if status == "completed" and len(lines) > 1:
                     # Read last few lines to find finish event (reading backwards is more efficient)
@@ -420,23 +427,25 @@ def cortex_agents(
                                 end_ts = event.get("ts", 0)
                                 if end_ts and agent_info["start"]:
                                     # Calculate runtime in seconds
-                                    agent_info["runtime_seconds"] = (end_ts - agent_info["start"]) / 1000.0
+                                    agent_info["runtime_seconds"] = (
+                                        end_ts - agent_info["start"]
+                                    ) / 1000.0
                                 break
                         except json.JSONDecodeError:
                             continue
-                
+
                 all_agents.append(agent_info)
         except (json.JSONDecodeError, IOError):
             # Skip malformed files
             continue
-    
+
     # Sort by start time (newest first)
     all_agents.sort(key=lambda x: x["start"], reverse=True)
-    
+
     # Apply pagination
     total = len(all_agents)
     paginated = all_agents[offset : offset + limit]
-    
+
     return {
         "agents": paginated,
         "pagination": {

@@ -11,7 +11,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from think.cortex_client import cortex_run as cortex_run_agent
 
-
 # Note: The async infrastructure has been removed since cortex_client.py
 # now provides synchronous functions directly
 

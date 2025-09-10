@@ -18,6 +18,7 @@ import os
 import subprocess
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -119,8 +120,10 @@ class CortexService:
         """Clean up any stale active files that exist on startup."""
         for file_path in self.agents_dir.glob("*_active.jsonl"):
             agent_id = file_path.stem.replace("_active", "")
-            self.logger.warning(f"Found stale active file from previous session: {agent_id}")
-            
+            self.logger.warning(
+                f"Found stale active file from previous session: {agent_id}"
+            )
+
             # Write an error event indicating the agent crashed
             error_message = "Agent failed due to unexpected Cortex service shutdown"
             self._write_error_and_complete(file_path, error_message)
@@ -171,6 +174,10 @@ class CortexService:
     ) -> None:
         """Spawn an agent subprocess and monitor its output using the provided request."""
         try:
+            # Store the request for later use (e.g., for save field)
+            self.agent_requests = getattr(self, "agent_requests", {})
+            self.agent_requests[agent_id] = request
+
             # Pass the full request through to the agent as NDJSON
             ndjson_input = json.dumps(request)
 
@@ -247,13 +254,23 @@ class CortexService:
 
                     # Handle finish or error event
                     if event.get("event") in ["finish", "error"]:
-                        # Check for handoff (only on finish)
+                        # Check for save and handoff (only on finish)
                         if event.get("event") == "finish":
+                            result = event.get("result", "")
+
+                            # Save result if requested
+                            original_request = getattr(self, "agent_requests", {}).get(
+                                agent.agent_id
+                            )
+                            if original_request and original_request.get("save"):
+                                self._save_agent_result(
+                                    agent.agent_id, result, original_request["save"]
+                                )
+
+                            # Handle handoff
                             handoff = event.get("handoff")
                             if handoff:
-                                self._spawn_handoff(
-                                    agent.agent_id, event.get("result", ""), handoff
-                                )
+                                self._spawn_handoff(agent.agent_id, result, handoff)
                         # Break to trigger cleanup
                         break
 
@@ -293,10 +310,16 @@ class CortexService:
             # Complete the file (rename from _active.jsonl to .jsonl)
             self._complete_agent_file(agent.agent_id, agent.log_path)
 
-            # Remove from running agents
+            # Remove from running agents and clean up stored request
             with self.lock:
                 if agent.agent_id in self.running_agents:
                     del self.running_agents[agent.agent_id]
+                # Clean up stored request
+                if (
+                    hasattr(self, "agent_requests")
+                    and agent.agent_id in self.agent_requests
+                ):
+                    del self.agent_requests[agent.agent_id]
 
     def _monitor_stderr(self, agent: AgentProcess) -> None:
         """Monitor agent stderr for errors."""
@@ -376,13 +399,36 @@ class CortexService:
         except Exception as e:
             self.logger.error(f"Failed to write error and complete: {e}")
 
+    def _save_agent_result(
+        self, agent_id: str, result: str, save_filename: str
+    ) -> None:
+        """Save agent result to a file in the current day directory."""
+        try:
+            # Get current day in YYYYMMDD format
+            today = datetime.now().strftime("%Y%m%d")
+
+            # Build path to day directory
+            day_dir = self.journal_path / today
+            day_dir.mkdir(parents=True, exist_ok=True)
+
+            # Write result to save file
+            save_path = day_dir / save_filename
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(result)
+
+            self.logger.info(f"Saved agent {agent_id} result to {save_path}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to save agent {agent_id} result: {e}")
+            # Don't raise - continue with normal flow even if save fails
+
     def _spawn_handoff(
         self, parent_id: str, result: str, handoff: Dict[str, Any]
     ) -> None:
         """Spawn a handoff agent from a completed agent's result."""
         try:
             from think.cortex_client import cortex_request
-            
+
             # Extract handoff configuration
             persona = handoff.get("persona", "default")
             backend = handoff.get("backend", "openai")

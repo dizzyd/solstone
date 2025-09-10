@@ -76,6 +76,7 @@ def spawn_scheduled_agents(journal: str) -> None:
                     persona=persona_id,
                     backend=config.get("backend", "openai"),
                     config=agent_config,
+                    save=config.get("save"),  # Pass save field from agent metadata
                 )
 
                 # Extract agent_id from the filename

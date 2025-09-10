@@ -634,8 +634,9 @@ def create_matter(domain_name: str) -> Any:
 
     try:
         # Import cortex request function
-        from think.cortex_client import cortex_request
         from pathlib import Path as PathLib
+
+        from think.cortex_client import cortex_request
 
         # Prepare the prompt for the matter_editor persona
         priority = data.get("priority", "medium")
@@ -671,7 +672,7 @@ Please analyze the description and:
         active_file = cortex_request(
             prompt=prompt, persona="matter_editor", backend="claude", config=config
         )
-        
+
         # Extract agent ID from filename
         agent_id = PathLib(active_file).stem.replace("_active", "")
 

@@ -155,7 +155,7 @@ def search_transcripts(
     If ``day`` is provided only that day's index is searched and results are
     ordered chronologically. Otherwise all available per-day indexes are
     queried and results are ordered by relevance.
-    
+
     If ``start_date`` and ``end_date`` are provided, only days within that
     range are searched (format: YYYYMMDD).
 

@@ -311,11 +311,11 @@ def generate_todos(day: str) -> Any:
         return "", 404
 
     # Import cortex functions
-    from think.cortex_client import cortex_request
-
     # Get yesterday's TODO if it exists
     from datetime import datetime, timedelta
     from pathlib import Path
+
+    from think.cortex_client import cortex_request
 
     day_date = datetime.strptime(day, "%Y%m%d")
     yesterday = (day_date - timedelta(days=1)).strftime("%Y%m%d")
@@ -351,6 +351,7 @@ Write the generated TODO list to the file at: {day}/TODO.md"""
         )
         # Extract agent ID from filename
         from pathlib import Path as PathLib
+
         agent_id = PathLib(active_file).stem.replace("_active", "")
     except Exception as e:
         return jsonify({"error": f"Failed to spawn agent: {str(e)}"}), 500
@@ -383,6 +384,7 @@ def todo_generation_status(day: str) -> Any:
     # Check agent status
     import os
     from pathlib import Path
+
     from think.cortex_client import cortex_agents
 
     # First check if agent exists in journal (finished)

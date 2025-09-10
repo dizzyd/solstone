@@ -221,3 +221,9 @@ Guide for updating:
 - Updated integration tests to use correct model constants from `think/models.py` for consistency
 - Fixed calendar day view tabs to always fit within viewport by using flexbox instead of scrolling
 - Added title attributes to calendar tabs to show full names as tooltips on hover
+- Added `save` field support to Cortex agent requests for saving results to journal day directories
+- Updated `cortex_request()` in `think/cortex_client.py` to accept optional `save` parameter
+- Modified `think/cortex.py` to save agent results to `<journal>/<current_day>/<filename>` when save field is present
+- Updated `think/supervisor.py` to pass save field from agent metadata for scheduled agents
+- Enhanced `CORTEX.md` documentation to describe the new save field and Agent Result Saving feature
+- Added comprehensive tests for save functionality including error handling in `tests/test_cortex.py`
