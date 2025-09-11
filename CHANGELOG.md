@@ -250,3 +250,5 @@ Guide for updating:
 - Added Disable/Enable toggle button in topic modal for easy state management in `dream/templates/agents.html`
 - Updated `_list_items()` in `dream/views/agents.py` to include disabled state when listing topics
 - Applied code formatting to multiple files via Black and isort
+- Added "Total" option to model dropdown in Dream dashboard token activity chart to show sum across all models
+- Modified `dream/static/dashboard.js` to aggregate token usage (prompt/response/thinking) when "Total" is selected

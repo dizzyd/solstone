@@ -126,10 +126,24 @@ const Dashboard = (function() {
     // Calculate max total for scaling
     let maxTotal = 0;
     const chartData = days.map(day => {
-      const dayData = tokenData[day][model] || {};
-      const prompt = dayData.prompt_tokens || 0;
-      const thoughts = dayData.thoughts_tokens || 0;
-      const candidates = dayData.candidates_tokens || 0;
+      let prompt = 0, thoughts = 0, candidates = 0;
+      
+      if (model === 'total') {
+        // Sum all models for this day
+        const dayModels = tokenData[day] || {};
+        Object.values(dayModels).forEach(modelData => {
+          prompt += modelData.prompt_tokens || 0;
+          thoughts += modelData.thoughts_tokens || 0;
+          candidates += modelData.candidates_tokens || 0;
+        });
+      } else {
+        // Single model data
+        const dayData = tokenData[day][model] || {};
+        prompt = dayData.prompt_tokens || 0;
+        thoughts = dayData.thoughts_tokens || 0;
+        candidates = dayData.candidates_tokens || 0;
+      }
+      
       const total = prompt + thoughts + candidates;
       maxTotal = Math.max(maxTotal, total);
       return { day, prompt, thoughts, candidates, total };
@@ -351,16 +365,22 @@ const Dashboard = (function() {
     const modelSelector = document.getElementById('modelSelector');
     if (models.length > 0) {
       modelSelector.innerHTML = '';
+      
+      // Add "Total" option first
+      const totalOption = el('option', {value: 'total'}, ['Total']);
+      modelSelector.appendChild(totalOption);
+      
+      // Add individual models
       models.forEach(model => {
         const option = el('option', {value: model}, [model]);
         modelSelector.appendChild(option);
       });
       
-      // Set first model as default
-      modelSelector.value = models[0];
+      // Set total as default
+      modelSelector.value = 'total';
       
       // Initial render
-      buildTokenChart(document.getElementById('tokenChart'), tokenUsage, models[0]);
+      buildTokenChart(document.getElementById('tokenChart'), tokenUsage, 'total');
       
       // Handle model selection changes
       modelSelector.addEventListener('change', function() {
