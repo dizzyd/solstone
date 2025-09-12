@@ -70,6 +70,23 @@
 .summary-loading { text-align: center; color: #666; padding: 2em; }
 .summary-loading .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #007bff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Re-run section */
+.rerun-section { margin-top: 2em; padding: 1em; background: #f0f8ff; border: 1px solid #007bff; border-radius: 4px; }
+.rerun-section h3 { margin-top: 0; color: #007bff; }
+.rerun-controls { display: flex; align-items: center; gap: 1em; margin-top: 1em; }
+.rerun-controls label { font-weight: bold; }
+.rerun-controls select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; background: white; min-width: 150px; }
+.rerun-controls button { padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.rerun-controls button:hover { background: #0056b3; }
+.rerun-controls button:disabled { background: #ccc; cursor: not-allowed; opacity: 0.6; }
+.rerun-note { font-size: 0.9em; color: #666; margin-top: 0.5em; font-style: italic; }
+
+/* Task output modal */
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+.modal-content { background: white; margin: 5% auto; padding: 1em; border-radius: 8px; max-width: 800px; max-height: 80vh; overflow: auto; position: relative; }
+.close { position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 24px; }
+#taskOutput { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; background: #f5f5f5; padding: 1em; border-radius: 4px; }
 </style>
 {% endblock %}
 
@@ -125,6 +142,27 @@
         Loading summary<span class="spinner"></span>
       </div>
     </div>
+  </div>
+  
+  <div class="rerun-section" id="rerunSection" style="display:none;">
+    <h3>Re-run Import</h3>
+    <div class="rerun-controls">
+      <label for="domainSelect">Domain:</label>
+      <select id="domainSelect">
+        <option value="">None</option>
+      </select>
+      <button id="rerunBtn">Re-run Import</button>
+    </div>
+    <div class="rerun-note">
+      Re-running will overwrite the existing transcription results with new ones using the selected domain for improved entity recognition.
+    </div>
+  </div>
+</div>
+
+<div id="taskModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <pre id="taskOutput"></pre>
   </div>
 </div>
 
@@ -208,10 +246,114 @@ function formatTimestamp(timestamp) {
   return timestamp;
 }
 
+// Global variable to store import data
+let importData = null;
+
+// Load domains for dropdown
+function loadDomains() {
+  fetch('{{ url_for("domains.domains_list") }}')
+    .then(r => r.json())
+    .then(domains => {
+      const select = document.getElementById('domainSelect');
+      const current = importData?.import_json?.domain || ''; // Use current domain from import
+      select.innerHTML = '<option value="">None</option>';
+      Object.entries(domains).forEach(([name, data]) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = data.title || name;
+        if (name === current) opt.selected = true;
+        select.appendChild(opt);
+      });
+    })
+    .catch(() => {/* ignore */});
+}
+
+// Run task with WebSocket output
+function runTask(taskData) {
+  const modal = document.getElementById('taskModal');
+  const out = document.getElementById('taskOutput');
+  const content = document.querySelector('#taskModal .modal-content');
+  out.innerHTML = '';
+  modal.style.display = 'block';
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner';
+  spinner.style.cssText = 'display: inline-block; width: 12px; height: 12px; border: 2px solid #ccc; border-top-color: #333; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 4px;';
+  out.appendChild(spinner);
+  const scroll = () => { content.scrollTop = content.scrollHeight; };
+  const addLine = html => { spinner.remove(); out.innerHTML += html + '\n'; out.appendChild(spinner); scroll(); };
+  const ws = new WebSocket(`ws://${location.host}/ws/tasks`);
+  ws.onopen = () => ws.send(JSON.stringify(taskData));
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'stdout') addLine(msg.text);
+    else if (msg.type === 'stderr') addLine('<span style="color:red">' + msg.text + '</span>');
+    else if (msg.type === 'exit') {
+      spinner.remove();
+      out.innerHTML += '[exit ' + msg.code + ']\n';
+      scroll();
+      ws.close();
+      // Reload page after successful re-run
+      if (msg.code === 0) {
+        setTimeout(() => location.reload(), 2000);
+      }
+    }
+  };
+  ws.onclose = () => { spinner.remove(); };
+}
+
+// Handle re-run button click
+document.getElementById('rerunBtn').addEventListener('click', () => {
+  const domain = document.getElementById('domainSelect').value;
+  
+  if (confirm('This will re-run the import and overwrite existing transcription results. Continue?')) {
+    const btn = document.getElementById('rerunBtn');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    
+    // Call the re-run endpoint
+    fetch('{{ url_for("import_view.import_rerun", timestamp=timestamp) }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: domain })
+    })
+    .then(r => r.json())
+    .then(result => {
+      if (result.status === 'ok') {
+        // Run the task with WebSocket output
+        runTask({
+          task: 'importer',
+          day: importData.import_json.file_path + '|{{ timestamp }}',
+          src: 'import_rerun'
+        });
+      } else {
+        alert('Failed to start re-run: ' + (result.error || 'Unknown error'));
+        btn.disabled = false;
+        btn.textContent = 'Re-run Import';
+      }
+    })
+    .catch(err => {
+      alert('Failed to start re-run: ' + err);
+      btn.disabled = false;
+      btn.textContent = 'Re-run Import';
+    });
+  }
+});
+
+// Modal close handlers
+document.querySelector('.close').onclick = () => {
+  document.getElementById('taskModal').style.display = 'none';
+};
+window.onclick = e => {
+  if (e.target == document.getElementById('taskModal')) {
+    document.getElementById('taskModal').style.display = 'none';
+  }
+};
+
 // Load import details
 fetch('{{ url_for("import_view.import_detail_api", timestamp=timestamp) }}')
   .then(r => r.json())
   .then(data => {
+    importData = data; // Store globally
     // Update header metadata
     const metaDiv = document.getElementById('importMeta');
     if (data.import_json) {
@@ -301,6 +443,18 @@ fetch('{{ url_for("import_view.import_detail_api", timestamp=timestamp) }}')
     if (data.has_summary) {
       const summaryTab = document.getElementById('summaryTab');
       summaryTab.style.display = 'block';
+    }
+    
+    // Show re-run section if import is completed or failed and file exists
+    if (data.import_json && data.import_json.file_path) {
+      // Show re-run section for completed or failed imports
+      if (data.imported_json || (data.import_json.task_id && !data.imported_json)) {
+        const rerunSection = document.getElementById('rerunSection');
+        rerunSection.style.display = 'block';
+        
+        // Load domains for the dropdown
+        loadDomains();
+      }
     }
   })
   .catch(err => {

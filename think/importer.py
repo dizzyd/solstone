@@ -221,9 +221,15 @@ def process_transcript(path: str, day_dir: str, base_dt: dt.datetime) -> list[st
 
 
 def audio_transcribe(
-    path: str, day_dir: str, base_dt: dt.datetime
+    path: str, day_dir: str, base_dt: dt.datetime, domain: str | None = None
 ) -> tuple[list[str], dict]:
     """Transcribe audio using Rev AI and save 5-minute chunks as imported JSON.
+
+    Args:
+        path: Path to audio file
+        day_dir: Directory to save chunks to
+        base_dt: Base datetime for timestamps
+        domain: Optional domain name to extract entities from
 
     Returns:
         Tuple of (list of created file paths, raw RevAI JSON result)
@@ -232,9 +238,34 @@ def audio_transcribe(
     media_path = Path(path)
     created_files = []
 
+    # Get domain entities if domain is specified
+    entities = None
+    if domain:
+        try:
+            from think.domains import get_domains
+
+            domains = get_domains()
+            if domain in domains:
+                domain_entities = domains[domain].get("entities", {})
+                # Flatten all entity names into a single list for Rev AI
+                entities = []
+                for entity_type, names in domain_entities.items():
+                    entities.extend(names)
+                if entities:
+                    logger.info(
+                        f"Using {len(entities)} entities from domain '{domain}' for transcription"
+                    )
+            else:
+                logger.warning(f"Domain '{domain}' not found")
+        except Exception as e:
+            logger.warning(f"Failed to load domain entities: {e}")
+
     # Transcribe using Rev AI
     try:
-        revai_json = transcribe_file(media_path)
+        if entities:
+            revai_json = transcribe_file(media_path, entities=entities)
+        else:
+            revai_json = transcribe_file(media_path)
     except Exception as e:
         logger.error(f"Failed to transcribe audio: {e}")
         raise
@@ -427,6 +458,12 @@ def main() -> None:
         default=5.0,
         help="Video sampling interval in seconds",
     )
+    parser.add_argument(
+        "--domain",
+        type=str,
+        default=None,
+        help="Domain name to use for entity extraction",
+    )
     args, extra = setup_cli(parser, parse_known=True)
     if extra and not args.timestamp:
         args.timestamp = extra[0]
@@ -466,6 +503,7 @@ def main() -> None:
         "target_day_path": day_dir,
         "input_file": args.media,
         "processing_started": dt.datetime.now().isoformat(),
+        "domain": args.domain,
         "outputs": [],
     }
 
@@ -486,7 +524,7 @@ def main() -> None:
     else:
         if args.hear:
             created_files, revai_json_data = audio_transcribe(
-                args.media, day_dir, base_dt
+                args.media, day_dir, base_dt, domain=args.domain
             )
             all_created_files.extend(created_files)
             audio_transcript_files.extend(created_files)  # Track for summarization

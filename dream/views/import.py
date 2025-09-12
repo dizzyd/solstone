@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import time
 from pathlib import Path
 from typing import Any
@@ -371,3 +372,67 @@ def import_start() -> Any:
         return jsonify({"error": "missing params"}), 400
     run_task("importer", f"{path}|{ts}")
     return jsonify({"status": "ok"})
+
+
+@bp.route("/import/api/<timestamp>/rerun", methods=["POST"])
+def import_rerun(timestamp: str) -> Any:
+    """Re-run an import with optionally updated domain."""
+    import json
+
+    if not state.journal_root:
+        return jsonify({"error": "JOURNAL_PATH not set"}), 500
+
+    import_dir = Path(state.journal_root) / "imports" / timestamp
+    if not import_dir.exists():
+        return jsonify({"error": "Import not found"}), 404
+
+    # Read import metadata
+    import_json_path = import_dir / "import.json"
+    if not import_json_path.exists():
+        return jsonify({"error": "Import metadata not found"}), 404
+
+    try:
+        with open(import_json_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+    except Exception as e:
+        return jsonify({"error": f"Failed to read import metadata: {str(e)}"}), 500
+
+    # Get file path from metadata
+    file_path = metadata.get("file_path")
+    if not file_path:
+        return jsonify({"error": "File path not found in metadata"}), 500
+
+    # Check if file still exists
+    if not Path(file_path).exists():
+        return jsonify({"error": "Original file no longer exists"}), 404
+
+    # Get new domain from request
+    data = request.get_json(force=True)
+    new_domain = data.get("domain", "").strip() or None
+
+    # Update metadata with new domain
+    if new_domain != metadata.get("domain"):
+        metadata["domain"] = new_domain
+        metadata["rerun_at"] = time.time() * 1000
+        metadata["rerun_datetime"] = datetime.datetime.now().isoformat()
+
+        try:
+            with open(import_json_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2)
+        except Exception as e:
+            return jsonify({"error": f"Failed to update metadata: {str(e)}"}), 500
+
+    # Clear previous processing results to indicate re-run
+    imported_json_path = import_dir / "imported.json"
+    if imported_json_path.exists():
+        try:
+            # Archive the old results
+            archive_path = import_dir / f"imported.{int(time.time())}.json.bak"
+            imported_json_path.rename(archive_path)
+        except Exception:
+            pass  # Continue even if archiving fails
+
+    # Run the importer task with the same timestamp
+    run_task("importer", f"{file_path}|{timestamp}")
+
+    return jsonify({"status": "ok", "domain": new_domain})

@@ -232,6 +232,7 @@ def run_task(
                     raise ValueError("invalid importer args")
 
                 # Update metadata JSON with task ID and user-submitted timestamp
+                domain = None
                 if task_id:
                     import json
                     from pathlib import Path
@@ -251,6 +252,8 @@ def run_task(
                             )
                             metadata["task_id"] = task_id
                             metadata["user_submitted_timestamp"] = ts
+                            # Get domain from metadata
+                            domain = metadata.get("domain")
                             metadata_path.write_text(
                                 json.dumps(metadata, indent=2), encoding="utf-8"
                             )
@@ -258,6 +261,9 @@ def run_task(
                             pass  # Continue even if metadata update fails
 
                 cmd = ["think-importer", path, ts, "--verbose"]
+                # Add domain parameter if available
+                if domain:
+                    cmd.extend(["--domain", domain])
                 commands.append(" ".join(cmd))
                 code = (
                     _run_command(cmd, logger, stop)

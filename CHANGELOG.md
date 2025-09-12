@@ -253,3 +253,14 @@ Guide for updating:
 - Added "Total" option to model dropdown in Dream dashboard token activity chart to show sum across all models
 - Modified `dream/static/dashboard.js` to aggregate token usage (prompt/response/thinking) when "Total" is selected
 - Added `think-indexer --rescan-all` as the final step in `think/process_day.py` to ensure new day's content is indexed and available to scheduled agents
+
+## 2025-09-12
+
+- Added re-run import functionality with domain selection to improve transcription accuracy
+- Enhanced `think/importer.py` to accept `--domain` parameter and pass domain entities to Rev AI for better recognition
+- Modified `audio_transcribe()` function to load domain entities and include them in transcription requests
+- Updated `dream/task_runner.py` to read domain from import metadata and pass it to think-importer
+- Added new `/import/api/<timestamp>/rerun` endpoint in `dream/views/import.py` for re-running imports with updated domain
+- Enhanced import detail view with domain selector dropdown and re-run button for completed or failed imports
+- Added WebSocket-based task output display in modal for real-time re-run progress monitoring
+- Re-run functionality archives previous results before overwriting with new transcription using selected domain entities
