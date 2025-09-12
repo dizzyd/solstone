@@ -252,3 +252,4 @@ Guide for updating:
 - Applied code formatting to multiple files via Black and isort
 - Added "Total" option to model dropdown in Dream dashboard token activity chart to show sum across all models
 - Modified `dream/static/dashboard.js` to aggregate token usage (prompt/response/thinking) when "Total" is selected
+- Added `think-indexer --rescan-all` as the final step in `think/process_day.py` to ensure new day's content is indexed and available to scheduled agents

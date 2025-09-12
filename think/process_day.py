@@ -73,6 +73,12 @@ def build_commands(day: str, force: bool, verbose: bool = False) -> list[list[st
         stats_cmd.append("--verbose")
     commands.append(stats_cmd)
 
+    # Rescan all indexes to pick up the new day's content
+    indexer_cmd = ["think-indexer", "--rescan-all"]
+    if verbose:
+        indexer_cmd.append("--verbose")
+    commands.append(indexer_cmd)
+
     return commands
 
 
