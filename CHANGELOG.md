@@ -264,3 +264,9 @@ Guide for updating:
 - Enhanced import detail view with domain selector dropdown and re-run button for completed or failed imports
 - Added WebSocket-based task output display in modal for real-time re-run progress monitoring
 - Re-run functionality archives previous results before overwriting with new transcription using selected domain entities
+
+## 2025-09-13
+
+- Added new decisions topic extractor to identify and rank consequential decision-actions from multimodal journal data
+- Created `think/topics/decisions.txt` with comprehensive prompt for extracting decision-actions that affect other people
+- Created `think/topics/decisions.json` with metadata configuration including distinct red color (#dc3545) for UI display
