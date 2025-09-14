@@ -270,3 +270,6 @@ Guide for updating:
 - Added new decisions topic extractor to identify and rank consequential decision-actions from multimodal journal data
 - Created `think/topics/decisions.txt` with comprehensive prompt for extracting decision-actions that affect other people
 - Created `think/topics/decisions.json` with metadata configuration including distinct red color (#dc3545) for UI display
+- Added Decision Dossier Agent to analyze yesterday's most consequential decisions for gaps and stakeholder impacts
+- Created `think/agents/decisionalizer.txt` with MCP tool-based research protocol for deep decision analysis
+- Created `think/agents/decisionalizer.json` to schedule daily dossier generation analyzing previous day's decisions
