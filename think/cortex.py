@@ -18,7 +18,7 @@ import os
 import subprocess
 import threading
 import time
-from datetime import datetime
+# Removed datetime - using time.time() instead
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -93,6 +93,7 @@ class CortexService:
 
         self.logger = logging.getLogger(__name__)
         self.running_agents: Dict[str, AgentProcess] = {}
+        self.agent_requests: Dict[str, Dict[str, Any]] = {}  # Store agent configs
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.observer = None
@@ -156,8 +157,17 @@ class CortexService:
                 self._write_error_and_complete(file_path, "Empty prompt in request")
                 return
 
-            # Spawn the agent process with the full request object
-            self._spawn_agent(agent_id, file_path, request)
+            # Load persona and merge with request
+            from think.utils import get_agent
+
+            persona = request.get("persona", "default")
+            config = get_agent(persona)
+
+            # Merge request into config (request values override persona defaults)
+            config.update(request)
+
+            # Spawn the agent process with the merged config
+            self._spawn_agent(agent_id, file_path, config)
 
         except json.JSONDecodeError as e:
             self.logger.error(f"Invalid JSON in request file {file_path}: {e}")
@@ -170,16 +180,15 @@ class CortexService:
         self,
         agent_id: str,
         file_path: Path,
-        request: Dict[str, Any],
+        config: Dict[str, Any],
     ) -> None:
-        """Spawn an agent subprocess and monitor its output using the provided request."""
+        """Spawn an agent subprocess and monitor its output using the merged config."""
         try:
-            # Store the request for later use (e.g., for save field)
-            self.agent_requests = getattr(self, "agent_requests", {})
-            self.agent_requests[agent_id] = request
+            # Store the config for later use (e.g., for save field)
+            self.agent_requests[agent_id] = config
 
-            # Pass the full request through to the agent as NDJSON
-            ndjson_input = json.dumps(request)
+            # Pass the full config through to the agent as NDJSON
+            ndjson_input = json.dumps(config)
 
             # Prepare environment
             env = os.environ.copy()
@@ -432,25 +441,26 @@ class CortexService:
         try:
             from think.cortex_client import cortex_request
 
-            # Extract handoff configuration
-            persona = handoff.get("persona", "default")
-            backend = handoff.get("backend", "openai")
-            prompt = handoff.get(
-                "prompt", result
-            )  # Use explicit prompt or parent's result
-            config = {
-                k: v
-                for k, v in handoff.items()
-                if k not in ["persona", "backend", "prompt"]
-            }
+            # Get parent's config to inherit from
+            parent_config = self.agent_requests.get(parent_id, {})
+
+            # Start with parent config and overlay handoff values
+            handoff_config = parent_config.copy()
+            handoff_config.update(handoff)
+
+            # Use explicit prompt or parent's result
+            prompt = handoff_config.get("prompt", result)
 
             # Use cortex_request to create the handoff agent
             active_path = cortex_request(
                 prompt=prompt,
-                persona=persona,
-                backend=backend,
+                persona=handoff_config.get("persona", "default"),
+                backend=handoff_config.get("backend", "openai"),
                 handoff_from=parent_id,
-                config=config if config else None,
+                config={
+                    k: v for k, v in handoff_config.items()
+                    if k not in ["prompt", "persona", "backend", "handoff_from"]
+                },
             )
 
             self.logger.info(f"Spawned handoff agent {active_path} from {parent_id}")

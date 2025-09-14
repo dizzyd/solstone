@@ -277,3 +277,15 @@ Guide for updating:
 - Created `think/agents/todo_review.txt` with instructions to search yesterday's journal for completion indicators
 - Created `think/agents/todo_review.json` to run via handoff from TODO generator and update TODO.md with verified completions
 - Modified `think/agents/todo.json` to add handoff configuration that chains to todo_review agent after generation
+
+## 2025-09-14
+
+- Implemented unified agent configuration model to streamline persona config handling across the system
+- Added `get_agent()` function in `think/utils.py` that returns complete agent configuration including instruction text
+- Renamed `get_personas()` to `get_agents()` throughout codebase for naming consistency
+- Centralized configuration loading in Cortex, eliminating redundant persona loading in agents.py
+- Updated all agent backends (OpenAI, Google, Anthropic, Claude) to accept single config dict instead of separate parameters
+- Simplified agent handoff mechanism to automatically inherit parent configuration
+- Modified supervisor scheduled agents to rely on Cortex for configuration merging
+- Updated web interface to use cortex_client instead of direct agent calls
+- Fixed all tests to work with new unified configuration approach

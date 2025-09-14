@@ -93,13 +93,19 @@ def test_handle_active_file_valid_request(cortex_service, mock_journal):
     file_path.write_text(json.dumps(request) + "\n")
 
     with patch.object(cortex_service, "_spawn_agent") as mock_spawn:
-        cortex_service._handle_active_file(agent_id, file_path)
-        # Now it passes the full request object
-        mock_spawn.assert_called_once_with(
-            agent_id,
-            file_path,
-            request,
-        )
+        with patch("think.utils.get_agent") as mock_get_agent:
+            # Mock get_agent to return a config
+            mock_get_agent.return_value = {
+                "instruction": "Default instruction",
+                "title": "Default",
+            }
+            cortex_service._handle_active_file(agent_id, file_path)
+            # Now it passes the merged config
+            # The config includes get_agent result merged with request
+            assert mock_spawn.called
+            called_config = mock_spawn.call_args[0][2]
+            assert called_config["prompt"] == "Test prompt"
+            assert called_config["backend"] == "openai"
 
 
 def test_handle_active_file_empty_file(cortex_service, mock_journal):
@@ -505,7 +511,7 @@ def test_spawn_handoff_with_explicit_prompt(cortex_service, mock_journal):
             persona="reviewer",
             backend="openai",
             handoff_from=parent_id,
-            config=None,
+            config={},  # Empty config since only prompt and persona in handoff
         )
 
 

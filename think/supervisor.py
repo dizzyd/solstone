@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from think.cortex_client import cortex_request
-from think.utils import get_personas, setup_cli
+from think.utils import get_agents, setup_cli
 
 DEFAULT_THRESHOLD = 90
 CHECK_INTERVAL = 30
@@ -59,24 +59,15 @@ def run_process_day() -> bool:
 def spawn_scheduled_agents(journal: str) -> None:
     """Spawn agents that have schedule:daily in their metadata."""
     try:
-        personas = get_personas()
-        for persona_id, metadata in personas.items():
-            config = metadata.get("config", {})
+        agents = get_agents()
+        for persona_id, config in agents.items():
             if config.get("schedule") == "daily":
                 logging.info(f"Spawning scheduled agent: {persona_id}")
 
-                # Prepare agent config
-                agent_config = {}
-                if "model" in config:
-                    agent_config["model"] = config["model"]
-
-                # Spawn via Cortex
+                # Spawn via Cortex - it will load and merge the persona config
                 request_file = cortex_request(
                     prompt=f"Running daily scheduled task for {persona_id}",
                     persona=persona_id,
-                    backend=config.get("backend", "openai"),
-                    config=agent_config,
-                    save=config.get("save"),  # Pass save field from agent metadata
                 )
 
                 # Extract agent_id from the filename

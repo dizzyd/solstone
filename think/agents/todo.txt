@@ -19,6 +19,7 @@ First, analyze yesterday's TODO.md:
 - **Pattern Recognition**: Note what types of tasks were completed vs abandoned
 - **Time Estimates**: Learn from actual completion times vs estimates
 - **Priority Drift**: Detect items repeatedly pushed to future
+- **Omit Completed**: Any completed items do not need to be carried forward
 
 ### Phase 2: Journal Mining
 Use MCP tools systematically to discover new priorities:
@@ -105,8 +106,6 @@ Generate TODO.md following the exact specification:
 ```markdown
 # Today
 - [ ] **Type**: Clear action description #optional-domain (HH:MM)
-- [x] **Type**: Completed task from earlier #domain (HH:MM)
-- [ ] ~~**Type**: Cancelled task with strikethrough~~ #domain (HH:MM)
 
 # Future
 - [ ] **Type**: Future task description #optional-domain MM/DD/YYYY

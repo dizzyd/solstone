@@ -7,22 +7,12 @@ via the SDK and is used by the ``think-agents`` CLI.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
-
-from dotenv import load_dotenv
-
-# Add local claude installation to PATH if it exists
-_claude_bin = Path.home() / ".claude" / "local" / "node_modules" / ".bin"
-if _claude_bin.exists():
-    current_path = os.environ.get("PATH", "")
-    if str(_claude_bin) not in current_path:
-        os.environ["PATH"] = f"{_claude_bin}:{current_path}"
 
 from claude_code_sdk import (
     AssistantMessage,
@@ -35,9 +25,17 @@ from claude_code_sdk import (
     UserMessage,
     query,
 )
+from dotenv import load_dotenv
 
 from .agents import JSONEventCallback, ThinkingEvent
 from .models import CLAUDE_SONNET_4
+
+# Add local claude installation to PATH if it exists
+_claude_bin = Path.home() / ".claude" / "local" / "node_modules" / ".bin"
+if _claude_bin.exists():
+    current_path = os.environ.get("PATH", "")
+    if str(_claude_bin) not in current_path:
+        os.environ["PATH"] = f"{_claude_bin}:{current_path}"
 
 _DEFAULT_MODEL = CLAUDE_SONNET_4
 
@@ -50,29 +48,26 @@ def setup_logging(verbose: bool) -> logging.Logger:
 
 
 async def run_agent(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any],
     on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
 ) -> str:
     """Run a single prompt through the Claude Code SDK and return the response.
 
-    Loads persona-specific system instructions from think/agents/<persona>.txt.
-    Personas can optionally specify backend: "claude" in their .json metadata
-    to ensure they're designed for Claude Code.
+    Uses persona configuration from the unified config dict.
+    The config should include instruction text and all necessary parameters.
 
     Args:
-        prompt: The prompt to run
-        config: Configuration dictionary (requires 'domain', supports 'model', 'max_turns')
+        config: Complete configuration dictionary including prompt, instruction, model, domain, etc.
         on_event: Optional event callback
-        persona: Name of persona to load from agents/ directory (default: "default")
-                Use "matter_editor" for domain matter management tasks
     """
-    # Extract config values with defaults
-    config = config or {}
+    # Extract values from unified config
+    prompt = config.get("prompt", "")
+    if not prompt:
+        raise ValueError("Missing 'prompt' in config")
+
     model = config.get("model", _DEFAULT_MODEL)
     max_turns = config.get("max_turns", 32)
+    persona = config.get("persona", "default")
 
     callback = JSONEventCallback(on_event)
 
@@ -93,34 +88,8 @@ async def run_agent(
         if not os.path.isdir(domain_path):
             raise ValueError(f"Domain directory does not exist: {domain_path}")
 
-        # Load persona instructions from agents directory
-        agents_dir = os.path.join(os.path.dirname(__file__), "agents")
-        instructions_path = os.path.join(agents_dir, f"{persona}.txt")
-
-        # Check if persona exists and optionally verify it's for claude backend
-        json_path = os.path.join(agents_dir, f"{persona}.json")
-        if os.path.exists(json_path):
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    metadata = json.load(f)
-                    # Optionally verify this persona is for claude backend
-                    if metadata.get("backend") and metadata["backend"] != "claude":
-                        raise ValueError(
-                            f"Persona '{persona}' is for backend '{metadata['backend']}', not 'claude'"
-                        )
-            except json.JSONDecodeError:
-                pass  # Continue if JSON is malformed
-
-        if not os.path.exists(instructions_path):
-            raise ValueError(f"Persona '{persona}' not found at {instructions_path}")
-
-        try:
-            with open(instructions_path, "r", encoding="utf-8") as f:
-                system_instruction = f.read()
-        except Exception as exc:
-            raise RuntimeError(
-                f"Failed to load persona instructions from {instructions_path}: {exc}"
-            )
+        # Extract instruction from config
+        system_instruction = config.get("instruction", "")
 
         callback.emit(
             {
@@ -312,18 +281,14 @@ async def run_agent(
 
 
 async def run_prompt(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any],
     on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
 ) -> str:
-    """Convenience helper to run ``prompt`` (alias for run_agent).
+    """Convenience helper to run agent (alias for run_agent).
 
-    Loads persona-specific system instructions from think/agents/<persona>.txt.
-    Use persona="matter_editor" for domain matter management tasks.
+    Uses the complete configuration from the unified config dict.
     """
-    return await run_agent(prompt, config=config, on_event=on_event, persona=persona)
+    return await run_agent(config=config, on_event=on_event)
 
 
 __all__ = [

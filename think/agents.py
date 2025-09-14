@@ -8,7 +8,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Optional, TypedDict, Union
+from typing import Any, Callable, Literal, Optional, TypedDict, Union
 
 from think.utils import setup_cli
 
@@ -162,43 +162,6 @@ class JSONEventCallback:
         pass
 
 
-async def run_agent(
-    prompt: str,
-    *,
-    backend: str = "openai",
-    config: Optional[Dict[str, Any]] = None,
-    on_event: Optional[Callable[[Event], None]] = None,
-    persona: str = "default",
-) -> str:
-    """Run a single prompt through an agent backend and return the response.
-
-    Args:
-        prompt: The prompt to run
-        backend: Backend provider ("openai", "google", "anthropic", "claude")
-        config: Configuration dictionary for the backend (supports 'model', 'max_tokens', and backend-specific options)
-        on_event: Optional event callback
-        persona: Persona instructions to load
-
-    Returns:
-        The agent's response text
-    """
-    if backend == "google":
-        from . import google as backend_mod
-    elif backend == "anthropic":
-        from . import anthropic as backend_mod
-    elif backend == "claude":
-        from . import claude as backend_mod
-    else:
-        from . import openai as backend_mod
-
-    return await backend_mod.run_agent(
-        prompt,
-        config=config or {},
-        on_event=on_event,
-        persona=persona,
-    )
-
-
 __all__ = [
     "ToolStartEvent",
     "ToolEndEvent",
@@ -211,7 +174,6 @@ __all__ = [
     "JSONEventWriter",
     "JournalEventWriter",
     "JSONEventCallback",
-    "run_agent",
 ]
 
 
@@ -246,11 +208,11 @@ async def main_async() -> None:
                 continue
 
             try:
-                # Parse NDJSON line
-                request = json.loads(line)
+                # Parse NDJSON line - this is the complete merged config from Cortex
+                config = json.loads(line)
 
-                # Extract parameters
-                prompt = request.get("prompt")
+                # Validate prompt exists
+                prompt = config.get("prompt")
                 if not prompt:
                     emit_event(
                         {
@@ -261,12 +223,8 @@ async def main_async() -> None:
                     )
                     continue
 
-                # Run agent with provided parameters
-                backend = request.get("backend", "openai")
-                persona = request.get("persona", "default")
-
-                # Get config from request - expect it to be a dict
-                config = request.get("config", {})
+                # Extract backend to route to correct module
+                backend = config.get("backend", "openai")
 
                 # Set OpenAI key if needed
                 if backend == "openai":
@@ -276,16 +234,22 @@ async def main_async() -> None:
 
                         set_default_openai_key(api_key)
 
-                app_logger.debug(
-                    f"Processing request: backend={backend}, config={config}"
-                )
+                app_logger.debug(f"Processing request: backend={backend}")
 
-                await run_agent(
-                    prompt,
-                    backend=backend,
+                # Route to appropriate backend
+                if backend == "google":
+                    from . import google as backend_mod
+                elif backend == "anthropic":
+                    from . import anthropic as backend_mod
+                elif backend == "claude":
+                    from . import claude as backend_mod
+                else:
+                    from . import openai as backend_mod
+
+                # Pass complete config to backend
+                await backend_mod.run_agent(
                     config=config,
                     on_event=emit_event,
-                    persona=persona,
                 )
 
             except json.JSONDecodeError as e:

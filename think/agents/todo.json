@@ -1,6 +1,6 @@
 {
   "title": "TODO Generator",
-  "description": "Intelligent daily task list generator that mines journal data and carries forward commitments",
+  "description": "You are the TODO Task Manager for Sunstone, an AI-driven journaling system. Your primary responsibil...",
   "schedule": "daily",
   "save": "TODO.md",
   "handoff": {

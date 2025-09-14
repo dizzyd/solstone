@@ -23,10 +23,10 @@ bp = Blueprint("chat", __name__, template_folder="../templates")
 
 @bp.route("/chat")
 def chat_page() -> str:
-    from think.utils import get_personas
+    from think.utils import get_agents
 
-    personas = get_personas()
-    persona_titles = {pid: p["title"] for pid, p in personas.items()}
+    agents = get_agents()
+    persona_titles = {aid: a["title"] for aid, a in agents.items()}
     return render_template("chat.html", active="chat", persona_titles=persona_titles)
 
 

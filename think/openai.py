@@ -37,7 +37,7 @@ try:
 except Exception:  # pragma: no cover
     ResponseTextDeltaEvent = object  # type: ignore
 
-from think.utils import agent_instructions
+# Removed agent_instructions import - now using config directly
 
 from .agents import JSONEventCallback, ThinkingEvent
 from .models import GPT_5
@@ -127,24 +127,22 @@ def _extract_tool_args(raw_call: Any) -> Any:
 
 
 async def run_agent(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any],
     on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
 ) -> str:
     """
     Run a single prompt through the OpenAI Agents SDK using streaming.
     Emits JSON events and returns the final text output.
 
     Args:
-        prompt: The prompt to run
-        config: Configuration dictionary (supports 'model', 'max_tokens', 'max_turns', etc.)
+        config: Complete configuration dictionary including prompt, instruction, model, etc.
         on_event: Optional event callback
-        persona: Persona instructions to load
     """
-    # Extract config values with defaults
-    config = config or {}
+    # Extract values from unified config
+    prompt = config.get("prompt", "")
+    if not prompt:
+        raise ValueError("Missing 'prompt' in config")
+
     model = config.get("model", _DEFAULT_MODEL)
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
     max_turns = config.get("max_turns", _DEFAULT_MAX_TURNS)
@@ -160,7 +158,7 @@ async def run_agent(
         {
             "event": "start",
             "prompt": prompt,
-            "persona": persona,
+            "persona": config.get("persona", "default"),
             "model": model,
             "backend": "openai",
             "ts": _now_ms(),
@@ -194,8 +192,9 @@ async def run_agent(
             cache_tools_list=True,
         )
 
-    # Use your repo's persona utility
-    system_instruction, extra_context, _ = agent_instructions(persona)
+    # Extract instruction and extra_context from config
+    system_instruction = config.get("instruction", "")
+    extra_context = config.get("extra_context", "")
 
     # Keep a map of in-flight tools so we can pair outputs with args
     pending_tools: Dict[str, Dict[str, Any]] = {}

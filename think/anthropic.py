@@ -19,7 +19,7 @@ from anthropic.types import MessageParam, ToolParam, ToolUseBlock
 
 from .agents import JSONEventCallback, ThinkingEvent
 from .models import CLAUDE_SONNET_4
-from .utils import agent_instructions, create_mcp_client
+from .utils import create_mcp_client
 
 # Default values are now handled internally
 _DEFAULT_MODEL = CLAUDE_SONNET_4
@@ -145,26 +145,25 @@ async def _get_mcp_tools(mcp: Any) -> list[ToolParam]:
 
 
 async def run_agent(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any],
     on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
 ) -> str:
     """Run a single prompt through the Anthropic Claude agent and return the response.
 
     Args:
-        prompt: The prompt to run
-        config: Configuration dictionary (supports 'model', 'max_tokens', 'thinking_budget_tokens', etc.)
+        config: Complete configuration dictionary including prompt, instruction, model, etc.
         on_event: Optional event callback
-        persona: Persona instructions to load
     """
-    # Extract config values with defaults
-    config = config or {}
+    # Extract values from unified config
+    prompt = config.get("prompt", "")
+    if not prompt:
+        raise ValueError("Missing 'prompt' in config")
+
     model = config.get("model", _DEFAULT_MODEL)
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
     thinking_budget_tokens = config.get("thinking_budget_tokens", None)
     disable_mcp = config.get("disable_mcp", False)
+    persona = config.get("persona", "default")
 
     callback = JSONEventCallback(on_event)
 
@@ -185,8 +184,9 @@ async def run_agent(
             }
         )
 
-        # Get system instruction (always needed)
-        system_instruction, first_user, _ = agent_instructions(persona)
+        # Extract instruction and extra_context from config
+        system_instruction = config.get("instruction", "")
+        first_user = config.get("extra_context", "")
 
         # Build initial messages
         messages: list[MessageParam] = []

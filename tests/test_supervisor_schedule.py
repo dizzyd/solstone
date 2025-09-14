@@ -6,22 +6,24 @@ from think.supervisor import spawn_scheduled_agents
 
 
 @patch("think.supervisor.cortex_request")
-@patch("think.supervisor.get_personas")
-def test_spawn_scheduled_agents(mock_get_personas, mock_cortex_request):
+@patch("think.supervisor.get_agents")
+def test_spawn_scheduled_agents(mock_get_agents, mock_cortex_request):
     """Test that scheduled agents are spawned correctly via Cortex."""
-    # Mock personas with one scheduled and one not
-    mock_get_personas.return_value = {
+    # Mock agents with one scheduled and one not
+    mock_get_agents.return_value = {
         "todo": {
             "title": "TODO Task Manager",
-            "config": {"schedule": "daily", "backend": "openai", "model": "gpt-4"},
+            "schedule": "daily",
+            "backend": "openai",
+            "model": "gpt-4",
         },
         "default": {
             "title": "Default Assistant",
-            "config": {},  # No schedule
+            # No schedule
         },
         "another_daily": {
             "title": "Another Daily Task",
-            "config": {"schedule": "daily"},  # No model specified
+            "schedule": "daily",  # No model specified
         },
     }
 
@@ -37,18 +39,14 @@ def test_spawn_scheduled_agents(mock_get_personas, mock_cortex_request):
     # Should spawn 2 agents (todo and another_daily)
     assert mock_cortex_request.call_count == 2
 
-    # Check first request call (todo)
+    # Check first request call (todo) - now simplified
     first_call = mock_cortex_request.call_args_list[0]
     assert first_call[1]["persona"] == "todo"
-    assert first_call[1]["backend"] == "openai"
-    assert first_call[1]["config"] == {"model": "gpt-4"}
     assert "Running daily scheduled task for todo" in first_call[1]["prompt"]
 
-    # Check second request call (another_daily)
+    # Check second request call (another_daily) - now simplified
     second_call = mock_cortex_request.call_args_list[1]
     assert second_call[1]["persona"] == "another_daily"
-    assert second_call[1]["backend"] == "openai"  # default
-    assert second_call[1]["config"] == {}  # no model specified
     assert "Running daily scheduled task for another_daily" in second_call[1]["prompt"]
 
 

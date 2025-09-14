@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+# Removed asyncio - no longer needed
 import json
 import os
 
@@ -171,16 +171,16 @@ def _get_agents_list(agent_type: str) -> object:
 
     # Get agents directly from cortex_agents function
     from think.cortex_client import cortex_agents
-    from think.utils import get_personas
+    from think.utils import get_agents
 
     from ..utils import time_since
 
     # Get all agents using cortex_agents
     response = cortex_agents(limit=limit, offset=offset, agent_type=agent_type)
 
-    # Load persona titles for display
-    personas = get_personas()
-    persona_titles = {pid: p["title"] for pid, p in personas.items()}
+    # Load agent titles for display
+    agents_meta = get_agents()
+    persona_titles = {aid: a["title"] for aid, a in agents_meta.items()}
 
     # Format agents for display
     agents = response.get("agents", [])
@@ -313,29 +313,22 @@ def start_agent() -> object:
     config = data.get("config", {})
 
     try:
-        # Import agents module
-        import sys
+        # Use cortex_client to spawn agent
+        from think.cortex_client import cortex_request
 
-        sys.path.insert(
-            0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "..")
+        # Create the agent request
+        request_file = cortex_request(
+            prompt=plan,
+            persona=persona,
+            backend=backend,
+            config=config,
         )
-        from think import agents
 
-        # Run the agent async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(
-                agents.run_agent(
-                    plan,
-                    backend=backend,
-                    config=config,
-                    persona=persona,
-                )
-            )
-            return jsonify({"success": True, "result": result})
-        finally:
-            loop.close()
+        # Extract agent_id from the filename
+        from pathlib import Path
+        agent_id = Path(request_file).stem.replace("_active", "")
+
+        return jsonify({"success": True, "agent_id": agent_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

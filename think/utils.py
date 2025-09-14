@@ -248,6 +248,79 @@ def agent_instructions(persona: str = "default") -> Tuple[str, str, dict[str, ob
     return system_instruction, extra_context, meta
 
 
+def get_agent(persona: str = "default") -> dict:
+    """Return complete agent configuration for a persona.
+
+    Loads JSON configuration and instruction text, merges with runtime context.
+
+    Parameters
+    ----------
+    persona:
+        Name of the persona to load from agents/ directory.
+
+    Returns
+    -------
+    dict
+        Complete agent configuration including instruction, model, backend, etc.
+    """
+    config = {}
+
+    # Load JSON config if exists
+    json_path = AGENT_DIR / f"{persona}.json"
+    if json_path.exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+
+    # Load instruction text
+    txt_path = AGENT_DIR / f"{persona}.txt"
+    if not txt_path.exists():
+        raise FileNotFoundError(f"Agent persona not found: {persona}")
+    config["instruction"] = txt_path.read_text(encoding="utf-8")
+
+    # Add runtime context (entities and domains)
+    extra_parts = []
+
+    # Add entities context - use same logic as agent_instructions
+    journal = os.getenv("JOURNAL_PATH")
+    if journal:
+        ent_path = Path(journal) / "entities.md"
+        if ent_path.is_file():
+            entities = ent_path.read_text(encoding="utf-8").strip()
+            if entities:
+                extra_parts.append("## Well-Known Entities\n" + entities)
+
+        # Add domains to agent instructions
+        from think.domains import get_domains
+        try:
+            domains = get_domains()
+            if domains:
+                domains_list = []
+                for domain_name in sorted(domains.keys()):
+                    domains_list.append(f"- {domain_name}")
+                extra_parts.append("## Available Domains\n" + "\n".join(domains_list))
+        except Exception:
+            pass  # Ignore if domains can't be loaded
+
+    # Add current date/time
+    now = datetime.now()
+    try:
+        import tzlocal
+        local_tz = tzlocal.get_localzone()
+        now_local = now.astimezone(local_tz)
+        time_str = now_local.strftime("%A, %B %d, %Y at %I:%M %p %Z")
+    except Exception:
+        time_str = now.strftime("%A, %B %d, %Y at %I:%M %p")
+    extra_parts.append(f"## Current Date and Time\n{time_str}")
+
+    if extra_parts:
+        config["extra_context"] = "\n\n".join(extra_parts).strip()
+
+    # Set persona name
+    config["persona"] = persona
+
+    return config
+
+
 def create_mcp_client() -> Any:
     """Return a fastMCP HTTP client for Sunstone tools."""
 
@@ -611,48 +684,32 @@ def get_todos(day: str) -> dict[str, list[dict[str, Any]]] | None:
     return todos
 
 
-def get_personas() -> dict[str, dict[str, Any]]:
-    """Load persona metadata from think/agents directory.
+def get_agents() -> dict[str, dict[str, Any]]:
+    """Load agent metadata from think/agents directory.
 
     Returns:
-        Dictionary mapping persona IDs to their metadata including:
-        - title: Display title for the persona
-        - txt_path: Absolute path to the .txt file
-        - json_path: Absolute path to the .json file (if exists)
-        - config: Contents of the JSON configuration (if exists)
+        Dictionary mapping agent IDs to their metadata including:
+        - title: Display title for the agent
+        - All configuration fields from get_agent()
     """
-    personas = {}
-    agents_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "think", "agents"
-    )
+    agents = {}
+    agents_path = AGENT_DIR
 
-    if not os.path.isdir(agents_path):
-        return personas
+    if not agents_path.exists():
+        return agents
 
-    txt_files = [f for f in os.listdir(agents_path) if f.endswith(".txt")]
-    for txt_file in txt_files:
-        base_name = txt_file[:-4]
-        txt_path = os.path.join(agents_path, txt_file)
-        json_file = base_name + ".json"
-        json_path = os.path.join(agents_path, json_file)
+    for txt_path in sorted(agents_path.glob("*.txt")):
+        agent_id = txt_path.stem
+        try:
+            # Use get_agent to load full configuration
+            config = get_agent(agent_id)
+            # Extract title for compatibility
+            title = config.get("title", agent_id)
+            # Return the config itself as the agent metadata
+            agents[agent_id] = config
+            agents[agent_id]["title"] = title
+        except Exception:
+            # Skip agents that can't be loaded
+            pass
 
-        # Build metadata for this persona
-        metadata = {
-            "title": base_name,  # Default to ID
-            "txt_path": txt_path,
-        }
-
-        # Load JSON config if exists
-        if os.path.isfile(json_path):
-            metadata["json_path"] = json_path
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    agent_config = json.load(f)
-                    metadata["config"] = agent_config
-                    metadata["title"] = agent_config.get("title", base_name)
-            except Exception:
-                pass
-
-        personas[base_name] = metadata
-
-    return personas
+    return agents
