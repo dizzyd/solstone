@@ -303,3 +303,7 @@ Guide for updating:
 - Implemented get_tools() function to retrieve tool names by pack with "default" as alias for "journal"
 - Updated CORTEX.md to document new "tools" config option accepting pack names or explicit tool arrays
 - Modified think/cortex.py to expand tool pack strings to arrays before passing to agent backends
+- Added tool filtering support for agent backends to restrict available MCP tools based on config
+- Updated OpenAI backend to use ToolFilterStatic for MCP server-level filtering when tools list provided
+- Modified Anthropic backend to filter MCP tools during conversion to Claude format based on allowed tools list
+- Added warning in Google backend for tool filtering requests as full implementation pending due to SDK limitations

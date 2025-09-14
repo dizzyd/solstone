@@ -42,8 +42,10 @@ class ToolLoggingHooks:
     def __init__(self, writer: JSONEventCallback) -> None:
         self.writer = writer
         self._counter = 0
+        self.session = None
 
     def attach(self, session: Any) -> None:
+        self.session = session
         original = session.call_tool
 
         async def wrapped(name: str, arguments: dict | None = None, **kwargs) -> Any:
@@ -70,6 +72,12 @@ class ToolLoggingHooks:
             return result
 
         session.call_tool = wrapped  # type: ignore[assignment]
+
+    async def call_filtered_tool(self, name: str, arguments: dict | None = None) -> Any:
+        """Call a tool through the session with logging."""
+        if not self.session:
+            raise RuntimeError("Session not attached")
+        return await self.session.call_tool(name=name, arguments=arguments)
 
 
 async def run_agent(
@@ -136,7 +144,18 @@ async def run_agent(
             # Create MCP client and attach hooks
             async with create_mcp_client() as mcp:
                 # Attach tool logging hooks to the MCP session
-                ToolLoggingHooks(callback).attach(mcp.session)
+                tool_hooks = ToolLoggingHooks(callback)
+                tool_hooks.attach(mcp.session)
+
+                # Extract allowed tools from config
+                allowed_tools = config.get("tools", None)
+
+                # For now, use the MCP session directly
+                # Tool filtering for Google requires more complex implementation
+                # that would need to intercept function calls and validate against allowed list
+                if allowed_tools and isinstance(allowed_tools, list):
+                    logging.getLogger(__name__).info(f"Tool filtering requested for Google backend with tools: {allowed_tools}")
+                    logging.getLogger(__name__).warning("Tool filtering for Google backend is not yet fully implemented - using all available tools")
 
                 cfg = types.GenerateContentConfig(
                     max_output_tokens=max_tokens,

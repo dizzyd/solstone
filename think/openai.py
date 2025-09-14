@@ -28,6 +28,12 @@ from agents.items import (
     ToolCallOutputItem,
 )
 from agents.mcp.server import MCPServerStreamableHttp
+
+# Try to import ToolFilterStatic if available
+try:
+    from agents.mcp.server import ToolFilterStatic
+except ImportError:
+    ToolFilterStatic = None  # type: ignore
 from agents.model_settings import ModelSettings
 from agents.run import RunConfig
 
@@ -187,9 +193,20 @@ async def run_agent(
             raise RuntimeError("MCP server URI file is empty")
         http_uri = _normalize_streamable_http_uri(http_uri_raw)
 
+        # Extract allowed tools from config
+        allowed_tools = config.get("tools", None)
+        tool_filter = None
+        if allowed_tools and isinstance(allowed_tools, list) and ToolFilterStatic:
+            # Create a tool filter with allowed tools
+            tool_filter = ToolFilterStatic(allowed_tool_names=allowed_tools)
+            LOG.info(f"Using tool filter with allowed tools: {allowed_tools}")
+        elif allowed_tools:
+            LOG.warning("Tool filtering requested but ToolFilterStatic not available in this version")
+
         mcp_server = MCPServerStreamableHttp(
             params={"url": http_uri},
             cache_tools_list=True,
+            tool_filter=tool_filter,
         )
 
     # Extract instruction and extra_context from config

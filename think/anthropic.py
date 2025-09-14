@@ -122,8 +122,13 @@ class ToolExecutor:
         }
 
 
-async def _get_mcp_tools(mcp: Any) -> list[ToolParam]:
-    """Return a list of MCP tools formatted for Claude using ``mcp``."""
+async def _get_mcp_tools(mcp: Any, allowed_tools: Optional[list[str]] = None) -> list[ToolParam]:
+    """Return a list of MCP tools formatted for Claude using ``mcp``.
+
+    Args:
+        mcp: MCP client instance
+        allowed_tools: Optional list of allowed tool names to filter
+    """
 
     if not hasattr(mcp, "list_tools"):
         return []
@@ -132,6 +137,10 @@ async def _get_mcp_tools(mcp: Any) -> list[ToolParam]:
     tool_list = await mcp.list_tools()
 
     for tool in tool_list:
+        # Filter by allowed tools if specified
+        if allowed_tools and tool.name not in allowed_tools:
+            continue
+
         tools.append(
             {
                 "name": tool.name,
@@ -197,7 +206,12 @@ async def run_agent(
         # Initialize tools and executor based on disable_mcp flag
         if not disable_mcp:
             async with create_mcp_client() as mcp:
-                tools = await _get_mcp_tools(mcp)
+                # Extract allowed tools from config
+                allowed_tools = config.get("tools", None)
+                if allowed_tools and isinstance(allowed_tools, list):
+                    logging.getLogger(__name__).info(f"Using tool filter with allowed tools: {allowed_tools}")
+
+                tools = await _get_mcp_tools(mcp, allowed_tools)
                 tool_executor = ToolExecutor(mcp, callback)
 
                 while True:
