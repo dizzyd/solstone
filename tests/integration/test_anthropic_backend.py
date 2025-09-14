@@ -52,7 +52,8 @@ def test_anthropic_backend_basic():
             "prompt": "what is 1+1? Just give me the number.",
             "backend": "anthropic",
             "persona": "default",
-            "config": {"max_tokens": 100, "disable_mcp": True},
+            "max_tokens": 100,
+            "disable_mcp": True,
         }
     )
 
@@ -95,7 +96,16 @@ def test_anthropic_backend_basic():
 
     # Check finish event
     finish_event = events[-1]
-    assert finish_event["event"] == "finish"
+
+    # Check if this was an API error (intermittent failures)
+    if finish_event.get("event") == "error":
+        error_msg = finish_event.get("error", "Unknown error")
+        if "rate" in error_msg.lower() or "retry" in error_msg.lower() or "quota" in error_msg.lower():
+            pytest.skip(f"Intermittent Anthropic API error: {error_msg}")
+        else:
+            pytest.fail(f"Unexpected error: {finish_event}")
+
+    assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
     assert isinstance(finish_event["ts"], int)
     assert "result" in finish_event
 
@@ -139,12 +149,10 @@ def test_anthropic_backend_with_thinking():
             "prompt": "What is the square root of 16? Just the number please.",
             "backend": "anthropic",
             "persona": "default",
-            "config": {
-                "model": CLAUDE_SONNET_4,
-                "max_tokens": 200,
-                "thinking_budget_tokens": 1024,  # Minimum required for thinking
-                "disable_mcp": True,
-            },
+            "model": CLAUDE_SONNET_4,
+            "max_tokens": 200,
+            "thinking_budget_tokens": 1024,  # Minimum required for thinking
+            "disable_mcp": True,
         }
     )
 
@@ -171,7 +179,16 @@ def test_anthropic_backend_with_thinking():
 
     # Verify the answer is correct
     finish_event = events[-1]
-    assert finish_event["event"] == "finish"
+
+    # Check if this was an API error (intermittent failures)
+    if finish_event.get("event") == "error":
+        error_msg = finish_event.get("error", "Unknown error")
+        if "rate" in error_msg.lower() or "retry" in error_msg.lower() or "quota" in error_msg.lower():
+            pytest.skip(f"Intermittent Anthropic API error: {error_msg}")
+        else:
+            pytest.fail(f"Unexpected error: {finish_event}")
+
+    assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
     result_text = finish_event["result"].lower()
     assert (
         "4" in result_text or "four" in result_text
@@ -204,7 +221,8 @@ def test_anthropic_backend_with_verbose():
             "prompt": "what is 2+2? Just give me the number.",
             "backend": "anthropic",
             "persona": "default",
-            "config": {"max_tokens": 100, "disable_mcp": True},
+            "max_tokens": 100,
+            "disable_mcp": True,
         }
     )
 
@@ -267,11 +285,9 @@ def test_anthropic_backend_custom_model():
             "prompt": "What is 3*3? Just give me the number.",
             "backend": "anthropic",
             "persona": "default",
-            "config": {
-                "model": CLAUDE_SONNET_4,
-                "max_tokens": 50,
-                "disable_mcp": True,
-            },
+            "model": CLAUDE_SONNET_4,
+            "max_tokens": 50,
+            "disable_mcp": True,
         }
     )
 

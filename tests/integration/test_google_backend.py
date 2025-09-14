@@ -52,7 +52,8 @@ def test_google_backend_basic():
             "prompt": "what is 1+1? Just give me the number.",
             "backend": "google",
             "persona": "default",
-            "config": {"max_tokens": 100, "disable_mcp": True},
+            "max_tokens": 100,
+            "disable_mcp": True,
         }
     )
 
@@ -142,11 +143,9 @@ def test_google_backend_with_thinking():
             "prompt": "What is the square root of 16? Just the number please.",
             "backend": "google",
             "persona": "default",
-            "config": {
-                "model": GEMINI_PRO,  # Pro model for thinking
-                "max_tokens": 200,
-                "disable_mcp": True,
-            },
+            "model": GEMINI_PRO,  # Pro model for thinking
+            "max_tokens": 200,
+            "disable_mcp": True,
         }
     )
 
@@ -180,7 +179,17 @@ def test_google_backend_with_thinking():
 
     # Verify the answer is correct
     finish_event = events[-1]
-    assert finish_event["event"] == "finish"
+
+    # Check if this was an API error (intermittent failures)
+    if finish_event.get("event") == "error":
+        error_msg = finish_event.get("error", "Unknown error")
+        trace = finish_event.get("trace", "")
+        if "quota" in error_msg.lower() or "rate" in error_msg.lower() or "retry" in error_msg.lower():
+            pytest.skip(f"Intermittent Google API error: {error_msg}")
+        else:
+            pytest.fail(f"Unexpected error: {error_msg}\nTrace: {trace}")
+
+    assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
     assert "result" in finish_event, f"No result in finish event: {finish_event}"
     if finish_event["result"]:
         result_text = finish_event["result"].lower()
@@ -215,7 +224,8 @@ def test_google_backend_with_verbose():
             "prompt": "what is 2+2? Just give me the number.",
             "backend": "google",
             "persona": "default",
-            "config": {"max_tokens": 100, "disable_mcp": True},
+            "max_tokens": 100,
+            "disable_mcp": True,
         }
     )
 
@@ -278,11 +288,9 @@ def test_google_backend_custom_model():
             "prompt": "What is 3*3? Just give me the number.",
             "backend": "google",
             "persona": "default",
-            "config": {
-                "model": GEMINI_FLASH,  # Flash model
-                "max_tokens": 50,
-                "disable_mcp": True,
-            },
+            "model": GEMINI_FLASH,  # Flash model
+            "max_tokens": 50,
+            "disable_mcp": True,
         }
     )
 

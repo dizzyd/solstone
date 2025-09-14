@@ -292,3 +292,9 @@ Guide for updating:
 - Updated test_agents_ndjson.py tests to mock backend modules directly instead of deleted run_agent function
 - Fixed test_process_day_full.py to expect think-indexer as last command after daily processing rescan addition
 - Applied code formatting with black and isort to maintain code quality standards
+- Fixed integration tests to use correct flat config structure instead of nested config objects
+- Added improved error reporting in integration tests to distinguish intermittent API failures from real bugs
+- Updated all backend integration tests to properly handle config parameters at top level
+- Added timeout increases for Claude SDK operations in integration tests
+- Fixed OpenAI backend tests to properly find finish events in event stream
+- Updated CORTEX.md documentation to clarify config structure and merge behavior

@@ -14,10 +14,11 @@ The Cortex system manages AI agent execution through a file-based architecture. 
 
 ### Key Components
 - **File Watching**: Cortex uses watchdog to monitor for new `*_active.jsonl` files
-- **Process Management**: Spawns agent subprocesses via the `think-agents` command
+- **Configuration Loading**: Cortex loads and merges persona configuration with request parameters
+- **Process Management**: Spawns agent subprocesses via the `think-agents` command with merged configuration
 - **Event Capture**: Monitors agent stdout/stderr and appends to JSONL files
 - **Atomic Operations**: File renames provide race-free state transitions
-- **NDJSON Input Mode**: Agent processes accept newline-delimited JSON via stdin for batch processing
+- **NDJSON Input Mode**: Agent processes accept newline-delimited JSON via stdin containing the full merged configuration
 
 ### File States
 - `<timestamp>_pending.jsonl`: Request written by client, awaiting processing
@@ -192,7 +193,8 @@ Agents can transfer control to other agents for specialized tasks. When an agent
 
 - The `finish` event may include a `handoff` field specifying the next agent
 - The subsequent request includes `handoff_from` with the originating agent ID
-- This enables multi-step workflows and agent specialization
+- Handoff agents automatically inherit the parent agent's configuration (backend, model, etc.) unless explicitly overridden
+- This enables multi-step workflows and agent specialization with consistent configuration
 
 ## Agent Personas
 
@@ -200,7 +202,13 @@ Agents use persona configurations stored in the `think/agents/` directory. Each 
 - A `.txt` file containing system instructions and prompts
 - An optional `.json` file with metadata and configuration
 
-Personas define specialized behaviors, tool usage patterns, and domain expertise. Available personas can be discovered by listing files in the `think/agents/` directory.
+When spawning an agent:
+1. Cortex loads the persona configuration using `get_agent()` from `think/utils.py`
+2. The persona's instruction text and JSON metadata are merged into a complete configuration
+3. Request parameters override persona defaults in the merged configuration
+4. The full configuration (including instruction text) is passed to the agent process
+
+Personas define specialized behaviors, tool usage patterns, and domain expertise. Available personas can be discovered using the `get_agents()` function or by listing files in the `think/agents/` directory.
 
 ## MCP Tools Integration
 

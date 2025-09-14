@@ -93,11 +93,9 @@ def test_claude_backend_real_sdk():
                 "prompt": "what is 2+2? Just give me the number.",
                 "backend": "claude",
                 "persona": "default",
-                "config": {
-                    "model": CLAUDE_SONNET_4,
-                    "max_tokens": 100,
-                    "domain": "test-domain",  # Claude backend requires a domain
-                },
+                "model": CLAUDE_SONNET_4,
+                "max_tokens": 100,
+                "domain": "test-domain",  # Claude backend requires a domain
             }
         )
 
@@ -110,7 +108,7 @@ def test_claude_backend_real_sdk():
             input=ndjson_input,
             capture_output=True,
             text=True,
-            timeout=10,  # 60 second timeout for SDK call
+            timeout=30,  # 60 second timeout for SDK call
         )
 
         # Check that the command succeeded
@@ -144,7 +142,18 @@ def test_claude_backend_real_sdk():
 
         # Check finish event (should be last)
         finish_event = events[-1]
-        assert finish_event["event"] == "finish"
+
+        # Check if this was an API error (intermittent failures)
+        if finish_event.get("event") == "error":
+            error_msg = finish_event.get("error", "Unknown error")
+            if "CLI not found" in error_msg:
+                pytest.skip(f"Claude Code CLI issue: {error_msg}")
+            elif "rate" in error_msg.lower() or "retry" in error_msg.lower():
+                pytest.skip(f"Intermittent Claude API error: {error_msg}")
+            else:
+                pytest.fail(f"Unexpected error: {finish_event}")
+
+        assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
         if "ts" in finish_event:
             assert isinstance(finish_event["ts"], int)
         assert "result" in finish_event
@@ -231,11 +240,9 @@ def test_claude_backend_with_tool_calls():
                 "prompt": f"Read the file at {test_file} and tell me what it says.",
                 "backend": "claude",
                 "persona": "default",
-                "config": {
-                    "model": CLAUDE_SONNET_4,
-                    "max_tokens": 200,
-                    "domain": "test-domain",  # Claude backend requires a domain
-                },
+                "model": CLAUDE_SONNET_4,
+                "max_tokens": 200,
+                "domain": "test-domain",  # Claude backend requires a domain
             }
         )
 
@@ -248,7 +255,7 @@ def test_claude_backend_with_tool_calls():
             input=ndjson_input,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,  # Increase timeout for Claude SDK operations
         )
 
         # Clean up test file
@@ -277,7 +284,18 @@ def test_claude_backend_with_tool_calls():
 
         # Check finish event contains the file content
         finish_event = events[-1]
-        assert finish_event["event"] == "finish"
+
+        # Check if this was an API error (intermittent failures)
+        if finish_event.get("event") == "error":
+            error_msg = finish_event.get("error", "Unknown error")
+            if "CLI not found" in error_msg:
+                pytest.skip(f"Claude Code CLI issue: {error_msg}")
+            elif "rate" in error_msg.lower() or "retry" in error_msg.lower():
+                pytest.skip(f"Intermittent Claude API error: {error_msg}")
+            else:
+                pytest.fail(f"Unexpected error: {finish_event}")
+
+        assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
         result_text = finish_event["result"].lower()
         assert (
             "hello" in result_text
@@ -349,11 +367,9 @@ def test_claude_backend_with_thinking():
                 "prompt": "Think step by step: If I have 3 apples and give away 1, how many do I have left? Just give the number.",
                 "backend": "claude",
                 "persona": "default",
-                "config": {
-                    "model": CLAUDE_SONNET_4,
-                    "max_tokens": 200,
-                    "domain": "test-domain",  # Claude backend requires a domain
-                },
+                "model": CLAUDE_SONNET_4,
+                "max_tokens": 200,
+                "domain": "test-domain",  # Claude backend requires a domain
             }
         )
 
@@ -366,7 +382,7 @@ def test_claude_backend_with_thinking():
             input=ndjson_input,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
 
         # Check that the command succeeded
@@ -388,7 +404,18 @@ def test_claude_backend_with_thinking():
 
         # Check finish event
         finish_event = events[-1]
-        assert finish_event["event"] == "finish"
+
+        # Check if this was an API error (intermittent failures)
+        if finish_event.get("event") == "error":
+            error_msg = finish_event.get("error", "Unknown error")
+            if "CLI not found" in error_msg:
+                pytest.skip(f"Claude Code CLI issue: {error_msg}")
+            elif "rate" in error_msg.lower() or "retry" in error_msg.lower():
+                pytest.skip(f"Intermittent Claude API error: {error_msg}")
+            else:
+                pytest.fail(f"Unexpected error: {finish_event}")
+
+        assert finish_event["event"] == "finish", f"Expected finish event, got: {finish_event}"
         result_text = finish_event["result"].lower()
         assert (
             "2" in result_text or "two" in result_text
