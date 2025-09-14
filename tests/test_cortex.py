@@ -1,6 +1,7 @@
 """Tests for the file-based Cortex agent manager."""
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -94,18 +95,24 @@ def test_handle_active_file_valid_request(cortex_service, mock_journal):
 
     with patch.object(cortex_service, "_spawn_agent") as mock_spawn:
         with patch("think.utils.get_agent") as mock_get_agent:
-            # Mock get_agent to return a config
-            mock_get_agent.return_value = {
-                "instruction": "Default instruction",
-                "title": "Default",
-            }
-            cortex_service._handle_active_file(agent_id, file_path)
-            # Now it passes the merged config
-            # The config includes get_agent result merged with request
-            assert mock_spawn.called
-            called_config = mock_spawn.call_args[0][2]
-            assert called_config["prompt"] == "Test prompt"
-            assert called_config["backend"] == "openai"
+            # Create a mock module for mcp_tools
+            mock_mcp_tools = MagicMock()
+            mock_mcp_tools.get_tools = MagicMock(return_value=[])
+
+            with patch.dict("sys.modules", {"think.mcp_tools": mock_mcp_tools}):
+                # Mock get_agent to return a config
+                mock_get_agent.return_value = {
+                    "instruction": "Default instruction",
+                    "title": "Default",
+                }
+
+                cortex_service._handle_active_file(agent_id, file_path)
+                # Now it passes the merged config
+                # The config includes get_agent result merged with request
+                assert mock_spawn.called
+                called_config = mock_spawn.call_args[0][2]
+                assert called_config["prompt"] == "Test prompt"
+                assert called_config["backend"] == "openai"
 
 
 def test_handle_active_file_empty_file(cortex_service, mock_journal):
