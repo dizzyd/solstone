@@ -319,3 +319,7 @@ Guide for updating:
 - Added signal handling to supervisor for clean shutdown on Ctrl+C without tracebacks or timeout errors
 - Implemented global shutdown flag and graceful process termination for all child processes in supervisor
 - Applied code formatting with black and isort to maintain code consistency across multiple backend files
+- Removed live view functionality from dream web application while preserving live audio features in hear package
+- Deleted dream/views/live.py and dream/templates/live.html to remove unused live view interface
+- Updated dream navigation bar to remove live view link from base template
+- Cleaned up all live view imports and exports from dream/__init__.py and dream/views/__init__.py
