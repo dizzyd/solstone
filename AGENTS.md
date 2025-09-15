@@ -37,7 +37,6 @@ sunstone/
 ├── pyproject.toml  # Package configuration and dependencies
 ├── JOURNAL.md      # Journal directory structure documentation
 ├── README.md       # Project overview and quick start
-├── CHANGELOG.md    # Version history & release notes
 ├── CRUMBS.md       # Crumb file format specification
 ├── CORTEX.md       # Agent system documentation
 └── CLAUDE.md       # Development guidelines (this file)
@@ -193,7 +192,6 @@ make clean      # Remove build artifacts
 * **Silent Failures**: Avoid them - fail fast with clear errors
 
 ### Documentation
-* **CHANGELOG.md**: Update for all features/fixes following format
 * **README Files**: Update package READMEs for new functionality
 * **Code Comments**: Explain "why" not "what" - code should be self-documenting
 * **Type Hints**: Use type hints for function signatures
