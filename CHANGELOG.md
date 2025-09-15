@@ -336,3 +336,4 @@ Guide for updating:
 - Fixed Cortex service race condition where file watcher could trigger duplicate processing of agent files
 - Removed redundant on_moved handler in AgentFileHandler to prevent double-processing of renamed files
 - Added file existence check in _handle_active_file to gracefully handle already-processed files
+- Added --no-cortex flag to think-supervisor to allow running Cortex separately during debugging sessions

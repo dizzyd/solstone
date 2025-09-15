@@ -255,6 +255,11 @@ def parse_args() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable daily processing run at midnight",
     )
+    parser.add_argument(
+        "--no-cortex",
+        action="store_true",
+        help="Do not start the Cortex server (run it manually for debugging)",
+    )
     return parser
 
 
@@ -292,8 +297,9 @@ def main() -> None:
         procs = start_runners(journal, verbose=args.verbose)
     mcp_proc = start_mcp_server(journal, verbose=args.verbose)
     procs.append((mcp_proc, "mcp"))
-    cortex_proc = start_cortex_server(journal, verbose=args.verbose)
-    procs.append((cortex_proc, "cortex"))
+    if not args.no_cortex:
+        cortex_proc = start_cortex_server(journal, verbose=args.verbose)
+        procs.append((cortex_proc, "cortex"))
     try:
         supervise(
             journal,
