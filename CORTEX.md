@@ -239,8 +239,9 @@ The Model Context Protocol (MCP) provides tools for agent-journal interaction:
 - **Claude**: Uses filesystem tools instead; requires `domain` configuration in spawn request
 
 ### Tool Discovery
-MCP tools are provided by the `think-mcp-tools --transport http` service, which:
-- Writes its URI to `<journal>/agents/mcp.uri` for automatic discovery
+MCP tools are provided by the `think.mcp_tools` FastMCP server, which:
+- Runs inside Cortex as a background HTTP service
+- Shares its URL directly with agent runs (`mcp_server_url`) so no discovery file is needed
 - Exposes journal search and retrieval capabilities
 - Available tools can be discovered via the MCP service endpoint
 

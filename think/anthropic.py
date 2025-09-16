@@ -207,7 +207,11 @@ async def run_agent(
 
         # Initialize tools and executor based on disable_mcp flag
         if not disable_mcp:
-            async with create_mcp_client() as mcp:
+            mcp_url = config.get("mcp_server_url")
+            if not mcp_url:
+                raise RuntimeError("MCP server URL not provided in config")
+
+            async with create_mcp_client(str(mcp_url)) as mcp:
                 # Extract allowed tools from config
                 allowed_tools = config.get("tools", None)
                 if allowed_tools and isinstance(allowed_tools, list):

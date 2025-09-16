@@ -16,7 +16,6 @@ import os
 import sys
 import time
 import traceback
-from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlparse, urlunparse
 
@@ -181,17 +180,10 @@ async def run_agent(
     # Initialize MCP server only if not disabled
     mcp_server = None
     if not disable_mcp:
-        # Read MCP server URL from journal
-        journal_path = os.getenv("JOURNAL_PATH")
-        if not journal_path:
-            raise RuntimeError("JOURNAL_PATH not set")
-        uri_file = Path(journal_path) / "agents" / "mcp.uri"
-        if not uri_file.exists():
-            raise RuntimeError(f"MCP server URI file not found: {uri_file}")
-        http_uri_raw = uri_file.read_text().strip()
+        http_uri_raw = config.get("mcp_server_url")
         if not http_uri_raw:
-            raise RuntimeError("MCP server URI file is empty")
-        http_uri = _normalize_streamable_http_uri(http_uri_raw)
+            raise RuntimeError("MCP server URL not provided in config")
+        http_uri = _normalize_streamable_http_uri(str(http_uri_raw))
 
         # Extract allowed tools from config
         allowed_tools = config.get("tools", None)

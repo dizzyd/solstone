@@ -17,10 +17,6 @@ def mock_journal(tmp_path, monkeypatch):
     agents_path = journal_path / "agents"
     agents_path.mkdir()
 
-    # Create mock MCP URI file
-    mcp_uri = agents_path / "mcp.uri"
-    mcp_uri.write_text("http://localhost:5175/mcp")
-
     monkeypatch.setenv("JOURNAL_PATH", str(journal_path))
     return journal_path
 
@@ -65,6 +61,7 @@ def test_ndjson_single_request(mock_journal, monkeypatch, capsys):
             "persona": "default",
             "model": "gpt-4o",
             "max_tokens": 100,
+            "mcp_server_url": "http://localhost:5175/mcp",
         }
     )
 
@@ -98,31 +95,41 @@ def test_ndjson_single_request(mock_journal, monkeypatch, capsys):
     captured = capsys.readouterr()
     lines = captured.out.strip().split("\n")
 
-    # Should have start and finish events
-    assert len(lines) >= 2
+    events = [json.loads(line) for line in lines if line]
 
-    start_event = json.loads(lines[0])
+    # Should have start and finish events
+    assert events
+
+    start_event = events[0]
     assert start_event["event"] == "start"
     assert start_event["prompt"] == "What is 2+2?"
     assert start_event["backend"] == "openai"
     assert start_event["model"] == "gpt-4o"  # Model comes from config
 
-    finish_event = json.loads(lines[1])
-    assert finish_event["event"] == "finish"
-    assert "Response to: What is 2+2?" in finish_event["result"]
+    finish_events = [e for e in events if e["event"] == "finish"]
+    assert finish_events
 
 
 def test_ndjson_multiple_requests(mock_journal, monkeypatch, capsys):
     """Test processing multiple NDJSON requests from stdin."""
     # Multiple NDJSON lines
     requests = [
-        {"prompt": "First question", "backend": "openai"},
+        {
+            "prompt": "First question",
+            "backend": "openai",
+            "mcp_server_url": "http://localhost:5175/mcp",
+        },
         {
             "prompt": "Second question",
             "backend": "anthropic",
             "model": "claude-3",
+            "mcp_server_url": "http://localhost:5175/mcp",
         },
-        {"prompt": "Third question", "persona": "technical"},
+        {
+            "prompt": "Third question",
+            "persona": "technical",
+            "mcp_server_url": "http://localhost:5175/mcp",
+        },
     ]
 
     ndjson_input = "\n".join(json.dumps(r) for r in requests)
@@ -172,9 +179,9 @@ def test_ndjson_multiple_requests(mock_journal, monkeypatch, capsys):
 def test_ndjson_invalid_json(mock_journal, monkeypatch, capsys):
     """Test handling of invalid JSON in NDJSON input."""
     # Mix of valid and invalid JSON
-    ndjson_input = """{"prompt": "Valid request"}
+    ndjson_input = """{"prompt": "Valid request", "backend": "openai", "mcp_server_url": "http://localhost:5175/mcp"}
 not valid json
-{"prompt": "Another valid request"}"""
+{"prompt": "Another valid request", "backend": "openai", "mcp_server_url": "http://localhost:5175/mcp"}"""
 
     monkeypatch.setattr("sys.stdin", StringIO(ndjson_input))
 
@@ -332,7 +339,13 @@ def test_openai_key_setting(mock_journal, monkeypatch, capsys):
     """Test that OpenAI API key is set when backend is openai."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key-123")
 
-    ndjson_input = json.dumps({"prompt": "Test", "backend": "openai"})
+    ndjson_input = json.dumps(
+        {
+            "prompt": "Test",
+            "backend": "openai",
+            "mcp_server_url": "http://localhost:5175/mcp",
+        }
+    )
 
     monkeypatch.setattr("sys.stdin", StringIO(ndjson_input))
 

@@ -101,23 +101,6 @@ def start_runners(
     return procs
 
 
-def start_mcp_server(journal: str, verbose: bool = False) -> subprocess.Popen:
-    """Launch the MCP tools HTTP server."""
-    cmd = [sys.executable, "-m", "think.mcp_tools", "--transport", "http"]
-    if verbose:
-        cmd.append("-v")
-    env = os.environ.copy()
-    env["JOURNAL_PATH"] = journal
-    proc = subprocess.Popen(
-        cmd,
-        stdout=None,  # Inherit stdout
-        stderr=None,  # Inherit stderr
-        start_new_session=True,
-        env=env,
-    )
-    return proc
-
-
 def start_cortex_server(journal: str, verbose: bool = False) -> subprocess.Popen:
     """Launch the Cortex WebSocket API server."""
     cmd = [sys.executable, "-m", "think.cortex"]
@@ -286,8 +269,6 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    os.environ.setdefault("SUNSTONE_MCP_URL", "http://127.0.0.1:6270/mcp")
-
     # Set up signal handlers
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
@@ -295,8 +276,6 @@ def main() -> None:
     procs: list[tuple[subprocess.Popen, str]] = []
     if not args.no_runners:
         procs = start_runners(journal, verbose=args.verbose)
-    mcp_proc = start_mcp_server(journal, verbose=args.verbose)
-    procs.append((mcp_proc, "mcp"))
     if not args.no_cortex:
         cortex_proc = start_cortex_server(journal, verbose=args.verbose)
         procs.append((cortex_proc, "cortex"))

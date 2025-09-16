@@ -323,25 +323,12 @@ def get_agent(persona: str = "default") -> dict:
     return config
 
 
-def create_mcp_client() -> Any:
-    """Return a fastMCP HTTP client for Sunstone tools."""
+def create_mcp_client(http_uri: str) -> Any:
+    """Return a FastMCP HTTP client for Sunstone tools."""
 
-    # Auto-discover HTTP server URI from journal
-    journal_path = os.getenv("JOURNAL_PATH")
-    if not journal_path:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    uri_file = Path(journal_path) / "agents" / "mcp.uri"
-    if not uri_file.exists():
-        raise RuntimeError(f"MCP server URI file not found: {uri_file}")
-
-    try:
-        http_uri = uri_file.read_text().strip()
-    except Exception as exc:
-        raise RuntimeError(f"Failed to read MCP server URI: {exc}")
-
+    http_uri = http_uri.strip()
     if not http_uri:
-        raise RuntimeError("MCP server URI file is empty")
+        raise RuntimeError("MCP server URL not provided")
 
     from fastmcp import Client
 

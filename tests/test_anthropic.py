@@ -107,7 +107,7 @@ def _setup_fastmcp_stub(monkeypatch):
     sys.modules["fastmcp"] = fastmcp_stub
     sys.modules["fastmcp.fastmcp"] = fastmcp_fastmcp_stub
 
-    def mock_create_mcp_client():
+    def mock_create_mcp_client(_url=None):
         return DummyClient()
 
     monkeypatch.setattr("think.utils.create_mcp_client", mock_create_mcp_client)
@@ -122,16 +122,19 @@ def test_claude_main(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    # Create agents directory and MCP URI file
     agents_dir = journal / "agents"
     agents_dir.mkdir()
-    mcp_uri_file = agents_dir / "mcp.uri"
-    mcp_uri_file.write_text("http://localhost:5173/mcp")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    ndjson_input = json.dumps({"prompt": "hello", "backend": "anthropic"})
+    ndjson_input = json.dumps(
+        {
+            "prompt": "hello",
+            "backend": "anthropic",
+            "mcp_server_url": "http://localhost:5173/mcp",
+        }
+    )
     asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
@@ -158,16 +161,19 @@ def test_claude_outfile(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    # Create agents directory and MCP URI file
     agents_dir = journal / "agents"
     agents_dir.mkdir()
-    mcp_uri_file = agents_dir / "mcp.uri"
-    mcp_uri_file.write_text("http://localhost:5173/mcp")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    ndjson_input = json.dumps({"prompt": "hello", "backend": "anthropic"})
+    ndjson_input = json.dumps(
+        {
+            "prompt": "hello",
+            "backend": "anthropic",
+            "mcp_server_url": "http://localhost:5173/mcp",
+        }
+    )
     asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     # Output file functionality was removed in NDJSON-only mode
@@ -203,16 +209,19 @@ def test_claude_thinking_events(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    # Create agents directory and MCP URI file
     agents_dir = journal / "agents"
     agents_dir.mkdir()
-    mcp_uri_file = agents_dir / "mcp.uri"
-    mcp_uri_file.write_text("http://localhost:5173/mcp")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    ndjson_input = json.dumps({"prompt": "hello", "backend": "anthropic"})
+    ndjson_input = json.dumps(
+        {
+            "prompt": "hello",
+            "backend": "anthropic",
+            "mcp_server_url": "http://localhost:5173/mcp",
+        }
+    )
     asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()
@@ -238,16 +247,19 @@ def test_claude_outfile_error(monkeypatch, tmp_path, capsys):
 
     journal = tmp_path / "journal"
     journal.mkdir()
-    # Create agents directory and MCP URI file
     agents_dir = journal / "agents"
     agents_dir.mkdir()
-    mcp_uri_file = agents_dir / "mcp.uri"
-    mcp_uri_file.write_text("http://localhost:5173/mcp")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
 
-    ndjson_input = json.dumps({"prompt": "hello", "backend": "anthropic"})
+    ndjson_input = json.dumps(
+        {
+            "prompt": "hello",
+            "backend": "anthropic",
+            "mcp_server_url": "http://localhost:5173/mcp",
+        }
+    )
     asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     # Error events should be written to stdout

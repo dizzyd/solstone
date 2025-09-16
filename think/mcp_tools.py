@@ -690,17 +690,6 @@ def main() -> None:
     args = setup_cli(parser)
 
     if args.transport == "http":
-        # Write URI file for service discovery
-        journal = os.getenv("JOURNAL_PATH")
-        if journal:
-            from pathlib import Path
-
-            uri_file = Path(journal) / "agents" / "mcp.uri"
-            uri_file.parent.mkdir(parents=True, exist_ok=True)
-            mcp_uri = f"http://127.0.0.1:{args.port}{args.path}"
-            uri_file.write_text(mcp_uri)
-            print(f"MCP Tools URI written to {uri_file}")
-
         mcp.run(
             transport="http",
             host="127.0.0.1",

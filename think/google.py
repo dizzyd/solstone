@@ -141,8 +141,12 @@ async def run_agent(
 
         # Configure tools based on disable_mcp flag
         if not disable_mcp:
+            mcp_url = config.get("mcp_server_url")
+            if not mcp_url:
+                raise RuntimeError("MCP server URL not provided in config")
+
             # Create MCP client and attach hooks
-            async with create_mcp_client() as mcp:
+            async with create_mcp_client(str(mcp_url)) as mcp:
                 # Attach tool logging hooks to the MCP session
                 tool_hooks = ToolLoggingHooks(callback)
                 tool_hooks.attach(mcp.session)

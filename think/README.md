@@ -44,11 +44,10 @@ is loaded automatically by most commands.
 
 ## Service Discovery
 
-When HTTP services start up, they write their active URIs to files in the journal's `agents/` directory for automated discovery:
-
-- `think-mcp-tools --transport http` writes to `<journal>/agents/mcp.uri` (default: `http://127.0.0.1:6270/mcp/`)
-
-These URI files allow other components to automatically discover running services without hardcoded addresses.
+The MCP HTTP server now runs inside Cortex itself. When Cortex starts it passes
+the URL directly to each agent request (`mcp_server_url`). Utilities that need
+tool metadata, such as `think-planner`, query the registered tools directly and
+no discovery files or environment variables are required.
 
 ## Automating daily processing
 

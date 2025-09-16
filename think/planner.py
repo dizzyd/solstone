@@ -9,20 +9,19 @@ from typing import Optional
 from dotenv import load_dotenv
 
 from .models import GEMINI_PRO, gemini_generate
-from .utils import create_mcp_client, setup_cli
+from .utils import setup_cli
 
 PROMPT_PATH = Path(__file__).with_name("planner.txt")
 
 
 async def _get_mcp_tools() -> str:
     """Return formatted MCP tools information for the prompt."""
-    try:
-        mcp = create_mcp_client()
-        if not hasattr(mcp, "list_tools"):
-            return ""
 
-        tool_list = await mcp.list_tools()
-        if not tool_list:
+    try:
+        from think.mcp_tools import mcp
+
+        tools = await mcp.get_tools()
+        if not tools:
             return ""
 
         lines = [
@@ -33,13 +32,12 @@ async def _get_mcp_tools() -> str:
             "",
         ]
 
-        for tool in tool_list:
-            name = tool.name
+        for name in sorted(tools.keys()):
+            tool = tools[name]
             description = tool.description or "No description available"
             lines.append(f"**{name}**: {description}")
 
         return "\n".join(lines)
-
     except Exception as exc:
         logging.debug("Failed to fetch MCP tools: %s", exc)
         return ""
