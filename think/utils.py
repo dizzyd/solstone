@@ -495,195 +495,91 @@ def load_entity_names(
     return ", ".join(entity_names)
 
 
-def get_todos(day: str) -> dict[str, list[dict[str, Any]]] | None:
-    """Parse TODO.md file for a given day and return structured data.
+def get_todos(day: str) -> list[dict[str, Any]] | None:
+    """Parse ``todos/today.md`` for ``day`` and return checklist items.
 
-    Parameters
-    ----------
-    day:
-        Day folder in YYYYMMDD format.
-
-    Returns
-    -------
-    dict[str, list[dict[str, Any]]] | None
-        Dictionary with 'today' and 'future' keys containing parsed todos,
-        or None if TODO.md doesn't exist.
-
-    Example
-    -------
-    >>> todos = get_todos("20250124")
-    >>> if todos:
-    ...     for item in todos['today']:
-    ...         print(f"{item['type']}: {item['description']}")
+    The flat checklist preserves each raw line for guard validation while
+    exposing lightweight metadata for templates or tooling.
     """
-    day_dir = day_path(day)
-    todo_path = day_dir / "TODO.md"
 
+    todo_path = day_path(day) / "todos" / "today.md"
     if not todo_path.exists():
         return None
 
-    todos = {"today": [], "future": []}
-
-    current_section = None
-    line_number = 0  # Track actual line numbers in file (1-based for editors)
-
     try:
-        with open(todo_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line_number += 1  # Increment before processing (1-based)
-                line = line.strip()
-
-                # Check for section headers
-                if line == "# Today":
-                    current_section = "today"
-                    continue
-                elif line == "# Future":
-                    current_section = "future"
-                    continue
-
-                # Skip empty lines or non-todo lines
-                if not line.startswith("- ["):
-                    continue
-
-                # Parse checkbox state
-                completed = False
-                cancelled = False
-
-                if line.startswith("- [x]"):
-                    completed = True
-                    line = line[6:].strip()
-                elif line.startswith("- [ ]"):
-                    line = line[5:].strip()
-                else:
-                    continue  # Not a valid todo line
-
-                # Check for strikethrough (cancelled) - may have content after ~~
-                if line.startswith("~~"):
-                    # Find the closing ~~
-                    close_idx = line.find("~~", 2)
-                    if close_idx > 0:
-                        cancelled = True
-                        # Extract the content between ~~ and reconstruct line
-                        cancelled_content = line[2:close_idx].strip()
-                        after_content = line[close_idx + 2 :].strip()
-                        line = (
-                            cancelled_content + " " + after_content
-                            if after_content
-                            else cancelled_content
-                        )
-
-                # Parse the type (bold text) if present, otherwise use the whole line
-                type_match = re.match(r"\*\*([^*]+)\*\*:\s*(.*)", line)
-                if type_match:
-                    todo_type = type_match.group(1)
-                    remainder = type_match.group(2)
-                else:
-                    # No type prefix, use default type and entire line as description
-                    todo_type = None
-                    remainder = line
-
-                # Parse based on section
-                if current_section == "today":
-                    # Today format: description #optional-domain-tag (HH:MM)
-                    # Match time only if it's a valid hour:minute format at the very end
-                    # Hours can be 00-23 or 01-12 (with optional leading zero)
-                    time_match = re.search(r"\(([0-2]?\d:[0-5]\d)\)\s*$", remainder)
-                    if time_match:
-                        # Validate hour is in valid range (00-23)
-                        time_str = time_match.group(1)
-                        hour = int(time_str.split(":")[0])
-                        if hour <= 23:
-                            remainder = remainder[: time_match.start()].strip()
-                        else:
-                            time_str = None
-                    else:
-                        time_str = None
-
-                    # Extract domain tag if present
-                    # Domain tags should be #word with alphanumeric/hyphen/underscore only
-                    # and should be preceded by whitespace to avoid matching issue numbers
-                    domain_match = re.search(
-                        r"\s#([a-zA-Z][a-zA-Z0-9_-]*)\b", remainder
-                    )
-                    if domain_match:
-                        domain = domain_match.group(1)
-                        description = remainder[: domain_match.start()].strip()
-                    else:
-                        domain = None
-                        description = remainder
-
-                    todo_item = {
-                        "type": todo_type,
-                        "description": description,
-                        "completed": completed,
-                        "cancelled": cancelled,
-                        "time": time_str,
-                        "line_number": line_number,  # Add line number for tracking
-                    }
-                    if domain:
-                        todo_item["domain"] = domain
-
-                    todos["today"].append(todo_item)
-
-                elif current_section == "future":
-                    # Future format: description #optional-domain-tag MM/DD/YYYY
-                    date_match = re.search(r"(\d{2}/\d{2}/\d{4})$", remainder)
-                    if date_match:
-                        date_str = date_match.group(1)
-                        remainder = remainder[: date_match.start()].strip()
-                    else:
-                        date_str = None
-
-                    # Extract domain tag if present
-                    # Domain tags should be #word with alphanumeric/hyphen/underscore only
-                    # and should be preceded by whitespace to avoid matching issue numbers
-                    domain_match = re.search(
-                        r"\s#([a-zA-Z][a-zA-Z0-9_-]*)\b", remainder
-                    )
-                    if domain_match:
-                        domain = domain_match.group(1)
-                        description = remainder[: domain_match.start()].strip()
-                    else:
-                        domain = None
-                        description = remainder
-
-                    todo_item = {
-                        "type": todo_type,
-                        "description": description,
-                        "completed": completed,
-                        "cancelled": cancelled,
-                        "date": date_str,
-                        "line_number": line_number,  # Add line number for tracking
-                    }
-                    if domain:
-                        todo_item["domain"] = domain
-
-                    todos["future"].append(todo_item)
-
-    except Exception as exc:
-        logging.debug("Error parsing TODO.md for day %s: %s", day, exc)
+        text = todo_path.read_text(encoding="utf-8")
+    except OSError as exc:  # pragma: no cover - filesystem failure
+        logging.debug("Failed reading todos for %s: %s", day, exc)
         return None
 
-    # Sort future todos by date
-    if todos["future"]:
-        from datetime import datetime
+    items: list[dict[str, Any]] = []
+    lines = text.splitlines()
+    entry_index = 0
 
-        def parse_date(date_str):
-            """Parse MM/DD/YYYY format to datetime for sorting."""
-            if not date_str:
-                return datetime(9999, 12, 31)
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped or not stripped.startswith("- ["):
+            continue
+
+        match_state = re.match(r"- \[( |x|X)\]\s*(.*)", stripped)
+        if not match_state:
+            continue
+
+        entry_index += 1
+        completed = match_state.group(1).lower() == "x"
+        remainder = match_state.group(2).strip()
+
+        cancelled = False
+        cleaned = remainder
+        if cleaned.startswith("~~"):
+            close_idx = cleaned.find("~~", 2)
+            if close_idx > 0:
+                cancelled = True
+                inner = cleaned[2:close_idx].strip()
+                tail = cleaned[close_idx + 2 :].strip()
+                cleaned = inner + (f" {tail}" if tail else "")
+
+        todo_type: str | None = None
+        description = cleaned
+
+        type_match = re.match(r"\*\*([^*]+)\*\*:\s*(.*)", cleaned)
+        if type_match:
+            todo_type = type_match.group(1).strip()
+            description = type_match.group(2).strip()
+
+        domain: str | None = None
+        domain_match = re.search(r"\s#([a-zA-Z][\w-]*)\b", description)
+        if domain_match:
+            domain = domain_match.group(1)
+            before = description[: domain_match.start()].rstrip()
+            after = description[domain_match.end() :].strip()
+            description = (before + (f" {after}" if after else "")).strip()
+
+        time: str | None = None
+        time_match = re.search(r"\((\d{1,2}:[0-5]\d)\)\s*$", description)
+        if time_match:
+            hour_str = time_match.group(1).split(":", 1)[0]
             try:
-                parts = date_str.split("/")
-                if len(parts) == 3:
-                    month, day, year = int(parts[0]), int(parts[1]), int(parts[2])
-                    return datetime(year, month, day)
-            except (ValueError, IndexError):
+                if 0 <= int(hour_str) <= 23:
+                    time = time_match.group(1)
+                    description = description[: time_match.start()].rstrip()
+            except ValueError:
                 pass
-            return datetime(9999, 12, 31)
 
-        todos["future"].sort(key=lambda x: parse_date(x.get("date")))
+        items.append(
+            {
+                "index": entry_index,
+                "raw": stripped,
+                "text": description,
+                "type": todo_type,
+                "domain": domain,
+                "time": time,
+                "completed": completed,
+                "cancelled": cancelled,
+            }
+        )
 
-    return todos
+    return items
 
 
 def get_agents() -> dict[str, dict[str, Any]]:
