@@ -1,5 +1,12 @@
 {
   "title": "TODO Review",
-  "description": "Validates task completion status by checking journal evidence and updates TODO.md",
-  "save": "TODO.md"
+  "description": "Validates checklist entries against journal evidence and marks items complete via MCP todo tools.",
+  "tools": [
+    "search_summaries",
+    "search_transcripts",
+    "search_events",
+    "get_resource",
+    "todo_list",
+    "todo_done"
+  ]
 }
