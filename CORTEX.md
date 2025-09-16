@@ -194,7 +194,7 @@ When an agent completes successfully, its result can be automatically saved to a
 - The result from the `finish` event is written to `<journal>/<day>/<filename>`
 - Saving occurs before any handoff processing
 - Save failures are logged but don't interrupt the agent flow
-- Commonly used for scheduled agents that generate daily reports (e.g., TODO.md)
+- Commonly used for scheduled agents that generate daily reports
 
 ## Agent Handoff
 

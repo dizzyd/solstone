@@ -39,7 +39,7 @@ sunstone/
 ├── README.md       # Project overview and quick start
 ├── CRUMBS.md       # Crumb file format specification
 ├── CORTEX.md       # Agent system documentation
-└── CLAUDE.md       # Development guidelines (this file)
+└── AGENTS.md       # Development guidelines (this file)
 ```
 
 ### Package Organization
@@ -47,7 +47,7 @@ sunstone/
 * **Modules**: Each top-level folder is a Python package with `__init__.py`
 * **Imports**: Use absolute imports (e.g., `from hear.capture import record_audio`)
 * **Entry Points**: Defined in `pyproject.toml` under `[project.scripts]`
-* **Journal**: Data stored under `JOURNAL_PATH` environment variable location
+* **Journal**: Data stored under `JOURNAL_PATH` environment variable location always loaded from .env
 * **Calling**: When calling other modules as a separate process always use their command name and never call using `python -m ...` (e.g., use `think-indexer`, NOT `python -m think.indexer`)
 
 ---
@@ -55,33 +55,6 @@ sunstone/
 ## 🏛️ Architecture & Data Flow
 
 **Pipeline**: `hear/see` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `dream` (web UI)
-
----
-
-## 🔌 Critical Integration Points
-
-* **JOURNAL_PATH**: Central to all operations - set via environment
-* **Cortex**: WebSocket server spawns agents, captures stdout events → `.jsonl` files  
-* **MCP Tools**: HTTP server provides journal search/retrieval (check `agents/mcp.uri`)
-* **Flask/Async**: Use `dream.cortex_utils` for sync wrappers in Flask views
-
----
-
-## 🤖 Agent System Patterns
-
-```python
-# Async (in think/ modules)
-from think.cortex_client import run_agent
-result = await run_agent(prompt, persona="default", backend="openai")
-
-# Sync (in dream/ views)  
-from dream.cortex_utils import run_agent_via_cortex
-result = run_agent_via_cortex(prompt, on_event=lambda e: push_server.push(e))
-```
-
-**Event flow**: Agent stdout → Cortex → `.jsonl` + WebSocket broadcast
-
-**Essential utilities**: Always check `think.utils` for common operations (setup_cli, day_path, parse_time_range, etc.) and `think.crumbs` for dependency tracking.
 
 ---
 
@@ -98,7 +71,6 @@ os.environ["JOURNAL_PATH"] = "fixtures/journal"
 ## 💻 Coding Standards & Style
 
 ### Language & Tools
-* **Python Version**: 3.9+ required
 * **Code Formatting**: 
   - Black (`make format` or `black .`)
   - isort (`make format` or `isort .`)
@@ -235,10 +207,8 @@ make dev
 * **Security**: Never expose secrets, validate inputs, sanitize outputs
 
 ### Git Workflow
-* **Commits**: Small, focused commits with clear messages
+* **Commits**: Small, focused commits with CHANGELOG style commit messages
 * **Branches**: Feature branches from main, descriptive names
-* **Pull Requests**: Include tests, update docs, pass CI checks
-* **Reviews**: Address feedback promptly and thoroughly
 
 ---
 
