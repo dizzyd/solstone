@@ -148,4 +148,3 @@ def test_load_entity_names_missing_env_var(monkeypatch):
     with pytest.raises(ValueError) as exc_info:
         load_entity_names(None)
     assert "JOURNAL_PATH not set" in str(exc_info.value)
-

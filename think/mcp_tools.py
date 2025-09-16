@@ -3,13 +3,13 @@
 
 import base64
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.resources import FileResource, TextResource
 
+from think import todo
 from think.cluster import cluster_range
 from think.domains import domain_summary
 from think.indexer import search_events as search_events_impl
@@ -43,71 +43,6 @@ TOOL_PACKS = {
 }
 
 
-_TODO_ENTRY_RE = re.compile(r"^- \[( |x|X)\]\s?(.*)$")
-
-
-def _todo_file_path(day: str) -> Path:
-    """Return the absolute path to the todo checklist for ``day``."""
-
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    return Path(journal) / day / "todos" / "today.md"
-
-
-def _load_todo_entries(day: str) -> tuple[Path, list[str]]:
-    """Load todo entries for ``day`` as raw markdown lines."""
-
-    path = _todo_file_path(day)
-    day_dir = path.parents[1]
-    if not day_dir.is_dir():
-        raise FileNotFoundError(f"day folder '{day}' not found")
-
-    if not path.is_file():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path, []
-
-    text = path.read_text(encoding="utf-8")
-    entries = [line.rstrip("\n") for line in text.splitlines() if line.strip()]
-    return path, entries
-
-
-def _write_todo_entries(path: Path, entries: list[str]) -> None:
-    """Persist todo ``entries`` back to ``path`` ensuring a newline terminator."""
-
-    content = "\n".join(entries)
-    if entries:
-        content += "\n"
-    path.write_text(content, encoding="utf-8")
-
-
-def _format_numbered(entries: list[str]) -> str:
-    """Return todo ``entries`` formatted with ``1:`` style numbering."""
-
-    if not entries:
-        return "0: (no todos)"
-
-    return "\n".join(f"{idx}: {line}" for idx, line in enumerate(entries, start=1))
-
-
-def _parse_entry(entry: str) -> tuple[bool, str]:
-    """Return completion flag and body text for a todo entry."""
-
-    match = _TODO_ENTRY_RE.match(entry)
-    if not match:
-        raise ValueError("entry is not a markdown checklist item")
-    completed = match.group(1).lower() == "x"
-    text = match.group(2)
-    return completed, text
-
-
-def _validate_line_number(line_number: int, max_line: int) -> None:
-    """Ensure ``line_number`` is within the inclusive range ``[1, max_line]``."""
-
-    if line_number < 1 or line_number > max_line:
-        raise IndexError(
-            f"line number {line_number} is out of range (1..{max_line})"
-        )
-
-
 @mcp.tool(annotations=HINTS)
 def todo_list(day: str) -> dict[str, Any]:
     """Return the numbered markdown checklist for ``day``'s todos.
@@ -121,8 +56,8 @@ def todo_list(day: str) -> dict[str, Any]:
     """
 
     try:
-        _, entries = _load_todo_entries(day)
-        return {"day": day, "markdown": _format_numbered(entries)}
+        checklist = todo.TodoChecklist.load(day)
+        return {"day": day, "markdown": checklist.numbered()}
     except FileNotFoundError:
         return {
             "error": f"Day '{day}' not found",
@@ -147,30 +82,23 @@ def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
     """
 
     try:
-        path, entries = _load_todo_entries(day)
-        expected_line = len(entries) + 1
-        if line_number != expected_line:
-            return {
-                "error": (
-                    f"line number {line_number} must match the next available line"
-                ),
-                "suggestion": f"retry with {expected_line}",
-            }
-
-        body = text.strip()
-        if not body:
-            return {
-                "error": "todo text cannot be empty",
-                "suggestion": "provide a short description of the task",
-            }
-
-        entries.append(f"- [ ] {body}")
-        _write_todo_entries(path, entries)
-        return {"day": day, "markdown": _format_numbered(entries)}
+        checklist = todo.TodoChecklist.load(day)
+        checklist.add_entry(line_number, text)
+        return {"day": day, "markdown": checklist.numbered()}
     except FileNotFoundError:
         return {
             "error": f"Day '{day}' not found",
             "suggestion": "create the day directory before adding todos",
+        }
+    except todo.TodoLineNumberError as exc:
+        return {
+            "error": str(exc),
+            "suggestion": f"retry with {exc.expected}",
+        }
+    except todo.TodoEmptyTextError as exc:
+        return {
+            "error": str(exc),
+            "suggestion": "provide a short description of the task",
         }
     except Exception as exc:  # pragma: no cover - unexpected failure
         return {"error": f"Failed to add todo: {exc}"}
@@ -191,24 +119,18 @@ def todo_remove(day: str, line_number: int, guard: str) -> dict[str, Any]:
     """
 
     try:
-        path, entries = _load_todo_entries(day)
-        _validate_line_number(line_number, len(entries))
-
-        entry = entries[line_number - 1]
-        _parse_entry(entry)
-        if guard != entry:
-            return {
-                "error": "guard text does not match current todo",
-                "suggestion": f"expected '{entry}'",
-            }
-
-        del entries[line_number - 1]
-        _write_todo_entries(path, entries)
-        return {"day": day, "markdown": _format_numbered(entries)}
+        checklist = todo.TodoChecklist.load(day)
+        checklist.remove_entry(line_number, guard)
+        return {"day": day, "markdown": checklist.numbered()}
     except FileNotFoundError:
         return {
             "error": f"Day '{day}' not found",
             "suggestion": "verify the day folder exists before removing todos",
+        }
+    except todo.TodoGuardMismatchError as exc:
+        return {
+            "error": str(exc),
+            "suggestion": f"expected '{exc.expected}'",
         }
     except IndexError as exc:
         return {"error": str(exc), "suggestion": "refresh the todo list"}
@@ -236,24 +158,18 @@ def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
     """
 
     try:
-        path, entries = _load_todo_entries(day)
-        _validate_line_number(line_number, len(entries))
-
-        entry = entries[line_number - 1]
-        _, body = _parse_entry(entry)
-        if guard != entry:
-            return {
-                "error": "guard text does not match current todo",
-                "suggestion": f"expected '{entry}'",
-            }
-
-        entries[line_number - 1] = f"- [x] {body}"
-        _write_todo_entries(path, entries)
-        return {"day": day, "markdown": _format_numbered(entries)}
+        checklist = todo.TodoChecklist.load(day)
+        checklist.mark_done(line_number, guard)
+        return {"day": day, "markdown": checklist.numbered()}
     except FileNotFoundError:
         return {
             "error": f"Day '{day}' not found",
             "suggestion": "verify the day folder exists before updating todos",
+        }
+    except todo.TodoGuardMismatchError as exc:
+        return {
+            "error": str(exc),
+            "suggestion": f"expected '{exc.expected}'",
         }
     except IndexError as exc:
         return {"error": str(exc), "suggestion": "refresh the todo list"}
@@ -705,11 +621,10 @@ def get_media(day: str, name: str) -> FileResource:
 def get_todo(day: str) -> TextResource:
     """Return the ``todos/today.md`` checklist for ``day``."""
 
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    todo_path = Path(journal) / day / "todos" / "today.md"
+    todo_path = todo.todo_file_path(day)
 
     if not todo_path.is_file():
-        day_path = Path(journal) / day
+        day_path = todo_path.parents[1]
         if not day_path.is_dir():
             text = f"No journal entries for {day}."
         else:

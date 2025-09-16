@@ -40,7 +40,9 @@ def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
     list_result = call_tool(mcp_tools.todo_list, day)
     assert list_result == {"day": day, "markdown": "1: - [ ] Fixture task"}
 
-    add_result = call_tool(mcp_tools.todo_add, day, line_number=2, text="Follow up task")
+    add_result = call_tool(
+        mcp_tools.todo_add, day, line_number=2, text="Follow up task"
+    )
     assert add_result["markdown"].splitlines() == [
         "1: - [ ] Fixture task",
         "2: - [ ] Follow up task",

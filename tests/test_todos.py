@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from think.utils import get_todos
+from think.todo import get_todos
 
 
 @pytest.fixture

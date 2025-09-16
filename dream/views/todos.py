@@ -14,9 +14,10 @@ from flask import (
     url_for,
 )
 
+from think.todo import get_todos
+
 from .. import state
 from ..utils import DATE_RE, adjacent_days, format_date
-from think.utils import get_todos
 
 bp = Blueprint("todos", __name__, template_folder="../templates")
 
@@ -225,8 +226,12 @@ def todo_generation_status(day: str):  # type: ignore[override]
                 and day in state.todo_generation_agents
             ):
                 del state.todo_generation_agents[day]
-            return jsonify({"status": "finished", "agent_id": agent_id, "todo_created": True})
-        return jsonify({"status": "finished", "agent_id": agent_id, "todo_created": False})
+            return jsonify(
+                {"status": "finished", "agent_id": agent_id, "todo_created": True}
+            )
+        return jsonify(
+            {"status": "finished", "agent_id": agent_id, "todo_created": False}
+        )
 
     try:
         response = cortex_agents(limit=100, offset=0)

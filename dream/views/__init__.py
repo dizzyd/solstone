@@ -4,7 +4,18 @@ from importlib import import_module
 
 from flask import Flask
 
-from . import admin, agents, calendar, domains, entities, home, inbox, search, tasks, todos
+from . import (
+    admin,
+    agents,
+    calendar,
+    domains,
+    entities,
+    home,
+    inbox,
+    search,
+    tasks,
+    todos,
+)
 
 chat_view = import_module(".chat", __name__)
 

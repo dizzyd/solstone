@@ -70,14 +70,14 @@ def test_todo_generation_status_endpoint(client, monkeypatch, tmp_path):
 
     # Running agent
     active_file = agents_dir / "agent_1_active.jsonl"
-    active_file.write_text("{\"event\": \"request\"}\n", encoding="utf-8")
+    active_file.write_text('{"event": "request"}\n', encoding="utf-8")
 
     resp = client.get("/todos/20240101/generation-status?agent_id=agent_1")
     data = json.loads(resp.data)
     assert data["status"] == "running"
 
     # Finished agent with todo file present
-    (agents_dir / "agent_1.jsonl").write_text("{\"event\": \"start\"}\n", encoding="utf-8")
+    (agents_dir / "agent_1.jsonl").write_text('{"event": "start"}\n', encoding="utf-8")
     todo_file = Path(journal_root) / "20240101" / "todos"
     todo_file.mkdir(parents=True)
     (todo_file / "today.md").write_text("- [ ] Example\n", encoding="utf-8")
