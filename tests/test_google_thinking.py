@@ -63,46 +63,8 @@ def _setup_genai_stub(monkeypatch):
     monkeypatch.setitem(sys.modules, "google.genai", genai_mod)
 
 
-class DummySession:
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        pass
-
-    async def call_tool(self, name: str, arguments=None, **kwargs):
-        return {"ok": True}
-
-
-class DummyMCPClient:
-    def __init__(self, *a, **k):
-        self.session = DummySession()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        pass
-
-
-def _setup_fastmcp_stub(monkeypatch):
-    fastmcp_mod = types.ModuleType("fastmcp")
-    fastmcp_mod.Client = lambda *a, **k: DummyMCPClient()
-    monkeypatch.setitem(sys.modules, "fastmcp", fastmcp_mod)
-    transports_mod = types.ModuleType("fastmcp.client.transports")
-    transports_mod.PythonStdioTransport = lambda *a, **k: None
-    monkeypatch.setitem(sys.modules, "fastmcp.client.transports", transports_mod)
-
-    # Mock create_mcp_client to avoid reading URI file
-    def mock_create_mcp_client():
-        return DummyMCPClient()
-
-    monkeypatch.setattr("think.utils.create_mcp_client", mock_create_mcp_client)
-
-
 def test_google_thinking_events(monkeypatch, tmp_path, capsys):
     _setup_genai_stub(monkeypatch)
-    _setup_fastmcp_stub(monkeypatch)
 
     sys.modules.pop("think.google", None)
     importlib.reload(importlib.import_module("think.google"))
@@ -114,7 +76,13 @@ def test_google_thinking_events(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
-    ndjson_input = json.dumps({"prompt": "hello", "backend": "google"})
+    ndjson_input = json.dumps(
+        {
+            "prompt": "hello",
+            "backend": "google",
+            "disable_mcp": True,
+        }
+    )
     asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
 
     out_lines = capsys.readouterr().out.strip().splitlines()

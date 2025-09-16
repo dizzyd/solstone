@@ -1,7 +1,6 @@
 import importlib
 import sys
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
 
 
 def _setup_genai(monkeypatch):
@@ -61,21 +60,13 @@ def test_load_prompt_with_mcp_tools(monkeypatch):
     """Test that _load_prompt includes MCP tools when available."""
     sys.modules.pop("think.planner", None)
 
-    # Mock MCP client and tools
-    mock_tool = Mock()
-    mock_tool.name = "test_tool"
-    mock_tool.description = "A test tool for testing"
-
-    mock_client = AsyncMock()
-    mock_client.list_tools = AsyncMock(return_value=[mock_tool])
-
-    # Mock create_mcp_client to return our mock
-    def mock_create_mcp_client():
-        return mock_client
-
     # Import and patch
     mod = importlib.import_module("think.planner")
-    monkeypatch.setattr(mod, "create_mcp_client", mock_create_mcp_client)
+
+    async def fake_get_mcp_tools():
+        return "\n## Available Tools\n\n**test_tool**: A test tool for testing"
+
+    monkeypatch.setattr(mod, "_get_mcp_tools", fake_get_mcp_tools)
 
     # Test the function
     prompt = mod._load_prompt()
@@ -89,13 +80,13 @@ def test_load_prompt_without_mcp_tools(monkeypatch):
     """Test that _load_prompt works when MCP tools are not available."""
     sys.modules.pop("think.planner", None)
 
-    # Mock create_mcp_client to raise an exception
-    def mock_create_mcp_client():
-        raise RuntimeError("MCP not available")
-
     # Import and patch
     mod = importlib.import_module("think.planner")
-    monkeypatch.setattr(mod, "create_mcp_client", mock_create_mcp_client)
+
+    async def unavailable_tools():
+        raise RuntimeError("MCP not available")
+
+    monkeypatch.setattr(mod, "_get_mcp_tools", unavailable_tools)
 
     # Test the function
     prompt = mod._load_prompt()
