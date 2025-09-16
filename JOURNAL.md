@@ -139,57 +139,48 @@ objective_performance_optimization/
 
 The presence of `OUTCOME.md` indicates objective completion. Directory timestamps (created/modified) provide temporal tracking without requiring separate metadata files.
 
-## TODO.md Format
+## todos/today.md Format
 
-A daily task tracking file located in each day folder with two main sections for temporal organization:
+Each day folder stores a simple markdown checklist at `todos/today.md`. The
+file is a flat list—no sections or headers—so the tools can treat every line as
+a single actionable entry.
 
 ```markdown
-# Today
-- [ ] **Task**: Implement audio capture improvements #hear (09:30)
-- [x] **Meeting**: Weekly standup with team (10:15)
-- [ ] **Review**: Check PR comments on indexer module #think (11:45)
-- [ ] ~~**Task**: Update documentation for API~~ #dream (14:20)
-
-# Future
-- [ ] **Goal**: Design new agent persona system #think 01/25/2025
-- [ ] **Research**: Investigate alternative OCR libraries #see 01/26/2025
-- [ ] **Task**: Refactor domain summary generation 02/01/2025
+- [ ] Draft standup update
+- [ ] Review PR #1234 for indexing tweaks
+- [x] Morning planning session notes
+- [ ] ~~Cancel meeting with vendor~~
 ```
 
 ### Format Specification
 
-Each todo item follows this pattern:
+**Line structure:**
 
-**Today section:**
 ```
-- [checkbox] [~~]**Type**: description #optional-domain-tag (HH:MM)[~~]
-```
-
-**Future section:**
-```
-- [checkbox] [~~]**Type**: description #optional-domain-tag MM/DD/YYYY[~~]
+- [checkbox] optional-context
 ```
 
 **Components:**
-- `- [ ]` - Uncompleted task checkbox
-- `- [x]` - Completed task checkbox  
-- `**Type**:` - Bold categorization (Task, Meeting, Review, Goal, Research, Fix, etc.)
-- `description` - The actual todo content
-- `#optional-domain-tag` - Optional single domain reference
-- `(HH:MM)` - Required timestamp in Today section (24-hour format)
-- `MM/DD/YYYY` - Required date in Future section
-- `~~text~~` - Strikethrough wrapping for cancelled items
+- `- [ ]` – Uncompleted task checkbox
+- `- [x]` – Completed task checkbox (lower- or upper-case `x` accepted)
+- `optional-context` – Free-form markdown content; include timestamps,
+  annotations, or a single `#domain` tag for cross-referencing (e.g., `Sync
+  with design @ 14:00`, `File weekly review #think`).
+- `~~text~~` – Wrap any portion of the line to mark cancellation while keeping
+  the original wording visible.
 
 **Rules:**
-- Items in "Today" section are for current day execution with time tracking
-- Items in "Future" section are for upcoming/someday tasks with target dates
-- Completed items remain in place with `[x]` marking
-- Cancelled items get full strikethrough but remain visible for history
-- Today items use timestamps in parentheses at the end
-- Future items use dates without parentheses at the end
-- Domain tag is optional but helps with context linking
+- Every checklist line becomes the source of truth for agent tools; external
+  callers provide numbered views on demand rather than storing numbering in the
+  file.
+- Append new todos at the end of the file to maintain stable numbering
+  semantics for concurrent tooling.
+- Keep completed items in place by switching the checkbox to `[x]`.
+- Use consistent phrasing so guard checks (which compare the full line) remain
+  reliable.
 
-This format is human-readable, grep-friendly, and maintains consistency with the journal's entity notation style while being simple enough for daily manual editing.
+This minimalist structure keeps manual editing simple while enabling automated
+tools to manage tasks deterministically.
 
 ## Inbox
 
@@ -329,4 +320,3 @@ stored as `occurrences.json` inside each day folder.
 
 Each topic analysis can map its findings into this structure allowing the
 indexer to collect and search occurrences across all days.
-
