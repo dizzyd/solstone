@@ -19,7 +19,7 @@ import traceback
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlparse, urlunparse
 
-from agents import Agent, OpenAIConversationsSession, Runner
+from agents import Agent, OpenAIConversationsSession, Runner, Session, TResponseInputItem
 from agents.items import (
     MessageOutputItem,
     ReasoningItem,
@@ -46,6 +46,34 @@ except Exception:  # pragma: no cover
 
 from .agents import JSONEventCallback, ThinkingEvent
 from .models import GPT_5
+
+
+class WorkaroundConversations(Session):
+    """Workaround for OpenAI Conversations API item validation issues."""
+
+    def __init__(self, inner: Session):
+        self.inner = inner
+        # Expose conversation_id if the inner session has it
+        if hasattr(inner, 'conversation_id'):
+            self.conversation_id = inner.conversation_id
+
+    async def get_items(self, limit=None):
+        return await self.inner.get_items(limit=limit)
+
+    async def add_items(self, items: list[TResponseInputItem]) -> None:
+        cleaned = []
+        for it in items:
+            if it.get("type") == "message" and it.get("role") in ("user", "assistant"):
+                parts = it.get("content") or []
+                text_parts = [p for p in parts if p.get("type") == "text" and isinstance(p.get("text"), str)]
+                if text_parts:
+                    cleaned.append({"type": "message", "role": it["role"], "content": text_parts})
+        if cleaned:
+            await self.inner.add_items(cleaned)
+
+    async def pop_item(self):
+        return await self.inner.pop_item()
+
 
 # Default values are now handled internally
 _DEFAULT_MODEL = os.getenv("OPENAI_AGENT_MODEL", GPT_5)
@@ -214,11 +242,14 @@ async def run_agent(
     # Accumulate streamed text chunks as a fallback (if final_output missing)
     streamed_text: list[str] = []
 
-    session = (
+    # Create base session
+    base_session = (
         OpenAIConversationsSession(conversation_id=conversation_id_in)
         if conversation_id_in
         else OpenAIConversationsSession()
     )
+    # Wrap with workaround to filter invalid items
+    session = WorkaroundConversations(base_session)
 
     try:
         # Handle MCP server context manager conditionally
