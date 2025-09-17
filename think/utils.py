@@ -290,17 +290,33 @@ def get_agent(persona: str = "default") -> dict:
                 extra_parts.append("## Well-Known Entities\n" + entities)
 
         # Add domains to agent instructions
-        from think.domains import get_domains
-
         try:
+            from think.domains import get_domains
+
             domains = get_domains()
             if domains:
                 domains_list = []
-                for domain_name in sorted(domains.keys()):
-                    domains_list.append(f"- {domain_name}")
+                for domain_name, info in sorted(domains.items()):
+                    desc = str(info.get("description", "")).replace("\n", " ").strip()
+                    if desc:
+                        domains_list.append(f"- `{domain_name}`: {desc}")
+                    else:
+                        domains_list.append(f"- `{domain_name}`")
                 extra_parts.append("## Available Domains\n" + "\n".join(domains_list))
         except Exception:
             pass  # Ignore if domains can't be loaded
+
+    # Add topics to agent instructions
+    topics = get_topics()
+    if topics:
+        topics_list = []
+        for topic_name, info in sorted(topics.items()):
+            desc = str(info.get("contains", "")).replace("\n", " ").strip()
+            if desc:
+                topics_list.append(f"- `{topic_name}`: {desc}")
+            else:
+                topics_list.append(f"- `{topic_name}`")
+        extra_parts.append("## Available Topics\n" + "\n".join(topics_list))
 
     # Add current date/time
     now = datetime.now()
