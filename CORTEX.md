@@ -38,6 +38,7 @@ The first line of a request file must be a JSON object with `event: "request"`:
   "persona": "default",              // Optional: agent persona from think/agents/*.txt
   "model": "gpt-4o",               // Optional: backend-specific override
   "max_tokens": 8192,               // Optional: token limit (if supported)
+  "continue": "1234567890122",      // Optional: reuse prior run's conversation
   "domain": "my-project",          // Required for Claude backend only
   "save": "analysis.md",             // Optional: save result to file in day directory
   "day": "20250109",                  // Optional: YYYYMMDD format, defaults to current day
@@ -57,9 +58,13 @@ top-level keys to keep the schema flat and aligned with the agent backends.
 ### Conversation Continuations
 
 OpenAI's Agents SDK supports carrying a `conversation_id` across requests to reuse an
-existing session. Include this optional field in the request payload when resuming an
-ongoing conversation. When the backend issues a `finish` event it will echo the active
-`conversation_id`, allowing callers to persist it for future turns.
+existing session. Cortex now handles this automatically: include a `continue` field in
+your request with the `<timestamp>` identifier of any completed agent run. Cortex will
+open `<timestamp>.jsonl`, read the final event, and forward its `conversation_id` to the
+next agent invocation. You can still provide `conversation_id` manually if needed, but
+`continue` keeps callers agnostic of backend-specific identifiers. When the backend
+issues a `finish` event it will echo the active `conversation_id`, allowing callers to
+chain additional turns seamlessly.
 
 ## Agent Event Format
 
