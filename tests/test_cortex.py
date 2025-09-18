@@ -389,12 +389,15 @@ def test_monitor_stdout_with_handoff(cortex_service, mock_journal):
     mock_process = MagicMock()
     mock_process.poll.return_value = 0
     mock_process.stdout = StringIO(
-        '{"event": "finish", "ts": 1234567890, "result": "Create matter", '
-        '"handoff": {"persona": "matter_editor", "domain": "test"}}\n'
+        '{"event": "finish", "ts": 1234567890, "result": "Create matter"}\n'
     )
 
     agent = AgentProcess(agent_id, mock_process, log_path)
     cortex_service.running_agents[agent_id] = agent
+    cortex_service.agent_handoffs[agent_id] = {
+        "persona": "matter_editor",
+        "domain": "test",
+    }
 
     with patch.object(cortex_service, "_spawn_handoff") as mock_handoff:
         with patch.object(cortex_service, "_complete_agent_file"):
@@ -406,7 +409,7 @@ def test_monitor_stdout_with_handoff(cortex_service, mock_journal):
                 {"persona": "matter_editor", "domain": "test"},
             )
 
-
+    assert agent_id not in cortex_service.agent_handoffs
 def test_monitor_stdout_no_finish_event(cortex_service, mock_journal):
     """Test monitoring stdout when process exits without finish event."""
     from io import StringIO
@@ -571,7 +574,7 @@ def test_spawn_handoff_with_explicit_prompt(cortex_service, mock_journal):
             persona="reviewer",
             backend="openai",
             handoff_from=parent_id,
-            config={},  # Empty config since only prompt and persona in handoff
+            config=None,
         )
 
 

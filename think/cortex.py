@@ -12,6 +12,7 @@ capturing their stdout events and appending them to the JSONL files.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -108,6 +109,7 @@ class CortexService:
         self.logger = logging.getLogger(__name__)
         self.running_agents: Dict[str, AgentProcess] = {}
         self.agent_requests: Dict[str, Dict[str, Any]] = {}  # Store agent configs
+        self.agent_handoffs: Dict[str, Dict[str, Any]] = {}
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.observer = None
@@ -274,6 +276,15 @@ class CortexService:
 
             # Merge request into config (request values override persona defaults)
             config.update(request)
+
+            # Capture handoff configuration for post-run processing while
+            # leaving it in the merged config for logging transparency.
+            handoff_config = config.get("handoff")
+            with self.lock:
+                if handoff_config:
+                    self.agent_handoffs[agent_id] = copy.deepcopy(handoff_config)
+                else:
+                    self.agent_handoffs.pop(agent_id, None)
 
             # Inspect previous run continuation to reuse conversation context
             self._apply_conversation_continuation(config)
@@ -534,10 +545,18 @@ class CortexService:
                                     ),  # Pass optional day parameter
                                 )
 
-                            # Handle handoff
-                            handoff = event.get("handoff")
-                            if handoff:
-                                self._spawn_handoff(agent.agent_id, result, handoff)
+                            # Handle handoff (prefer stored config captured at startup)
+                            handoff_config = None
+                            with self.lock:
+                                if agent.agent_id in self.agent_handoffs:
+                                    handoff_config = copy.deepcopy(
+                                        self.agent_handoffs.pop(agent.agent_id)
+                                    )
+
+                            if handoff_config:
+                                self._spawn_handoff(
+                                    agent.agent_id, result, handoff_config
+                                )
                         # Break to trigger cleanup
                         break
 
@@ -584,6 +603,8 @@ class CortexService:
                 # Clean up stored request
                 if agent.agent_id in self.agent_requests:
                     del self.agent_requests[agent.agent_id]
+                # Ensure any pending handoff config is discarded
+                self.agent_handoffs.pop(agent.agent_id, None)
 
     def _monitor_stderr(self, agent: AgentProcess) -> None:
         """Monitor agent stderr for errors."""
@@ -686,28 +707,37 @@ class CortexService:
         try:
             from think.cortex_client import cortex_request
 
-            # Get parent's config to inherit from (thread-safe)
-            with self.lock:
-                parent_config = self.agent_requests.get(parent_id, {})
+            if not handoff:
+                self.logger.debug("No handoff configuration provided for agent %s", parent_id)
+                return
 
-            # Start with parent config and overlay handoff values
-            handoff_config = parent_config.copy()
-            handoff_config.update(handoff)
+            # Operate on a copy so callers keep their original config untouched.
+            handoff_config = copy.deepcopy(handoff)
 
-            # Use explicit prompt or parent's result
-            prompt = handoff_config.get("prompt", result)
+            # Determine prompt/backends/persona before pruning extra keys.
+            prompt = handoff_config.pop("prompt", None) or result
+            persona = handoff_config.pop("persona", None) or "default"
+            backend = handoff_config.pop("backend", None)
+            if backend is None:
+                with self.lock:
+                    backend = self.agent_requests.get(parent_id, {}).get("backend")
+            if backend is None:
+                backend = "openai"
+
+            # Ensure we do not propagate parent handoff metadata.
+            handoff_config.pop("handoff", None)
+            handoff_config.pop("handoff_from", None)
+
+            # Only pass through additional overrides if any remain.
+            extra_config = handoff_config or None
 
             # Use cortex_request to create the handoff agent
             active_path = cortex_request(
                 prompt=prompt,
-                persona=handoff_config.get("persona", "default"),
-                backend=handoff_config.get("backend", "openai"),
+                persona=persona,
+                backend=backend,
                 handoff_from=parent_id,
-                config={
-                    k: v
-                    for k, v in handoff_config.items()
-                    if k not in ["prompt", "persona", "backend", "handoff_from"]
-                },
+                config=extra_config,
             )
 
             self.logger.info(f"Spawned handoff agent {active_path} from {parent_id}")
