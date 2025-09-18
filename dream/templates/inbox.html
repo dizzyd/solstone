@@ -389,7 +389,6 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" id="btnClose">Close</button>
-      <button class="btn btn-primary" id="btnMarkRead" style="display: none;">Mark as Read</button>
       <button class="btn btn-danger" id="btnArchive" style="display: none;">Archive</button>
       <button class="btn btn-primary" id="btnUnarchive" style="display: none;">Unarchive</button>
     </div>
@@ -513,25 +512,22 @@ async function openMessage(messageId) {
   }
   
   // Update buttons
-  const btnMarkRead = document.getElementById('btnMarkRead');
   const btnArchive = document.getElementById('btnArchive');
   const btnUnarchive = document.getElementById('btnUnarchive');
-  
+
   if (currentStatus === 'active') {
-    btnMarkRead.style.display = message.status === 'unread' ? 'inline-block' : 'none';
     btnArchive.style.display = 'inline-block';
     btnUnarchive.style.display = 'none';
   } else {
-    btnMarkRead.style.display = 'none';
     btnArchive.style.display = 'none';
     btnUnarchive.style.display = 'inline-block';
   }
-  
+
   // Show modal
   document.getElementById('messageModal').style.display = 'block';
-  
+
   // Mark as read automatically if unread
-  if (message.status === 'unread' && currentStatus === 'active') {
+  if (message.status === 'unread') {
     markAsRead(messageId);
   }
 }
@@ -616,9 +612,6 @@ function closeModal() {
 
 document.querySelector('.modal-close').addEventListener('click', closeModal);
 document.getElementById('btnClose').addEventListener('click', closeModal);
-document.getElementById('btnMarkRead').addEventListener('click', () => {
-  if (currentMessage) markAsRead(currentMessage.id);
-});
 document.getElementById('btnArchive').addEventListener('click', archiveMessage);
 document.getElementById('btnUnarchive').addEventListener('click', unarchiveMessage);
 
