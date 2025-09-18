@@ -36,25 +36,45 @@ def install_agents_stub():
             DummyRunner.called = True
             return StreamResult(DummyRunner.events_to_stream)
 
+    class DummySession:
+        """Minimal async session used by WorkaroundConversations."""
+
+        def __init__(self, *_, conversation_id=None, **__):
+            self._items: list[dict] = []
+            # Upstream stores the conversation id on both attributes;
+            # mirror that so callers can inspect either one.
+            self.conversation_id = conversation_id
+            self._session_id = conversation_id
+
+        async def get_items(self, limit=None):
+            if limit is None:
+                return list(self._items)
+            return list(self._items)[-limit:]
+
+        async def add_items(self, items):
+            if not isinstance(items, list):
+                raise TypeError("items must be a list")
+            self._items.extend(items)
+
+        async def pop_item(self):
+            if self._items:
+                return self._items.pop()
+            return None
+
+    class DummyConversationSession(DummySession):
+        pass
+
     agents_stub.Agent = DummyAgent
     agents_stub.Runner = DummyRunner
+    agents_stub.Session = DummySession
+    agents_stub.SQLiteSession = DummySession
+    agents_stub.OpenAIConversationsSession = DummyConversationSession
+    agents_stub.TResponseInputItem = dict
+    agents_stub.set_default_openai_key = lambda key: None
     agents_run_stub.RunConfig = lambda **kwargs: SimpleNamespace(**kwargs)
     agents_model_settings_stub.ModelSettings = lambda **kwargs: SimpleNamespace(**kwargs)
     agents_stub.RunConfig = agents_run_stub.RunConfig
     agents_stub.ModelSettings = agents_model_settings_stub.ModelSettings
-    agents_stub.set_default_openai_key = lambda key: None
-
-    class DummySession:
-        def __init__(self, *_, **__):
-            pass
-
-    agents_stub.SQLiteSession = DummySession
-
-    class DummyConversationSession:
-        def __init__(self, conversation_id=None):
-            self.conversation_id = conversation_id
-
-    agents_stub.OpenAIConversationsSession = DummyConversationSession
 
     class DummyMCPServer:
         async def __aenter__(self):
