@@ -216,6 +216,7 @@ def supervise(
     global shutdown_requested
     last_day = datetime.now().date()
     alert_state = {}  # Track {issue_key: (last_alert_time, backoff_seconds)}
+    prev_stale: set[str] = set()
     initial_backoff = 60  # Start with 1 minute
     max_backoff = 3600  # Max 1 hour between alerts
 
@@ -248,12 +249,18 @@ def supervise(
                     alert_state[exit_key] = (now, initial_backoff)
 
         stale = check_health(journal, threshold)
-        if stale:
-            msg = f"Journaling offline: {', '.join(sorted(stale))}"
+        stale_set = set(stale)
+
+        recovered = sorted(prev_stale - stale_set)
+        for name in recovered:
+            logging.info("%s heartbeat recovered", name)
+
+        if stale_set:
+            msg = f"Journaling offline: {', '.join(sorted(stale_set))}"
             logging.warning(msg)
 
             # Apply exponential backoff
-            stale_key = ("stale", tuple(sorted(stale)))
+            stale_key = ("stale", tuple(sorted(stale_set)))
             now = time.time()
 
             if stale_key in alert_state:
@@ -271,10 +278,19 @@ def supervise(
             else:
                 send_notification(msg, command)
                 alert_state[stale_key] = (now, initial_backoff)
+            # Retain only alert state entries still relevant
+            alert_state = {
+                k: v
+                for k, v in alert_state.items()
+                if k[0] != "stale" or set(k[1]).issubset(stale_set)
+            }
         else:
-            logging.info("Heartbeat OK")
+            if prev_stale:
+                logging.info("Heartbeat OK")
             # Clear alert state for stale services when they recover
             alert_state = {k: v for k, v in alert_state.items() if k[0] != "stale"}
+
+        prev_stale = stale_set
 
         if daily and datetime.now().date() != last_day:
             if run_process_day(journal):

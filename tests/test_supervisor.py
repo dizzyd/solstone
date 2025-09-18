@@ -1,5 +1,6 @@
 import importlib
 import io
+import logging
 import os
 import subprocess
 import time
@@ -156,3 +157,31 @@ def test_run_process_day(tmp_path, monkeypatch):
     assert env is None
     assert launch_calls["logger"].closed is True
     assert any("seconds" in m for m in messages)
+
+
+def test_supervise_logs_recovery(monkeypatch, caplog):
+    mod = importlib.reload(importlib.import_module("think.supervisor"))
+    mod.shutdown_requested = False
+
+    health_states = [["hear"], []]
+
+    def fake_check_health(journal, threshold):
+        state = health_states.pop(0)
+        if not health_states:
+            mod.shutdown_requested = True
+        return state
+
+    monkeypatch.setattr(mod, "check_runner_exits", lambda procs: [])
+    monkeypatch.setattr(mod, "check_health", fake_check_health)
+    monkeypatch.setattr(mod, "send_notification", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mod.time, "time", lambda: 0)
+    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
+
+    with caplog.at_level(logging.INFO):
+        mod.supervise("/test/journal", threshold=1, interval=1, procs=[])
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert "hear heartbeat recovered" in messages
+    assert messages.count("Heartbeat OK") == 1
+
+    mod.shutdown_requested = False
