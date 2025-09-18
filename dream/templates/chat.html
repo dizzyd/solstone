@@ -687,17 +687,20 @@ function createResourceCard(uri) {
     };
   }
   
-  // Parse journal://raw/20250726/090000/45 format (raw transcripts)
-  match = uri.match(/journal:\/\/raw\/(\d{8})\/(\d{6})\/(\d+)/);
+  // Parse journal://transcripts/{mode}/20250726/090000/45 format
+  match = uri.match(/journal:\/\/transcripts\/(full|audio|screen)\/(\d{8})\/(\d{6})\/(\d+)/);
   if(match) {
-    const date = match[1];
-    const time = match[2];
-    const length = match[3];
+    const mode = match[1];
+    const date = match[2];
+    const time = match[3];
+    const length = match[4];
     const dateStr = formatDate(date);
     const timeStr = formatTime(time);
-    
+
+    const modeText = mode === 'full' ? 'full' : mode === 'audio' ? 'audio-only' : 'screen-only';
+
     return {
-      text: `Loading ${length}-minute transcript from ${dateStr} at ${timeStr}`,
+      text: `Loading ${length}-minute ${modeText} transcript from ${dateStr} at ${timeStr}`,
       url: `/calendar/${date}`
     };
   }

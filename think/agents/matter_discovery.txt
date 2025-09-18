@@ -73,7 +73,7 @@ Phase 1: Discovery
 Phase 2: Deep Dive
 - search_transcripts() for specific discussions on promising themes
 - Access journal://summary/{day}/{topic} for complete context
-- journal://raw/{day}/{time}/{length} for detailed activity windows
+- journal://transcripts/full/{day}/{time}/{length} for detailed activity windows
 
 Phase 3: Validation
 - Cross-reference findings across multiple days

@@ -493,7 +493,9 @@ async def get_resource(uri: str) -> object:
     The following resource types are supported:
 
     - ``journal://summary/{day}/{topic}`` — markdown topic summaries
-    - ``journal://raw/{day}/{time}/{length}`` — raw transcripts for a time range
+    - ``journal://transcripts/full/{day}/{time}/{length}`` — full transcripts (audio + raw screen)
+    - ``journal://transcripts/audio/{day}/{time}/{length}`` — audio transcripts only
+    - ``journal://transcripts/screen/{day}/{time}/{length}`` — screen summaries only
     - ``journal://media/{day}/{name}`` — raw FLAC or PNG media files
     - ``journal://todo/{day}`` — daily ``todos/today.md`` checklist file
 
@@ -539,15 +541,13 @@ def get_summary(day: str, topic: str) -> TextResource:
     )
 
 
-@mcp.resource("journal://raw/{day}/{time}/{length}")
-def get_transcripts(day: str, time: str, length: str) -> TextResource:
-    """Return raw audio and screen transcripts for a specific time range.
-
-    This resource provides raw audio and screen transcripts for a given
-    time range. The data is organized into 5-minute intervals and formatted
-    as markdown. Each 5 minute segment could potentially be very large if there was a lot of activity, so it is recommended to use this with a specific minimum time range.
+def _get_transcript_resource(
+    mode: str, day: str, time: str, length: str
+) -> TextResource:
+    """Shared handler for all transcript resource modes.
 
     Args:
+        mode: Transcript mode - "full", "audio", or "screen"
         day: Day in YYYYMMDD format
         time: Start time in HHMMSS format
         length: Length in minutes for the time range
@@ -563,28 +563,88 @@ def get_transcripts(day: str, time: str, length: str) -> TextResource:
         end_dt = start_dt + timedelta(minutes=length_minutes)
         end_time = end_dt.strftime("%H%M%S")
 
-        # Use cluster_range with raw screen data
-        markdown_content = cluster_range(
-            day=day, start=time, end=end_time, screen="raw"
-        )
+        # Configure cluster_range based on mode
+        if mode == "full":
+            markdown_content = cluster_range(
+                day=day, start=time, end=end_time, audio=True, screen="raw"
+            )
+            description = f"Full transcripts (audio + raw screen) from {day} starting at {time} for {length} minutes"
+        elif mode == "audio":
+            markdown_content = cluster_range(
+                day=day, start=time, end=end_time, audio=True, screen=None
+            )
+            description = f"Audio transcripts only from {day} starting at {time} for {length} minutes"
+        elif mode == "screen":
+            markdown_content = cluster_range(
+                day=day, start=time, end=end_time, audio=False, screen="summary"
+            )
+            description = f"Screen summaries only from {day} starting at {time} for {length} minutes"
+        else:
+            raise ValueError(f"Invalid transcript mode: {mode}")
 
         return TextResource(
-            uri=f"journal://raw/{day}/{time}/{length}",
-            name=f"Transcripts: {day} {time} ({length}min)",
-            description=f"Raw screen activity from {day} starting at {time} for {length} minutes",
+            uri=f"journal://transcripts/{mode}/{day}/{time}/{length}",
+            name=f"Transcripts ({mode}): {day} {time} ({length}min)",
+            description=description,
             mime_type="text/markdown",
             text=markdown_content,
         )
 
     except Exception as e:
-        error_content = f"# Error\n\nFailed to generate transcripts for {day} {time} ({length}min): {str(e)}"
+        error_content = f"# Error\n\nFailed to generate {mode} transcripts for {day} {time} ({length}min): {str(e)}"
         return TextResource(
-            uri=f"journal://raw/{day}/{time}/{length}",
-            name=f"Transcripts Error: {day} {time} ({length}min)",
-            description="Error generating raw screen transcripts",
+            uri=f"journal://transcripts/{mode}/{day}/{time}/{length}",
+            name=f"Transcripts Error ({mode}): {day} {time} ({length}min)",
+            description=f"Error generating {mode} transcripts",
             mime_type="text/markdown",
             text=error_content,
         )
+
+
+@mcp.resource("journal://transcripts/full/{day}/{time}/{length}")
+def get_transcripts_full(day: str, time: str, length: str) -> TextResource:
+    """Return full audio and raw screen transcripts for a specific time range.
+
+    This resource provides both audio transcripts and raw screen diffs for a given
+    time range. The data is organized into 5-minute intervals and formatted
+    as markdown. Each 5 minute segment could potentially be very large if there was a lot of activity.
+
+    Args:
+        day: Day in YYYYMMDD format
+        time: Start time in HHMMSS format
+        length: Length in minutes for the time range
+    """
+    return _get_transcript_resource("full", day, time, length)
+
+
+@mcp.resource("journal://transcripts/audio/{day}/{time}/{length}")
+def get_transcripts_audio(day: str, time: str, length: str) -> TextResource:
+    """Return audio transcripts only for a specific time range.
+
+    This resource provides audio transcripts without screen data for a given
+    time range. Useful when you only need verbal/audio content.
+
+    Args:
+        day: Day in YYYYMMDD format
+        time: Start time in HHMMSS format
+        length: Length in minutes for the time range
+    """
+    return _get_transcript_resource("audio", day, time, length)
+
+
+@mcp.resource("journal://transcripts/screen/{day}/{time}/{length}")
+def get_transcripts_screen(day: str, time: str, length: str) -> TextResource:
+    """Return screen summaries only for a specific time range.
+
+    This resource provides processed screen summaries without audio data for a given
+    time range. Useful when you only need visual activity summaries.
+
+    Args:
+        day: Day in YYYYMMDD format
+        time: Start time in HHMMSS format
+        length: Length in minutes for the time range
+    """
+    return _get_transcript_resource("screen", day, time, length)
 
 
 @mcp.resource("journal://media/{day}/{name}")

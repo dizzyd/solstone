@@ -231,12 +231,12 @@ def cluster_range(
     start: str,
     end: str,
     audio: bool = True,
-    screen: str = "summary",
+    screen: Optional[str] = "summary",
 ) -> str:
     """Return markdown for ``day`` limited to ``start``-``end`` (HHMMSS)."""
 
-    if screen not in {"summary", "raw"}:
-        raise ValueError("screen must be 'summary' or 'raw'")
+    if screen is not None and screen not in {"summary", "raw"}:
+        raise ValueError("screen must be 'summary', 'raw', or None")
 
     day_dir = str(day_path(day))
     date_str = _date_str(day_dir)

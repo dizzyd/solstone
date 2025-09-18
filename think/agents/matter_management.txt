@@ -63,7 +63,7 @@ Phase 2: Objective-Specific Search
 
 Phase 3: Deep Context Retrieval
 - journal://summary/{day}/{topic} for detailed narratives
-- journal://raw/{day}/{time}/{length} for specific work sessions
+- journal://transcripts/full/{day}/{time}/{length} for specific work sessions
 - Verify completion claims with primary evidence
 ```
 
@@ -277,7 +277,7 @@ Structure your matter review as:
 ```
 1. search_summaries("[objective keywords] complete OR finished OR done")
 2. search_transcripts("[deliverable name]" OR "[key feature]")
-3. Verify with journal://raw/ for specific work session
+3. Verify with journal://transcripts/full/ for specific work session
 4. Check for follow-up mentions confirming stability
 ```
 

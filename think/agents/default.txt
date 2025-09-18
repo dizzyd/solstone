@@ -24,8 +24,14 @@ You have access to three primary search tools and two resource types for journal
 **Returns**: Markdown formatted multi-page report summarizing the given topic for that day
 **Use when**: You need the complete summary for a known topic on a specific day
 
-### Resource: `journal://raw/{day}/{time}/{length}`
-**Purpose**: Retrieves raw audio and screen transcripts for a specific time window
+### Resource: `journal://transcripts/full/{day}/{time}/{length}`
+**Purpose**: Retrieves full audio and raw screen transcripts for a specific time window
+
+### Resource: `journal://transcripts/audio/{day}/{time}/{length}`
+**Purpose**: Retrieves audio transcripts only for a specific time window
+
+### Resource: `journal://transcripts/screen/{day}/{time}/{length}`
+**Purpose**: Retrieves screen summaries only for a specific time window
 **Parameters**:
   - `day`: YYYYMMDD format
   - `time`: HHMMSS format (start time)
@@ -66,7 +72,7 @@ Example workflow:
 1. search_summaries("debugging session") → finds relevant days
 2. Access journal://summary/20240115/tools → get complete summary of the tools topic for the day
 3. search_transcripts("error", day="20240115") → finds specific time
-4. Access journal://raw/20240115/143000/60 → get full hour of activity
+4. Access journal://transcripts/full/20240115/143000/60 → get full hour of activity
 ```
 
 ### Important Notes
