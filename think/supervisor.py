@@ -65,23 +65,18 @@ def _stream_output(
     process_name: str,
     stream_label: str,
     logger: ProcessLogWriter,
-    verbose_target: TextIO | None,
 ) -> None:
     if pipe is None:
         return
     with pipe:
         for line in pipe:
             logger.write(_format_log_line(process_name, stream_label, line))
-            if verbose_target is not None:
-                verbose_target.write(line)
-                verbose_target.flush()
 
 
 def _launch_process(
     name: str,
     cmd: list[str],
     journal: str,
-    verbose: bool,
     *,
     env: dict[str, str] | None = None,
 ) -> ManagedProcess:
@@ -102,12 +97,12 @@ def _launch_process(
     threads = [
         threading.Thread(
             target=_stream_output,
-            args=(proc.stdout, name, "stdout", log_writer, sys.stdout if verbose else None),
+            args=(proc.stdout, name, "stdout", log_writer),
             daemon=True,
         ),
         threading.Thread(
             target=_stream_output,
-            args=(proc.stderr, name, "stderr", log_writer, sys.stderr if verbose else None),
+            args=(proc.stderr, name, "stderr", log_writer),
             daemon=True,
         ),
     ]
@@ -141,21 +136,26 @@ def send_notification(message: str, command: str = "notify-send") -> None:
         logging.error("Failed to send notification: %s", exc)
 
 
-def run_process_day() -> bool:
-    """Run ``think.process_day`` and log duration.
+def run_process_day(journal: str) -> bool:
+    """Run ``think.process_day`` while mirroring output to a dedicated log.
 
-    Returns:
-        True if process_day completed successfully, False otherwise.
+    Returns ``True`` when the subprocess exits successfully.
     """
+
     start = time.time()
-    result = subprocess.run(
+    managed = _launch_process(
+        "process_day",
         [sys.executable, "-m", "think.process_day"],
-        stdout=None,  # Inherit stdout
-        stderr=None,  # Inherit stderr
+        journal,
     )
+    try:
+        return_code = managed.process.wait()
+    finally:
+        managed.cleanup()
+
     duration = int(time.time() - start)
     logging.info("think.process_day finished in %s seconds", duration)
-    return result.returncode == 0
+    return return_code == 0
 
 
 def spawn_scheduled_agents(journal: str) -> None:
@@ -179,26 +179,22 @@ def spawn_scheduled_agents(journal: str) -> None:
         logging.error(f"Failed to spawn scheduled agents: {e}")
 
 
-def start_runners(journal: str, verbose: bool = False) -> list[ManagedProcess]:
+def start_runners(journal: str) -> list[ManagedProcess]:
     """Launch hear and see runners with output logging."""
     procs: list[ManagedProcess] = []
     for module in ("hear.runner", "see.runner"):
         cmd = [sys.executable, "-m", module]
-        if verbose:
-            cmd.append("-v")
         runner_name = module.split(".")[0]
-        procs.append(_launch_process(runner_name, cmd, journal, verbose))
+        procs.append(_launch_process(runner_name, cmd, journal))
     return procs
 
 
-def start_cortex_server(journal: str, verbose: bool = False) -> ManagedProcess:
+def start_cortex_server(journal: str) -> ManagedProcess:
     """Launch the Cortex WebSocket API server."""
     cmd = [sys.executable, "-m", "think.cortex"]
-    if verbose:
-        cmd.append("-v")
     env = os.environ.copy()
     env["JOURNAL_PATH"] = journal
-    return _launch_process("cortex", cmd, journal, verbose, env=env)
+    return _launch_process("cortex", cmd, journal, env=env)
 
 
 def check_runner_exits(procs: list[ManagedProcess]) -> list[str]:
@@ -284,7 +280,7 @@ def supervise(
             alert_state = {k: v for k, v in alert_state.items() if k[0] != "stale"}
 
         if daily and datetime.now().date() != last_day:
-            if run_process_day():
+            if run_process_day(journal):
                 spawn_scheduled_agents(journal)
             last_day = datetime.now().date()
 
@@ -343,12 +339,13 @@ def main() -> None:
     if not journal:
         parser.error("JOURNAL_PATH not set")
 
-    # Only log to console
-    level = logging.DEBUG if args.debug else logging.INFO
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    log_path = Path(journal) / "health" / "supervisor.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     logging.getLogger().handlers = []
     logging.basicConfig(
-        level=level,
-        handlers=[logging.StreamHandler()],
+        level=log_level,
+        handlers=[logging.FileHandler(log_path, encoding="utf-8")],
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
@@ -358,9 +355,9 @@ def main() -> None:
 
     procs: list[ManagedProcess] = []
     if not args.no_runners:
-        procs.extend(start_runners(journal, verbose=args.verbose))
+        procs.extend(start_runners(journal))
     if not args.no_cortex:
-        procs.append(start_cortex_server(journal, verbose=args.verbose))
+        procs.append(start_cortex_server(journal))
     try:
         supervise(
             journal,

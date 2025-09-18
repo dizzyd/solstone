@@ -2,6 +2,7 @@ import importlib
 import io
 import os
 import subprocess
+import sys
 import time
 
 
@@ -114,16 +115,31 @@ def test_main_no_daily(tmp_path, monkeypatch):
 def test_run_process_day(tmp_path, monkeypatch):
     mod = importlib.import_module("think.supervisor")
 
-    commands = []
+    launch_calls = {}
 
-    class DummyResult:
-        returncode = 0
+    class DummyProcess:
+        def wait(self):
+            return 0
 
-    def fake_run(cmd, stdout=None, stderr=None):
-        commands.append((cmd, stdout, stderr))
-        return DummyResult()
+    class DummyLogger:
+        def __init__(self):
+            self.closed = False
 
-    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+        def close(self):
+            self.closed = True
+
+    def fake_launch(name, cmd, journal, *, env=None):
+        dummy_logger = DummyLogger()
+        launch_calls["args"] = (name, cmd, journal, env)
+        launch_calls["logger"] = dummy_logger
+        return mod.ManagedProcess(
+            process=DummyProcess(),
+            name=name,
+            logger=dummy_logger,
+            threads=[],
+        )
+
+    monkeypatch.setattr(mod, "_launch_process", fake_launch)
 
     times = iter([0, 1])
     monkeypatch.setattr(mod.time, "time", lambda: next(times))
@@ -133,10 +149,13 @@ def test_run_process_day(tmp_path, monkeypatch):
         mod.logging, "info", lambda msg, *a: messages.append(msg % a if a else msg)
     )
 
-    mod.run_process_day()  # No longer takes log_path parameter
+    assert mod.run_process_day(str(tmp_path)) is True
 
-    assert commands[0][0][2] == "think.process_day"
-    # Check that stdout and stderr are None (inherit from parent)
-    assert commands[0][1] is None
-    assert commands[0][2] is None
+    name, cmd, journal, env = launch_calls["args"]
+    assert name == "process_day"
+    assert cmd[0] == sys.executable
+    assert cmd[1:] == ["-m", "think.process_day"]
+    assert journal == str(tmp_path)
+    assert env is None
+    assert launch_calls["logger"].closed is True
     assert any("seconds" in m for m in messages)
