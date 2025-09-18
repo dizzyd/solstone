@@ -9,20 +9,39 @@
 </head>
 <body>
   <div class="nav-icons">
-    <a id="homeIcon" href="{{ url_for('review.home') }}" class="{% if active=='home' %}current{% endif %}" title="Home">🏠</a>
-    <a href="{{ url_for('domains.domains_page') }}" class="{% if active=='domains' %}current{% endif %}" title="Domains">🎯</a>
-    <a href="{{ url_for('todos.todos_page') }}" class="{% if active=='todos' %}current{% endif %}" title="Todos">✅</a>
-    <a href="{{ url_for('inbox.inbox_page') }}" class="{% if active=='inbox' %}current{% endif %}" title="Inbox">✉️</a>
-    <a href="{{ url_for('calendar.calendar_page') }}" class="{% if active=='calendar' %}current{% endif %}" title="Calendar">📅</a>
-    <a href="{{ url_for('chat.chat_page') }}" class="{% if active=='chat' %}current{% endif %}" title="Chat">💬</a>
-    <a href="{{ url_for('agents.agents_page') }}" class="{% if active=='agents' %}current{% endif %}" title="Agents">🚀</a>
-    <a href="{{ url_for('search.search_page') }}" class="{% if active=='search' %}current{% endif %}" title="Search">🔍</a>
-    <a href="{{ url_for('import_view.import_page') }}" class="{% if active=='import' %}current{% endif %}" title="Import">📥</a>
-    <a href="{{ url_for('entities.entities') }}" class="{% if active=='entities' %}current{% endif %}" title="Entities">📑</a>
-    <a href="{{ url_for('tasks.tasks_page') }}" class="{% if active=='tasks' %}current{% endif %}" title="Tasks">⏳</a>
-    <a href="{{ url_for('admin.admin_page') }}" class="{% if active=='admin' %}current{% endif %}" title="Admin">⚙️</a>
-    <a href="{{ url_for('review.logout') }}" title="Logout">🔒</a>
+    <a id="homeIcon" data-nav-key="home" href="{{ url_for('review.home') }}" class="{% if active=='home' %}current{% endif %}" title="Home">🏠<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="domains" href="{{ url_for('domains.domains_page') }}" class="{% if active=='domains' %}current{% endif %}" title="Domains">🎯<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="todos" href="{{ url_for('todos.todos_page') }}" class="{% if active=='todos' %}current{% endif %}" title="Todos">✅<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="inbox" href="{{ url_for('inbox.inbox_page') }}" class="{% if active=='inbox' %}current{% endif %}" title="Inbox">✉️<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="calendar" href="{{ url_for('calendar.calendar_page') }}" class="{% if active=='calendar' %}current{% endif %}" title="Calendar">📅<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="chat" href="{{ url_for('chat.chat_page') }}" class="{% if active=='chat' %}current{% endif %}" title="Chat">💬<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="agents" href="{{ url_for('agents.agents_page') }}" class="{% if active=='agents' %}current{% endif %}" title="Agents">🚀<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="search" href="{{ url_for('search.search_page') }}" class="{% if active=='search' %}current{% endif %}" title="Search">🔍<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="import" href="{{ url_for('import_view.import_page') }}" class="{% if active=='import' %}current{% endif %}" title="Import">📥<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="entities" href="{{ url_for('entities.entities') }}" class="{% if active=='entities' %}current{% endif %}" title="Entities">📑<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="tasks" href="{{ url_for('tasks.tasks_page') }}" class="{% if active=='tasks' %}current{% endif %}" title="Tasks">⏳<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="admin" href="{{ url_for('admin.admin_page') }}" class="{% if active=='admin' %}current{% endif %}" title="Admin">⚙️<span class="nav-badge" aria-hidden="true"></span></a>
+    <a data-nav-key="logout" href="{{ url_for('review.logout') }}" title="Logout">🔒<span class="nav-badge" aria-hidden="true"></span></a>
   </div>
+  <script>
+  (function(){
+    const badgeData = {{ (nav_badges or {})|tojson }};
+    if(!badgeData || typeof badgeData !== 'object') return;
+    Object.entries(badgeData).forEach(([key, count]) => {
+      if(!count || count < 1) return;
+      const anchor = document.querySelector(`.nav-icons a[data-nav-key="${key}"]`);
+      if(!anchor) return;
+      const badge = anchor.querySelector('.nav-badge');
+      if(!badge) return;
+      const displayValue = count > 99 ? '99+' : String(count);
+      badge.textContent = displayValue;
+      badge.style.display = 'inline-flex';
+      const existingLabel = anchor.getAttribute('aria-label') || anchor.getAttribute('title') || key;
+      anchor.setAttribute('aria-label', `${existingLabel} (${displayValue})`);
+      anchor.dataset.badgeCount = String(count);
+    });
+  })();
+  </script>
   <script>
   (function(){
     const listeners = {};

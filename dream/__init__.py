@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 import types
+from datetime import datetime
 from importlib import import_module
+from typing import Callable
 
 from flask import Flask
 from flask_sock import Sock
 
+from think import messages as message_store
+from think import todo as todo_store
 from think.utils import setup_cli
 
 from . import state
@@ -47,6 +52,48 @@ from .tasks import task_manager
 import_page_view = import_module(".import", "dream.views")
 
 
+logger = logging.getLogger(__name__)
+
+
+def _count_pending_todos_today() -> int:
+    """Return count of unfinished todos for the current day."""
+
+    today = datetime.now().strftime("%Y%m%d")
+    try:
+        todos = todo_store.get_todos(today, ensure_day=False)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        return 0
+    if not todos:
+        return 0
+    return sum(
+        1
+        for todo in todos
+        if not bool(todo.get("completed")) and not bool(todo.get("cancelled"))
+    )
+
+
+BadgeProvider = Callable[[], int]
+
+NAV_BADGE_PROVIDERS: dict[str, BadgeProvider] = {
+    "inbox": message_store.get_unread_count,
+    "todos": _count_pending_todos_today,
+}
+
+
+def _resolve_nav_badges() -> dict[str, int]:
+    """Run registered badge providers and gather non-zero counts."""
+    badges: dict[str, int] = {}
+    for key, provider in NAV_BADGE_PROVIDERS.items():
+        try:
+            count = int(provider())
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("nav badge provider %s failed: %s", key, exc)
+            continue
+        if count > 0:
+            badges[key] = count
+    return badges
+
+
 def create_app(journal: str = "", password: str = "") -> Flask:
     """Create and configure the review Flask application."""
     app = Flask(
@@ -57,6 +104,12 @@ def create_app(journal: str = "", password: str = "") -> Flask:
     app.secret_key = os.getenv("DREAM_SECRET", "sunstone-secret")
     app.config["PASSWORD"] = password
     register_views(app)
+
+    @app.context_processor
+    def inject_nav_badges() -> dict[str, dict[str, int]]:
+        """Expose nav badge counts to all templates."""
+        return {"nav_badges": _resolve_nav_badges()}
+
     sock = Sock(app)
     task_runner.register(sock)
     push_server.register(sock)
