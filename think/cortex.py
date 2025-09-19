@@ -218,11 +218,21 @@ class CortexService:
         """Clean up any stale active files that exist on startup."""
         for file_path in self.agents_dir.glob("*_active.jsonl"):
             agent_id = file_path.stem.replace("_active", "")
-            self.logger.warning(
-                f"Found stale active file from previous session: {agent_id}"
-            )
 
-            # Write an error event indicating the agent crashed
+            # Check if this agent never started (only has request event)
+            try:
+                with open(file_path, "r") as f:
+                    lines = f.readlines()
+                    if len(lines) == 1 and json.loads(lines[0]).get("event") == "request":
+                        # Agent never started - treat as new activation
+                        self.logger.info(f"Reactivating unstarted agent: {agent_id}")
+                        self._handle_active_file(agent_id, file_path)
+                        continue
+            except (json.JSONDecodeError, OSError):
+                pass
+
+            # Agent had started but didn't complete - mark as failed
+            self.logger.warning(f"Found stale active file from previous session: {agent_id}")
             error_message = "Agent failed due to unexpected Cortex service shutdown"
             self._write_error_and_complete(file_path, error_message)
 
