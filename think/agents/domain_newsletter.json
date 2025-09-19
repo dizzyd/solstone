@@ -1,0 +1,7 @@
+{
+  "title": "Domain Newsletter Generator",
+  "description": "Creates comprehensive daily newsletters for each domain, capturing activities, progress, and insights",
+  "schedule": "daily",
+  "multi_domain": true,
+  "tools": "journal,domains"
+}
