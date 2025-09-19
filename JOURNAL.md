@@ -21,6 +21,7 @@ Each domain is organized as `domains/<domain>/` where `<domain>` is a descriptiv
 
 - `domain.json` – metadata file with domain title and description.
 - `entities.md` – entities specific to this domain.
+- `news/` – daily news and updates relevant to the domain (optional).
 - `<timestamp>/` – individual matter directories for domain-specific sub-projects and focused topics.
 
 ### Domain metadata
@@ -43,6 +44,58 @@ Optional fields:
 ### Domain Entities
 
 The `entities.md` file follows the same format as the top-level entities file but contains only entities relevant to this specific domain. This allows for more targeted entity tracking within focused areas of work.
+
+### Domain News
+
+The `news/` directory provides a chronological record of news, updates, and external developments relevant to the domain. This allows tracking of industry news, research updates, regulatory changes, or any external information that impacts the domain's focus area.
+
+#### News organization
+
+News files are organized by date as `news/YYYYMMDD.md` where each file contains the day's relevant news items. Only create files for days that have news to record—sparse population is expected.
+
+#### News file format
+
+Each `YYYYMMDD.md` file is a markdown document with a consistent structure:
+
+```markdown
+# 2025-01-18 News - Machine Learning Research
+
+## OpenAI Announces New Model Architecture
+**Source:** techcrunch.com | **Time:** 09:15
+Summary of the announcement and its relevance to current research projects...
+
+## Paper: "Efficient Attention Mechanisms in Transformers"
+**Source:** arxiv.org | **Time:** 14:30
+Key findings from the paper and potential applications...
+
+## Google Research Updates Dataset License Terms
+**Source:** blog.google | **Time:** 16:45
+Changes to dataset licensing that may affect ongoing experiments...
+```
+
+#### News entry structure
+
+Each news entry should include:
+- **Title** – concise headline as a level 2 heading
+- **Source** – origin of the news (website, journal, etc.)
+- **Time** – optional time of publication or discovery (HH:MM format)
+- **Summary** – brief description focusing on relevance to the domain
+- **Impact** – optional notes on how this affects domain work
+
+#### News metadata
+
+Optionally, a `news.json` file can be maintained at the root of the news directory to track metadata:
+
+```json
+{
+  "last_updated": "2025-01-18",
+  "sources": ["arxiv.org", "techcrunch.com", "nature.com"],
+  "auto_fetch": false,
+  "keywords": ["transformer", "attention", "llm", "research"]
+}
+```
+
+This allows for future automation of news gathering while maintaining manual curation quality.
 
 ### Domain Matters
 
