@@ -14,6 +14,7 @@ from flask import (
     url_for,
 )
 
+from think.domains import get_domains
 from think.todo import get_todos
 
 from .. import state
@@ -140,6 +141,11 @@ def todos_day(day: str):  # type: ignore[override]
         return redirect(url_for("todos.todos_day", day=day))
 
     todos = get_todos(day) or []
+    try:
+        domain_map = get_domains()
+    except Exception as exc:  # pragma: no cover - metadata is optional
+        bp.logger.debug("Failed to load domain metadata: %s", exc)
+        domain_map = {}
     prev_day, next_day = adjacent_days(state.journal_root, day)
 
     return render_template(
@@ -150,6 +156,7 @@ def todos_day(day: str):  # type: ignore[override]
         prev_day=prev_day,
         next_day=next_day,
         todos=todos,
+        domain_map=domain_map,
     )
 
 

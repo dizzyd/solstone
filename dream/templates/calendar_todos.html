@@ -1,94 +1,187 @@
 {% extends 'base.html' %}
 {% import 'macros.html' as macros %}
 {% set active = 'todos' %}
+{% set domain_lookup = domain_map if domain_map is defined else {} %}
 
 {% block head %}
 <style>
+
 .todo-list {
   list-style: none;
   padding: 0;
-  margin: 2rem 0;
+  margin: 1rem 0;
+}
+
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
 }
 
 .todo-item {
   display: flex;
   align-items: center;
+  gap: 0.4rem;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: 0.3rem 0.6rem;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin-bottom: 0.75rem;
-  background: #fafafa;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 0.94rem;
+  flex: 1;
 }
 
-.todo-item.completed {
-  background: #ecfdf5;
-  color: #065f46;
+.todo-row.completed .todo-item {
+  background: #f3f4f6;
+}
+
+.todo-row.completed .todo-meta,
+.todo-row.completed .todo-meta .todo-type,
+.todo-row.completed .todo-meta .todo-time {
+  color: #9ca3af;
 }
 
 .todo-meta {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: center;
+  flex: 1;
+  min-width: 0;
 }
 
-.todo-number {
-  font-weight: 600;
-  color: #6b7280;
-}
 
 .todo-type {
   font-weight: 600;
   color: #2563eb;
+  flex-shrink: 0;
 }
 
-.todo-domain {
-  background: #2563eb;
-  color: #fff;
-  padding: 0.1rem 0.6rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
 }
+
 
 .todo-time {
   color: #6b7280;
-  font-size: 0.875rem;
+  font-size: 0.76rem;
+  flex-shrink: 0;
 }
 
-.todo-actions {
+.todo-side {
   display: flex;
-  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.todo-actions form {
-  display: inline;
+.todo-side form {
+  display: flex;
 }
 
-.todo-actions button {
+.todo-side button {
+  width: 1.8rem;
+  height: 1.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.todo-side button svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+
+.todo-side:hover button,
+.todo-side:focus-within button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.todo-side button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.todo-side-check button {
+  background: #eef1f6;
+  border: 1px solid #d7dbe4;
+  color: #64748b;
+}
+
+.todo-side-check:hover button,
+.todo-side-check:focus-within button,
+.todo-side-check button:focus-visible {
+  color: #2563eb;
+}
+
+.todo-row.completed .todo-side-check button {
+  opacity: 1;
+  pointer-events: auto;
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  color: #9ca3af;
+}
+
+.todo-side-remove button {
   background: #f3f4f6;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.875rem;
-  cursor: pointer;
+  color: #9ca3af;
 }
 
-.todo-actions button.complete {
-  background: #10b981;
-  border-color: #10b981;
-  color: #fff;
-}
-
-.todo-actions button.uncomplete {
-  background: #fbbf24;
-  border-color: #f59e0b;
-  color: #1f2937;
-}
-
-.todo-actions button.remove {
-  background: #ef4444;
+.todo-side-remove:hover button,
+.todo-side-remove:focus-within button,
+.todo-side-remove button:focus-visible {
+  color: #ef4444;
   border-color: #ef4444;
+}
+
+.todo-domain-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 9999px;
+  font-size: 0.95rem;
   color: #fff;
+  flex-shrink: 0;
+}
+
+.todo-domain-icon span[aria-hidden="true"] {
+  line-height: 1;
+}
+
+@media (hover: none) {
+  .todo-side button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .add-form {
@@ -158,36 +251,77 @@
   {% endwith %}
 
   {% if todos %}
+    {% set active_todos = todos | selectattr('completed', 'equalto', False) | list %}
+    {% set completed_todos = todos | selectattr('completed', 'equalto', True) | list %}
     <ul class="todo-list">
-      {% for item in todos %}
-        <li class="todo-item {% if item.completed %}completed{% endif %}">
-          <div class="todo-meta">
-            <span class="todo-number">{{ item.index }}.</span>
-            {% if item.type %}
-              <span class="todo-type">{{ item.type }}</span>
-            {% endif %}
-            <span class="todo-text">{{ item.text or item.raw }}</span>
-            {% if item.domain %}
-              <span class="todo-domain">#{{ item.domain }}</span>
-            {% endif %}
-            {% if item.time %}
-              <span class="todo-time">{{ item.time }}</span>
-            {% endif %}
-          </div>
-          <div class="todo-actions">
+      {% for item in active_todos + completed_todos %}
+        <li class="todo-row {% if item.completed %}completed{% endif %}">
+          <div class="todo-side todo-side-check">
             <form method="post">
               <input type="hidden" name="action" value="{{ 'uncomplete' if item.completed else 'complete' }}">
               <input type="hidden" name="index" value="{{ item.index }}">
               <input type="hidden" name="guard" value="{{ item.raw }}">
-              <button type="submit" class="{{ 'uncomplete' if item.completed else 'complete' }}">
-                {{ 'Mark Undone' if item.completed else 'Mark Done' }}
+              <button
+                type="submit"
+                class="{{ 'uncomplete' if item.completed else 'complete' }}"
+                aria-label="{{ 'Mark undone' if item.completed else 'Mark done' }}"
+                title="{{ 'Mark undone' if item.completed else 'Mark done' }}"
+              >
+                {% if item.completed %}
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M7.5 2a5.5 5.5 0 1 1-4.358 8.848l.915-.915a4.25 4.25 0 1 0 1.93-6.793V5H3V1.5h3.5z" />
+                  </svg>
+                {% else %}
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M6.173 13.414 2.05 9.293l1.414-1.414 2.709 2.708 6.364-6.364 1.414 1.414z" />
+                  </svg>
+                {% endif %}
+                <span class="sr-only">{{ 'Mark undone' if item.completed else 'Mark done' }}</span>
               </button>
             </form>
+          </div>
+          <div class="todo-item">
+            <div class="todo-meta">
+              {% if item.type %}
+                <span class="todo-type">{{ item.type }}</span>
+              {% endif %}
+              <span class="todo-text" title="{{ item.text or item.raw }}">{{ item.text or item.raw }}</span>
+              {% if item.time %}
+                <span class="todo-time">{{ item.time }}</span>
+              {% endif %}
+            </div>
+            {% if item.domain %}
+              {% set domain_info = domain_lookup.get(item.domain, {}) %}
+              {% set domain_color = domain_info.get('color') or '#e5e7eb' %}
+              {% set domain_symbol = domain_info.get('emoji') or item.domain[0]|upper %}
+              {% set domain_title = domain_info.get('title') or item.domain %}
+              {% set domain_text_color = '#374151' if not domain_info.get('color') else '#ffffff' %}
+              <span
+                class="todo-domain-icon"
+                style="background: {{ domain_color }}; color: {{ domain_text_color }};"
+                title="{{ domain_title }}"
+              >
+                <span aria-hidden="true">{{ domain_symbol }}</span>
+                <span class="sr-only">Domain {{ domain_title }}</span>
+              </span>
+            {% endif %}
+          </div>
+          <div class="todo-side todo-side-remove">
             <form method="post">
               <input type="hidden" name="action" value="remove">
               <input type="hidden" name="index" value="{{ item.index }}">
               <input type="hidden" name="guard" value="{{ item.raw }}">
-              <button type="submit" class="remove">Remove</button>
+              <button
+                type="submit"
+                class="remove"
+                aria-label="Remove todo"
+                title="Remove todo"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M6 2h4l.5 1H14v1H2V3h3.5zM4 14V5h8v9H4zm2-7h1v5H6zm3 0h1v5H9z" />
+                </svg>
+                <span class="sr-only">Remove todo</span>
+              </button>
             </form>
           </div>
         </li>
