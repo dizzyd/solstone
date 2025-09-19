@@ -27,7 +27,7 @@ __all__ = [
 ]
 
 TODO_ENTRY_RE = re.compile(r"^- \[( |x|X)\]\s?(.*)$")
-TYPE_RE = re.compile(r"\*\*([^*]+)\*\*:\s*(.*)")
+LEADING_MARKUP_RE = re.compile(r"\*\*([^*]+)\*\*:\s*(.*)")
 DOMAIN_RE = re.compile(r"\s#([a-zA-Z][\w-]*)\b")
 TIME_RE = re.compile(r"\((\d{1,2}:[0-5]\d)\)\s*$")
 
@@ -164,7 +164,6 @@ class TodoItem:
     index: int
     raw: str
     text: str
-    type: str | None
     domain: str | None
     time: str | None
     completed: bool
@@ -177,7 +176,6 @@ class TodoItem:
             "index": self.index,
             "raw": self.raw,
             "text": self.text,
-            "type": self.type,
             "domain": self.domain,
             "time": self.time,
             "completed": self.completed,
@@ -250,13 +248,11 @@ def parse_items(entries: Iterable[str]) -> list[TodoItem]:
                 tail = cleaned[close_idx + 2 :].strip()
                 cleaned = inner + (f" {tail}" if tail else "")
 
-        todo_type: str | None = None
         description = cleaned
 
-        type_match = TYPE_RE.match(cleaned)
-        if type_match:
-            todo_type = type_match.group(1).strip()
-            description = type_match.group(2).strip()
+        markup_match = LEADING_MARKUP_RE.match(cleaned)
+        if markup_match:
+            description = markup_match.group(2).strip()
 
         domain: str | None = None
         domain_match = DOMAIN_RE.search(description)
@@ -282,7 +278,6 @@ def parse_items(entries: Iterable[str]) -> list[TodoItem]:
                 index=index,
                 raw=stripped,
                 text=description,
-                type=todo_type,
                 domain=domain,
                 time=time,
                 completed=completed,

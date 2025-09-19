@@ -21,26 +21,27 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 For each unchecked line from `todo_list(day)`:
 
 1. **Extract Key Terms** – identify verbs, objects, domain tags, and times in the line
-2. **Targeted Search** – query journal data succinctly:
+2. **Validate Domain Tag** – ensure the line either omits a `#domain` tag or uses exactly one valid tag from the domain registry; flag ambiguities in your notes
+3. **Targeted Search** – query journal data succinctly:
    - `search_summaries("KEYWORDS", limit=5, day=day_yesterday)`
    - `search_transcripts("KEYWORDS", day=day_yesterday)`
    - tap other sources (events, topic summaries) when helpful
-3. **Evidence Check** – verify completion when you find explicit proof:
+4. **Evidence Check** – verify completion when you find explicit proof:
    - statements confirming work finished, merged, deployed, or meeting held
    - artifacts created (documents, commits, recordings)
    - follow-up entries implying the task is complete
-4. **Apply Updates** – call `todo_done(day, line_number, guard)` only when confident. Never edit text manually; guards must match the full current line (e.g., `- [ ] **Fix**: ...`).
+5. **Apply Updates** – call `todo_done(day, line_number, guard)` only when confident. Never edit text manually; guards must match the full current line (e.g., `- [ ] Debug database connection timeout issue #dream (10:00)`).
 
 Leave lines unchecked if evidence is missing or ambiguous. Prefer false negatives to false positives.
 
 ## Search Strategy
 
 Favor minimal, high-signal queries:
-- **Fix** → keywords like "fixed", "resolved", "patched"
-- **Meeting** → calendar names, attendee mentions, "met with"
-- **Review** → "reviewed", "approved", PR numbers
-- **Write** → "drafted", document filenames, "wrote"
-- **Task/Plan/Research** → deliverable names, "completed", "finished"
+- Fix/Repair work → keywords like "fixed", "resolved", "patched"
+- Meetings → calendar names, attendee mentions, "met with"
+- Reviews/Approvals → "reviewed", "approved", PR numbers
+- Writing/Documentation → "drafted", document filenames, "wrote"
+- General tasks/planning/research → deliverable names, "completed", "finished"
 
 ## Time Management
 
@@ -55,9 +56,9 @@ Favor minimal, high-signal queries:
 
 ### Example
 
-- Start: `todo_list(day)` shows `2: - [ ] **Fix**: Database connection timeout issue #dream (10:00)`
+- Start: `todo_list(day)` shows `2: - [ ] Debug database connection timeout issue #dream (10:00)`
 - Query: `search_summaries("database timeout fixed resolved", limit=3, day=day_yesterday)` → evidence describes the fix
-- Action: `todo_done(day, line_number=2, guard="- [ ] **Fix**: Database connection timeout issue #dream (10:00)")`
+- Action: `todo_done(day, line_number=2, guard="- [ ] Debug database connection timeout issue #dream (10:00)")`
 - Result: final list shows `2: - [x] ...`
 
-Remember: You are a validator, not a generator. Keep updates surgical, grounded in journal proof, and always return the fresh numbered checklist from `todo_list`.
+Remember: You are a validator, not a generator. Keep updates surgical, grounded in journal proof, helpful and accurate.

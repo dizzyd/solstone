@@ -37,7 +37,6 @@
 }
 
 .todo-row.completed .todo-meta,
-.todo-row.completed .todo-meta .todo-type,
 .todo-row.completed .todo-meta .todo-time {
   color: #9ca3af;
 }
@@ -50,12 +49,6 @@
   min-width: 0;
 }
 
-
-.todo-type {
-  font-weight: 600;
-  color: #2563eb;
-  flex-shrink: 0;
-}
 
 .todo-text {
   flex: 1;
@@ -282,9 +275,6 @@
           </div>
           <div class="todo-item">
             <div class="todo-meta">
-              {% if item.type %}
-                <span class="todo-type">{{ item.type }}</span>
-              {% endif %}
               <span class="todo-text" title="{{ item.text or item.raw }}">{{ item.text or item.raw }}</span>
               {% if item.time %}
                 <span class="todo-time">{{ item.time }}</span>
@@ -336,7 +326,7 @@
 
   <form method="post" class="add-form">
     <input type="hidden" name="action" value="add">
-    <input type="text" name="text" placeholder="Add a new todo (e.g., **Review**: Merge PR #think (15:30))">
+    <input type="text" name="text" placeholder="Add a new todo (e.g., Merge PR #think (15:30))">
     <button type="submit">Add Todo</button>
   </form>
 </div>

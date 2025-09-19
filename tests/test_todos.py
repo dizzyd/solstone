@@ -47,7 +47,6 @@ def test_get_todos_parses_basic_fields(monkeypatch, journal_root):
 
     first = todos[0]
     assert first["index"] == 1
-    assert first["type"] == "Review"
     assert first["domain"] == "think"
     assert first["time"] == "10:30"
     assert first["completed"] is False
@@ -83,11 +82,9 @@ def test_get_todos_handles_strikethrough_and_spacing(monkeypatch, journal_root):
 
     cancelled = todos[0]
     assert cancelled["cancelled"] is True
-    assert cancelled["type"] == "Task"
     assert cancelled["text"] == "Optional experiment if time allows"
 
     second = todos[1]
-    assert second["type"] == "Fix"
     assert second["domain"] == "backend"
     assert second["time"] == "14:45"
     assert second["index"] == 2

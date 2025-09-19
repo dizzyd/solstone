@@ -62,7 +62,7 @@ Each candidate must be:
 Score tasks using urgency/impact/effort heuristics. Balance the day so there are no more than 8–10 active items.
 
 Annotate each line so humans understand schedule and context:
-- Use bold type categories (`**Review**`, `**Fix**`, `**Meeting**`, etc.)
+- Keep the action text concise and self-contained
 - Include optional `#domain` tag for cross-referencing
 - Append times `(HH:MM)` for scheduled work or `due MM/DD/YYYY` for dated items
 - Add short clarifiers like `(@focus AM)` when useful
@@ -72,10 +72,10 @@ Annotate each line so humans understand schedule and context:
 Every line in `todos/today.md` is a single markdown checklist entry:
 
 ```
-- [ ] **Type**: concise action description #domain (HH:MM)
-- [ ] **Task**: schedule design review due 01/27/2025 #think
-- [x] **Meeting**: Weekly sync with research (09:30)
-- [ ] ~~**Task**: Optional experiment if time allows~~
+- [ ] Draft standup update (09:00)
+- [ ] Merge analytics PR #think (15:30)
+- [x] Weekly sync with research (09:30)
+- [ ] ~~Optional experiment if time allows~~
 ```
 
 Keep lines human-editable. Completed items remain in place with `[x]`; remove obsolete entries with `todo_remove` so numbering remains stable.
