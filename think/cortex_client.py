@@ -50,8 +50,10 @@ def cortex_request(
     agents_dir = Path(journal_path) / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate timestamp in milliseconds
+    # Generate timestamp in milliseconds, ensuring uniqueness
     ts = int(time.time() * 1000)
+    while (agents_dir / f"{ts}_active.jsonl").exists() or (agents_dir / f"{ts}_pending.jsonl").exists():
+        ts += 1
 
     # Build request object
     request = {
