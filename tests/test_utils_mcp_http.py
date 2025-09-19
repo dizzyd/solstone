@@ -24,7 +24,9 @@ class TestCreateMCPClientHTTP:
         with patch("fastmcp.Client") as mock_client:
             result = create_mcp_client(" http://127.0.0.1:6270/mcp/ ")
 
-            mock_client.assert_called_once_with("http://127.0.0.1:6270/mcp/")
+            mock_client.assert_called_once_with(
+                "http://127.0.0.1:6270/mcp/", timeout=15.0
+            )
             assert result == mock_client.return_value
 
     def test_empty_url_error(self):

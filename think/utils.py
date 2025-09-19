@@ -298,7 +298,7 @@ def create_mcp_client(http_uri: str) -> Any:
 
     from fastmcp import Client
 
-    return Client(http_uri)
+    return Client(http_uri, timeout=15.0)
 
 
 def parse_time_range(text: str) -> Optional[tuple[str, str, str]]:
