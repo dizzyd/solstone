@@ -57,6 +57,48 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: inherit;
+  cursor: text;
+}
+
+
+.todo-text:focus {
+  outline: 2px solid #9ca3af;
+  outline-offset: 1px;
+}
+
+
+.todo-item.editing .todo-meta,
+.todo-item.editing .todo-domain-icon {
+  display: none;
+}
+
+
+.todo-edit-form {
+  display: none;
+  flex: 1;
+}
+
+
+.todo-item.editing .todo-edit-form {
+  display: flex;
+}
+
+
+.todo-edit-input {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.94rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  color: #111827;
+  background: #ffffff;
+}
+
+
+.todo-edit-input:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 
@@ -275,7 +317,12 @@
           </div>
           <div class="todo-item">
             <div class="todo-meta">
-              <span class="todo-text" title="{{ item.text or item.raw }}">{{ item.text or item.raw }}</span>
+              <span
+                class="todo-text"
+                title="{{ item.text or item.raw }}"
+                tabindex="0"
+                role="button"
+              >{{ item.text or item.raw }}</span>
               {% if item.time %}
                 <span class="todo-time">{{ item.time }}</span>
               {% endif %}
@@ -295,6 +342,18 @@
                 <span class="sr-only">Domain {{ domain_title }}</span>
               </span>
             {% endif %}
+            <form method="post" class="todo-edit-form" hidden>
+              <input type="hidden" name="action" value="edit">
+              <input type="hidden" name="index" value="{{ item.index }}">
+              <input type="hidden" name="guard" value="{{ item.raw }}">
+              <input
+                type="text"
+                name="text"
+                class="todo-edit-input"
+                aria-label="Edit todo {{ item.index }}"
+                autocomplete="off"
+              >
+            </form>
           </div>
           <div class="todo-side todo-side-remove">
             <form method="post">
@@ -330,4 +389,154 @@
     <button type="submit">Add Todo</button>
   </form>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var rows = document.querySelectorAll('.todo-row');
+  var closeActiveEditor = null;
+
+  function extractBody(guardValue) {
+    if (!guardValue) {
+      return '';
+    }
+    var match = guardValue.match(/^- \[(?: |x|X)\]\s?(.*)$/);
+    if (match) {
+      return match[1];
+    }
+    var stripped = guardValue.replace(/^- \[[^\]]*\]\s*/, '');
+    if (stripped !== guardValue) {
+      return stripped;
+    }
+    return guardValue;
+  }
+
+  rows.forEach(function (row) {
+    var item = row.querySelector('.todo-item');
+    var textEl = row.querySelector('.todo-text');
+    var form = row.querySelector('.todo-edit-form');
+    if (!item || !textEl || !form) {
+      return;
+    }
+
+    var input = form.querySelector('.todo-edit-input');
+    var guardInput = form.querySelector('input[name="guard"]');
+    if (!input || !guardInput) {
+      return;
+    }
+
+    var lastTouchTime = 0;
+
+    function getInitialValue() {
+      var guardValue = guardInput.value || '';
+      var body = extractBody(guardValue);
+      if (body) {
+        return body;
+      }
+      return (textEl.textContent || '').trim();
+    }
+
+    function closeEditor() {
+      if (!item.classList.contains('editing')) {
+        return;
+      }
+      form.hidden = true;
+      item.classList.remove('editing');
+      if (closeActiveEditor === closeEditor) {
+        closeActiveEditor = null;
+      }
+    }
+
+    function focusText() {
+      textEl.focus();
+    }
+
+    function cancelEditor() {
+      closeEditor();
+      focusText();
+    }
+
+    function openEditor() {
+      if (closeActiveEditor && closeActiveEditor !== closeEditor) {
+        closeActiveEditor();
+      }
+
+      item.classList.add('editing');
+      form.hidden = false;
+
+      var value = getInitialValue();
+      input.value = value;
+
+      var focusInput = function () {
+        input.focus();
+        var length = input.value.length;
+        try {
+          input.setSelectionRange(length, length);
+        } catch (err) {
+          // Some input types may not support setSelectionRange.
+        }
+      };
+
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(focusInput);
+      } else {
+        setTimeout(focusInput, 0);
+      }
+
+      closeActiveEditor = closeEditor;
+    }
+
+    textEl.addEventListener('dblclick', function (event) {
+      event.preventDefault();
+      openEditor();
+    });
+
+    textEl.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openEditor();
+      }
+    });
+
+    textEl.addEventListener('touchend', function (event) {
+      var now = Date.now();
+      if (now - lastTouchTime < 300) {
+        event.preventDefault();
+        openEditor();
+      }
+      lastTouchTime = now;
+    });
+
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelEditor();
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        var trimmed = input.value.trim();
+        if (!trimmed) {
+          return;
+        }
+        input.value = trimmed;
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      }
+    });
+
+    form.addEventListener('submit', function (event) {
+      var trimmed = input.value.trim();
+      if (!trimmed) {
+        event.preventDefault();
+        input.focus();
+        return;
+      }
+      input.value = trimmed;
+    });
+  });
+});
+</script>
 {% endblock %}

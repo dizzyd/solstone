@@ -69,6 +69,25 @@ class TodoChecklist:
     entries: list[str]
     exists: bool
 
+    def _validated_body(self, text: str) -> str:
+        body = text.strip()
+        if not body:
+            raise TodoEmptyTextError()
+        return body
+
+    def _entry_components(
+        self, line_number: int, guard: str
+    ) -> tuple[int, str, bool, str]:
+        validate_line_number(line_number, len(self.entries))
+
+        index = line_number - 1
+        entry = self.entries[index]
+        completed, body = parse_entry(entry)
+        if guard and guard != entry:
+            raise TodoGuardMismatchError(entry)
+
+        return index, entry, completed, body
+
     @classmethod
     def load(cls, day: str, *, ensure_day: bool = False) -> "TodoChecklist":
         """Load checklist entries for ``day``.
@@ -123,9 +142,12 @@ class TodoChecklist:
         if line_number != expected:
             raise TodoLineNumberError(expected, line_number)
 
-        body = text.strip()
-        if not body:
-            raise TodoEmptyTextError()
+        self.append_entry(text)
+
+    def append_entry(self, text: str) -> None:
+        """Append a new unchecked todo entry without line validation."""
+
+        body = self._validated_body(text)
 
         self.entries.append(f"- [ ] {body}")
         self.save()
@@ -133,27 +155,35 @@ class TodoChecklist:
     def remove_entry(self, line_number: int, guard: str) -> None:
         """Remove a todo entry after validating guard text."""
 
-        validate_line_number(line_number, len(self.entries))
+        index, _, _, _ = self._entry_components(line_number, guard)
 
-        entry = self.entries[line_number - 1]
-        parse_entry(entry)  # Ensure entry is a valid checklist line
-        if guard != entry:
-            raise TodoGuardMismatchError(entry)
-
-        del self.entries[line_number - 1]
+        del self.entries[index]
         self.save()
 
     def mark_done(self, line_number: int, guard: str) -> None:
         """Mark a todo entry complete."""
 
-        validate_line_number(line_number, len(self.entries))
+        index, _, _, body = self._entry_components(line_number, guard)
 
-        entry = self.entries[line_number - 1]
-        _, body = parse_entry(entry)
-        if guard != entry:
-            raise TodoGuardMismatchError(entry)
+        self.entries[index] = f"- [x] {body}"
+        self.save()
 
-        self.entries[line_number - 1] = f"- [x] {body}"
+    def mark_undone(self, line_number: int, guard: str) -> None:
+        """Mark a todo entry incomplete."""
+
+        index, _, _, body = self._entry_components(line_number, guard)
+
+        self.entries[index] = f"- [ ] {body}"
+        self.save()
+
+    def update_entry_text(self, line_number: int, guard: str, text: str) -> None:
+        """Replace the body text of an entry while keeping its completion state."""
+
+        index, _, completed, _ = self._entry_components(line_number, guard)
+        body = self._validated_body(text)
+
+        checkbox = "[x]" if completed else "[ ]"
+        self.entries[index] = f"- {checkbox} {body}"
         self.save()
 
 

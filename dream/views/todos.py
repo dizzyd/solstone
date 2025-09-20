@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Callable
 
 from flask import (
     Blueprint,
@@ -15,7 +14,13 @@ from flask import (
 )
 
 from think.domains import get_domains
-from think.todo import get_todos
+from think.todo import (
+    TodoChecklist,
+    TodoEmptyTextError,
+    TodoGuardMismatchError,
+    TodoLineNumberError,
+    get_todos,
+)
 
 from .. import state
 from ..utils import DATE_RE, adjacent_days, format_date
@@ -25,56 +30,6 @@ bp = Blueprint("todos", __name__, template_folder="../templates")
 
 def _todo_path(day: str) -> Path:
     return Path(state.journal_root) / day / "todos" / "today.md"
-
-
-def _read_lines(path: Path) -> list[str]:
-    if not path.exists():
-        return []
-    return path.read_text(encoding="utf-8").splitlines()
-
-
-def _write_lines(path: Path, lines: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = "\n".join(lines)
-    if content:
-        content += "\n"
-    path.write_text(content, encoding="utf-8")
-
-
-def _modify_entry(
-    path: Path,
-    index: int,
-    guard: str,
-    transform: Callable[[str], str | None],
-) -> bool:
-    lines = _read_lines(path)
-    tasks: list[tuple[int, int, str]] = []  # (entry_index, line_index, stripped)
-    entry_index = 0
-
-    for line_index, line in enumerate(lines):
-        stripped = line.strip()
-        if not stripped or not stripped.startswith("- ["):
-            continue
-        entry_index += 1
-        tasks.append((entry_index, line_index, stripped))
-
-    target = next((item for item in tasks if item[0] == index), None)
-    if target is None:
-        return False
-
-    _, line_index, stripped = target
-    if guard and stripped != guard:
-        return False
-
-    new_value = transform(lines[line_index])
-    if new_value is None:
-        # Remove the line entirely
-        del lines[line_index]
-    else:
-        lines[line_index] = new_value
-
-    _write_lines(path, lines)
-    return True
 
 
 @bp.route("/todos")
@@ -88,8 +43,6 @@ def todos_day(day: str):  # type: ignore[override]
     if not DATE_RE.fullmatch(day):
         return "", 404
 
-    todo_path = _todo_path(day)
-
     if request.method == "POST":
         action = request.form.get("action")
 
@@ -98,9 +51,12 @@ def todos_day(day: str):  # type: ignore[override]
             if not text:
                 flash("Cannot add an empty todo", "error")
             else:
-                lines = _read_lines(todo_path)
-                lines.append(f"- [ ] {text}")
-                _write_lines(todo_path, lines)
+                try:
+                    checklist = TodoChecklist.load(day, ensure_day=True)
+                    checklist.append_entry(text)
+                except (TodoEmptyTextError, FileNotFoundError, RuntimeError) as exc:
+                    bp.logger.debug("Failed to append todo for %s: %s", day, exc)
+                    flash("Unable to add todo right now", "error")
             return redirect(url_for("todos.todos_day", day=day))
 
         index_str = request.form.get("index")
@@ -115,27 +71,28 @@ def todos_day(day: str):  # type: ignore[override]
             flash("Missing todo index", "error")
             return redirect(url_for("todos.todos_day", day=day))
 
-        if action == "complete":
-            success = _modify_entry(
-                todo_path,
-                index,
-                guard,
-                lambda line: line.replace("- [ ]", "- [x]", 1),
-            )
-        elif action == "uncomplete":
-            success = _modify_entry(
-                todo_path,
-                index,
-                guard,
-                lambda line: line.replace("- [x]", "- [ ]", 1),
-            )
-        elif action == "remove":
-            success = _modify_entry(todo_path, index, guard, lambda line: None)
-        else:
-            flash("Unknown action", "error")
+        try:
+            checklist = TodoChecklist.load(day)
+        except (FileNotFoundError, RuntimeError) as exc:
+            bp.logger.debug("Failed to load checklist for %s: %s", day, exc)
+            flash("Todo list changed, please refresh and try again", "error")
             return redirect(url_for("todos.todos_day", day=day))
 
-        if not success:
+        try:
+            if action == "complete":
+                checklist.mark_done(index, guard)
+            elif action == "uncomplete":
+                checklist.mark_undone(index, guard)
+            elif action == "remove":
+                checklist.remove_entry(index, guard)
+            elif action == "edit":
+                checklist.update_entry_text(index, guard, request.form.get("text", ""))
+            else:
+                flash("Unknown action", "error")
+                return redirect(url_for("todos.todos_day", day=day))
+        except TodoEmptyTextError:
+            flash("Cannot update todo to empty text", "error")
+        except (TodoGuardMismatchError, TodoLineNumberError, IndexError, ValueError):
             flash("Todo list changed, please refresh and try again", "error")
 
         return redirect(url_for("todos.todos_day", day=day))
