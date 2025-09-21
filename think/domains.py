@@ -4,13 +4,62 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
 
 from think.indexer.entities import parse_entities
+
+
+def _normalize_matter_timestamp(value: Any) -> tuple[Optional[str], Optional[Any]]:
+    """Return an ISO 8601 timestamp and the original value for matter logs.
+
+    Handles epoch timestamps stored in seconds or milliseconds, numeric
+    strings, and already formatted timestamp strings. Returns (None, None)
+    when the value cannot be normalized.
+    """
+
+    if value is None:
+        return None, None
+
+    original_value = value
+
+    # Normalize whitespace for strings
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None, original_value
+
+        if stripped.isdigit():
+            value = float(stripped)
+        else:
+            try:
+                numeric_value = float(stripped)
+            except ValueError:
+                # Assume it's already a formatted timestamp string
+                return stripped, original_value
+            else:
+                value = numeric_value
+
+    elif isinstance(value, (int, float)):
+        value = float(value)
+    else:
+        return None, original_value
+
+    # Detect millisecond epoch timestamps
+    if value > 1e12:
+        value /= 1000.0
+    elif value > 1e10:
+        value /= 1000.0
+
+    try:
+        timestamp = datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+    except (OverflowError, OSError, ValueError):
+        return None, original_value
+
+    return timestamp, original_value
 
 
 def get_domains() -> dict[str, dict[str, object]]:
@@ -503,10 +552,34 @@ def get_matter(domain: str, matter_id: str) -> dict[str, Any]:
     matter_jsonl = matter_path / "activity_log.jsonl"
     if matter_jsonl.exists():
         try:
+            activity_entries: list[dict[str, Any]] = []
             with open(matter_jsonl, "r", encoding="utf-8") as f:
-                result["activity_log"] = [
-                    json.loads(line.strip()) for line in f if line.strip()
-                ]
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        logging.debug(
+                            "Error parsing activity log line in %s: %s",
+                            matter_jsonl,
+                            exc,
+                        )
+                        continue
+
+                    normalized_ts, original_ts = _normalize_matter_timestamp(
+                        entry.get("timestamp")
+                    )
+                    if original_ts is not None:
+                        entry["timestamp_raw"] = original_ts
+                    if normalized_ts is not None:
+                        entry["timestamp"] = normalized_ts
+
+                    activity_entries.append(entry)
+
+            result["activity_log"] = activity_entries
         except Exception as exc:
             logging.debug("Error reading %s: %s", matter_jsonl, exc)
 

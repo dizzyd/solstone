@@ -227,6 +227,57 @@ def test_get_matter_missing_files():
             assert result["attachments"] == {}
 
 
+def test_get_matter_normalizes_epoch_timestamps():
+    """Epoch timestamps in activity logs are converted to ISO 8601 strings."""
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        journal_path = Path(tmp_dir) / "journal"
+        matter_path = journal_path / "domains" / "test-domain" / "matter_1"
+        matter_path.mkdir(parents=True)
+
+        (matter_path / "matter.json").write_text(
+            json.dumps({"title": "Test Matter", "description": "Sample"})
+        )
+
+        activity_entries = [
+            {
+                "timestamp": 1700000000000,
+                "type": "created",
+                "message": "Created",
+            },
+            {
+                "timestamp": "1700000000000",
+                "type": "update",
+                "message": "Numeric string",
+            },
+            {
+                "timestamp": "2025-01-01T12:00:00Z",
+                "type": "note",
+                "message": "ISO string",
+            },
+        ]
+        (matter_path / "activity_log.jsonl").write_text(
+            "\n".join(json.dumps(entry) for entry in activity_entries)
+        )
+
+        with patch.dict(os.environ, {"JOURNAL_PATH": str(journal_path)}):
+            from think.domains import get_matter
+
+            result = get_matter("test-domain", "matter_1")
+
+        assert result["activity_log"][0]["timestamp"] == "2023-11-14T22:13:20+00:00"
+        assert result["activity_log"][0]["timestamp_raw"] == 1700000000000
+
+        assert result["activity_log"][1]["timestamp"] == "2023-11-14T22:13:20+00:00"
+        assert result["activity_log"][1]["timestamp_raw"] == "1700000000000"
+
+        assert result["activity_log"][2]["timestamp"] == "2025-01-01T12:00:00Z"
+        assert (
+            result["activity_log"][2]["timestamp_raw"]
+            == "2025-01-01T12:00:00Z"
+        )
+
+
 def test_get_matter_error_handling():
     """Test get_matter error handling for non-existent matters."""
     with tempfile.TemporaryDirectory() as tmp_dir:
