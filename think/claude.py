@@ -110,6 +110,7 @@ async def run_agent(
         options = ClaudeCodeOptions(
             system_prompt=system_instruction,
             model=model,
+            cwd=domain_path,  # Set working directory to the domain path
             # Allow file operations and git commands in domain directory
             allowed_tools=[
                 f"Read({domain_path}/**)",
