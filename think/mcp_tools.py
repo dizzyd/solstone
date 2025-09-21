@@ -4,7 +4,7 @@
 import base64
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from fastmcp import FastMCP
 from fastmcp.resources import FileResource, TextResource
@@ -23,6 +23,18 @@ mcp = FastMCP("sunstone")
 
 # Add annotation hints for all MCP tools
 HINTS = {"readOnlyHint": True, "openWorldHint": False}
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def register_tool(*tool_args: Any, **tool_kwargs: Any) -> Callable[[F], F]:
+    """Register ``func`` as an MCP tool while keeping it directly callable."""
+
+    def decorator(func: F) -> F:
+        mcp.tool(*tool_args, **tool_kwargs)(func)
+        return func
+
+    return decorator
 
 # Tool packs - logical groupings of tools
 TOOL_PACKS = {
@@ -46,7 +58,7 @@ TOOL_PACKS = {
 }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def todo_list(day: str) -> dict[str, Any]:
     """Return the numbered markdown checklist for ``day``'s todos.
 
@@ -70,7 +82,7 @@ def todo_list(day: str) -> dict[str, Any]:
         return {"error": f"Failed to list todos: {exc}"}
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
     """Append a new unchecked todo entry using the next sequential line number.
 
@@ -107,7 +119,7 @@ def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
         return {"error": f"Failed to add todo: {exc}"}
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def todo_remove(day: str, line_number: int, guard: str) -> dict[str, Any]:
     """Delete an existing todo entry after verifying its current text.
 
@@ -146,7 +158,7 @@ def todo_remove(day: str, line_number: int, guard: str) -> dict[str, Any]:
         return {"error": f"Failed to remove todo: {exc}"}
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
     """Mark a todo entry as completed by switching its checkbox to ``[x]``.
 
@@ -185,7 +197,7 @@ def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
         return {"error": f"Failed to complete todo: {exc}"}
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def search_summaries(
     query: str,
     limit: int = 5,
@@ -249,7 +261,7 @@ def search_summaries(
         }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def search_transcripts(
     query: str,
     day: str | None = None,
@@ -314,7 +326,7 @@ def search_transcripts(
         }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def search_events(
     query: str,
     limit: int = 5,
@@ -385,7 +397,7 @@ def search_events(
         }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def get_domain(domain: str) -> dict[str, Any]:
     """Get a comprehensive summary of a domain including its metadata, entities, and matters.
 
@@ -437,7 +449,7 @@ def get_domain(domain: str) -> dict[str, Any]:
         }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def domain_news(domain: str, day: str, markdown: str | None = None) -> dict[str, Any]:
     """Read or write news for a specific domain and day.
 
@@ -521,7 +533,7 @@ def domain_news(domain: str, day: str, markdown: str | None = None) -> dict[str,
         }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 def send_message(body: str) -> dict[str, Any]:
     """Send a message to the user's inbox for asynchronous communication.
 
@@ -569,7 +581,7 @@ def send_message(body: str) -> dict[str, Any]:
         }
 
 
-@mcp.tool(annotations=HINTS)
+@register_tool(annotations=HINTS)
 async def get_resource(uri: str) -> object:
     """Return the contents of a journal resource.
 
