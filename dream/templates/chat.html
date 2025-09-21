@@ -569,6 +569,13 @@ function processEvent(event) {
     case 'finish':
       if(event.agent_id){
         const matchesActive = activeRunAgentId ? event.agent_id === activeRunAgentId : responseInProgress;
+        if(event.source === 'cortex'){
+          const text = event.result || '';
+          const html = event.html || text;
+          if(html || text){
+            addMessage(html || text, 'from-bot', Boolean(event.html), text || html);
+          }
+        }
         if(matchesActive){
           if(event.conversation_id){
             nextContinueAgentId = event.agent_id;
