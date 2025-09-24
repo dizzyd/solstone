@@ -1,5 +1,7 @@
+import datetime as dt
 import importlib
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -28,8 +30,17 @@ def test_importer_text(tmp_path, monkeypatch):
 
     f1 = tmp_path / "20240101" / "120000_imported_audio.json"
     f2 = tmp_path / "20240101" / "120500_imported_audio.json"
-    assert json.loads(f1.read_text()) == [{"text": "seg1"}]
-    assert json.loads(f2.read_text()) == [{"text": "seg2"}]
+
+    chunk1 = json.loads(f1.read_text())
+    chunk2 = json.loads(f2.read_text())
+
+    assert chunk1["entries"] == [{"text": "seg1"}]
+    assert chunk1["imported"]["id"] == "20240101_120000"
+    assert "domain" not in chunk1["imported"]
+
+    assert chunk2["entries"] == [{"text": "seg2"}]
+    assert chunk2["imported"]["id"] == "20240101_120000"
+    assert "domain" not in chunk2["imported"]
 
 
 def test_importer_audio_transcribe(tmp_path, monkeypatch):
@@ -114,16 +125,113 @@ def test_importer_audio_transcribe(tmp_path, monkeypatch):
 
     # Check first chunk (0-5 minutes)
     chunk1 = json.loads(f1.read_text())
-    assert len(chunk1) == 2
-    assert chunk1[0]["text"] == "Hello world."
-    assert chunk1[0]["speaker"] == 1  # Rev uses 0-based, we use 1-based
-    assert chunk1[0]["source"] == "import"
-    assert chunk1[0]["start"] == "00:00:00"
-    assert chunk1[1]["text"] == "This is a test."
+    assert chunk1["imported"]["id"] == "20240101_120000"
+    assert len(chunk1["entries"]) == 2
+    assert chunk1["entries"][0]["text"] == "Hello world."
+    assert chunk1["entries"][0]["speaker"] == 1  # Rev uses 0-based, we use 1-based
+    assert chunk1["entries"][0]["source"] == "import"
+    assert chunk1["entries"][0]["start"] == "00:00:00"
+    assert chunk1["entries"][1]["text"] == "This is a test."
 
     # Check second chunk (5-10 minutes)
     chunk2 = json.loads(f2.read_text())
-    assert len(chunk2) == 1
-    assert chunk2[0]["text"] == "Second chunk."
-    assert chunk2[0]["speaker"] == 2
-    assert chunk2[0]["start"] == "00:05:10"
+    assert chunk2["imported"]["id"] == "20240101_120000"
+    assert len(chunk2["entries"]) == 1
+    assert chunk2["entries"][0]["text"] == "Second chunk."
+    assert chunk2["entries"][0]["speaker"] == 2
+    assert chunk2["entries"][0]["start"] == "00:05:10"
+
+
+def test_audio_transcribe_sanitizes_entities(tmp_path, monkeypatch):
+    mod = importlib.import_module("think.importer")
+
+    audio_file = tmp_path / "test_audio.mp3"
+    audio_file.write_bytes(b"fake audio content")
+
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+
+    monkeypatch.setattr(
+        "think.domains.get_domains",
+        lambda: {
+            "uavionix": {
+                "entities": {
+                    "Person": [
+                        "Ryan Reed (R2)",
+                        "123",
+                        "Surface Awareness Initiative (SAI)",
+                        "Ryan Reed (R2)",
+                    ]
+                }
+            }
+        },
+    )
+
+    captured: list[list[str]] = []
+
+    def fake_transcribe_file(media_path, entities=None):
+        captured.append(entities or [])
+        return {}
+
+    monkeypatch.setattr(mod, "transcribe_file", fake_transcribe_file)
+    monkeypatch.setattr(mod, "convert_revai_to_sunstone", lambda _: [])
+
+    mod.audio_transcribe(
+        str(audio_file),
+        str(tmp_path),
+        dt.datetime(2024, 1, 1, 12, 0, 0),
+        import_id="20240101_120000",
+        domain="uavionix",
+    )
+
+    assert captured
+    assert captured[0] == [
+        "Ryan Reed (R)",
+        "Surface Awareness Initiative (SAI)",
+    ]
+
+
+def test_audio_transcribe_includes_import_metadata(tmp_path, monkeypatch):
+    mod = importlib.import_module("think.importer")
+
+    audio_file = tmp_path / "test_audio.mp3"
+    audio_file.write_bytes(b"fake audio content")
+
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+
+    monkeypatch.setattr(
+        "think.domains.get_domains",
+        lambda: {
+            "uavionix": {
+                "entities": {"Person": ["Ryan Reed (R2)"]},
+            }
+        },
+    )
+
+    monkeypatch.setattr(mod, "transcribe_file", lambda *_, **__: {"ok": True})
+    monkeypatch.setattr(
+        mod,
+        "convert_revai_to_sunstone",
+        lambda *_: [
+            {
+                "text": "Test entry",
+                "start": "00:00:00",
+                "speaker": 1,
+                "source": "import",
+            }
+        ],
+    )
+
+    created_files, _ = mod.audio_transcribe(
+        str(audio_file),
+        str(tmp_path),
+        dt.datetime(2024, 1, 1, 12, 0, 0),
+        import_id="20240101_120000",
+        domain="uavionix",
+    )
+
+    assert created_files
+
+    payload = json.loads(Path(created_files[0]).read_text())
+    assert payload["entries"][0]["text"] == "Test entry"
+    assert payload["imported"]["id"] == "20240101_120000"
+    assert payload["imported"]["domain"] == "uavionix"

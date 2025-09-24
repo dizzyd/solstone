@@ -4,8 +4,10 @@ import json
 import logging
 import os
 import re
+import string
 import subprocess
 import tempfile
+import unicodedata
 from datetime import timedelta
 from pathlib import Path
 
@@ -29,6 +31,19 @@ logger = logging.getLogger(__name__)
 
 MIN_THRESHOLD = 250
 TIME_RE = re.compile(r"\d{8}_\d{6}")
+_ALLOWED_ASCII = set(string.ascii_letters + string.punctuation + " ")
+
+
+def _build_import_payload(
+    entries: list[dict], *, import_id: str, domain: str | None = None
+) -> dict:
+    """Return structured payload for imported transcript chunks."""
+
+    imported_meta: dict[str, str] = {"id": import_id}
+    if domain:
+        imported_meta["domain"] = domain
+
+    return {"imported": imported_meta, "entries": entries}
 
 
 def str2bool(value: str) -> bool:
@@ -96,6 +111,34 @@ def split_audio(path: str, out_dir: str, start: dt.datetime) -> list[str]:
         created_files.append(dest)
 
     return created_files
+
+
+def _sanitize_entities(entities: list[str]) -> list[str]:
+    """Return Rev AI safe custom vocabulary phrases."""
+
+    sanitized: list[str] = []
+    seen: set[str] = set()
+
+    for original in entities:
+        normalized = unicodedata.normalize("NFKD", original)
+        ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+        filtered = "".join(ch for ch in ascii_only if ch in _ALLOWED_ASCII)
+        filtered = re.sub(r"\s+", " ", filtered).strip()
+
+        if not filtered or not any(ch.isalpha() for ch in filtered):
+            logger.debug("Dropping entity without alpha characters after sanitizing: %s", original)
+            continue
+
+        if filtered != original:
+            logger.debug("Sanitized entity '%s' -> '%s'", original, filtered)
+
+        if filtered in seen:
+            continue
+
+        seen.add(filtered)
+        sanitized.append(filtered)
+
+    return sanitized
 
 
 def has_video_stream(path: str) -> bool:
@@ -195,7 +238,14 @@ def _read_transcript(path: str) -> str:
     raise ValueError("unsupported transcript format")
 
 
-def process_transcript(path: str, day_dir: str, base_dt: dt.datetime) -> list[str]:
+def process_transcript(
+    path: str,
+    day_dir: str,
+    base_dt: dt.datetime,
+    *,
+    import_id: str,
+    domain: str | None = None,
+) -> list[str]:
     """Process a transcript file and write imported JSON segments.
 
     Returns:
@@ -212,8 +262,9 @@ def process_transcript(path: str, day_dir: str, base_dt: dt.datetime) -> list[st
         json_path = os.path.join(
             day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.json"
         )
+        payload = _build_import_payload(json_data, import_id=import_id, domain=domain)
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(json_data, f, indent=2)
+            json.dump(payload, f, indent=2)
         logger.info(f"Added transcript segment to journal: {json_path}")
         created_files.append(json_path)
 
@@ -221,7 +272,12 @@ def process_transcript(path: str, day_dir: str, base_dt: dt.datetime) -> list[st
 
 
 def audio_transcribe(
-    path: str, day_dir: str, base_dt: dt.datetime, domain: str | None = None
+    path: str,
+    day_dir: str,
+    base_dt: dt.datetime,
+    *,
+    import_id: str,
+    domain: str | None = None,
 ) -> tuple[list[str], dict]:
     """Transcribe audio using Rev AI and save 5-minute chunks as imported JSON.
 
@@ -252,9 +308,15 @@ def audio_transcribe(
                 for entity_type, names in domain_entities.items():
                     entities.extend(names)
                 if entities:
-                    logger.info(
-                        f"Using {len(entities)} entities from domain '{domain}' for transcription"
-                    )
+                    entities = _sanitize_entities(entities)
+                    if entities:
+                        logger.info(
+                            f"Using {len(entities)} entities from domain '{domain}' for transcription"
+                        )
+                    else:
+                        logger.info(
+                            f"Domain '{domain}' entities removed after sanitization"
+                        )
             else:
                 logger.warning(f"Domain '{domain}' not found")
         except Exception as e:
@@ -315,8 +377,11 @@ def audio_transcribe(
         )
 
         # Save the chunk
+        payload = _build_import_payload(
+            chunk_entries, import_id=import_id, domain=domain
+        )
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(chunk_entries, f, indent=2)
+            json.dump(payload, f, indent=2)
         logger.info(f"Added transcript chunk to journal: {json_path}")
         created_files.append(json_path)
 
@@ -350,8 +415,13 @@ def create_transcript_summary(
         try:
             with open(json_path, "r", encoding="utf-8") as f:
                 transcript_data = json.load(f)
+                if isinstance(transcript_data, dict) and "entries" in transcript_data:
+                    entries = transcript_data.get("entries") or []
+                else:
+                    entries = transcript_data if isinstance(transcript_data, list) else []
+
                 all_transcripts.append(
-                    {"file": os.path.basename(json_path), "content": transcript_data}
+                    {"file": os.path.basename(json_path), "content": entries}
                 )
         except Exception as e:
             logger.warning(f"Failed to read {json_path}: {e}")
@@ -378,7 +448,7 @@ def create_transcript_summary(
 - Original file: {input_filename}
 - Recording timestamp: {timestamp}
 - Number of transcript segments: {len(all_transcripts)}
-- Total transcript entries: {sum(len(t["content"]) if isinstance(t["content"], list) else 0 for t in all_transcripts)}"""
+- Total transcript entries: {sum(len(t["content"]) for t in all_transcripts)}"""
     )
 
     # Format the transcript content for the user message
@@ -410,10 +480,7 @@ def create_transcript_summary(
 
         # Save the summary
         summary_path = import_dir / "summary.md"
-        total_entries = sum(
-            len(t["content"]) if isinstance(t["content"], list) else 0
-            for t in all_transcripts
-        )
+        total_entries = sum(len(t["content"]) for t in all_transcripts)
         with open(summary_path, "w", encoding="utf-8") as f:
             f.write("# Audio Transcript Summary\n\n")
             f.write(f"**Source File:** {input_filename}\n")
@@ -509,7 +576,13 @@ def main() -> None:
 
     ext = os.path.splitext(args.media)[1].lower()
     if ext in {".txt", ".pdf"}:
-        created_files = process_transcript(args.media, day_dir, base_dt)
+        created_files = process_transcript(
+            args.media,
+            day_dir,
+            base_dt,
+            import_id=args.timestamp,
+            domain=args.domain,
+        )
         all_created_files.extend(created_files)
         audio_transcript_files.extend(created_files)  # Track for summarization
         processing_results["outputs"].append(
@@ -524,7 +597,11 @@ def main() -> None:
     else:
         if args.hear:
             created_files, revai_json_data = audio_transcribe(
-                args.media, day_dir, base_dt, domain=args.domain
+                args.media,
+                day_dir,
+                base_dt,
+                import_id=args.timestamp,
+                domain=args.domain,
             )
             all_created_files.extend(created_files)
             audio_transcript_files.extend(created_files)  # Track for summarization
