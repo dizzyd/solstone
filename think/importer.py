@@ -35,13 +35,19 @@ _ALLOWED_ASCII = set(string.ascii_letters + string.punctuation + " ")
 
 
 def _build_import_payload(
-    entries: list[dict], *, import_id: str, domain: str | None = None
+    entries: list[dict],
+    *,
+    import_id: str,
+    domain: str | None = None,
+    setting: str | None = None,
 ) -> dict:
     """Return structured payload for imported transcript chunks."""
 
     imported_meta: dict[str, str] = {"id": import_id}
     if domain:
         imported_meta["domain"] = domain
+    if setting:
+        imported_meta["setting"] = setting
 
     return {"imported": imported_meta, "entries": entries}
 
@@ -245,6 +251,7 @@ def process_transcript(
     *,
     import_id: str,
     domain: str | None = None,
+    setting: str | None = None,
 ) -> list[str]:
     """Process a transcript file and write imported JSON segments.
 
@@ -262,7 +269,12 @@ def process_transcript(
         json_path = os.path.join(
             day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.json"
         )
-        payload = _build_import_payload(json_data, import_id=import_id, domain=domain)
+        payload = _build_import_payload(
+            json_data,
+            import_id=import_id,
+            domain=domain,
+            setting=setting,
+        )
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
         logger.info(f"Added transcript segment to journal: {json_path}")
@@ -278,6 +290,7 @@ def audio_transcribe(
     *,
     import_id: str,
     domain: str | None = None,
+    setting: str | None = None,
 ) -> tuple[list[str], dict]:
     """Transcribe audio using Rev AI and save 5-minute chunks as imported JSON.
 
@@ -286,6 +299,7 @@ def audio_transcribe(
         day_dir: Directory to save chunks to
         base_dt: Base datetime for timestamps
         domain: Optional domain name to extract entities from
+        setting: Optional description of the setting to store with metadata
 
     Returns:
         Tuple of (list of created file paths, raw RevAI JSON result)
@@ -378,7 +392,10 @@ def audio_transcribe(
 
         # Save the chunk
         payload = _build_import_payload(
-            chunk_entries, import_id=import_id, domain=domain
+            chunk_entries,
+            import_id=import_id,
+            domain=domain,
+            setting=setting,
         )
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
@@ -389,7 +406,11 @@ def audio_transcribe(
 
 
 def create_transcript_summary(
-    import_dir: Path, audio_json_files: list[str], input_filename: str, timestamp: str
+    import_dir: Path,
+    audio_json_files: list[str],
+    input_filename: str,
+    timestamp: str,
+    setting: str | None = None,
 ) -> None:
     """Create a summary of all imported audio transcript files using Gemini Pro.
 
@@ -398,6 +419,7 @@ def create_transcript_summary(
         audio_json_files: List of paths to _imported_audio.json files
         input_filename: Original media filename for context
         timestamp: Processing timestamp for context
+        setting: Optional description of the setting to include in metadata
     """
     if not audio_json_files:
         logger.info("No audio transcript files to summarize")
@@ -440,16 +462,17 @@ def create_transcript_summary(
         return
 
     # Add the context metadata to the prompt
-    importer_prompt = (
-        importer_prompt_template
-        + f"""
+    metadata_lines = [
+        "\n\n## Metadata for this summary:",
+        f"- Original file: {input_filename}",
+        f"- Recording timestamp: {timestamp}",
+        f"- Number of transcript segments: {len(all_transcripts)}",
+        f"- Total transcript entries: {sum(len(t['content']) for t in all_transcripts)}",
+    ]
+    if setting:
+        metadata_lines.append(f"- Setting: {setting}")
 
-## Metadata for this summary:
-- Original file: {input_filename}
-- Recording timestamp: {timestamp}
-- Number of transcript segments: {len(all_transcripts)}
-- Total transcript entries: {sum(len(t["content"]) for t in all_transcripts)}"""
-    )
+    importer_prompt = importer_prompt_template + "\n".join(metadata_lines)
 
     # Format the transcript content for the user message
     user_message_parts = []
@@ -487,6 +510,8 @@ def create_transcript_summary(
             f.write(f"**Import Timestamp:** {timestamp}\n")
             f.write(f"**Segments Processed:** {len(all_transcripts)}\n")
             f.write(f"**Total Entries:** {total_entries}\n\n")
+            if setting:
+                f.write(f"**Setting:** {setting}\n\n")
             f.write("---\n\n")
             f.write(response_text)
 
@@ -531,6 +556,12 @@ def main() -> None:
         default=None,
         help="Domain name to use for entity extraction",
     )
+    parser.add_argument(
+        "--setting",
+        type=str,
+        default=None,
+        help="Contextual setting description to store with import metadata",
+    )
     args, extra = setup_cli(parser, parse_known=True)
     if extra and not args.timestamp:
         args.timestamp = extra[0]
@@ -571,6 +602,7 @@ def main() -> None:
         "input_file": args.media,
         "processing_started": dt.datetime.now().isoformat(),
         "domain": args.domain,
+        "setting": args.setting,
         "outputs": [],
     }
 
@@ -582,6 +614,7 @@ def main() -> None:
             base_dt,
             import_id=args.timestamp,
             domain=args.domain,
+            setting=args.setting,
         )
         all_created_files.extend(created_files)
         audio_transcript_files.extend(created_files)  # Track for summarization
@@ -602,6 +635,7 @@ def main() -> None:
                 base_dt,
                 import_id=args.timestamp,
                 domain=args.domain,
+                setting=args.setting,
             )
             all_created_files.extend(created_files)
             audio_transcript_files.extend(created_files)  # Track for summarization
@@ -703,6 +737,7 @@ def main() -> None:
             audio_json_files=audio_transcript_files,
             input_filename=os.path.basename(args.media),
             timestamp=args.timestamp,
+            setting=args.setting,
         )
 
 
