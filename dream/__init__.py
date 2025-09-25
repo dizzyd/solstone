@@ -120,8 +120,6 @@ def create_app(journal: str = "", password: str = "") -> Flask:
         os.environ.setdefault("JOURNAL_PATH", journal)
         task_manager.load_cached()
         state.occurrences_index = build_occurrence_index(journal)
-
-    start_cortex_event_watcher()
     return app
 
 
@@ -238,6 +236,7 @@ __all__ = [
     "stats_data",
     "journal_root",
     "occurrences_index",
+    "run_service",
 ]
 
 
@@ -267,6 +266,21 @@ class _Module(types.ModuleType):
 sys.modules[__name__].__class__ = _Module
 
 
+def run_service(
+    app: Flask,
+    *,
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    debug: bool = False,
+    start_watcher: bool = True,
+) -> None:
+    """Run the Dream service, optionally starting the Cortex watcher."""
+
+    if start_watcher:
+        start_cortex_event_watcher()
+    app.run(host=host, port=port, debug=debug)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Combined review web service")
     parser.add_argument("--port", type=int, default=8000, help="Port to serve on")
@@ -284,7 +298,7 @@ def main() -> None:
     if not app.config["PASSWORD"]:
         raise ValueError("Password must be provided via --password or DREAM_PASSWORD")
 
-    app.run(host="0.0.0.0", port=args.port, debug=args.verbose)
+    run_service(app, host="0.0.0.0", port=args.port, debug=args.verbose)
 
 
 if __name__ == "__main__":

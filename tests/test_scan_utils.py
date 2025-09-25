@@ -5,6 +5,8 @@ from PIL import Image
 
 def test_cache_roundtrip(tmp_path, monkeypatch):
     scan = importlib.import_module("see.scan")
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(scan, "CACHE_DIR", str(cache_dir))
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     img = Image.new("RGB", (10, 10), "white")
     images = {1: img}
