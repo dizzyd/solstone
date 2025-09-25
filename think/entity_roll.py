@@ -4,10 +4,8 @@ import os
 import re
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
 
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_PRO, gemini_generate
@@ -92,20 +90,16 @@ def cluster_glob(filepaths: List[str]) -> str:
 def send_to_gemini(
     markdown_content: str,
     prompt_text: str,
-    api_key: str,
-    model_name: str,
-    is_json_mode: bool,
 ) -> Optional[str]:
     """Send markdown content and a prompt to Gemini API."""
     try:
         response_text = gemini_generate(
             contents=markdown_content,
-            model=model_name,
+            model=GEMINI_PRO,
             temperature=0.3,
             max_output_tokens=8192 * 2,
             thinking_budget=8192 * 2,
             system_instruction=prompt_text,
-            json_output=is_json_mode,
         )
         return response_text
 
@@ -180,17 +174,11 @@ def process_day(
     markdown = cluster_glob(files)
 
     try:
-        load_dotenv()
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            print("GOOGLE_API_KEY not found in environment")
-            return
-
         with open(PROMPT_PATH, "r", encoding="utf-8") as f:
             prompt = f.read().strip()
 
         print("  Sending to Gemini for entity extraction...")
-        result = send_to_gemini(markdown, prompt, api_key, GEMINI_PRO, verbose)
+        result = send_to_gemini(markdown, prompt)
         if not result:
             print(f"Gemini returned no result for {day_str}")
             return

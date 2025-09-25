@@ -28,14 +28,18 @@ Follow these steps to build the top list:
     * **Prioritize Types:** Try to capture more Person and Project entities, only the most unique Tool and Company entities are important.
 
 4.  **Format the Final Output:**
-    * Present the final, prioritized list as a bulleted list.
+    * Present the final, prioritized list as a bulleted markdown list.
     * Each item must follow the exact format: `* [Type]: [Canonical Name] - [Synthesized Short Description]`
+    * Each line must start with an asterisk and space (`* `)
+    * Use plain text only - no JSON, no formatting other than the bullet points
     * Ensure there are no duplicate entities in the final output.
     * Capture all of the relevant entities directly observed in the user data.
 
-**Example Output Format:**
+**Example Output Format (This is the ONLY acceptable format):**
 
 * Company: ACME - A technology company that produces advanced widgets and is headquartered in Phoenix.
 * Person: Jeremie Miller (Jer) - A key software engineer and the original creator of the Jabber/XMPP technology.
 * Tool: Widgetizer 3000 - A next-generation widget design engine known for its efficiency and precision.
 * Project: XMPP - An open-source communication protocol for real-time messaging and presence.
+
+**IMPORTANT:** Output ONLY the markdown bulleted list. Do not output JSON or any other format. Each entity must be on its own line starting with `* `.
