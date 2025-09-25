@@ -340,6 +340,46 @@ table[data-entity-type="Tool"] th {
   opacity: 0.9;
 }
 
+/* Generate button styling */
+.generate-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.generate-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.generate-btn.generating {
+  background: #999;
+}
+
+.generate-btn.generating .generate-icon {
+  animation: sparkle 1.5s infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(180deg); }
+}
+
+
 /* Modal styling */
 .modal {
   display: none;
@@ -573,7 +613,10 @@ table[data-entity-type="Tool"] th {
         <textarea id="entityDescription" name="description" placeholder="Brief description (optional)"></textarea>
       </div>
       <div class="form-actions">
-        <button type="button" class="btn btn-secondary" id="newEntityCancelBtn">Cancel</button>
+        <button type="button" id="generateEntityDescBtn" class="generate-btn" title="Generate description with AI">
+          <span class="generate-icon">✨</span>
+          <span class="generate-text">Generate</span>
+        </button>
         <button type="submit" class="btn btn-primary" id="newEntitySaveBtn">Create Entity</button>
       </div>
     </form>
@@ -1035,7 +1078,55 @@ function showNewEntityError(message) {
 
 // New Entity Modal event handlers
 document.getElementById('newEntityClose').onclick = closeNewEntityModal;
-document.getElementById('newEntityCancelBtn').onclick = closeNewEntityModal;
+
+// Generate entity description button handler
+document.getElementById('generateEntityDescBtn').onclick = async function() {
+  const entityName = document.getElementById('entityName').value.trim();
+
+  if (!entityName) {
+    showNewEntityError('Please enter an entity name first');
+    return;
+  }
+
+  const btn = this;
+  const generateText = btn.querySelector('.generate-text');
+  const descriptionTextarea = document.getElementById('entityDescription');
+
+  // Disable button and show generating state
+  btn.disabled = true;
+  btn.classList.add('generating');
+  generateText.textContent = 'Generating...';
+
+  try {
+    const response = await fetch('{{ url_for('entities.entities') }}/api/generate-description', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        type: activeType,
+        name: entityName
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      // Update the description field
+      descriptionTextarea.value = data.description;
+    } else {
+      showNewEntityError(data.error || 'Failed to generate description');
+    }
+  } catch (error) {
+    console.error('Error generating description:', error);
+    showNewEntityError('Failed to generate description: ' + error.message);
+  } finally {
+    // Re-enable button and reset state
+    btn.disabled = false;
+    btn.classList.remove('generating');
+    generateText.textContent = 'Generate';
+  }
+};
 
 // Merge Confirmation Modal event handlers
 document.getElementById('mergeConfirmClose').onclick = function() {
