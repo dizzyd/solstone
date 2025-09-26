@@ -83,23 +83,44 @@ table[data-entity-type="Tool"] th {
   border-bottom: 2px solid var(--border-tool);
 }
 .count {
-  text-align: center;
+  text-align: left;
   font-weight: bold;
   color: #007bff;
-  width: 80px;
+  width: 110px;
+}
+.entity-row {
   cursor: pointer;
 }
-.count:hover {
-  background: #e3f2fd;
-  border-radius: 4px;
+.entity-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
-.search-icon {
-  margin-left: 6px;
+.entity-star {
+  font-size: 1.1em;
+  line-height: 1;
   cursor: pointer;
-  text-decoration: none;
+  transition: transform 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
 }
-.search-icon:hover {
-  color: #007bff;
+.entity-star:hover {
+  transform: scale(1.1);
+}
+.entity-star.is-top {
+  color: gold;
+  cursor: default;
+  transform: none;
+}
+.entity-star.is-loading {
+  color: #888;
+  cursor: wait;
+  transform: none;
+}
+.entity-count-value {
+  display: inline-block;
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .name { font-weight: 500; width: 200px; }
 .desc { color: #666; }
@@ -525,9 +546,22 @@ table[data-entity-type="Tool"] th {
 .modal-header h3:hover {
   background: #f0f0f0;
 }
-.modal-header #modalStar {
-  vertical-align: middle;
+.modal-delete {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 1.1em;
+  padding: 4px;
   line-height: 1;
+}
+.modal-delete:hover {
+  color: #c0392b;
+}
+.modal-delete:focus {
+  outline: 2px solid #c0392b;
+  outline-offset: 2px;
 }
 .modal-body {
   max-height: calc(70vh - 80px);
@@ -930,9 +964,66 @@ function renderTable() {
       });
   filteredItems.forEach(item => {
     const tr = document.createElement('tr');
-    const count = item.top ? '<span style="color:gold">&#9733;</span>' : item.count;
-    const search = `<a class="search-icon" href="{{ url_for('search.search_page') }}?q=${encodeURIComponent(item.name)}" title="Search">&#128269;</a>`;
-    tr.innerHTML = `<td class="count" onclick="handleCountClick(event, '${item.name}')">${count}${search}</td><td class="name">${item.name}</td><td class="desc">${item.desc}</td>`;
+    tr.classList.add('entity-row');
+
+    const countCell = document.createElement('td');
+    countCell.classList.add('count');
+
+    const star = document.createElement('span');
+    star.classList.add('entity-star');
+    if (item.top) {
+      star.classList.add('is-top');
+      star.textContent = '★';
+      star.title = 'Already highlighted';
+    } else {
+      star.textContent = '☆';
+      star.title = 'Add to highlights';
+    }
+
+    const countValue = document.createElement('span');
+    countValue.classList.add('entity-count-value');
+    countValue.textContent = item.count;
+
+    const countWrapper = document.createElement('span');
+    countWrapper.classList.add('entity-count');
+
+    star.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (item.top) {
+        return;
+      }
+      generateTopEntry(item, star);
+    });
+
+    countWrapper.appendChild(star);
+    countWrapper.appendChild(countValue);
+    countCell.appendChild(countWrapper);
+
+    const nameCell = document.createElement('td');
+    nameCell.classList.add('name');
+    nameCell.textContent = item.name;
+
+    const descCell = document.createElement('td');
+    descCell.classList.add('desc');
+    descCell.textContent = item.desc;
+
+    tr.addEventListener('click', (event) => {
+      if (event.target.closest('.entity-star')) {
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        event.preventDefault();
+        generateTopEntry(item, star);
+        return;
+      }
+
+      showEntityDetails(item.name);
+    });
+
+    tr.appendChild(countCell);
+    tr.appendChild(nameCell);
+    tr.appendChild(descCell);
     tbody.appendChild(tr);
   });
 }
@@ -987,107 +1078,6 @@ function editName(nameElement, item) {
   input.select();
 }
 
-function showTopEditor(item, text) {
-  const content = document.getElementById('modalContent');
-  const html = `
-    <div class="modal-header">
-      <span id="modalStar" style="cursor:pointer;margin-right:8px;color:gold">&#9733;</span>
-      <h3 id="modalEntityName">${item.name}</h3>
-      <span id="modalDelete" style="cursor:pointer;color:#555;margin-left:8px;" title="Delete entity">&#128465;</span>
-    </div>
-    <div class="modal-body">
-      <textarea id="topDesc" style="width:100%;height:150px;">${text}</textarea>
-      <div style="text-align:right;margin-top:10px;">
-        <button id="regenerateBtn" style="margin-right:10px;">Regenerate</button>
-        <button id="saveTopBtn">Save</button>
-      </div>
-    </div>`;
-  content.innerHTML = html;
-  document.getElementById('regenerateBtn').onclick = () => {
-    const btn = document.getElementById('regenerateBtn');
-    const textarea = document.getElementById('topDesc');
-    const originalText = btn.textContent;
-    
-    btn.textContent = 'Regenerating...';
-    btn.disabled = true;
-    
-    fetch('{{ url_for('entities.entities') }}/api/top_generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: activeType, name: item.name })
-    }).then(r => r.json()).then(res => {
-      if (res.error) {
-        alert('Error regenerating description: ' + res.error);
-      } else {
-        textarea.value = res.desc;
-      }
-      btn.textContent = originalText;
-      btn.disabled = false;
-    }).catch(err => {
-      alert('Network error: ' + err.message);
-      btn.textContent = originalText;
-      btn.disabled = false;
-    });
-  };
-  document.getElementById('saveTopBtn').onclick = () => {
-    const desc = document.getElementById('topDesc').value.trim();
-    fetch('{{ url_for('entities.entities') }}/api/top_update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: activeType, name: item.name, desc })
-    }).then(() => {
-      document.getElementById('entityModal').style.display = 'none';
-      reloadTabs();
-    });
-  };
-  document.getElementById('modalEntityName').onclick = () => {
-    editName(document.getElementById('modalEntityName'), item);
-  };
-  document.getElementById('modalDelete').onclick = () => {
-    if (!confirm(`Delete ${item.name}?`)) return;
-    
-    document.getElementById('entityModal').style.display = 'none';
-    
-    fetch('{{ url_for('entities.entities') }}/api/remove', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: activeType, name: item.name, days: item.raw_dates })
-    }).then(() => {
-      reloadTabs();
-    });
-  };
-}
-
-function handleStarClick(item) {
-  if (item.top) {
-    showTopEditor(item, item.desc);
-  } else {
-    const starEl = document.getElementById('modalStar');
-    starEl.style.cursor = 'wait';
-    starEl.onclick = null;
-    
-    fetch('{{ url_for('entities.entities') }}/api/top_generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: activeType, name: item.name })
-    }).then(r => r.json()).then(res => {
-      if (res.error) {
-        alert('Error generating summary: ' + res.error);
-        starEl.style.cursor = 'pointer';
-        starEl.onclick = () => handleStarClick(item);
-        return;
-      }
-      if (document.getElementById('entityModal').style.display === 'block') {
-        showTopEditor(item, res.desc);
-      }
-    }).catch(err => {
-      alert('Network error: ' + err.message);
-      starEl.style.cursor = 'pointer';
-      starEl.onclick = () => handleStarClick(item);
-    });
-  }
-}
-
 function showEntityDetails(name) {
   fetch(`{{ url_for('entities.entities_details') }}?type=${activeType}&name=${encodeURIComponent(name)}`)
     .then(r => r.json())
@@ -1096,12 +1086,10 @@ function showEntityDetails(name) {
       currentItem = item;
       const modal = document.getElementById('entityModal');
       const content = document.getElementById('modalContent');
-      const star = item.top ? '&#9733;' : '&#9734;';
       let html = `
         <div class="modal-header">
-          <span id="modalStar" style="cursor:pointer;margin-right:8px;color:gold">${star}</span>
           <h3 id="modalEntityName">${name}</h3>
-          <span id="modalDelete" style="cursor:pointer;color:#555;margin-left:8px;" title="Delete entity">&#128465;</span>
+          <button type="button" class="modal-delete" id="modalDelete" title="Delete entity" aria-label="Delete entity">&#128465;</button>
         </div>
         <div class="modal-body">`;
       item.dates.forEach(date => {
@@ -1117,9 +1105,6 @@ function showEntityDetails(name) {
       content.innerHTML = html;
       document.getElementById('modalEntityName').onclick = () => {
         editName(document.getElementById('modalEntityName'), item);
-      };
-      document.getElementById('modalStar').onclick = () => {
-        handleStarClick(item);
       };
       document.getElementById('modalDelete').onclick = () => {
         if (!confirm(`Delete ${name}?`)) return;
@@ -1149,64 +1134,63 @@ window.onclick = function(event) {
   }
 };
 
-// Handle count click with control-click support for background top generation
-function handleCountClick(event, name) {
-  if (event.ctrlKey || event.metaKey || event.altKey) {
-    // Control-click: generate top entry in background
-    const item = data[activeType].find(item => item.name === name);
-    if (!item || item.top || generatingTops.has(name)) return;
-    
-    // Mark as generating and update UI
-    generatingTops.add(name);
-    const countCell = event.target;
-    const originalContent = countCell.innerHTML;
-    countCell.innerHTML = '<span style="color:#888">⏳</span>';
-    countCell.style.opacity = '0.7';
-    
-    // Generate top description in parallel - don't await, let it run independently
-    (async () => {
-      try {
-        const generateResponse = await fetch('{{ url_for('entities.entities') }}/api/top_generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: activeType, name: name })
-        });
-        
-        const res = await generateResponse.json();
-        
-        if (res.error) {
-          console.error('Error generating top entry for', name, ':', res.error);
-          // Restore original state
-          countCell.innerHTML = originalContent;
-          countCell.style.opacity = '1';
-          generatingTops.delete(name);
-          return;
-        }
-        
-        // Auto-submit the generated description
-        await fetch('{{ url_for('entities.entities') }}/api/top_update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: activeType, name: name, desc: res.desc })
-        });
-        
-        // Success - update UI
-        countCell.innerHTML = '<span style="color:gold">&#9733;</span>';
-        countCell.style.opacity = '1';
-        generatingTops.delete(name);
-        reloadTabs();
-        
-      } catch (err) {
-        console.error('Network error for', name, ':', err);
-        // Restore original state
-        countCell.innerHTML = originalContent;
-        countCell.style.opacity = '1';
-        generatingTops.delete(name);
-      }
-    })();
-  } else {
-    // Normal click: show details
-    showEntityDetails(name);
+// Generate a top summary inline (used by star clicks and modifier row clicks)
+async function generateTopEntry(item, starEl) {
+  if (!item || item.top) {
+    return;
+  }
+
+  const name = item.name;
+  if (generatingTops.has(name)) {
+    return;
+  }
+
+  generatingTops.add(name);
+
+  const originalStarText = starEl.textContent;
+  const originalTitle = starEl.getAttribute('title');
+
+  starEl.classList.add('is-loading');
+  starEl.textContent = '⏳';
+  starEl.setAttribute('title', 'Generating summary...');
+
+  try {
+    const generateResponse = await fetch('{{ url_for('entities.entities') }}/api/top_generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name })
+    });
+
+    const res = await generateResponse.json();
+
+    if (res.error) {
+      throw new Error(res.error);
+    }
+
+    await fetch('{{ url_for('entities.entities') }}/api/top_update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: activeType, name, desc: res.desc })
+    });
+
+    starEl.classList.remove('is-loading');
+    starEl.classList.add('is-top');
+    starEl.textContent = '★';
+    starEl.setAttribute('title', 'Already highlighted');
+    item.top = true;
+    reloadTabs();
+  } catch (err) {
+    console.error('Error generating top entry for', name, ':', err);
+    starEl.classList.remove('is-loading');
+    starEl.classList.remove('is-top');
+    starEl.textContent = originalStarText;
+    if (originalTitle) {
+      starEl.setAttribute('title', originalTitle);
+    } else {
+      starEl.removeAttribute('title');
+    }
+  } finally {
+    generatingTops.delete(name);
   }
 }
 
