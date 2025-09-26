@@ -55,6 +55,11 @@ import_page_view = import_module(".import", "dream.views")
 
 logger = logging.getLogger(__name__)
 
+def _resolve_env_password() -> str:
+    """Return the configured Dream password from ``SS_DREAM_PW``."""
+
+    return os.getenv("SS_DREAM_PW", "")
+
 
 def _count_pending_todos_today() -> int:
     """Return count of unfinished todos for the current day."""
@@ -103,7 +108,7 @@ def create_app(journal: str = "", password: str = "") -> Flask:
         static_folder=os.path.join(os.path.dirname(__file__), "static"),
     )
     app.secret_key = os.getenv("DREAM_SECRET", "sunstone-secret")
-    app.config["PASSWORD"] = password
+    app.config["PASSWORD"] = password or _resolve_env_password()
     register_views(app)
 
     @app.context_processor
@@ -286,17 +291,18 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000, help="Port to serve on")
     parser.add_argument(
         "--password",
-        help="Password required for login (can also set DREAM_PASSWORD)",
-        default=os.getenv("DREAM_PASSWORD"),
+        help="Password required for login (can also set SS_DREAM_PW)",
+        default=None,
     )
     args = setup_cli(parser)
     journal = os.getenv("JOURNAL_PATH")
     if not journal:
         raise SystemExit("JOURNAL_PATH not set")
 
-    app = create_app(journal, args.password)
+    password = args.password or _resolve_env_password()
+    app = create_app(journal, password)
     if not app.config["PASSWORD"]:
-        raise ValueError("Password must be provided via --password or DREAM_PASSWORD")
+        raise ValueError("Password must be provided via --password or SS_DREAM_PW")
 
     run_service(app, host="0.0.0.0", port=args.port, debug=args.verbose)
 

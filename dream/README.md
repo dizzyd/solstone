@@ -16,7 +16,9 @@ Run the server with:
 dream --password YOURPASSWORD
 ```
 
-Open the printed URL in your browser and login with the password.
+Open the printed URL in your browser and login with the password. You can also
+set `SS_DREAM_PW` in your environment or `.env` file instead of passing
+`--password`.
 
 ## Layout
 
