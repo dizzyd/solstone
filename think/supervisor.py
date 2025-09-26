@@ -21,6 +21,13 @@ CHECK_INTERVAL = 30
 shutdown_requested = False
 
 
+def _get_journal_path() -> Path:
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+    return Path(journal)
+
+
 class ProcessLogWriter:
     """Thread-safe writer that appends process output to a log file."""
 
@@ -40,12 +47,18 @@ class ProcessLogWriter:
             if not self._fh.closed:
                 self._fh.close()
 
+    @property
+    def path(self) -> Path:
+        return self._log_path
+
 
 @dataclass
 class ManagedProcess:
     process: subprocess.Popen
     name: str
     logger: ProcessLogWriter
+    cmd: list[str]
+    restart: bool = False
     threads: list[threading.Thread] = field(default_factory=list)
 
     def cleanup(self) -> None:
@@ -76,11 +89,12 @@ def _stream_output(
 def _launch_process(
     name: str,
     cmd: list[str],
-    journal: str,
     *,
-    env: dict[str, str] | None = None,
+    restart: bool = False,
+    log_name: str | None = None,
 ) -> ManagedProcess:
-    log_writer = ProcessLogWriter(Path(journal) / "health" / f"{name}.log")
+    journal_path = _get_journal_path()
+    log_writer = ProcessLogWriter(journal_path / "health" / f"{(log_name or name)}.log")
     try:
         proc = subprocess.Popen(
             cmd,
@@ -89,7 +103,6 @@ def _launch_process(
             text=True,
             bufsize=1,
             start_new_session=True,
-            env=env,
         )
     except Exception:
         log_writer.close()
@@ -108,14 +121,21 @@ def _launch_process(
     ]
     for thread in threads:
         thread.start()
-    return ManagedProcess(process=proc, name=name, logger=log_writer, threads=threads)
+    return ManagedProcess(
+        process=proc,
+        name=name,
+        logger=log_writer,
+        cmd=list(cmd),
+        restart=restart,
+        threads=threads,
+    )
 
 
-def check_health(journal: str, threshold: int = DEFAULT_THRESHOLD) -> list[str]:
+def check_health(threshold: int = DEFAULT_THRESHOLD) -> list[str]:
     """Return a list of stale heartbeat names."""
     now = time.time()
     stale: list[str] = []
-    health_dir = Path(journal) / "health"
+    health_dir = _get_journal_path() / "health"
     for name in ("see", "hear"):
         path = health_dir / f"{name}.up"
         try:
@@ -136,14 +156,14 @@ def send_notification(message: str, command: str = "notify-send") -> None:
         logging.error("Failed to send notification: %s", exc)
 
 
-def run_process_day(journal: str) -> bool:
+def run_process_day() -> bool:
     """Run ``think.process_day`` while mirroring output to a dedicated log.
 
     Returns ``True`` when the subprocess exits successfully.
     """
 
     start = time.time()
-    managed = _launch_process("process_day", ["think-process-day", "-v"], journal)
+    managed = _launch_process("process_day", ["think-process-day", "-v"])
     try:
         return_code = managed.process.wait()
     finally:
@@ -154,12 +174,12 @@ def run_process_day(journal: str) -> bool:
     return return_code == 0
 
 
-def spawn_scheduled_agents(journal: str) -> None:
+def spawn_scheduled_agents() -> None:
     """Spawn agents that have schedule:daily in their metadata."""
     try:
         # Calculate yesterday's date
         yesterday = (datetime.now().date() - timedelta(days=1)).strftime("%Y-%m-%d")
-        
+
         agents = get_agents()
         for persona_id, config in agents.items():
             if config.get("schedule") == "daily":
@@ -191,7 +211,7 @@ def spawn_scheduled_agents(journal: str) -> None:
         logging.error(f"Failed to spawn scheduled agents: {e}")
 
 
-def start_runners(journal: str) -> list[ManagedProcess]:
+def start_runners() -> list[ManagedProcess]:
     """Launch hear and see runners with output logging."""
     procs: list[ManagedProcess] = []
     commands = {
@@ -199,29 +219,36 @@ def start_runners(journal: str) -> list[ManagedProcess]:
         "see": ["see-runner", "-v"],
     }
     for name, cmd in commands.items():
-        procs.append(_launch_process(name, cmd, journal))
+        procs.append(_launch_process(name, cmd))
     return procs
 
 
-def start_cortex_server(journal: str) -> ManagedProcess:
+def start_cortex_server() -> ManagedProcess:
     """Launch the Cortex WebSocket API server."""
     cmd = ["think-cortex", "-v"]
-    env = os.environ.copy()
-    env["JOURNAL_PATH"] = journal
-    return _launch_process("cortex", cmd, journal, env=env)
+    return _launch_process("cortex", cmd)
 
 
-def check_runner_exits(procs: list[ManagedProcess]) -> list[str]:
-    """Check if any runner processes have exited and return their names."""
-    exited = []
+def start_dream_server(verbose: bool) -> ManagedProcess:
+    """Launch the Dream web application with optional verbose logging."""
+
+    cmd = ["dream"]
+    if verbose:
+        cmd.append("-v")
+    return _launch_process("dream", cmd, restart=True)
+
+
+def check_runner_exits(procs: list[ManagedProcess]) -> list[ManagedProcess]:
+    """Return managed processes that have exited."""
+
+    exited: list[ManagedProcess] = []
     for managed in procs:
-        if managed.process.poll() is not None:  # Process has exited
-            exited.append(managed.name)
+        if managed.process.poll() is not None:
+            exited.append(managed)
     return exited
 
 
 def supervise(
-    journal: str,
     *,
     threshold: int = DEFAULT_THRESHOLD,
     interval: int = CHECK_INTERVAL,
@@ -244,16 +271,16 @@ def supervise(
         if procs:
             exited = check_runner_exits(procs)
             if exited:
-                msg = f"Runner process exited: {', '.join(sorted(exited))}"
+                exited_names = [managed.name for managed in exited]
+                msg = f"Runner process exited: {', '.join(sorted(exited_names))}"
                 logging.error(msg)
-                exit_key = ("runner_exit", tuple(sorted(exited)))
+                exit_key = ("runner_exit", tuple(sorted(exited_names)))
                 now = time.time()
 
                 if exit_key in alert_state:
                     last_time, backoff = alert_state[exit_key]
                     if now - last_time >= backoff:
                         send_notification(msg, command)
-                        # Double the backoff for next time, up to max
                         alert_state[exit_key] = (now, min(backoff * 2, max_backoff))
                         logging.info(
                             f"Alert sent, next backoff: {min(backoff * 2, max_backoff)}s"
@@ -265,7 +292,46 @@ def supervise(
                     send_notification(msg, command)
                     alert_state[exit_key] = (now, initial_backoff)
 
-        stale = check_health(journal, threshold)
+                for managed in exited:
+                    returncode = managed.process.returncode
+                    logging.info("%s exited with code %s", managed.name, returncode)
+                    try:
+                        index = procs.index(managed)
+                    except ValueError:
+                        index = None
+
+                    if index is not None:
+                        procs.pop(index)
+                    else:
+                        try:
+                            procs.remove(managed)
+                        except ValueError:
+                            pass
+
+                    managed.cleanup()
+
+                    if managed.restart and not shutdown_requested:
+                        logging.info("Restarting %s...", managed.name)
+                        try:
+                            new_proc = _launch_process(
+                                managed.name,
+                                managed.cmd,
+                                restart=True,
+                                log_name=managed.logger.path.stem,
+                            )
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logging.exception("Failed to restart %s: %s", managed.name, exc)
+                            continue
+
+                        insert_at = index if index is not None else len(procs)
+                        procs.insert(insert_at, new_proc)
+                        logging.info(
+                            "Restarted %s after exit code %s", managed.name, returncode
+                        )
+                    else:
+                        logging.info("Not restarting %s", managed.name)
+
+        stale = check_health(threshold)
         stale_set = set(stale)
 
         recovered = sorted(prev_stale - stale_set)
@@ -310,8 +376,8 @@ def supervise(
         prev_stale = stale_set
 
         if daily and datetime.now().date() != last_day:
-            if run_process_day(journal):
-                spawn_scheduled_agents(journal)
+            if run_process_day():
+                spawn_scheduled_agents()
             last_day = datetime.now().date()
 
         # Use shorter sleep intervals to check for shutdown
@@ -352,6 +418,11 @@ def parse_args() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not start the Cortex server (run it manually for debugging)",
     )
+    parser.add_argument(
+        "--no-dream",
+        action="store_true",
+        help="Do not start the Dream web application",
+    )
     return parser
 
 
@@ -365,12 +436,14 @@ def handle_shutdown(signum, frame):
 def main() -> None:
     parser = parse_args()
     args = setup_cli(parser)
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
+    try:
+        journal_path = _get_journal_path()
+    except RuntimeError:
         parser.error("JOURNAL_PATH not set")
+        return
 
     log_level = logging.DEBUG if args.debug else logging.INFO
-    log_path = Path(journal) / "health" / "supervisor.log"
+    log_path = journal_path / "health" / "supervisor.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logging.getLogger().handlers = []
     logging.basicConfig(
@@ -393,12 +466,13 @@ def main() -> None:
 
     procs: list[ManagedProcess] = []
     if not args.no_runners:
-        procs.extend(start_runners(journal))
+        procs.extend(start_runners())
     if not args.no_cortex:
-        procs.append(start_cortex_server(journal))
+        procs.append(start_cortex_server())
+    if not args.no_dream:
+        procs.append(start_dream_server(verbose=args.verbose))
     try:
         supervise(
-            journal,
             threshold=args.threshold,
             interval=args.interval,
             command=args.notify_cmd,
