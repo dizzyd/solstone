@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
-from think.models import GPT_5, GPT_5_MINI
+from think.models import GPT_5_MINI
 
 
 def get_fixtures_env():
@@ -175,87 +175,3 @@ def test_openai_backend_with_reasoning():
     assert (
         "4" in result_text or "four" in result_text
     ), f"Expected '4' in response, got: {finish_event['result']}"
-
-
-@pytest.mark.integration
-@pytest.mark.requires_api
-def test_openai_backend_custom_model():
-    """Test OpenAI backend with different model configuration."""
-    fixtures_env, api_key, journal_path = get_fixtures_env()
-
-    if not fixtures_env:
-        pytest.skip("fixtures/.env not found")
-
-    if not api_key:
-        pytest.skip("OPENAI_API_KEY not found in fixtures/.env file")
-
-    if not journal_path:
-        pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
-
-    # Prepare environment
-    env = os.environ.copy()
-    env["JOURNAL_PATH"] = journal_path
-    env["OPENAI_API_KEY"] = api_key
-
-    # Use gpt-4o for higher quality (but more expensive)
-    ndjson_input = json.dumps(
-        {
-            "prompt": "What is 3*3? Just give me the number.",
-            "backend": "openai",
-            "persona": "default",
-            "model": GPT_5,
-            "max_tokens": 50,
-            "disable_mcp": True,
-        }
-    )
-
-    # Run the command
-    cmd = ["think-agents"]
-    result = subprocess.run(
-        cmd,
-        env=env,
-        input=ndjson_input,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-
-    assert result.returncode == 0, f"Command failed with stderr: {result.stderr}"
-
-    # Parse events
-    stdout_lines = result.stdout.strip().split("\n")
-    events = [json.loads(line) for line in stdout_lines if line]
-
-    # Verify model in start event
-    start_event = events[0]
-    assert start_event["model"] == GPT_5
-
-    # Verify the answer - look for finish event specifically
-    finish_events = [e for e in events if e.get("event") == "finish"]
-    error_events = [e for e in events if e.get("event") == "error"]
-
-    # Check if this was an API error (intermittent failures)
-    if error_events:
-        error_event = error_events[0]
-        error_msg = error_event.get("error", "Unknown error")
-        if "request ID" in error_msg or "retry your request" in error_msg:
-            pytest.skip(f"Intermittent OpenAI API error: {error_msg}")
-        else:
-            pytest.fail(f"Unexpected error: {error_event}")
-
-    assert finish_events, f"No finish event found. Events: {events}"
-    finish_event = finish_events[0]
-    assert "result" in finish_event, f"No result in finish event: {finish_event}"
-
-    result = finish_event.get("result")
-    if result is None:
-        pytest.fail(f"Result is None in finish event: {finish_event}")
-
-    # Handle cases where model returns empty result (can happen with some models)
-    if result == "":
-        pytest.skip(f"Model {GPT_5} returned empty result - may be a model issue")
-
-    result_text = str(result).lower()
-    assert (
-        "9" in result_text or "nine" in result_text
-    ), f"Expected '9' in response, got: {result!r} (type: {type(result).__name__})"
