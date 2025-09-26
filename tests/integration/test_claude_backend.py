@@ -222,7 +222,7 @@ def test_claude_backend_with_tool_calls():
         tmpdir = Path(tmpdir)
 
         # Create a test file to read
-        test_file = journal_dir / "test_file.txt"
+        test_file = test_domain_dir / "test_file.txt"
         test_file.write_text("Hello from test file!")
 
         # Prepare environment
