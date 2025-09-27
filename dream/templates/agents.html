@@ -527,7 +527,7 @@ tr a:hover {
   display: block;
 }
 
-.plan-editor {
+.prompt-editor {
   width: 100%;
   min-height: 400px;
   border: 1px solid #ddd;
@@ -593,7 +593,7 @@ tr a:hover {
   margin-bottom: 1rem;
 }
 
-.plan-content {
+.prompt-content {
   background: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 4px;
@@ -1024,21 +1024,21 @@ tr a:hover {
     <form id="createPersonaForm" class="input-area">
       <input type="text" id="personaTitle" placeholder="Agent Title" required />
       <textarea id="personaInput" rows="8" placeholder="Describe what this agent should accomplish..." required></textarea>
-      <button type="submit" id="createPlanBtn">Create Plan</button>
+      <button type="submit" id="createPromptBtn">Create Prompt</button>
     </form>
     
     <!-- Planning Status -->
-    <div id="createPersonaPlanningStatus" class="planning-status">
-      <div>Creating execution plan...</div>
+    <div id="createPersonaPromptStatus" class="planning-status">
+      <div>Creating prompt...</div>
     </div>
     
     <!-- Result Area -->
     <div id="personaResult" style="display: none;">
-      <h3>Generated Plan</h3>
-      <div id="personaResultContent" class="plan-content"></div>
+      <h3>Generated Prompt</h3>
+      <div id="personaResultPromptContent" class="prompt-content"></div>
       <div class="modal-actions">
         <button onclick="saveNewPersona()">Save Agent</button>
-        <button onclick="editPersonaPlan()">Edit Plan</button>
+        <button onclick="editPersonaPrompt()">Edit Prompt</button>
       </div>
     </div>
   </div>
@@ -1058,7 +1058,7 @@ tr a:hover {
     <!-- Result Area -->
     <div id="topicResult" style="display: none;">
       <h3>Topic Content</h3>
-      <div id="topicResultContent" class="plan-content"></div>
+      <div id="topicResultContent" class="prompt-content"></div>
       <div class="modal-actions">
         <button onclick="saveNewTopic()">Save Topic</button>
         <button onclick="editTopicContent()">Edit Content</button>
@@ -1086,32 +1086,32 @@ tr a:hover {
 </div>
 
 <!-- Planning Modal -->
-<div id="planningModal" class="modal">
+<div id="promptModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closePlanningModal()">&times;</span>
+    <span class="close" onclick="closePromptModal()">&times;</span>
     <div class="modal-header">
-      <h3>Agent Execution Plan</h3>
+      <h3>Agent Prompt</h3>
     </div>
     <div class="modal-body">
       <!-- Tabs -->
       <div class="modal-tabs">
-        <button class="modal-tab active" onclick="switchTab('plan')">Edit Plan</button>
+        <button class="modal-tab active" onclick="switchTab('prompt')">Edit Prompt</button>
         <button class="modal-tab" onclick="switchTab('preview')">Preview</button>
         <button class="modal-tab" onclick="switchTab('config')">Configuration</button>
       </div>
       
       <!-- Tab Content -->
-      <div id="planTab" class="tab-content active">
-        <textarea id="planEditor" class="plan-editor" placeholder="Your execution plan will appear here..."></textarea>
+      <div id="promptTab" class="tab-content active">
+        <textarea id="promptEditor" class="prompt-editor" placeholder="Your execution prompt will appear here..."></textarea>
       </div>
       
       <div id="previewTab" class="tab-content">
-        <div id="planPreview" class="markdown-content"></div>
+        <div id="promptPreview" class="markdown-content"></div>
       </div>
       
       <div id="configTab" class="tab-content">
         <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
-          <em>Note: Plan generation uses Gemini. Configuration below applies to agent execution.</em>
+          <em>Note: Prompt generation uses Gemini. Configuration below applies to agent execution.</em>
         </p>
         
         <div class="config-section">
@@ -1478,7 +1478,7 @@ async function saveItemChanges() {
     document.getElementById('modalContent').style.display = 'block';
     document.getElementById('modalContentEdit').style.display = 'none';
     
-    // Refresh agent dropdown in planning modal if it's open (for agents only)
+    // Refresh agent dropdown in prompt modal if it's open (for agents only)
     if (currentEditingType === 'agent') {
       loadPersonas();
     }
@@ -1494,16 +1494,16 @@ async function saveItemChanges() {
 // Form submission - removed as agentForm doesn't exist in this template
 // The create agent functionality is handled by createPersonaForm instead
 
-// Show planning modal with plan
-function showPlanningModal(plan) {
-  const modal = document.getElementById('planningModal');
-  const editor = document.getElementById('planEditor');
+// Show prompt modal with prompt text
+function showPromptModal(promptText) {
+  const modal = document.getElementById('promptModal');
+  const editor = document.getElementById('promptEditor');
   
-  // Set the plan in the editor
-  editor.value = plan;
+  // Set the prompt in the editor
+  editor.value = promptText;
   
   // Update preview
-  updatePreview();
+  updatePromptPreview();
   
   // Load available agents
   loadPersonas();
@@ -1512,9 +1512,9 @@ function showPlanningModal(plan) {
   modal.style.display = 'block';
 }
 
-// Close planning modal
-function closePlanningModal() {
-  document.getElementById('planningModal').style.display = 'none';
+// Close prompt modal
+function closePromptModal() {
+  document.getElementById('promptModal').style.display = 'none';
 }
 
 // Switch between tabs
@@ -1533,20 +1533,20 @@ function switchTab(tabName) {
   
   // Update preview if switching to preview tab
   if (tabName === 'preview') {
-    updatePreview();
+    updatePromptPreview();
   }
 }
 
 // Update markdown preview
-function updatePreview() {
-  const editor = document.getElementById('planEditor');
-  const preview = document.getElementById('planPreview');
+function updatePromptPreview() {
+  const editor = document.getElementById('promptEditor');
+  const preview = document.getElementById('promptPreview');
   
   if (editor.value.trim()) {
     preview.innerHTML = marked.parse(editor.value);
   } else {
-    preview.innerHTML = '<p><em>No plan content to preview</em></p>';
-  }
+    preview.innerHTML = '<p><em>No prompt content to preview</em></p>';
+}
 }
 
 // Load available agents
@@ -1569,11 +1569,11 @@ function loadPersonas() {
     });
 }
 
-// Start agent with current plan and config
+// Start agent with current prompt and config
 async function startAgent() {
-  const plan = document.getElementById('planEditor').value.trim();
-  if (!plan) {
-    showError('Please provide a plan before starting the agent.');
+  const prompt = document.getElementById('promptEditor').value.trim();
+  if (!prompt) {
+    showError('Please provide a prompt before starting the agent.');
     return;
   }
   
@@ -1598,7 +1598,7 @@ async function startAgent() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        plan: plan,
+        prompt: prompt,
         backend: backend,
         config: config,
         persona: persona
@@ -1612,7 +1612,7 @@ async function startAgent() {
     }
     
     // Success - close modal and reload agents
-    closePlanningModal();
+    closePromptModal();
     loadAgentSessions();
     
     // Clear the input form
@@ -1876,9 +1876,9 @@ function openCreatePersonaModal() {
   
   // Reset form
   document.getElementById('createPersonaForm').reset();
-  document.getElementById('createPersonaPlanningStatus').classList.remove('show');
+  document.getElementById('createPersonaPromptStatus').classList.remove('show');
   document.getElementById('personaResult').style.display = 'none';
-  document.getElementById('createPlanBtn').disabled = false;
+  document.getElementById('createPromptBtn').disabled = false;
 }
 
 function closeCreatePersonaModal() {
@@ -1907,12 +1907,12 @@ document.getElementById('createPersonaForm').addEventListener('submit', async (e
   const title = document.getElementById('personaTitle').value.trim();
   const input = document.getElementById('personaInput').value.trim();
   const form = e.target;
-  const status = document.getElementById('createPersonaPlanningStatus');
-  const createBtn = document.getElementById('createPlanBtn');
+  const status = document.getElementById('createPersonaPromptStatus');
+  const createBtn = document.getElementById('createPromptBtn');
   
   if (!title || !input) return;
   
-  // Show planning status
+  // Show prompt generation status
   form.classList.add('busy');
   status.classList.add('show');
   createBtn.disabled = true;
@@ -1930,14 +1930,19 @@ document.getElementById('createPersonaForm').addEventListener('submit', async (e
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to create plan');
+      throw new Error(data.error || 'Failed to create prompt');
     }
     
-    // Show the generated plan
-    showPersonaResult(data.plan, title);
-    
+    const generatedPrompt = data.prompt || data.plan;
+    if (!generatedPrompt) {
+      throw new Error('No prompt returned by planner');
+    }
+
+    // Show the generated prompt
+    showPersonaPromptResult(generatedPrompt, title);
+
   } catch (error) {
-    showError('Error creating plan: ' + error.message);
+    showError('Error creating prompt: ' + error.message);
     createBtn.disabled = false;
   } finally {
     // Remove busy state
@@ -1946,24 +1951,24 @@ document.getElementById('createPersonaForm').addEventListener('submit', async (e
   }
 });
 
-function showPersonaResult(plan, title) {
+function showPersonaPromptResult(prompt, title) {
   const resultDiv = document.getElementById('personaResult');
-  const resultContent = document.getElementById('personaResultContent');
+  const resultContent = document.getElementById('personaResultPromptContent');
   
-  // Store plan and title for saving
-  window.currentPersonaPlan = plan;
+  // Store prompt and title for saving
+  window.currentPersonaPrompt = prompt;
   window.currentPersonaTitle = title;
   
-  // Display the plan
-  resultContent.textContent = plan;
+  // Display the prompt
+  resultContent.textContent = prompt;
   resultDiv.style.display = 'block';
   
   // Hide form
   document.getElementById('createPersonaForm').style.display = 'none';
 }
 
-function editPersonaPlan() {
-  const resultContent = document.getElementById('personaResultContent');
+function editPersonaPrompt() {
+  const resultContent = document.getElementById('personaResultPromptContent');
   
   // Convert to editable textarea
   const textarea = document.createElement('textarea');
@@ -1977,15 +1982,15 @@ function editPersonaPlan() {
   resultContent.innerHTML = '';
   resultContent.appendChild(textarea);
   
-  // Update the plan when editing
+  // Update the prompt when editing
   textarea.addEventListener('input', () => {
-    window.currentPersonaPlan = textarea.value;
+    window.currentPersonaPrompt = textarea.value;
   });
 }
 
 async function saveNewPersona() {
   const title = window.currentPersonaTitle;
-  const content = window.currentPersonaPlan;
+  const content = window.currentPersonaPrompt;
   
   if (!title || !content) {
     showError('Missing title or content');
@@ -2120,15 +2125,15 @@ async function saveNewTopic() {
 // Update modal close handlers
 window.onclick = function(event) {
   const itemModal = document.getElementById('itemModal');
-  const planningModal = document.getElementById('planningModal');
+  const promptModal = document.getElementById('promptModal');
   const createPersonaModal = document.getElementById('createPersonaModal');
   const createTopicModal = document.getElementById('createTopicModal');
   
   if (event.target == itemModal) {
     closeItemModal();
   }
-  if (event.target == planningModal) {
-    planningModal.style.display = 'none';
+  if (event.target == promptModal) {
+    promptModal.style.display = 'none';
   }
   if (event.target == createPersonaModal) {
     createPersonaModal.style.display = 'none';

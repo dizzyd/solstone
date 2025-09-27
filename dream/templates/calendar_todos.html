@@ -494,6 +494,9 @@
       <p>Add a new entry above to start the checklist.</p>
     </div>
   {% endif %}
+  <div class="todo-weekly-launch">
+    <button type="button" id="runWeeklyScoutBtn">Look for more TODOs</button>
+  </div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -503,6 +506,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var closeActiveMove = null;
   var moveEndpoint = {{ url_for('todos.move_todo', day=day)|tojson }};
   var currentDay = {{ day|tojson }};
+  var startAgentEndpoint = {{ url_for('agents.start_agent')|tojson }};
 
   if (addForm) {
     var addInput = addForm.querySelector('input[name="text"]');
@@ -971,6 +975,65 @@ document.addEventListener('DOMContentLoaded', function () {
       submitMove(moveDate.value);
     });
   });
+
+  var weeklyScoutBtn = document.getElementById('runWeeklyScoutBtn');
+  if (weeklyScoutBtn) {
+    weeklyScoutBtn.addEventListener('click', async function () {
+      if (weeklyScoutBtn.disabled) {
+        return;
+      }
+
+      var extra = window.prompt('Add optional instructions for the Weekly Scout (leave blank to skip):');
+      if (extra === null) {
+        return;
+      }
+
+      var promptLines = [
+        'Run the TODO Weekly Scout for journal day ' + currentDay + '.',
+        'Follow the weekly audit procedure to review the past seven days, validate completions, and add up to five high-impact todos for today.'
+      ];
+
+      if (extra && extra.trim()) {
+        promptLines.push('Additional operator guidance: ' + extra.trim());
+      }
+
+      var originalText = weeklyScoutBtn.textContent;
+      weeklyScoutBtn.disabled = true;
+      weeklyScoutBtn.textContent = 'Running Weekly TODO Scout';
+
+      try {
+        var response = await fetch(startAgentEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            prompt: promptLines.join('\n\n'),
+            persona: 'todo_weekly'
+          })
+        });
+
+        var data;
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          data = {};
+        }
+
+        if (!response.ok || !data || !data.success) {
+          var message = data && data.error ? data.error : 'Unable to start Weekly Scout';
+          throw new Error(message);
+        }
+
+        weeklyScoutBtn.textContent = 'Weekly Scout queued';
+      } catch (error) {
+        weeklyScoutBtn.disabled = false;
+        weeklyScoutBtn.textContent = originalText;
+        var reason = error && error.message ? error.message : String(error);
+        window.alert('Failed to start Weekly Scout: ' + reason);
+      }
+    });
+  }
 });
 </script>
 {% endblock %}

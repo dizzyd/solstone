@@ -200,7 +200,7 @@ def _get_agents_list(agent_type: str) -> object:
 
 @bp.route("/agents/api/plan", methods=["POST"])
 def create_plan() -> object:
-    """Create a plan from user input using the planner agent."""
+    """Create a prompt from user input using the planner agent."""
     data = request.get_json()
     if not data or not data.get("request"):
         return jsonify({"error": "Request is required"}), 400
@@ -217,12 +217,12 @@ def create_plan() -> object:
         )
         from think.planner import generate_plan
 
-        # Generate the plan (synchronous)
+        # Generate the prompt (synchronous)
         if model:
-            plan = generate_plan(user_request, model=model)
+            prompt_text = generate_plan(user_request, model=model)
         else:
-            plan = generate_plan(user_request)
-        return jsonify({"plan": plan})
+            prompt_text = generate_plan(user_request)
+        return jsonify({"prompt": prompt_text, "plan": prompt_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -303,12 +303,17 @@ def update_agent(agent_id: str) -> object:
 
 @bp.route("/agents/api/start", methods=["POST"])
 def start_agent() -> object:
-    """Start a new agent with the given plan and configuration."""
+    """Start a new agent with the given prompt and configuration."""
     data = request.get_json()
-    if not data or not data.get("plan"):
-        return jsonify({"error": "Plan is required"}), 400
+    if not data:
+        return jsonify({"error": "Prompt is required"}), 400
 
-    plan = data["plan"]
+    plan = (data.get("plan") or "").strip()
+    prompt = (data.get("prompt") or "").strip()
+    prompt_value = prompt or plan
+
+    if not prompt_value:
+        return jsonify({"error": "Prompt is required"}), 400
     backend = data.get("backend", "openai")
     persona = data.get("persona", "default")
     config = data.get("config", {})
@@ -319,7 +324,7 @@ def start_agent() -> object:
 
         # Create the agent request
         request_file = cortex_request(
-            prompt=plan,
+            prompt=prompt_value,
             persona=persona,
             backend=backend,
             config=config,
