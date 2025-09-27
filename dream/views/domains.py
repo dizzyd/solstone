@@ -560,13 +560,14 @@ def get_domain_news_feed(domain_name: str) -> Any:
     """Return paginated news entries for a domain."""
 
     cursor = request.args.get("cursor")
+    day = request.args.get("day")
     # Default to 5 newsletters for initial load, 5 more for "load more"
     limit = request.args.get("days", default=5, type=int) or 5
     if limit < 0:
         limit = 5
 
     try:
-        news_payload = get_domain_news(domain_name, cursor=cursor, limit=limit)
+        news_payload = get_domain_news(domain_name, cursor=cursor, limit=limit, day=day)
         return jsonify(news_payload)
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 500

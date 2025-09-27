@@ -248,61 +248,6 @@
   border-bottom-color: #667eea;
 }
 
-.news-entry {
-  background: white;
-  border-radius: 12px;
-  padding: 1.2em 1.4em;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  border: 1px solid #eef2ff;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6em;
-}
-
-.news-entry-title {
-  margin: 0;
-  font-size: 1.15em;
-  color: #1f2933;
-}
-
-.news-entry-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75em;
-  font-size: 0.9em;
-  color: #5a6270;
-}
-
-.news-entry-meta span::before {
-  content: '·';
-  margin-right: 0.4em;
-  color: #c4c8d4;
-}
-
-.news-entry-meta span:first-child::before {
-  content: '';
-  margin-right: 0;
-}
-
-.news-entry-paragraph {
-  margin: 0;
-  line-height: 1.6;
-  color: #3d4551;
-}
-
-.news-entry-impact {
-  background: #fff8e1;
-  border-left: 4px solid #ffb300;
-  padding: 0.75em 1em;
-  border-radius: 8px;
-  font-size: 0.95em;
-  color: #8c6d1f;
-}
-
-.news-entry-impact strong {
-  color: #775a0a;
-}
-
 .news-load-more {
   text-align: center;
   margin-top: 1.5em;
@@ -1329,10 +1274,9 @@ function appendNewsDay(day) {
 
   const header = document.createElement('h3');
   header.className = 'news-day-header';
-  header.textContent = day.friendly_date || formatNewsDateKey(day.date);
+  header.textContent = formatNewsDateKey(day.date);
   section.appendChild(header);
 
-  // If we have raw markdown content, render that instead of parsed entries
   if (day.raw_content) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'newsletter-content';
@@ -1352,57 +1296,6 @@ function appendNewsDay(day) {
     // Render markdown to HTML
     contentDiv.innerHTML = marked.parse(content);
     section.appendChild(contentDiv);
-  } else if (day.entries && day.entries.length > 0) {
-    // Fallback to the old parsed entries format
-    const entries = Array.isArray(day.entries) ? day.entries : [];
-    entries.forEach(entry => {
-      const article = document.createElement('article');
-      article.className = 'news-entry';
-
-      const titleEl = document.createElement('h4');
-      titleEl.className = 'news-entry-title';
-      titleEl.textContent = entry.title || 'Untitled news item';
-      article.appendChild(titleEl);
-
-      const metaParts = [];
-      if (entry.source) {
-        metaParts.push(entry.source);
-      }
-      if (entry.time) {
-        metaParts.push(entry.time);
-      }
-
-      if (metaParts.length > 0) {
-        const metaDiv = document.createElement('div');
-        metaDiv.className = 'news-entry-meta';
-        metaParts.forEach(part => {
-          const span = document.createElement('span');
-          span.textContent = part;
-          metaDiv.appendChild(span);
-        });
-        article.appendChild(metaDiv);
-      }
-
-      const paragraphs = Array.isArray(entry.paragraphs) ? entry.paragraphs : [];
-      paragraphs.forEach(paragraph => {
-        const p = document.createElement('p');
-        p.className = 'news-entry-paragraph';
-        p.textContent = paragraph;
-        article.appendChild(p);
-      });
-
-      if (entry.impact) {
-        const impactDiv = document.createElement('div');
-        impactDiv.className = 'news-entry-impact';
-        const impactLabel = document.createElement('strong');
-        impactLabel.textContent = 'Impact:';
-        impactDiv.appendChild(impactLabel);
-        impactDiv.appendChild(document.createTextNode(' ' + entry.impact));
-        article.appendChild(impactDiv);
-      }
-
-      section.appendChild(article);
-    });
   } else {
     const emptyNotice = document.createElement('div');
     emptyNotice.className = 'no-entities';
