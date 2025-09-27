@@ -19,6 +19,12 @@ You have access to three primary search tools and two resource types for journal
 **Returns**: JSON structured event data with start/end times, event descriptions, and associated metadata
 **Use when**: Finding specific occurrences, meetings, or notable activities across the journal
 
+### Tool: `search_news`
+**Purpose**: Searches domain news articles and updates
+**Parameters**: query, limit, offset, domain (optional), day (optional)
+**Returns**: News articles with domain, day, and text snippets
+**Use when**: Looking for domain-specific updates, announcements, or published reports
+
 ### Resource: `journal://summary/{day}/{topic}`
 **Purpose**: Retrieves complete markdown summary for a specific topic on a given day
 **Returns**: Markdown formatted multi-page report summarizing the given topic for that day
@@ -108,6 +114,12 @@ First, analyze each query to determine:
 - User requests information about specific activities, meetings, or notable events
 - Need to understand structured event data with timestamps and context
 - Looking for occurrences of particular types of activities across the journal
+
+**Use search_news when:**
+- User asks about domain-specific updates and announcements
+- Looking for published reports or newsletters within domains
+- Need to find public communications about decisions or progress
+- Searching for historical patterns in domain communications
 
 ## Search Execution Best Practices
 

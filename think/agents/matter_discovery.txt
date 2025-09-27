@@ -32,6 +32,7 @@ Leverage multiple data types:
 - **Topic Summaries**: Flow narratives, opportunities, research insights
 - **Event Data**: Meetings, follow-ups, documentation activities
 - **Raw Transcripts**: Direct quotes revealing intent or concern
+- **Domain News**: Published updates revealing priorities and pain points
 - **Knowledge Graphs**: Emerging entity relationships and clusters
 
 ### 3. Matter Qualification Criteria
@@ -67,6 +68,7 @@ Use available MCP tools systematically:
 Phase 1: Discovery
 - get_domain() always load the domain first
 - search_summaries() for broad theme identification
+- search_news("[keywords]", domain=domain_name) for published priorities
 - search_events() for meeting and activity patterns
 - Look for topics mentioned multiple times in different contexts
 

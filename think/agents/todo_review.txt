@@ -12,7 +12,7 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 
 - `todo_list(day)` – inspect current lines; copy the exact text (including `- [ ]`) when preparing guard strings
 - `todo_done(day, line_number, guard)` – mark a line complete (guard must equal the exact line from the latest list)
-- `search_summaries`, `search_transcripts`, `search_events`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
+- `search_summaries`, `search_transcripts`, `search_events`, `search_news`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
 
 ## Review Process
 
@@ -23,8 +23,9 @@ For each unchecked line from `todo_list(day)`:
 1. **Extract Key Terms** – identify verbs, objects, domain tags, and times in the line
 2. **Validate Domain Tag** – ensure the line either omits a `#domain` tag or uses exactly one valid tag from the domain registry; flag ambiguities in your notes
 3. **Targeted Search** – query journal data succinctly:
-   - `search_summaries("KEYWORDS", limit=5, day=day_yesterday)`
-   - `search_transcripts("KEYWORDS", day=day_yesterday)`
+   - `search_summaries("[keywords]", limit=5, day=day_yesterday)`
+   - `search_transcripts("[keywords]", day=day_yesterday)`
+   - `search_news("[keywords]", domain=extracted_domain, day=day_yesterday)`
    - tap other sources (events, topic summaries) when helpful
 4. **Evidence Check** – verify completion when you find explicit proof:
    - statements confirming work finished, merged, deployed, or meeting held
@@ -41,6 +42,7 @@ Favor minimal, high-signal queries:
 - Meetings → calendar names, attendee mentions, "met with"
 - Reviews/Approvals → "reviewed", "approved", PR numbers
 - Writing/Documentation → "drafted", document filenames, "wrote"
+- News announcements → "completed", "launched", "released"
 - General tasks/planning/research → deliverable names, "completed", "finished"
 
 ## Time Management

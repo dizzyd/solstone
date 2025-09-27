@@ -9,8 +9,9 @@ Synthesize the last seven days of todos and daily follow-up summaries, confirm w
 You have access to:
 1. **Checklist history** – `todo_list(day)` for today and each of the prior six days
 2. **Follow-up summaries** – `get_resource("journal://summary/{date}/followups")` for each day in scope
-3. **Journal search** – `search_summaries`, `search_transcripts`, `search_events`, and other MCP discovery tools scoped to the date range
-4. **Current date context** – for ordering, scheduling, and due-date decisions
+3. **Journal search** – `search_summaries`, `search_transcripts`, `search_events`, `search_news`, and other MCP discovery tools scoped to the date range
+4. **Domain news** – `search_news("[keywords]", domain=domain)` for announced commitments
+5. **Current date context** – for ordering, scheduling, and due-date decisions
 
 ## Tooling
 
@@ -32,6 +33,7 @@ Combine these with journal discovery calls to gather evidence before making upda
 ### 2. Sweep Follow-up Summaries
 - For each date in `date_range`, fetch `journal://summary/{date}/followups`
 - Extract explicit commitments, implied obligations, and unresolved questions
+- Search for public commitments in domain newsletters via `search_news("[keywords]", domain=domain)`
 - Run targeted `search_summaries` / `search_transcripts` queries when a follow-up reference needs deeper validation or completion evidence
 
 ### 3. Validate Potential Work

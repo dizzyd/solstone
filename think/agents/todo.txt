@@ -46,7 +46,10 @@ Priority Discovery:
 4. search_transcripts("TODO OR FIXME", day={yesterday})
    → Catch technical debt and verbal commitments
 
-5. search_events(...) and additional targeted queries as needed
+5. search_news("[keywords]", domain=relevant_domain, limit=5)
+   → Check domain news for announced commitments
+
+6. search_events(...) and additional targeted queries as needed
 ```
 
 ### Phase 3: Task Qualification

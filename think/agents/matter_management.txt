@@ -53,6 +53,7 @@ Use MCP tools to find matter-relevant activity:
 ```
 Phase 1: Broad Discovery
 - search_summaries("[matter keywords]", limit=20) for recent mentions
+- search_news("[matter keywords]", domain=relevant_domain) for public updates
 - search_events() for related meetings or discussions
 - Focus on last 7-14 days for current activity
 
@@ -246,6 +247,7 @@ Structure your matter review as:
 - **[Date] [Topic]**: [Relevant excerpt or summary]
 - **[Date] Meeting**: [Decision or discussion point]
 - **[Date] Work Session**: [Progress or discovery]
+- **[Date] News**: [Progress announced in domain news if applicable]
 
 ### Metrics & Indicators
 - [Quantifiable progress markers]
