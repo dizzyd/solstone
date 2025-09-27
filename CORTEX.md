@@ -242,6 +242,11 @@ The `.json` file for a persona can include:
   - String: Tool pack name (e.g., "default", "journal") - expanded via `get_tools()`
   - Array: Explicit list of tool names (e.g., `["search_summaries", "get_domain"]`)
   - If omitted, defaults to "default" pack
+- `schedule`: Scheduling configuration for automated execution
+  - `"daily"`: Run automatically at midnight each day
+- `priority`: Execution order for scheduled agents (integer, default: 50)
+  - Lower numbers run first (e.g., priority 10 runs before priority 50)
+  - Used to control the order when multiple agents have the same schedule
 
 ## MCP Tools Integration
 
