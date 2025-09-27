@@ -237,9 +237,15 @@ async def run_agent(
             )
 
         agent_id = str(config.get("agent_id", "")).strip()
+        persona = str(config.get("persona", "")).strip()
         mcp_params = {"url": http_uri}
+        headers: dict[str, str] = {}
         if agent_id:
-            mcp_params["headers"] = {"X-Agent-Id": agent_id}
+            headers["X-Agent-Id"] = agent_id
+        if persona:
+            headers["X-Agent-Persona"] = persona
+        if headers:
+            mcp_params["headers"] = headers
 
         mcp_server = MCPServerStreamableHttp(
             params=mcp_params,

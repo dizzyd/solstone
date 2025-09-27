@@ -119,6 +119,39 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
     assert DummyRunner.called
 
 
+def test_openai_mcp_headers(monkeypatch, tmp_path):
+    last_kwargs, DummyRunner = _setup_openai_mocks(monkeypatch, tmp_path)
+    DummyRunner.events_to_stream = []
+    last_kwargs.clear()
+
+    importlib.reload(importlib.import_module("think.openai"))
+    mod = importlib.reload(importlib.import_module("think.agents"))
+
+    journal = tmp_path / "journal"
+    journal.mkdir()
+    (journal / "agents").mkdir()
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+
+    ndjson_input = json.dumps(
+        {
+            "prompt": "audit headers",
+            "backend": "openai",
+            "persona": "investigator",
+            "agent_id": "999",
+            "mcp_server_url": "http://localhost:5173/mcp",
+        }
+    )
+    asyncio.run(run_main(mod, ["think-agents"], stdin_data=ndjson_input))
+
+    mcp_kwargs = last_kwargs.get("mcp_server")
+    assert mcp_kwargs is not None
+    headers = mcp_kwargs["params"].get("headers", {})
+    assert headers["X-Agent-Id"] == "999"
+    assert headers["X-Agent-Persona"] == "investigator"
+
+
 def test_openai_outfile(monkeypatch, tmp_path, capsys):
     last_kwargs, DummyRunner = _setup_openai_mocks(monkeypatch, tmp_path)
     DummyRunner.events_to_stream = []  # Reset for this test

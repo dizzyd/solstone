@@ -77,13 +77,16 @@ def install_agents_stub():
     agents_stub.ModelSettings = agents_model_settings_stub.ModelSettings
 
     class DummyMCPServer:
+        def __init__(self, *_, **kwargs):
+            last_kwargs["mcp_server"] = kwargs
+
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
             pass
 
-    agents_mcp_server_stub.MCPServerStreamableHttp = lambda **kwargs: DummyMCPServer()
+    agents_mcp_server_stub.MCPServerStreamableHttp = DummyMCPServer
 
     agents_items_stub.MessageOutputItem = SimpleNamespace
     agents_items_stub.ToolCallItem = SimpleNamespace
