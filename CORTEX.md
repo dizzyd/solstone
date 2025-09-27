@@ -247,6 +247,10 @@ The `.json` file for a persona can include:
 - `priority`: Execution order for scheduled agents (integer, default: 50)
   - Lower numbers run first (e.g., priority 10 runs before priority 50)
   - Used to control the order when multiple agents have the same schedule
+- `multi_domain`: Boolean flag for domain-aware agents (default: false)
+  - When true, the agent is spawned once for each domain in the journal
+  - Each instance receives a domain-specific prompt with the domain name
+  - Useful for creating per-domain reports, newsletters, or analyses
 
 ## MCP Tools Integration
 
@@ -281,6 +285,34 @@ All backends:
 - Use consistent event structures across providers
 - Process events are written to stdout for Cortex to capture
 
+## Scheduled Agents
+
+The supervisor automatically runs agents with `"schedule": "daily"` at midnight each day:
+
+### Execution Order
+Scheduled agents run in priority order (lower numbers first):
+1. Agents are sorted by their `priority` field (default: 50)
+2. Agents with the same priority run in alphabetical order by filename
+3. Each agent completes before the next begins
+
+### Multi-Domain Agents
+When an agent has `"multi_domain": true`:
+1. The agent is spawned once for each domain in `<journal>/domains/`
+2. Each instance receives a prompt including the domain name
+3. The agent should call `get_domain(domain_name)` to load domain context
+4. This enables per-domain reports, newsletters, and analyses
+
+Example configuration:
+```json
+{
+  "title": "Domain Newsletter Generator",
+  "schedule": "daily",
+  "priority": 10,
+  "multi_domain": true,
+  "tools": "journal,domains"
+}
+```
+
 ## Process Management
 
 The `think-supervisor` command provides process management for the Cortex ecosystem:
@@ -288,5 +320,6 @@ The `think-supervisor` command provides process management for the Cortex ecosys
 - Starts and monitors the MCP tools HTTP server
 - Handles process restarts on failure
 - Monitors system health indicators
+- Executes scheduled agents at midnight each day
 
 This is distinct from agent lifecycle management, which Cortex handles internally through file state transitions.
