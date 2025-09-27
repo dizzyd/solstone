@@ -116,7 +116,7 @@ def search_news(
     cursor = conn.execute(
         f"""
         SELECT content, domain, day, bm25(news_text) as rank
-        FROM news_text WHERE {where_clause} ORDER BY rank LIMIT ? OFFSET ?
+        FROM news_text WHERE {where_clause} ORDER BY day DESC LIMIT ? OFFSET ?
         """,
         params + [limit, offset],
     )
