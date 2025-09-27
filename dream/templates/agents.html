@@ -715,6 +715,226 @@ tr a:hover {
   line-height: 1.5;
   resize: vertical;
 }
+
+/* Tools Tab Styles */
+.tools-container {
+  padding: 1rem 0;
+}
+
+.tools-header {
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tools-search {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.tools-search:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+.pack-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pack-filter-btn {
+  padding: 0.5rem 1rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.pack-filter-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.pack-filter-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.pack-filter-btn .count {
+  margin-left: 0.3rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.tools-grid {
+  display: grid;
+  gap: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.tool-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tool-card:hover {
+  border-color: #007bff;
+  box-shadow: 0 4px 12px rgba(0,123,255,0.1);
+  transform: translateY(-2px);
+}
+
+.tool-card.hidden {
+  display: none;
+}
+
+.tool-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.tool-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.tool-packs {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.tool-pack-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.tool-description {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.tool-params {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 1rem;
+  margin-top: auto;
+}
+
+.tool-params-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 0.5rem;
+}
+
+.param-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.param-item {
+  display: flex;
+  align-items: start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.param-name {
+  font-family: 'Monaco', 'Menlo', monospace;
+  background: #f8f9fa;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  color: #d63384;
+  white-space: nowrap;
+}
+
+.param-required {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.param-optional {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.param-type {
+  color: #0969da;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.85rem;
+}
+
+.param-description {
+  color: #666;
+  flex: 1;
+}
+
+.loading-spinner {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+  font-style: italic;
+}
+
+.tools-empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.tools-empty-state h3 {
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+/* Collapsible parameters */
+.tool-params.collapsed .param-list {
+  display: none;
+}
+
+.tool-params-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.tool-params-toggle::before {
+  content: '▼';
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.tool-params.collapsed .tool-params-toggle::before {
+  transform: rotate(-90deg);
+}
 </style>
 {% endblock %}
 {% block body %}
@@ -725,6 +945,7 @@ tr a:hover {
     <button class="tab-button active" onclick="switchMainTab('log')">Log</button>
     <button class="tab-button" onclick="switchMainTab('agents')">Agents</button>
     <button class="tab-button" onclick="switchMainTab('topics')">Topics</button>
+    <button class="tab-button" onclick="switchMainTab('tools')">Tools</button>
   </div>
   
   <!-- Tab Content -->
@@ -775,7 +996,23 @@ tr a:hover {
     <div id="topicsTab" class="main-tab-content">
       <div id="topicCards" class="agent-cards"></div>
     </div>
-    
+
+    <!-- Tools Tab -->
+    <div id="toolsTab" class="main-tab-content">
+      <div class="tools-container">
+        <!-- Tools Filter/Search -->
+        <div class="tools-header">
+          <input type="text" id="toolsSearch" placeholder="Search tools..." class="tools-search" />
+          <div class="pack-filters" id="packFilters"></div>
+        </div>
+
+        <!-- Tools Grid -->
+        <div id="toolsGrid" class="tools-grid">
+          <div class="loading-spinner">Loading tools...</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -915,10 +1152,13 @@ tr a:hover {
 <script>
 let availableAgents = [];
 let availableTopics = [];
+let availableTools = [];
+let toolPacks = {};
 let currentMainTab = 'log';
 let currentEditingItem = null;
 let currentEditingType = null; // 'agent' or 'topic'
 let isEditMode = false;
+let activePackFilter = 'all';
 
 // Switch between main tabs
 function switchMainTab(tabName) {
@@ -949,6 +1189,11 @@ function switchMainTab(tabName) {
     stopAutoRefresh();
     if (!document.getElementById('topicCards').children.length) {
       loadAvailableTopics();
+    }
+  } else if (tabName === 'tools') {
+    stopAutoRefresh();
+    if (availableTools.length === 0) {
+      loadAvailableTools();
     }
   }
 }
@@ -1981,6 +2226,264 @@ async function toggleTopicState() {
   } finally {
     toggleBtn.disabled = false;
   }
+}
+
+// Load available tools and render them
+function loadAvailableTools() {
+  fetch('{{ url_for('agents.available_tools') }}')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('toolsGrid').innerHTML = `
+          <div class="tools-empty-state">
+            <h3>Error Loading Tools</h3>
+            <p>${data.error}</p>
+          </div>
+        `;
+        return;
+      }
+
+      availableTools = data.tools || [];
+      toolPacks = data.packs || {};
+      renderPackFilters();
+      renderToolsGrid();
+      setupToolsSearch();
+    })
+    .catch(err => {
+      console.error('Failed to load tools:', err);
+      document.getElementById('toolsGrid').innerHTML = `
+        <div class="tools-empty-state">
+          <h3>Failed to Load Tools</h3>
+          <p>Please ensure the MCP tools server is configured correctly.</p>
+        </div>
+      `;
+    });
+}
+
+// Render pack filter buttons
+function renderPackFilters() {
+  const container = document.getElementById('packFilters');
+  container.innerHTML = '';
+
+  // All tools button
+  const allBtn = document.createElement('button');
+  allBtn.className = 'pack-filter-btn active';
+  allBtn.innerHTML = `All<span class="count">${availableTools.length}</span>`;
+  allBtn.onclick = () => filterByPack('all');
+  container.appendChild(allBtn);
+
+  // Pack-specific buttons
+  Object.entries(toolPacks).forEach(([packName, packInfo]) => {
+    const btn = document.createElement('button');
+    btn.className = 'pack-filter-btn';
+    btn.innerHTML = `${packInfo.name}<span class="count">${packInfo.tools.length}</span>`;
+    btn.title = packInfo.description;
+    btn.onclick = () => filterByPack(packName);
+    container.appendChild(btn);
+  });
+
+  // Uncategorized button (tools not in any pack)
+  const uncategorized = availableTools.filter(t => t.packs.length === 0);
+  if (uncategorized.length > 0) {
+    const uncatBtn = document.createElement('button');
+    uncatBtn.className = 'pack-filter-btn';
+    uncatBtn.innerHTML = `Other<span class="count">${uncategorized.length}</span>`;
+    uncatBtn.onclick = () => filterByPack('uncategorized');
+    container.appendChild(uncatBtn);
+  }
+}
+
+// Filter tools by pack
+function filterByPack(pack) {
+  activePackFilter = pack;
+
+  // Update button states
+  document.querySelectorAll('.pack-filter-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+
+  // Apply filter
+  applyToolsFilter();
+}
+
+// Apply search and pack filters
+function applyToolsFilter() {
+  const searchTerm = document.getElementById('toolsSearch').value.toLowerCase();
+  const cards = document.querySelectorAll('.tool-card');
+
+  cards.forEach(card => {
+    const toolName = card.dataset.toolName;
+    const tool = availableTools.find(t => t.name === toolName);
+    if (!tool) return;
+
+    // Check pack filter
+    let packMatch = true;
+    if (activePackFilter !== 'all') {
+      if (activePackFilter === 'uncategorized') {
+        packMatch = tool.packs.length === 0;
+      } else {
+        packMatch = tool.packs.includes(activePackFilter);
+      }
+    }
+
+    // Check search filter
+    let searchMatch = true;
+    if (searchTerm) {
+      searchMatch = tool.name.toLowerCase().includes(searchTerm) ||
+                   (tool.description && tool.description.toLowerCase().includes(searchTerm));
+    }
+
+    // Show/hide card
+    if (packMatch && searchMatch) {
+      card.classList.remove('hidden');
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+}
+
+// Setup search functionality
+function setupToolsSearch() {
+  const searchInput = document.getElementById('toolsSearch');
+  searchInput.addEventListener('input', applyToolsFilter);
+}
+
+// Render tools grid
+function renderToolsGrid() {
+  const container = document.getElementById('toolsGrid');
+  container.innerHTML = '';
+
+  if (availableTools.length === 0) {
+    container.innerHTML = `
+      <div class="tools-empty-state">
+        <h3>No Tools Available</h3>
+        <p>MCP tools will appear here once configured.</p>
+      </div>
+    `;
+    return;
+  }
+
+  availableTools.forEach(tool => {
+    const card = createToolCard(tool);
+    container.appendChild(card);
+  });
+}
+
+// Create a tool card element
+function createToolCard(tool) {
+  const card = document.createElement('div');
+  card.className = 'tool-card';
+  card.dataset.toolName = tool.name;
+
+  // Header with name and pack badges
+  const header = document.createElement('div');
+  header.className = 'tool-header';
+
+  const name = document.createElement('h3');
+  name.className = 'tool-name';
+  name.textContent = tool.name;
+  header.appendChild(name);
+
+  if (tool.packs && tool.packs.length > 0) {
+    const packs = document.createElement('div');
+    packs.className = 'tool-packs';
+    tool.packs.forEach(packName => {
+      const badge = document.createElement('span');
+      badge.className = 'tool-pack-badge';
+      badge.textContent = packName;
+      packs.appendChild(badge);
+    });
+    header.appendChild(packs);
+  }
+
+  card.appendChild(header);
+
+  // Description
+  const desc = document.createElement('div');
+  desc.className = 'tool-description';
+  desc.innerHTML = marked.parse(tool.description || 'No description available');
+  card.appendChild(desc);
+
+  // Parameters (if available)
+  if (tool.input_schema && tool.input_schema.properties) {
+    const params = createParametersSection(tool.input_schema);
+    if (params) {
+      card.appendChild(params);
+    }
+  }
+
+  return card;
+}
+
+// Create parameters section for a tool
+function createParametersSection(schema) {
+  const properties = schema.properties || {};
+  const required = schema.required || [];
+
+  if (Object.keys(properties).length === 0) {
+    return null;
+  }
+
+  const section = document.createElement('div');
+  section.className = 'tool-params';
+
+  const title = document.createElement('div');
+  title.className = 'tool-params-toggle tool-params-title';
+  title.textContent = `Parameters (${Object.keys(properties).length})`;
+  title.onclick = () => section.classList.toggle('collapsed');
+  section.appendChild(title);
+
+  const list = document.createElement('div');
+  list.className = 'param-list';
+
+  Object.entries(properties).forEach(([paramName, paramSchema]) => {
+    const item = document.createElement('div');
+    item.className = 'param-item';
+
+    const name = document.createElement('span');
+    name.className = 'param-name';
+    name.textContent = paramName;
+    item.appendChild(name);
+
+    // Required/optional indicator
+    const reqSpan = document.createElement('span');
+    if (required.includes(paramName)) {
+      reqSpan.className = 'param-required';
+      reqSpan.textContent = '*';
+    } else {
+      reqSpan.className = 'param-optional';
+      reqSpan.textContent = '(optional)';
+    }
+    item.appendChild(reqSpan);
+
+    // Type
+    if (paramSchema.type) {
+      const type = document.createElement('span');
+      type.className = 'param-type';
+      type.textContent = `[${paramSchema.type}]`;
+      item.appendChild(type);
+    }
+
+    // Description
+    if (paramSchema.description) {
+      const desc = document.createElement('span');
+      desc.className = 'param-description';
+      desc.textContent = paramSchema.description;
+      item.appendChild(desc);
+    }
+
+    list.appendChild(item);
+  });
+
+  section.appendChild(list);
+
+  // Start collapsed if more than 3 parameters
+  if (Object.keys(properties).length > 3) {
+    section.classList.add('collapsed');
+  }
+
+  return section;
 }
 
 // Initialize - The Log tab is shown by default now

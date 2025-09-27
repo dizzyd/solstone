@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # Removed asyncio - no longer needed
+import asyncio
 import json
 import os
 
@@ -381,3 +382,78 @@ def toggle_topic(topic_id: str) -> object:
         return jsonify({"success": True, "disabled": topic_config["disabled"]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/agents/api/tools")
+def available_tools() -> object:
+    """Return list of available MCP tools from think.mcp_tools."""
+    try:
+        from think.mcp_tools import TOOL_PACKS, mcp
+
+        # Get all tools asynchronously
+        async def get_all_tools():
+            tools = await mcp.get_tools()
+            return tools
+
+        tools = asyncio.run(get_all_tools())
+
+        # Transform tools into a structure suitable for the frontend
+        tools_list = []
+
+        # Add tool packs information
+        packs_info = {}
+        for pack_name, tool_names in TOOL_PACKS.items():
+            packs_info[pack_name] = {
+                "name": pack_name,
+                "tools": tool_names,
+                "description": _get_pack_description(pack_name)
+            }
+
+        # Process individual tools
+        for name, tool in tools.items():
+            # Find which packs contain this tool
+            containing_packs = [
+                pack for pack, tool_list in TOOL_PACKS.items()
+                if name in tool_list
+            ]
+
+            # Extract input schema if available
+            input_schema = None
+            if hasattr(tool, 'input_schema'):
+                try:
+                    input_schema = tool.input_schema
+                    # If it's a pydantic model, convert to dict
+                    if hasattr(input_schema, 'model_json_schema'):
+                        input_schema = input_schema.model_json_schema()
+                    elif hasattr(input_schema, 'dict'):
+                        input_schema = input_schema.dict()
+                except Exception:
+                    pass
+
+            tools_list.append({
+                "name": name,
+                "description": tool.description or "No description available",
+                "packs": containing_packs,
+                "input_schema": input_schema,
+            })
+
+        # Sort tools alphabetically
+        tools_list.sort(key=lambda x: x["name"])
+
+        return jsonify({
+            "tools": tools_list,
+            "packs": packs_info,
+            "total": len(tools_list)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def _get_pack_description(pack_name: str) -> str:
+    """Return a human-friendly description for each tool pack."""
+    descriptions = {
+        "journal": "Core journal operations for searching and managing content",
+        "todo": "Todo list management with add, remove, and complete operations",
+        "domains": "Domain-specific news and information retrieval",
+    }
+    return descriptions.get(pack_name, f"Tools for {pack_name} operations")
