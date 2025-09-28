@@ -11,6 +11,7 @@ h1 { margin-bottom: 0.5em; }
 #calendar { width:100%; border-collapse:collapse; }
 #calendar th, #calendar td { width:14.28%; border:1px solid #e0e0e0; vertical-align:top; height:80px; padding:4px; position:relative; }
 #calendar th { background:#f8f9fa; }
+#calendar td.today { background:rgba(0,123,255,0.12); box-shadow:inset 0 0 0 2px #007bff; }
 .day-number{font-weight:bold;text-decoration:none;color:inherit;}
 .missing{color:#ccc;}
 .bar-chart { position:absolute; bottom:4px; left:2px; right:2px; top:20px; display:flex; align-items:flex-end; }
@@ -39,6 +40,9 @@ let availableDays = new Set();
 const dayBase = '{{ url_for("calendar.calendar_day", day="") }}';
 let months = [];
 let currentIndex = 0;
+const now = new Date();
+const CURRENT_YEAR_MONTH = generateYearMonth(now.getFullYear(), now.getMonth());
+const TODAY_DATE_STRING = CURRENT_YEAR_MONTH + String(now.getDate()).padStart(2,'0');
 
 function loadData() {
   const occReq = fetch('{{ url_for("calendar.calendar_occurrences") }}').then(r => {
@@ -53,18 +57,18 @@ function loadData() {
     .then(([occ, days]) => {
       occurrences = occ || {};
       availableDays = new Set(days || []);
-      months = Array.from(new Set(Array.from(availableDays).map(d => d.slice(0,6)))).sort();
-      if(!months.length) {
-        const now = new Date();
-        months = [generateYearMonth(now.getFullYear(), now.getMonth())];
+      const monthSet = new Set(Array.from(availableDays).map(d => d.slice(0,6)));
+      monthSet.add(CURRENT_YEAR_MONTH);
+      months = Array.from(monthSet).sort();
+      currentIndex = months.indexOf(CURRENT_YEAR_MONTH);
+      if (currentIndex === -1) {
+        currentIndex = months.length - 1;
       }
-      currentIndex = months.length - 1;
       showMonth(months[currentIndex]);
     })
     .catch(err => {
       console.error('Error loading calendar data:', err);
-      const now = new Date();
-      months = [generateYearMonth(now.getFullYear(), now.getMonth())];
+      months = [CURRENT_YEAR_MONTH];
       currentIndex = 0;
       showMonth(months[currentIndex]);
     });
@@ -131,6 +135,9 @@ function showMonth(ym) {
       td.textContent = day;
       td.classList.add('missing');
     }
+    if (dateStr === TODAY_DATE_STRING) {
+      td.classList.add('today');
+    }
     if(occList.length){
       td.appendChild(createBarChart(occList, dateStr));
     }
@@ -183,4 +190,3 @@ document.getElementById('nextMonth').onclick = () => navigateMonth(1);
 loadData();
 </script>
 {% endblock %}
-
