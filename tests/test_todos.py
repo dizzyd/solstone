@@ -218,10 +218,10 @@ def test_upcoming_groups_future_days(monkeypatch, journal_root):
     result = upcoming(today="20240104")
 
     expected = (
-        "### 2024-01-05\n"
+        "### 20240105\n"
         "- [ ] First future task\n"
         "- [x] Completed future task\n\n"
-        "### 2024-01-06\n"
+        "### 20240106\n"
         "- [ ] Another future task"
     )
 
@@ -243,7 +243,7 @@ def test_upcoming_respects_limit(monkeypatch, journal_root):
     result = upcoming(limit=2, today="20240104")
 
     expected = (
-        "### 2024-01-05\n"
+        "### 20240105\n"
         "- [ ] Task one\n"
         "- [ ] Task two"
     )
