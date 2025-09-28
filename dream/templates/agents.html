@@ -703,82 +703,196 @@ tr a:hover {
   background: #545b62;
 }
 
-/* Edit Mode Styles */
-.edit-btn, .toggle-btn {
-  position: absolute;
-  top: 20px;
-  background: #007bff;
-  color: white;
-  border: none;
-  padding: 0.4rem 0.8rem;
+/* Enhanced Agent Modal Styles */
+.modal-title-editable {
+  display: inline-block;
+  padding: 0.5rem;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.9rem;
-  z-index: 3;
-}
-
-.edit-btn {
-  right: 60px;
-}
-
-.toggle-btn {
-  right: 120px;
-  background: #6c757d;
-}
-
-.toggle-btn:hover {
-  background: #545b62;
-}
-
-.toggle-btn.enable {
-  background: #28a745;
-}
-
-.toggle-btn.enable:hover {
-  background: #218838;
-}
-
-.edit-btn:hover {
-  background: #0056b3;
-}
-
-.edit-btn.save-mode {
-  background: #28a745;
-  position: static;
-  margin-left: 1rem;
-  flex-shrink: 0;
-}
-
-.edit-btn.save-mode:hover {
-  background: #218838;
-}
-
-.modal-header.edit-mode {
-  display: flex;
-  align-items: center;
-  padding-right: 60px;
-}
-
-.edit-mode-input {
-  flex: 1;
-  padding: 0.5rem;
-  font-size: 1.1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-weight: 500;
+  transition: background 0.2s;
+  font-size: 1.5rem;
+  font-weight: 600;
   margin: 0;
 }
 
-.edit-mode-textarea {
+.modal-title-editable:hover {
+  background: #f0f0f0;
+}
+
+.modal-title-input {
+  font-size: 1.5rem;
+  font-weight: 600;
+  padding: 0.5rem;
+  border: 2px solid #007bff;
+  border-radius: 4px;
+  width: 100%;
+  outline: none;
+}
+
+.metadata-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.metadata-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metadata-item label {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.metadata-item input,
+.metadata-item select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  font-size: 0.95rem;
+}
+
+.metadata-item input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.checkbox-wrapper:hover {
+  background: #f0f0f0;
+}
+
+.prompt-section {
+  position: relative;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+}
+
+.prompt-label {
+  font-weight: 500;
+  color: #333;
+}
+
+.prompt-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.prompt-actions button {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.edit-prompt-btn {
+  background: #007bff;
+  color: white;
+}
+
+.edit-prompt-btn:hover {
+  background: #0056b3;
+}
+
+.save-prompt-btn {
+  background: #28a745;
+  color: white;
+}
+
+.save-prompt-btn:hover {
+  background: #218838;
+}
+
+.cancel-prompt-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.cancel-prompt-btn:hover {
+  background: #545b62;
+}
+
+.prompt-content {
+  padding: 1rem;
+  max-height: 500px;
+  overflow-y: auto;
+  background: white;
+}
+
+.prompt-display {
+  white-space: pre-wrap;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #333;
+}
+
+.prompt-editor {
   width: 100%;
   min-height: 400px;
   padding: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  border: none;
+  font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.9rem;
-  line-height: 1.5;
+  line-height: 1.6;
   resize: vertical;
+  outline: none;
+}
+
+.saving-indicator {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: #28a745;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  animation: fadeInOut 2s;
+  position: absolute;
+  top: 0.75rem;
+  right: 1rem;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Remove old toggle button styles */
+.toggle-btn {
+  display: none !important;
 }
 
 /* Tools Tab Styles */
@@ -1153,47 +1267,105 @@ tr a:hover {
   </div>
 </div>
 
-<!-- Item Details Modal (for both Agents and Topics) -->
+<!-- Enhanced Agent/Topic Modal -->
 <div id="itemModal" class="modal">
   <div class="modal-content">
     <span class="close" onclick="closeItemModal()">&times;</span>
-    <button id="toggleBtn" class="toggle-btn" style="display: none;" onclick="toggleTopicState()">Disable</button>
-    <button id="editBtn" class="edit-btn" onclick="toggleEditMode()">Edit</button>
-    <div id="modalHeader" class="modal-header">
-      <h3 id="modalTitle"></h3>
-      <input id="modalTitleEdit" class="edit-mode-input" style="display: none;" />
-      <button id="saveBtn" class="edit-btn save-mode" style="display: none;" onclick="saveItemChanges()">Save</button>
+
+    <div class="modal-header">
+      <h3 id="modalTitle" class="modal-title-editable" ondblclick="startTitleEdit()" title="Double-click to edit"></h3>
+      <input id="modalTitleInput" class="modal-title-input" style="display: none;"
+             onblur="saveTitleEdit()" onkeydown="handleTitleKey(event)" />
     </div>
+
     <div class="modal-body">
-      <div id="modalContent" class="markdown-content"></div>
-      <textarea id="modalContentEdit" class="edit-mode-textarea" style="display: none;"></textarea>
-      <div id="agentConfigContainer" style="display: none; margin-top: 1rem;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-          <div>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="modalDailySchedule" style="width: auto;">
-              <span>Run daily (scheduled agent)</span>
-            </label>
-          </div>
-          <div>
-            <label style="display: block; margin-bottom: 0.5rem;">
-              Priority (0-99, lower runs first):
-              <input type="number" id="modalPriority" min="0" max="99" placeholder="Default: 50"
-                     style="width: 100px; margin-left: 0.5rem; padding: 0.25rem;">
-            </label>
+      <!-- Metadata section for agents only -->
+      <div id="agentMetadata" class="metadata-section" style="display: none;">
+        <div class="metadata-item">
+          <label>Schedule</label>
+          <div class="checkbox-wrapper" onclick="toggleSchedule()">
+            <input type="checkbox" id="modalSchedule" onclick="event.stopPropagation()" onchange="saveMetadata()">
+            <span>Daily Execution</span>
           </div>
         </div>
-        <div>
-          <label style="display: block; margin-bottom: 0.5rem;">
-            Tool Packs:
-            <select id="modalToolPacks" multiple style="width: 100%; height: 100px; margin-top: 0.5rem;">
-              <option value="">Default (All Tools)</option>
-              <option value="journal">Journal</option>
-              <option value="todo">Todo</option>
-              <option value="domains">Domains</option>
-            </select>
-          </label>
-          <small style="color: #666;">Hold Ctrl/Cmd to select multiple. Select only "Default" to use all tools.</small>
+
+        <div class="metadata-item">
+          <label>Priority</label>
+          <input type="number" id="modalPriority" min="0" max="99" placeholder="50"
+                 onblur="saveMetadata()" onkeydown="if(event.key === 'Escape') this.blur();">
+        </div>
+
+        <div class="metadata-item">
+          <label>Multi-Domain</label>
+          <div class="checkbox-wrapper" onclick="toggleMultiDomain()">
+            <input type="checkbox" id="modalMultiDomain" onclick="event.stopPropagation()" onchange="saveMetadata()">
+            <span>Run per domain</span>
+          </div>
+        </div>
+
+        <div class="metadata-item">
+          <label>Backend</label>
+          <select id="modalBackend" onchange="saveMetadata()">
+            <option value="">Default</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="google">Google</option>
+            <option value="claude">Claude</option>
+          </select>
+        </div>
+
+        <div class="metadata-item">
+          <label>Model</label>
+          <input type="text" id="modalModel" placeholder="Auto"
+                 onblur="saveMetadata()" onkeydown="if(event.key === 'Escape') this.blur();">
+        </div>
+
+        <div class="metadata-item">
+          <label>Tools</label>
+          <select id="modalTools" onchange="saveMetadata()">
+            <option value="">Default</option>
+            <option value="journal">Journal</option>
+            <option value="todo">Todo</option>
+            <option value="domains">Domains</option>
+            <option value="journal,todo">Journal + Todo</option>
+            <option value="journal,domains">Journal + Domains</option>
+            <option value="custom">Custom...</option>
+          </select>
+          <input type="text" id="modalToolsCustom" placeholder="e.g., tool1,tool2"
+                 style="display: none; margin-top: 0.5rem;"
+                 onblur="saveMetadata()" onkeydown="if(event.key === 'Escape') this.blur();">
+        </div>
+      </div>
+
+      <!-- Prompt/Content section -->
+      <div class="prompt-section">
+        <div class="prompt-header">
+          <span class="prompt-label" id="promptLabel">System Prompt</span>
+          <div class="prompt-actions">
+            <button id="editPromptBtn" class="edit-prompt-btn" onclick="startPromptEdit()">Edit</button>
+            <button id="savePromptBtn" class="save-prompt-btn" style="display: none;" onclick="savePromptEdit()">Save</button>
+            <button id="cancelPromptBtn" class="cancel-prompt-btn" style="display: none;" onclick="cancelPromptEdit()">Cancel</button>
+            <span id="savingIndicator" class="saving-indicator" style="display: none;">Saved!</span>
+          </div>
+        </div>
+        <div class="prompt-content">
+          <div id="promptDisplay" class="prompt-display"></div>
+          <textarea id="promptEditor" class="prompt-editor" style="display: none;"></textarea>
+        </div>
+      </div>
+
+      <!-- Topics metadata section -->
+      <div id="topicMetadata" class="metadata-section" style="display: none;">
+        <div class="metadata-item">
+          <label>Status</label>
+          <div class="checkbox-wrapper" onclick="toggleTopicEnabled()">
+            <input type="checkbox" id="modalTopicEnabled" onclick="event.stopPropagation()" onchange="saveTopicMetadata()">
+            <span>Enabled</span>
+          </div>
+        </div>
+        <div class="metadata-item">
+          <label>Color</label>
+          <input type="color" id="modalTopicColor" onchange="saveTopicMetadata()">
         </div>
       </div>
     </div>
@@ -1489,47 +1661,39 @@ function renderTopicCards() {
 // View item details in modal (generic for both agents and topics)
 function viewItemDetails(itemId, itemType, event) {
   event.stopPropagation();
-  
+
   const items = itemType === 'agent' ? availableAgents : availableTopics;
   const item = items.find(i => i.id === itemId);
   if (!item) return;
-  
+
   currentEditingItem = itemId;
   currentEditingType = itemType;
-  isEditMode = false;
-  
-  // Reset edit mode UI
-  const editBtn = document.getElementById('editBtn');
-  const toggleBtn = document.getElementById('toggleBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  const modalHeader = document.getElementById('modalHeader');
-  
-  // Show/hide toggle button for topics only
-  if (itemType === 'topic') {
-    toggleBtn.style.display = 'block';
-    // Update button text based on disabled state
-    const isDisabled = item.disabled || false;
-    toggleBtn.textContent = isDisabled ? 'Enable' : 'Disable';
-    toggleBtn.className = isDisabled ? 'toggle-btn enable' : 'toggle-btn';
-  } else {
-    toggleBtn.style.display = 'none';
-  }
-  
-  editBtn.style.display = 'block';
-  saveBtn.style.display = 'none';
-  modalHeader.classList.remove('edit-mode');
-  document.getElementById('modalTitle').style.display = 'block';
-  document.getElementById('modalTitleEdit').style.display = 'none';
-  document.getElementById('modalContent').style.display = 'block';
-  document.getElementById('modalContentEdit').style.display = 'none';
-  
-  document.getElementById('modalTitle').textContent = item.title;
-  document.getElementById('modalTitleEdit').value = item.title;
-  document.getElementById('modalContent').innerHTML = '<p>Loading...</p>';
-  document.getElementById('itemModal').style.display = 'block';
+  window.originalPromptContent = ''; // Store original content for cancel
 
-  // Hide agent config container initially (only shown in edit mode for agents)
-  document.getElementById('agentConfigContainer').style.display = 'none';
+  // Set title
+  const modalTitle = document.getElementById('modalTitle');
+  modalTitle.textContent = item.title;
+
+  // Show/hide metadata sections based on type
+  const agentMetadata = document.getElementById('agentMetadata');
+  const topicMetadata = document.getElementById('topicMetadata');
+  const promptLabel = document.getElementById('promptLabel');
+
+  if (itemType === 'agent') {
+    agentMetadata.style.display = 'grid';
+    topicMetadata.style.display = 'none';
+    promptLabel.textContent = 'System Prompt';
+  } else {
+    agentMetadata.style.display = 'none';
+    topicMetadata.style.display = 'grid';
+    promptLabel.textContent = 'Topic Content';
+    // Set topic metadata
+    document.getElementById('modalTopicEnabled').checked = !item.disabled;
+    document.getElementById('modalTopicColor').value = item.color || '#6c757d';
+  }
+
+  document.getElementById('promptDisplay').innerHTML = 'Loading...';
+  document.getElementById('itemModal').style.display = 'block';
 
   // Determine the correct endpoint based on item type
   const contentUrl = itemType === 'agent'
@@ -1538,45 +1702,52 @@ function viewItemDetails(itemId, itemType, event) {
 
   // Load agent's config if it's an agent
   if (itemType === 'agent') {
-    // Load the agent's JSON config to get schedule, priority, and tools
-    fetch(`/think/agents/${itemId}.json`)
-      .then(r => r.json())
-      .then(config => {
-        // Schedule
-        document.getElementById('modalDailySchedule').checked = config.schedule === 'daily';
+    // Set defaults first
+    document.getElementById('modalSchedule').checked = false;
+    document.getElementById('modalPriority').value = '';
+    document.getElementById('modalMultiDomain').checked = false;
+    document.getElementById('modalBackend').value = '';
+    document.getElementById('modalModel').value = '';
+    document.getElementById('modalTools').value = '';
+    document.getElementById('modalToolsCustom').style.display = 'none';
 
-        // Priority (leave empty if not set, will show placeholder)
-        document.getElementById('modalPriority').value = config.priority || '';
+    // Load from item metadata (already fetched)
+    if (item.schedule === 'daily') {
+      document.getElementById('modalSchedule').checked = true;
+    }
+    if (item.priority !== undefined && item.priority !== null) {
+      document.getElementById('modalPriority').value = item.priority;
+    }
+    if (item.multi_domain) {
+      document.getElementById('modalMultiDomain').checked = true;
+    }
+    if (item.backend) {
+      document.getElementById('modalBackend').value = item.backend;
+    }
+    if (item.model) {
+      document.getElementById('modalModel').value = item.model;
+    }
+    if (item.tools) {
+      const toolsSelect = document.getElementById('modalTools');
+      const toolsCustom = document.getElementById('modalToolsCustom');
 
-        // Tools - parse and select appropriate options
-        const toolsSelect = document.getElementById('modalToolPacks');
-        const toolsArray = config.tools ? config.tools.split(',').map(t => t.trim()) : [];
-
-        // Clear all selections first
-        for (let option of toolsSelect.options) {
-          option.selected = false;
+      // Check if tools match a predefined option
+      let matched = false;
+      for (let option of toolsSelect.options) {
+        if (option.value && option.value === item.tools) {
+          toolsSelect.value = item.tools;
+          matched = true;
+          break;
         }
+      }
 
-        // If no tools specified, select "Default"
-        if (toolsArray.length === 0) {
-          toolsSelect.options[0].selected = true;
-        } else {
-          // Select specified tool packs
-          for (let tool of toolsArray) {
-            for (let option of toolsSelect.options) {
-              if (option.value === tool) {
-                option.selected = true;
-              }
-            }
-          }
-        }
-      })
-      .catch(() => {
-        // If no JSON file or error, set defaults
-        document.getElementById('modalDailySchedule').checked = false;
-        document.getElementById('modalPriority').value = '';
-        document.getElementById('modalToolPacks').options[0].selected = true;
-      });
+      if (!matched && item.tools) {
+        // Custom tools
+        toolsSelect.value = 'custom';
+        toolsCustom.value = item.tools;
+        toolsCustom.style.display = 'block';
+      }
+    }
   }
 
   // Load and render item content
@@ -1584,171 +1755,250 @@ function viewItemDetails(itemId, itemType, event) {
     .then(r => r.json())
     .then(data => {
       if (data.error) {
-        document.getElementById('modalContent').innerHTML = `<p>Error: ${data.error}</p>`;
-        document.getElementById('modalContentEdit').value = '';
+        document.getElementById('promptDisplay').innerHTML = `<p>Error: ${data.error}</p>`;
+        window.originalPromptContent = '';
       } else {
-        // Store raw markdown for editing
-        document.getElementById('modalContentEdit').value = data.content;
-        // Convert markdown to HTML for display
-        const html = marked.parse(data.content);
-        document.getElementById('modalContent').innerHTML = html;
+        // Store raw content for editing
+        const rawContent = data.content;
+        window.originalPromptContent = rawContent;
+        document.getElementById('promptEditor').value = rawContent;
+
+        // Display content
+        document.getElementById('promptDisplay').textContent = rawContent;
       }
     })
     .catch(err => {
-      document.getElementById('modalContent').innerHTML = `<p>Error loading content: ${err.message}</p>`;
-      document.getElementById('modalContentEdit').value = '';
+      console.error('Failed to load content:', err);
+      document.getElementById('promptDisplay').innerHTML = `<p>Failed to load content</p>`;
     });
 }
 
-// Toggle edit mode for agent
-function toggleEditMode() {
-  const editBtn = document.getElementById('editBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  const modalHeader = document.getElementById('modalHeader');
-  const titleDisplay = document.getElementById('modalTitle');
-  const titleEdit = document.getElementById('modalTitleEdit');
-  const contentDisplay = document.getElementById('modalContent');
-  const contentEdit = document.getElementById('modalContentEdit');
-  
-  if (!isEditMode) {
-    // Enter edit mode
-    isEditMode = true;
-    editBtn.style.display = 'none';
-    saveBtn.style.display = 'block';
-    modalHeader.classList.add('edit-mode');
+// Title editing functions
+function startTitleEdit() {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalTitleInput = document.getElementById('modalTitleInput');
 
-    titleDisplay.style.display = 'none';
-    titleEdit.style.display = 'block';
-    contentDisplay.style.display = 'none';
-    contentEdit.style.display = 'block';
+  modalTitleInput.value = modalTitle.textContent;
+  modalTitle.style.display = 'none';
+  modalTitleInput.style.display = 'block';
+  modalTitleInput.focus();
+  modalTitleInput.select();
+}
 
-    // Show agent config container for agents only
-    if (currentEditingType === 'agent') {
-      document.getElementById('agentConfigContainer').style.display = 'block';
-    }
+function saveTitleEdit() {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalTitleInput = document.getElementById('modalTitleInput');
+  const newTitle = modalTitleInput.value.trim();
 
-    // Focus on title input
-    titleEdit.focus();
+  if (newTitle && newTitle !== modalTitle.textContent) {
+    // Save the title change
+    saveMetadata({ title: newTitle });
+    modalTitle.textContent = newTitle;
+  }
+
+  modalTitle.style.display = 'block';
+  modalTitleInput.style.display = 'none';
+}
+
+function handleTitleKey(event) {
+  if (event.key === 'Enter') {
+    saveTitleEdit();
+  } else if (event.key === 'Escape') {
+    const modalTitle = document.getElementById('modalTitle');
+    const modalTitleInput = document.getElementById('modalTitleInput');
+    modalTitle.style.display = 'block';
+    modalTitleInput.style.display = 'none';
   }
 }
 
-// Save item changes (generic for both agents and topics)
-async function saveItemChanges() {
-  const editBtn = document.getElementById('editBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  const modalHeader = document.getElementById('modalHeader');
-  const newTitle = document.getElementById('modalTitleEdit').value.trim();
-  const newContent = document.getElementById('modalContentEdit').value.trim();
-  
-  if (!newTitle || !newContent) {
-    showError('Title and content cannot be empty');
+// Prompt editing functions
+function startPromptEdit() {
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('promptEditor');
+  const editBtn = document.getElementById('editPromptBtn');
+  const saveBtn = document.getElementById('savePromptBtn');
+  const cancelBtn = document.getElementById('cancelPromptBtn');
+
+  promptDisplay.style.display = 'none';
+  promptEditor.style.display = 'block';
+  editBtn.style.display = 'none';
+  saveBtn.style.display = 'inline-block';
+  cancelBtn.style.display = 'inline-block';
+  promptEditor.focus();
+}
+
+function savePromptEdit() {
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('promptEditor');
+  const newContent = promptEditor.value.trim();
+
+  if (!newContent) {
+    showError('Content cannot be empty');
     return;
   }
-  
-  if (!currentEditingItem || !currentEditingType) {
-    showError('No item selected for editing');
-    return;
-  }
-  
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving...';
 
-  // Determine the correct endpoint based on item type
-  const updateUrl = currentEditingType === 'agent'
-    ? `{{ url_for('agents.update_agent', agent_id='') }}${currentEditingItem}`
-    : `{{ url_for('agents.update_topic', topic_id='') }}${currentEditingItem}`;
+  // Save the content
+  saveMetadata({ content: newContent });
 
-  // Build request body
-  const requestBody = {
-    title: newTitle,
-    content: newContent
-  };
+  promptDisplay.textContent = newContent;
+  window.originalPromptContent = newContent;
 
-  // Add agent-specific config
+  // Reset UI
+  promptDisplay.style.display = 'block';
+  promptEditor.style.display = 'none';
+  document.getElementById('editPromptBtn').style.display = 'inline-block';
+  document.getElementById('savePromptBtn').style.display = 'none';
+  document.getElementById('cancelPromptBtn').style.display = 'none';
+}
+
+function cancelPromptEdit() {
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('promptEditor');
+
+  // Restore original content
+  promptEditor.value = window.originalPromptContent;
+
+  // Reset UI
+  promptDisplay.style.display = 'block';
+  promptEditor.style.display = 'none';
+  document.getElementById('editPromptBtn').style.display = 'inline-block';
+  document.getElementById('savePromptBtn').style.display = 'none';
+  document.getElementById('cancelPromptBtn').style.display = 'none';
+}
+
+// Metadata saving function
+async function saveMetadata(updates = {}) {
+  const requestBody = {};
+
   if (currentEditingType === 'agent') {
+    // Gather all current metadata values
+    const currentTitle = document.getElementById('modalTitle').textContent;
+    const currentContent = document.getElementById('promptEditor').value.trim();
+
+    requestBody.title = updates.title || currentTitle;
+    requestBody.content = updates.content || currentContent;
+
     // Schedule
-    const isDaily = document.getElementById('modalDailySchedule').checked;
-    if (isDaily) {
+    const isScheduled = document.getElementById('modalSchedule').checked;
+    if (isScheduled) {
       requestBody.schedule = 'daily';
     }
 
-    // Priority (only add if a value is entered)
+    // Priority
     const priority = document.getElementById('modalPriority').value;
     if (priority !== '') {
       requestBody.priority = parseInt(priority);
     }
 
-    // Tools (only add if not "Default")
-    const toolsSelect = document.getElementById('modalToolPacks');
-    const selectedTools = [];
-    for (let option of toolsSelect.options) {
-      if (option.selected && option.value !== '') {
-        selectedTools.push(option.value);
-      }
+    // Multi-domain
+    const isMultiDomain = document.getElementById('modalMultiDomain').checked;
+    if (isMultiDomain) {
+      requestBody.multi_domain = true;
     }
-    // Only add tools parameter if specific packs are selected
-    if (selectedTools.length > 0) {
-      requestBody.tools = selectedTools.join(',');
+
+    // Backend
+    const backend = document.getElementById('modalBackend').value;
+    if (backend) {
+      requestBody.backend = backend;
+    }
+
+    // Model
+    const model = document.getElementById('modalModel').value.trim();
+    if (model) {
+      requestBody.model = model;
+    }
+
+    // Tools
+    const toolsSelect = document.getElementById('modalTools').value;
+    const toolsCustom = document.getElementById('modalToolsCustom').value.trim();
+
+    if (toolsSelect === 'custom' && toolsCustom) {
+      requestBody.tools = toolsCustom;
+    } else if (toolsSelect && toolsSelect !== '') {
+      requestBody.tools = toolsSelect;
+    }
+
+    const updateUrl = `{{ url_for('agents.update_agent', agent_id='') }}${currentEditingItem}`;
+
+    try {
+      const response = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Show saving indicator
+        showSavingIndicator();
+        // Reload the list to reflect changes
+        loadAvailableAgents();
+      } else {
+        showError(data.error || 'Failed to save changes');
+      }
+    } catch (error) {
+      showError('Error saving changes: ' + error.message);
     }
   }
+}
+
+// Topic metadata saving
+async function saveTopicMetadata() {
+  const requestBody = {
+    title: document.getElementById('modalTitle').textContent,
+    content: document.getElementById('promptEditor').value.trim(),
+    disabled: !document.getElementById('modalTopicEnabled').checked,
+    color: document.getElementById('modalTopicColor').value
+  };
+
+  const updateUrl = `{{ url_for('agents.update_topic', topic_id='') }}${currentEditingItem}`;
 
   try {
     const response = await fetch(updateUrl, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
     });
-    
+
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to save changes');
-    }
-    
-    // Update local data
-    const items = currentEditingType === 'agent' ? availableAgents : availableTopics;
-    const item = items.find(i => i.id === currentEditingItem);
-    if (item) {
-      item.title = newTitle;
-      // Update the item card if it exists
-      const card = document.querySelector(`[data-item-id="${currentEditingItem}"][data-item-type="${currentEditingType}"] h3`);
-      if (card) {
-        card.textContent = newTitle;
-      }
-    }
-    
-    // Exit edit mode and update display
-    isEditMode = false;
-    editBtn.style.display = 'block';
-    saveBtn.style.display = 'none';
-    modalHeader.classList.remove('edit-mode');
-    
-    document.getElementById('modalTitle').textContent = newTitle;
-    document.getElementById('modalTitle').style.display = 'block';
-    document.getElementById('modalTitleEdit').style.display = 'none';
-    
-    // Update content display with new markdown
-    const html = marked.parse(newContent);
-    document.getElementById('modalContent').innerHTML = html;
-    document.getElementById('modalContent').style.display = 'block';
-    document.getElementById('modalContentEdit').style.display = 'none';
 
-    // Hide agent config container when exiting edit mode
-    document.getElementById('agentConfigContainer').style.display = 'none';
-
-    // Refresh agent dropdown in prompt modal if it's open (for agents only)
-    if (currentEditingType === 'agent') {
-      loadPersonas();
+    if (response.ok) {
+      showSavingIndicator();
+      loadAvailableTopics();
+    } else {
+      showError(data.error || 'Failed to save changes');
     }
-    
   } catch (error) {
     showError('Error saving changes: ' + error.message);
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save';
   }
+}
+
+// Helper functions
+function toggleSchedule() {
+  const checkbox = document.getElementById('modalSchedule');
+  checkbox.checked = !checkbox.checked;
+  saveMetadata();
+}
+
+function toggleMultiDomain() {
+  const checkbox = document.getElementById('modalMultiDomain');
+  checkbox.checked = !checkbox.checked;
+  saveMetadata();
+}
+
+function toggleTopicEnabled() {
+  const checkbox = document.getElementById('modalTopicEnabled');
+  checkbox.checked = !checkbox.checked;
+  saveTopicMetadata();
+}
+
+function showSavingIndicator() {
+  const indicator = document.getElementById('savingIndicator');
+  indicator.style.display = 'inline-block';
+  setTimeout(() => {
+    indicator.style.display = 'none';
+  }, 2000);
 }
 
 // Form submission - removed as agentForm doesn't exist in this template
@@ -1888,21 +2138,35 @@ async function startAgent() {
 
 // Close item modal function
 function closeItemModal() {
-  // Reset edit mode when closing
-  if (isEditMode) {
-    isEditMode = false;
-    const editBtn = document.getElementById('editBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const modalHeader = document.getElementById('modalHeader');
-    
-    editBtn.style.display = 'block';
-    saveBtn.style.display = 'none';
-    modalHeader.classList.remove('edit-mode');
-    document.getElementById('modalTitle').style.display = 'block';
-    document.getElementById('modalTitleEdit').style.display = 'none';
-    document.getElementById('modalContent').style.display = 'block';
-    document.getElementById('modalContentEdit').style.display = 'none';
+  // Cancel any ongoing prompt edits if elements exist
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('promptEditor');
+
+  if (promptDisplay && promptEditor) {
+    // Reset prompt editor if it was being edited
+    if (promptEditor.style.display === 'block') {
+      promptEditor.value = window.originalPromptContent || '';
+      promptDisplay.style.display = 'block';
+      promptEditor.style.display = 'none';
+
+      const editBtn = document.getElementById('editPromptBtn');
+      const saveBtn = document.getElementById('savePromptBtn');
+      const cancelBtn = document.getElementById('cancelPromptBtn');
+
+      if (editBtn) editBtn.style.display = 'inline-block';
+      if (saveBtn) saveBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+    }
   }
+
+  // Reset title if editing
+  const modalTitle = document.getElementById('modalTitle');
+  const modalTitleInput = document.getElementById('modalTitleInput');
+  if (modalTitle && modalTitleInput) {
+    modalTitle.style.display = 'block';
+    modalTitleInput.style.display = 'none';
+  }
+
   document.getElementById('itemModal').style.display = 'none';
 }
 
@@ -2431,64 +2695,25 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Toggle topic disabled state
-async function toggleTopicState() {
-  if (!currentEditingItem || currentEditingType !== 'topic') return;
-  
-  const toggleBtn = document.getElementById('toggleBtn');
-  toggleBtn.disabled = true;
-  
-  try {
-    const response = await fetch(`{{ url_for('agents.toggle_topic', topic_id='') }}${currentEditingItem}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+// Handle tools dropdown change for modal
+document.addEventListener('DOMContentLoaded', () => {
+  const toolsSelect = document.getElementById('modalTools');
+  if (toolsSelect) {
+    toolsSelect.addEventListener('change', () => {
+      const customInput = document.getElementById('modalToolsCustom');
+      if (toolsSelect.value === 'custom') {
+        customInput.style.display = 'block';
+        customInput.focus();
+      } else {
+        customInput.style.display = 'none';
+      }
+      // Auto-save when tools change
+      if (currentEditingType === 'agent') {
+        saveMetadata();
+      }
     });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      // Update button text and style
-      const isDisabled = data.disabled;
-      toggleBtn.textContent = isDisabled ? 'Enable' : 'Disable';
-      toggleBtn.className = isDisabled ? 'toggle-btn enable' : 'toggle-btn';
-      
-      // Update the item in availableTopics
-      const topic = availableTopics.find(t => t.id === currentEditingItem);
-      if (topic) {
-        topic.disabled = isDisabled;
-      }
-      
-      // Update the card appearance
-      const card = document.querySelector(`[data-item-id="${currentEditingItem}"][data-item-type="topic"]`);
-      if (card) {
-        if (isDisabled) {
-          card.classList.add('disabled');
-        } else {
-          card.classList.remove('disabled');
-        }
-        
-        // Update title to show disabled state
-        const h3 = card.querySelector('h3');
-        if (h3) {
-          let html = h3.innerHTML;
-          // Remove existing disabled indicator
-          html = html.replace(/ <span style="color: #6c757d; font-size: 0.8em;">\(disabled\)<\/span>/g, '');
-          // Add new indicator if disabled
-          if (isDisabled) {
-            html += ' <span style="color: #6c757d; font-size: 0.8em;">(disabled)</span>';
-          }
-          h3.innerHTML = html;
-        }
-      }
-    } else {
-      showError('Failed to toggle topic: ' + (data.error || 'Unknown error'));
-    }
-  } catch (error) {
-    showError('Error toggling topic: ' + error.message);
-  } finally {
-    toggleBtn.disabled = false;
   }
-}
+});
 
 // Load available tools and render them
 function loadAvailableTools() {

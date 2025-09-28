@@ -261,6 +261,9 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
     schedule = data.get("schedule")  # Can be None, "daily", etc.
     priority = data.get("priority")  # Can be None or 0-99
     tools = data.get("tools")  # Can be None or comma-separated string
+    multi_domain = data.get("multi_domain")  # Can be None or boolean
+    backend = data.get("backend")  # Can be None or backend name
+    model = data.get("model")  # Can be None or model name
 
     if not new_title or not new_content:
         return {"error": "Title and content are required"}, 400
@@ -289,6 +292,12 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
                     item_config["priority"] = priority
                 if tools:
                     item_config["tools"] = tools
+                if multi_domain is not None and multi_domain:
+                    item_config["multi_domain"] = True
+                if backend:
+                    item_config["backend"] = backend
+                if model:
+                    item_config["model"] = model
         else:
             # Update existing JSON file
             with open(json_path, "r", encoding="utf-8") as f:
@@ -314,6 +323,26 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
                 elif "tools" in item_config:
                     del item_config["tools"]
 
+                # Multi-domain (boolean field)
+                if multi_domain is not None:
+                    if multi_domain:
+                        item_config["multi_domain"] = True
+                    elif "multi_domain" in item_config:
+                        del item_config["multi_domain"]
+                # Don't delete if multi_domain is None (not provided)
+
+                # Backend
+                if backend:
+                    item_config["backend"] = backend
+                elif "backend" in item_config:
+                    del item_config["backend"]
+
+                # Model
+                if model:
+                    item_config["model"] = model
+                elif "model" in item_config:
+                    del item_config["model"]
+
         # Write JSON file
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(item_config, f, indent=2, ensure_ascii=False)
@@ -332,7 +361,14 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
 @bp.route("/agents/api/update/<agent_id>", methods=["PUT"])
 def update_agent(agent_id: str) -> object:
     """Update an agent's title and content or create a new one."""
-    response, status = _update_item("agents", agent_id, request.get_json())
+    data = request.get_json()
+
+    # Handle topics-specific fields (color, disabled)
+    if "color" in data or "disabled" in data:
+        # This is actually a topic update, not an agent
+        return jsonify({"error": "Invalid fields for agent update"}), 400
+
+    response, status = _update_item("agents", agent_id, data)
     return jsonify(response), status
 
 
@@ -392,7 +428,44 @@ def topic_content(topic_id: str) -> object:
 @bp.route("/agents/api/topics/update/<topic_id>", methods=["PUT"])
 def update_topic(topic_id: str) -> object:
     """Update a topic's title and content or create a new one."""
-    response, status = _update_item("topics", topic_id, request.get_json())
+    data = request.get_json()
+
+    # Handle topic-specific fields
+    if "color" in data:
+        # Save color in JSON config
+        topics_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "..", "think", "topics"
+        )
+        json_path = os.path.join(topics_path, f"{topic_id}.json")
+
+        topic_config = {}
+        if os.path.isfile(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                topic_config = json.load(f)
+
+        topic_config["color"] = data["color"]
+
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(topic_config, f, indent=4)
+
+    if "disabled" in data:
+        # Save disabled state in JSON config
+        topics_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "..", "think", "topics"
+        )
+        json_path = os.path.join(topics_path, f"{topic_id}.json")
+
+        topic_config = {}
+        if os.path.isfile(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                topic_config = json.load(f)
+
+        topic_config["disabled"] = data["disabled"]
+
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(topic_config, f, indent=4)
+
+    response, status = _update_item("topics", topic_id, data)
     return jsonify(response), status
 
 
