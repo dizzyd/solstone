@@ -7,18 +7,18 @@ import os
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
 
 from .models import GEMINI_LITE, gemini_generate
+from .utils import load_prompt
 
 
 def _load_system_prompt() -> str:
     """Load the system prompt from detect_created.txt file."""
-    prompt_path = os.path.join(os.path.dirname(__file__), "detect_created.txt")
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    return load_prompt("detect_created", base_dir=Path(__file__).parent).text
 
 
 def _extract_metadata(path: str) -> str:

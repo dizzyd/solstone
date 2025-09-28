@@ -4,12 +4,19 @@ import os
 import re
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_PRO, gemini_generate
-from think.utils import day_log, day_path, setup_cli
+from think.utils import (
+    PromptNotFoundError,
+    day_log,
+    day_path,
+    load_prompt,
+    setup_cli,
+)
 
 
 def extract_date_from_filename(filename: str) -> Optional[datetime]:
@@ -109,7 +116,6 @@ def send_to_gemini(
 
 
 DATE_RE = re.compile(r"\d{8}")
-PROMPT_PATH = os.path.join(os.path.dirname(__file__), "entity_roll.txt")
 
 
 def find_day_dirs(journal: str) -> Dict[str, str]:
@@ -174,8 +180,8 @@ def process_day(
     markdown = cluster_glob(files)
 
     try:
-        with open(PROMPT_PATH, "r", encoding="utf-8") as f:
-            prompt = f.read().strip()
+        prompt_data = load_prompt("entity_roll", base_dir=Path(__file__).parent)
+        prompt = prompt_data.text
 
         print("  Sending to Gemini for entity extraction...")
         result = send_to_gemini(markdown, prompt)
@@ -188,11 +194,17 @@ def process_day(
         print(f"Wrote {out_path}")
 
         crumb_builder = (
-            CrumbBuilder().add_file(PROMPT_PATH).add_files(files).add_model(GEMINI_PRO)
+            CrumbBuilder()
+            .add_file(str(prompt_data.path))
+            .add_files(files)
+            .add_model(GEMINI_PRO)
         )
         crumb_path = crumb_builder.commit(out_path)
         print(f"Crumb saved to: {crumb_path}")
         success = True
+    except PromptNotFoundError as exc:
+        print(exc)
+        return
     finally:
         msg = f"entity-roll {'ok' if success else 'failed'}"
         if force:

@@ -5,27 +5,23 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
 
 from .models import GEMINI_FLASH, GEMINI_PRO, gemini_generate
+from .utils import load_prompt
 
 
 def _load_json_prompt() -> str:
     """Load the JSON system prompt."""
-    prompt_path = os.path.join(os.path.dirname(__file__), "detect_transcript_json.txt")
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    return load_prompt("detect_transcript_json", base_dir=Path(__file__).parent).text
 
 
 def _load_segment_prompt() -> str:
     """Load the system prompt for segment detection."""
-    prompt_path = os.path.join(
-        os.path.dirname(__file__), "detect_transcript_segment.txt"
-    )
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    return load_prompt("detect_transcript_segment", base_dir=Path(__file__).parent).text
 
 
 def number_lines(text: str) -> tuple[str, List[str]]:

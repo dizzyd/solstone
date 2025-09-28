@@ -10,7 +10,14 @@ from google.genai import types
 from think.cluster import cluster
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_FLASH, GEMINI_PRO, gemini_generate
-from think.utils import day_log, day_path, get_topics, setup_cli
+from think.utils import (
+    PromptNotFoundError,
+    day_log,
+    day_path,
+    get_topics,
+    load_prompt,
+    setup_cli,
+)
 
 COMMON_SYSTEM_INSTRUCTION = "You are an expert productivity analyst tasked with analyzing a full workday transcript containing both audio conversations and screen activity data, segmented into 5-minute chunks. You will be given the transcripts and then following that you will have a detailed user request for how to process them.  Please follow those instructions carefully. Take time to consider all of the nuance of the interactions from the day, deeply think through how best to prioritize the most important aspects and understandings, formulate the best approach for each step of the analysis."
 
@@ -208,11 +215,13 @@ def main() -> None:
         if not api_key:
             parser.error("GOOGLE_API_KEY not found in environment")
 
+        topic_path = Path(args.topic)
         try:
-            with open(args.topic, "r") as f:
-                prompt = f.read().strip()
-        except FileNotFoundError:
-            parser.error(f"Topic file not found: {args.topic}")
+            topic_prompt = load_prompt(topic_path.stem, base_dir=topic_path.parent)
+        except PromptNotFoundError:
+            parser.error(f"Topic file not found: {topic_path}")
+
+        prompt = topic_prompt.text
 
         model = GEMINI_PRO if args.pro else GEMINI_FLASH
         day = args.day
@@ -241,11 +250,11 @@ def main() -> None:
             print("Markdown file exists but --force specified. Regenerating.")
             result = send_markdown(
                 markdown,
-                prompt,
-                api_key,
-                model,
-                cache_display_name=cache_display_name,
-            )
+            prompt,
+            api_key,
+            model,
+            cache_display_name=cache_display_name,
+        )
         else:
             result = send_markdown(
                 markdown,
@@ -269,7 +278,7 @@ def main() -> None:
 
             crumb_builder = (
                 CrumbBuilder()
-                .add_file(args.topic)
+                .add_file(str(topic_prompt.path))
                 .add_glob(os.path.join(day_dir, "*_audio.json"))
                 .add_glob(os.path.join(day_dir, "*_screen.md"))
                 .add_model(model)
@@ -283,13 +292,16 @@ def main() -> None:
             return
 
         # Create a corresponding occurrence JSON from the markdown summary
-        occ_prompt_path = os.path.join(os.path.dirname(__file__), "ponder.txt")
+        occ_prompt_path = Path(__file__).with_name("ponder.txt")
         try:
-            with open(occ_prompt_path, "r") as f:
-                occ_prompt = f.read().strip().replace("DAY", day)
-        except FileNotFoundError:
-            print(f"Occurrence prompt not found: {occ_prompt_path}")
+            occ_prompt_content = load_prompt(
+                occ_prompt_path.stem, base_dir=occ_prompt_path.parent
+            )
+        except PromptNotFoundError as exc:
+            print(exc)
             return
+
+        occ_prompt = occ_prompt_content.text.replace("DAY", day)
 
         occ_output_path = json_path
         json_exists = occ_output_path.exists() and occ_output_path.stat().st_size > 0
@@ -325,7 +337,10 @@ def main() -> None:
         print(f"Results saved to: {occ_output_path}")
 
         occ_crumb_builder = (
-            CrumbBuilder().add_file(occ_prompt_path).add_file(md_path).add_model(model)
+            CrumbBuilder()
+            .add_file(str(occ_prompt_content.path))
+            .add_file(md_path)
+            .add_model(model)
         )
         occ_crumb_path = occ_crumb_builder.commit(str(occ_output_path))
         print(f"Crumb saved to: {occ_crumb_path}")

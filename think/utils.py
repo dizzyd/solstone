@@ -7,7 +7,7 @@ import time
 import zoneinfo
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 from dotenv import load_dotenv
 from timefhuman import timefhuman
@@ -17,6 +17,54 @@ DATE_RE = re.compile(r"\d{8}")
 # Topic colors are now stored in each topic's JSON metadata file
 
 AGENT_DIR = Path(__file__).with_name("agents")
+
+
+class PromptContent(NamedTuple):
+    """Container for prompt text and its resolved path."""
+
+    text: str
+    path: Path
+
+
+class PromptNotFoundError(FileNotFoundError):
+    """Raised when a prompt file cannot be located."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(f"Prompt file not found: {path}")
+
+
+def load_prompt(name: str, base_dir: str | Path | None = None) -> PromptContent:
+    """Return the text contents and path for a ``.txt`` prompt file.
+
+    Parameters
+    ----------
+    name:
+        Base filename of the prompt without the ``.txt`` suffix. If the suffix is
+        included, it will not be duplicated.
+    base_dir:
+        Optional directory containing the prompt file. Defaults to the directory
+        of this module when not provided.
+
+    Returns
+    -------
+    PromptContent
+        The prompt text (with surrounding whitespace removed) and the resolved
+        path to the ``.txt`` file.
+    """
+
+    if not name:
+        raise ValueError("Prompt name must be provided")
+
+    filename = name if name.endswith(".txt") else f"{name}.txt"
+    prompt_dir = Path(base_dir) if base_dir is not None else Path(__file__).parent
+    prompt_path = prompt_dir / filename
+    try:
+        text = prompt_path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:  # pragma: no cover - caller handles missing prompt
+        raise PromptNotFoundError(prompt_path) from exc
+
+    return PromptContent(text=text, path=prompt_path)
 
 
 def day_path(day: Optional[str] = None) -> Path:
@@ -225,7 +273,8 @@ def get_agent(persona: str = "default") -> dict:
     txt_path = AGENT_DIR / f"{persona}.txt"
     if not txt_path.exists():
         raise FileNotFoundError(f"Agent persona not found: {persona}")
-    config["instruction"] = txt_path.read_text(encoding="utf-8")
+    prompt_data = load_prompt(persona, base_dir=AGENT_DIR)
+    config["instruction"] = prompt_data.text
 
     # Add runtime context (entities and domains)
     extra_parts = []

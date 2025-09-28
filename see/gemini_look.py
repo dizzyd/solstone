@@ -1,9 +1,10 @@
 import json
-import os
+from pathlib import Path
 
 from PIL import ImageDraw
 
 from think.models import GEMINI_FLASH, GEMINI_LITE, gemini_generate
+from think.utils import PromptNotFoundError, load_prompt
 
 # Module-level global to store the system instruction
 _system_instruction = None
@@ -22,15 +23,13 @@ def initialize():
 
     # Load system instruction from external file
     try:
-        system_instruction_path = os.path.join(
-            os.path.dirname(__file__), "gemini_look.txt"
+        system_instruction_path = Path(__file__).with_name("gemini_look.txt")
+        prompt_content = load_prompt(
+            system_instruction_path.stem, base_dir=system_instruction_path.parent
         )
-        with open(system_instruction_path, "r") as f:
-            _system_instruction = f.read().strip()
-    except FileNotFoundError:
-        print(
-            f"Warning: System instruction file not found at {system_instruction_path}"
-        )
+        _system_instruction = prompt_content.text
+    except PromptNotFoundError as exc:
+        print(exc)
         return False
 
     return _system_instruction is not None

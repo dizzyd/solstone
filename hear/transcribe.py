@@ -21,7 +21,13 @@ from hear.audio_utils import SAMPLE_RATE, detect_speech, merge_streams, resample
 from hear.gemini import transcribe_segments
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_FLASH
-from think.utils import day_log, load_entity_names, setup_cli
+from think.utils import (
+    PromptNotFoundError,
+    day_log,
+    load_entity_names,
+    load_prompt,
+    setup_cli,
+)
 
 # Constants
 MODEL = GEMINI_FLASH
@@ -38,8 +44,15 @@ class Transcriber:
         self.journal_dir = journal_dir
         self.watch_dir: Optional[Path] = None
         self.client = genai.Client(api_key=api_key)
-        self.prompt_path = prompt_path
-        self.prompt_text = prompt_path.read_text().strip()
+        try:
+            prompt_data = load_prompt(
+                prompt_path.stem, base_dir=prompt_path.parent
+            )
+        except PromptNotFoundError as exc:
+            raise SystemExit(str(exc)) from exc
+
+        self.prompt_path = prompt_data.path
+        self.prompt_text = prompt_data.text
         # Validate entities file exists at startup
         load_entity_names(journal_dir, required=True)
         self.model = load_silero_vad()

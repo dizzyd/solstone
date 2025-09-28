@@ -20,7 +20,7 @@ from see.screen_compare import compare_images
 from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
 from think.models import GEMINI_PRO, gemini_generate
-from think.utils import setup_cli
+from think.utils import PromptNotFoundError, load_prompt, setup_cli
 
 try:
     from pypdf import PdfReader
@@ -453,13 +453,12 @@ def create_transcript_summary(
         return
 
     # Load the prompt from importer.txt
-    prompt_file = Path(__file__).parent / "importer.txt"
     try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            importer_prompt_template = f.read()
-    except Exception as e:
-        logger.error(f"Failed to load importer.txt: {e}")
+        importer_prompt = load_prompt("importer", base_dir=Path(__file__).parent)
+    except PromptNotFoundError as exc:
+        logger.error(f"Failed to load importer prompt: {exc}")
         return
+    importer_prompt_template = importer_prompt.text
 
     # Add the context metadata to the prompt
     metadata_lines = [
