@@ -11,8 +11,6 @@ from dotenv import load_dotenv
 from .models import GEMINI_PRO, gemini_generate
 from .utils import load_prompt, setup_cli
 
-PROMPT_PATH = Path(__file__).with_name("planner.txt")
-
 
 async def _get_mcp_tools() -> str:
     """Return formatted MCP tools information for the prompt."""
@@ -45,7 +43,8 @@ async def _get_mcp_tools() -> str:
 
 def _load_prompt() -> str:
     """Return system instruction text for planning."""
-    base_prompt = load_prompt(PROMPT_PATH.stem, base_dir=PROMPT_PATH.parent).text
+    prompt_content = load_prompt("planner", base_dir=Path(__file__).parent)
+    base_prompt = prompt_content.text
 
     # Try to add MCP tools information
     try:

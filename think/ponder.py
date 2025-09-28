@@ -292,11 +292,8 @@ def main() -> None:
             return
 
         # Create a corresponding occurrence JSON from the markdown summary
-        occ_prompt_path = Path(__file__).with_name("ponder.txt")
         try:
-            occ_prompt_content = load_prompt(
-                occ_prompt_path.stem, base_dir=occ_prompt_path.parent
-            )
+            occ_prompt_content = load_prompt("ponder", base_dir=Path(__file__).parent)
         except PromptNotFoundError as exc:
             print(exc)
             return

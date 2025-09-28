@@ -23,10 +23,7 @@ def initialize():
 
     # Load system instruction from external file
     try:
-        system_instruction_path = Path(__file__).with_name("gemini_look.txt")
-        prompt_content = load_prompt(
-            system_instruction_path.stem, base_dir=system_instruction_path.parent
-        )
+        prompt_content = load_prompt("gemini_look", base_dir=Path(__file__).parent)
         _system_instruction = prompt_content.text
     except PromptNotFoundError as exc:
         print(exc)

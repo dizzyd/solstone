@@ -39,15 +39,13 @@ class Transcriber:
         self,
         journal_dir: Path,
         api_key: str,
-        prompt_path: Path,
+        prompt_name: str = "transcribe",
     ):
         self.journal_dir = journal_dir
         self.watch_dir: Optional[Path] = None
         self.client = genai.Client(api_key=api_key)
         try:
-            prompt_data = load_prompt(
-                prompt_path.stem, base_dir=prompt_path.parent
-            )
+            prompt_data = load_prompt(prompt_name, base_dir=Path(__file__).parent)
         except PromptNotFoundError as exc:
             raise SystemExit(str(exc)) from exc
 
@@ -266,7 +264,7 @@ class Transcriber:
 
                 crumb_builder = (
                     CrumbBuilder()
-                    .add_file(self.prompt_path)
+                    .add_file(str(self.prompt_path))
                     .add_file(self.journal_dir / "entities.md")
                 )
                 crumb_builder = crumb_builder.add_file(raw_path).add_model(MODEL)
@@ -408,13 +406,6 @@ class Transcriber:
 def main():
     parser = argparse.ArgumentParser(description="Transcribe FLAC files using Gemini")
     parser.add_argument(
-        "-p",
-        "--prompt",
-        type=Path,
-        default=Path(__file__).with_name("transcribe.txt"),
-        help="Path to the system prompt text",
-    )
-    parser.add_argument(
         "--repair",
         type=str,
         help="Repair mode: process incomplete files for specified day (YYYYMMDD format)",
@@ -434,7 +425,7 @@ def main():
     if not ent_path.is_file():
         parser.error(f"entities file not found: {ent_path}")
 
-    transcriber = Transcriber(journal, api_key, args.prompt)
+    transcriber = Transcriber(journal, api_key)
 
     if args.repair:
         try:

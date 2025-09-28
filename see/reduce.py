@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -12,9 +11,13 @@ from dotenv import load_dotenv
 
 from think.crumbs import CrumbBuilder
 from think.models import GEMINI_FLASH, gemini_generate
-from think.utils import day_log, day_path, setup_cli
-
-DEFAULT_PROMPT_PATH = os.path.join(os.path.dirname(__file__), "reduce.txt")
+from think.utils import (
+    PromptNotFoundError,
+    day_log,
+    day_path,
+    load_prompt,
+    setup_cli,
+)
 
 
 def parse_monitor_files(day_dir):
@@ -80,17 +83,6 @@ def scan_day(day: str) -> dict[str, list[str]]:
                 unreduced.append(Path(e["path"]).name)
 
     return {"processed": reduced, "repairable": sorted(set(unreduced))}
-
-
-def load_prompt(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        logging.error("Prompt file not found: %s", path)
-        sys.exit(1)
-
-
 def _get_api_key() -> str:
     load_dotenv()
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -126,7 +118,7 @@ def call_gemini(markdown, prompt, api_key, debug=False):
 def process_group(
     start,
     files,
-    prompt,
+    prompt_text,
     prompt_path,
     api_key,
     force,
@@ -176,7 +168,7 @@ def process_group(
         file_count,
     )
     try:
-        result = call_gemini(markdown, prompt, api_key, debug)
+        result = call_gemini(markdown, prompt_text, api_key, debug)
     except Exception as e:
         raise RuntimeError(f"Gemini call failed: {e}") from e
 
@@ -216,7 +208,6 @@ def _iter_groups(day_dir: str, start: datetime | None, end: datetime | None):
 
 def reduce_day(
     day: str,
-    prompt_path: str = DEFAULT_PROMPT_PATH,
     *,
     force: bool = False,
     debug: bool = False,
@@ -259,7 +250,14 @@ def reduce_day(
         logging.error(str(exc))
         return 0, 0
 
-    prompt = load_prompt(prompt_path)
+    try:
+        prompt_data = load_prompt("reduce", base_dir=Path(__file__).parent)
+    except PromptNotFoundError as exc:
+        logging.error(str(exc))
+        return 0, len(groups_iter)
+
+    prompt_text = prompt_data.text
+    prompt_path = str(prompt_data.path)
 
     success = 0
     failed = 0
@@ -270,7 +268,7 @@ def reduce_day(
                 process_group,
                 group_start,
                 files,
-                prompt,
+                prompt_text,
                 prompt_path,
                 api_key,
                 force,
@@ -299,9 +297,6 @@ def main():
         "day", help="Day in YYYYMMDD format containing *_<source>_<id>_diff.json files"
     )
     parser.add_argument(
-        "-p", "--prompt", default=DEFAULT_PROMPT_PATH, help="Prompt file"
-    )
-    parser.add_argument(
         "--force", action="store_true", help="Overwrite existing markdown files"
     )
     parser.add_argument("--start", help="Start time HH:MM for partial processing")
@@ -321,7 +316,6 @@ def main():
 
     success, failed = reduce_day(
         args.day,
-        args.prompt,
         force=args.force,
         debug=args.debug,
         start=start,

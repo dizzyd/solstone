@@ -1,6 +1,7 @@
 import importlib
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 FIXTURES = Path("fixtures")
 
@@ -27,8 +28,8 @@ def test_parse_and_group_entries(tmp_path, monkeypatch):
 def test_reduce_day(tmp_path, monkeypatch):
     mod = importlib.import_module("see.reduce")
     day_dir = copy_day(tmp_path)
-    prompt = tmp_path / "prompt.txt"
-    prompt.write_text("prompt")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("prompt")
 
     def fake_call(md, prompt_text, api_key, debug=False):
         return "summary"
@@ -38,7 +39,9 @@ def test_reduce_day(tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-    mod.reduce_day("20240101", str(prompt))
+    prompt_content = SimpleNamespace(text="prompt", path=prompt_path)
+    monkeypatch.setattr(mod, "load_prompt", lambda *a, **k: prompt_content)
+    mod.reduce_day("20240101")
     out = day_dir / "123000_screen.md"
     crumb = Path(str(out) + ".crumb")
     assert out.read_text() == "summary"
@@ -54,8 +57,8 @@ def test_scan_day(tmp_path, monkeypatch):
     assert "123456_screen.md" in info["processed"]
     assert "123456_monitor_1_diff.json" in info["repairable"]
 
-    prompt = tmp_path / "prompt.txt"
-    prompt.write_text("prompt")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("prompt")
 
     def fake_call(md, prompt_text, api_key, debug=False):
         return "summary"
@@ -63,7 +66,9 @@ def test_scan_day(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "call_gemini", fake_call)
     monkeypatch.setattr(mod, "load_dotenv", lambda: True)
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
-    mod.reduce_day("20240101", str(prompt))
+    prompt_content = SimpleNamespace(text="prompt", path=prompt_path)
+    monkeypatch.setattr(mod, "load_prompt", lambda *a, **k: prompt_content)
+    mod.reduce_day("20240101")
 
     info_after = mod.scan_day("20240101")
     assert "123000_screen.md" in info_after["processed"]
@@ -73,8 +78,8 @@ def test_scan_day(tmp_path, monkeypatch):
 def test_reduce_day_parallel(tmp_path, monkeypatch):
     mod = importlib.import_module("see.reduce")
     day_dir = copy_day(tmp_path)
-    prompt = tmp_path / "prompt.txt"
-    prompt.write_text("prompt")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("prompt")
 
     # create a second diff file for another time block
     src = day_dir / "123456_monitor_1_diff.json"
@@ -92,6 +97,8 @@ def test_reduce_day_parallel(tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-    mod.reduce_day("20240101", str(prompt), jobs=2)
+    prompt_content = SimpleNamespace(text="prompt", path=prompt_path)
+    monkeypatch.setattr(mod, "load_prompt", lambda *a, **k: prompt_content)
+    mod.reduce_day("20240101", jobs=2)
 
     assert len(calls) == 2
