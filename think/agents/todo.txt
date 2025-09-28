@@ -34,22 +34,26 @@ Systematically mine recent journal data for new priorities:
 
 ```
 Priority Discovery:
-1. get_resource("journal://summary/{yesterday}/followups") and .../opportunities
+1. todo_upcoming(limit=50)
+   → IMPORTANT: Always check upcoming todos first to avoid duplicating tasks
+     already scheduled for future days
+
+2. get_resource("journal://summary/{yesterday}/followups") and .../opportunities
    → Capture explicit next steps
 
-2. search_summaries("followup OR todo OR need to OR schedule", limit=10)
+3. search_summaries("followup OR todo OR need to OR schedule", limit=10)
    → Find natural language commitments
 
-3. search_summaries("deadline OR urgent OR critical", limit=10)
+4. search_summaries("deadline OR urgent OR critical", limit=10)
    → Identify time-sensitive work
 
-4. search_transcripts("TODO OR FIXME", day={yesterday})
+5. search_transcripts("TODO OR FIXME", day={yesterday})
    → Catch technical debt and verbal commitments
 
-5. search_news("[keywords]", domain=relevant_domain, limit=5)
+6. search_news("[keywords]", domain=relevant_domain, limit=5)
    → Check domain news for announced commitments
 
-6. search_events(...) and additional targeted queries as needed
+7. search_events(...) and additional targeted queries as needed
 ```
 
 ### Phase 3: Task Qualification
@@ -57,6 +61,7 @@ Priority Discovery:
 Each candidate must be:
 - **Actionable** – specific action with a clear outcome
 - **Grounded** – supported by journal evidence or ongoing commitments
+- **Unique** – not already present in upcoming todos for future days
 - **Prioritized** – urgent or high impact items take precedence
 - **Sized** – achievable within the day or clearly labeled for future
 

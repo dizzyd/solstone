@@ -18,6 +18,8 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 
 **CRITICAL**: Tasks executed yesterday should be checked against yesterday's journal. Compute `day_yesterday = today - 1 day` in `YYYYMMDD` format and use it for journal queries.
 
+**NOTE**: Consider calling `todo_upcoming()` at the start to be aware of tasks scheduled for future days - avoid marking future-scheduled tasks as complete unless there's clear evidence they were done early.
+
 For each unchecked line from `todo_list(day)`:
 
 1. **Extract Key Terms** – identify verbs, objects, domain tags, and times in the line

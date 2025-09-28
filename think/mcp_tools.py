@@ -206,7 +206,28 @@ def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
 
 @register_tool(annotations=HINTS)
 def todo_upcoming(limit: int = 20) -> dict[str, Any]:
-    """Return upcoming todos across future days as markdown sections."""
+    """Return upcoming todos across future days as markdown sections.
+
+    This tool retrieves todos from future journal days, organized by date.
+    Use this before adding any todo with a scope beyond today to check if
+    it has already been scheduled for another upcoming day, avoiding duplicates
+    and ensuring proper task organization across the timeline.
+
+    Args:
+        limit: Maximum number of todos to return (default: 20)
+
+    Returns:
+        Dictionary containing:
+        - limit: The limit value used for this query
+        - markdown: Formatted markdown with todos grouped by day, each section
+                   showing the day's date and its todo items
+        - error: Error message if the operation fails (only on exception)
+
+    Examples:
+        - todo_upcoming()  # Return up to 20 upcoming todos
+        - todo_upcoming(limit=10)  # Return up to 10 upcoming todos
+        - todo_upcoming(limit=50)  # Return up to 50 upcoming todos
+    """
 
     try:
         markdown = todo.upcoming(limit=limit)

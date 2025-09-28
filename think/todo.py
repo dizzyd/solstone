@@ -396,7 +396,7 @@ def upcoming(limit: int = 20, *, today: str | None = None) -> str:
         today: Optional ``YYYYMMDD`` override for the current day, useful for testing.
 
     Returns:
-        Markdown with a ``### YYYY-MM-DD`` section per day followed by raw todo
+        Markdown with a ``### YYYYMMDD`` section per day followed by raw todo
         checklist lines. When no upcoming items exist the string
         ``"No upcoming todos."`` is returned.
     """
@@ -441,7 +441,6 @@ def upcoming(limit: int = 20, *, today: str | None = None) -> str:
         if not items:
             continue
 
-        day_heading = datetime.strptime(day, "%Y%m%d").strftime("%Y-%m-%d")
         day_lines: list[str] = []
 
         for item in items:
@@ -451,7 +450,7 @@ def upcoming(limit: int = 20, *, today: str | None = None) -> str:
                 break
 
         if day_lines:
-            section = "\n".join([f"### {day_heading}"] + day_lines)
+            section = "\n".join([f"### {day}"] + day_lines)
             sections.append(section)
 
         if remaining == 0:

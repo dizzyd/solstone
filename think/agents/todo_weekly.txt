@@ -37,10 +37,12 @@ Combine these with journal discovery calls to gather evidence before making upda
 - Run targeted `search_summaries` / `search_transcripts` queries when a follow-up reference needs deeper validation or completion evidence
 
 ### 3. Validate Potential Work
+- First, call `todo_upcoming(limit=50)` to review todos already scheduled for future days
 - For every candidate task from the summaries:
   - Check whether it already exists in any checklist entry across the week (completed or not)
+  - Check whether it already exists in upcoming todos for future days (avoid duplicates)
   - Use journal evidence to decide if it is finished; if so, and the corresponding todo is still open, call `todo_done` on today's list or the origin day as appropriate
-  - Discard items that are obsolete, already satisfied, or outside actionable scope
+  - Discard items that are obsolete, already satisfied, already scheduled, or outside actionable scope
 
 ### 4. Curate the Next Five Priorities
 - Score remaining candidates by urgency, impact, dependencies, and freshness
