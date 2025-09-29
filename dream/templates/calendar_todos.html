@@ -12,6 +12,26 @@
   margin: 1rem 0;
 }
 
+.day-heading-today {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  background: #2563eb;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.day-heading-today:hover,
+.day-heading-today:focus-visible {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
 .todo-row {
   display: flex;
   align-items: center;
@@ -197,6 +217,13 @@
   opacity: 1;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .todo-side-move button,
+  .todo-side-remove button {
+    opacity: 1;
+  }
+}
+
 
 .todo-domain-icon {
   display: inline-flex;
@@ -353,9 +380,12 @@
 
 {% block body %}
 <div class="container">
-  {{ macros.day_heading(title,
+  {{ macros.day_heading(
+        title,
         prev_day and url_for('todos.todos_day', day=prev_day),
-        next_day and url_for('todos.todos_day', day=next_day)) }}
+        next_day and url_for('todos.todos_day', day=next_day),
+        today_url=url_for('todos.todos_day', day=today_day)
+      ) }}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}

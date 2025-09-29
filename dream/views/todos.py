@@ -104,6 +104,7 @@ def todos_day(day: str):  # type: ignore[override]
         bp.logger.debug("Failed to load domain metadata: %s", exc)
         domain_map = {}
     prev_day, next_day = adjacent_days(state.journal_root, day)
+    today_day = date.today().strftime("%Y%m%d")
 
     return render_template(
         "calendar_todos.html",
@@ -112,6 +113,7 @@ def todos_day(day: str):  # type: ignore[override]
         day=day,
         prev_day=prev_day,
         next_day=next_day,
+        today_day=today_day,
         todos=todos,
         domain_map=domain_map,
     )
