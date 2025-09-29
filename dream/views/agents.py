@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# Removed asyncio - no longer needed
 import asyncio
 import json
 import os
@@ -16,14 +15,6 @@ bp = Blueprint("agents", __name__, template_folder="../templates")
 def agents_page() -> str:
     """Render the Agents view."""
     return render_template("agents.html", active="agents")
-
-
-def _agents_dir() -> str:
-    if not state.journal_root:
-        return ""
-    path = os.path.join(state.journal_root, "agents")
-    os.makedirs(path, exist_ok=True)
-    return path
 
 
 def _list_items(item_type: str) -> list[dict[str, object]]:

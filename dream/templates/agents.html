@@ -279,17 +279,6 @@
   display: block;
 }
 
-.selection-status {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 1rem;
-}
-
-.selection-status.required {
-  color: #dc3545;
-  font-weight: 500;
-}
-
 /* Session History Table */
 table { 
   border-collapse: collapse; 
@@ -658,7 +647,8 @@ tr a:hover {
   margin-bottom: 1rem;
 }
 
-.prompt-content {
+/* Prompt content display box for create modals */
+.prompt-result-box {
   background: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 4px;
@@ -843,6 +833,7 @@ tr a:hover {
   background: #545b62;
 }
 
+/* Prompt section container in item modal */
 .prompt-content {
   padding: 1rem;
   max-height: 500px;
@@ -888,11 +879,6 @@ tr a:hover {
   20% { opacity: 1; }
   80% { opacity: 1; }
   100% { opacity: 0; }
-}
-
-/* Remove old toggle button styles */
-.toggle-btn {
-  display: none !important;
 }
 
 /* Tools Tab Styles */
@@ -1258,7 +1244,7 @@ tr a:hover {
     <!-- Result Area -->
     <div id="topicResult" style="display: none;">
       <h3>Topic Content</h3>
-      <div id="topicResultContent" class="prompt-content"></div>
+      <div id="topicResultContent" class="prompt-result-box"></div>
       <div class="modal-actions">
         <button onclick="saveNewTopic()">Save Topic</button>
         <button onclick="editTopicContent()">Edit Content</button>
@@ -1350,7 +1336,7 @@ tr a:hover {
         </div>
         <div class="prompt-content">
           <div id="promptDisplay" class="prompt-display"></div>
-          <textarea id="promptEditor" class="prompt-editor" style="display: none;"></textarea>
+          <textarea id="itemContentEditor" class="prompt-editor" style="display: none;"></textarea>
         </div>
       </div>
 
@@ -1446,6 +1432,9 @@ let currentEditingItem = null;
 let currentEditingType = null; // 'agent' or 'topic'
 let isEditMode = false;
 let activePackFilter = 'all';
+let originalPromptContent = ''; // Store original content for cancel
+let currentTopicContent = '';
+let currentTopicTitle = '';
 
 // Switch between main tabs
 function switchMainTab(tabName) {
@@ -1668,7 +1657,7 @@ function viewItemDetails(itemId, itemType, event) {
 
   currentEditingItem = itemId;
   currentEditingType = itemType;
-  window.originalPromptContent = ''; // Store original content for cancel
+  originalPromptContent = ''; // Store original content for cancel
 
   // Set title
   const modalTitle = document.getElementById('modalTitle');
@@ -1756,12 +1745,12 @@ function viewItemDetails(itemId, itemType, event) {
     .then(data => {
       if (data.error) {
         document.getElementById('promptDisplay').innerHTML = `<p>Error: ${data.error}</p>`;
-        window.originalPromptContent = '';
+        originalPromptContent = '';
       } else {
         // Store raw content for editing
         const rawContent = data.content;
-        window.originalPromptContent = rawContent;
-        document.getElementById('promptEditor').value = rawContent;
+        originalPromptContent = rawContent;
+        document.getElementById('itemContentEditor').value = rawContent;
 
         // Display content
         document.getElementById('promptDisplay').textContent = rawContent;
@@ -1814,7 +1803,7 @@ function handleTitleKey(event) {
 // Prompt editing functions
 function startPromptEdit() {
   const promptDisplay = document.getElementById('promptDisplay');
-  const promptEditor = document.getElementById('promptEditor');
+  const promptEditor = document.getElementById('itemContentEditor');
   const editBtn = document.getElementById('editPromptBtn');
   const saveBtn = document.getElementById('savePromptBtn');
   const cancelBtn = document.getElementById('cancelPromptBtn');
@@ -1829,7 +1818,7 @@ function startPromptEdit() {
 
 function savePromptEdit() {
   const promptDisplay = document.getElementById('promptDisplay');
-  const promptEditor = document.getElementById('promptEditor');
+  const promptEditor = document.getElementById('itemContentEditor');
   const newContent = promptEditor.value.trim();
 
   if (!newContent) {
@@ -1841,7 +1830,7 @@ function savePromptEdit() {
   saveMetadata({ content: newContent });
 
   promptDisplay.textContent = newContent;
-  window.originalPromptContent = newContent;
+  originalPromptContent = newContent;
 
   // Reset UI
   promptDisplay.style.display = 'block';
@@ -1853,10 +1842,10 @@ function savePromptEdit() {
 
 function cancelPromptEdit() {
   const promptDisplay = document.getElementById('promptDisplay');
-  const promptEditor = document.getElementById('promptEditor');
+  const promptEditor = document.getElementById('itemContentEditor');
 
   // Restore original content
-  promptEditor.value = window.originalPromptContent;
+  promptEditor.value = originalPromptContent;
 
   // Reset UI
   promptDisplay.style.display = 'block';
@@ -1873,7 +1862,7 @@ async function saveMetadata(updates = {}) {
   if (currentEditingType === 'agent') {
     // Gather all current metadata values
     const currentTitle = document.getElementById('modalTitle').textContent;
-    const currentContent = document.getElementById('promptEditor').value.trim();
+    const currentContent = document.getElementById('itemContentEditor').value.trim();
 
     requestBody.title = updates.title || currentTitle;
     requestBody.content = updates.content || currentContent;
@@ -1947,7 +1936,7 @@ async function saveMetadata(updates = {}) {
 async function saveTopicMetadata() {
   const requestBody = {
     title: document.getElementById('modalTitle').textContent,
-    content: document.getElementById('promptEditor').value.trim(),
+    content: document.getElementById('itemContentEditor').value.trim(),
     disabled: !document.getElementById('modalTopicEnabled').checked,
     color: document.getElementById('modalTopicColor').value
   };
@@ -2000,9 +1989,6 @@ function showSavingIndicator() {
     indicator.style.display = 'none';
   }, 2000);
 }
-
-// Form submission - removed as agentForm doesn't exist in this template
-// The create agent functionality is handled by createPersonaForm instead
 
 // Show prompt modal with prompt text
 function showPromptModal(promptText) {
@@ -2124,10 +2110,7 @@ async function startAgent() {
     // Success - close modal and reload agents
     closePromptModal();
     loadAgentSessions();
-    
-    // Clear the input form
-    document.getElementById('agentInput').value = '';
-    
+
   } catch (error) {
     showError('Error starting agent: ' + error.message);
   } finally {
@@ -2140,12 +2123,12 @@ async function startAgent() {
 function closeItemModal() {
   // Cancel any ongoing prompt edits if elements exist
   const promptDisplay = document.getElementById('promptDisplay');
-  const promptEditor = document.getElementById('promptEditor');
+  const promptEditor = document.getElementById('itemContentEditor');
 
   if (promptDisplay && promptEditor) {
     // Reset prompt editor if it was being edited
     if (promptEditor.style.display === 'block') {
-      promptEditor.value = window.originalPromptContent || '';
+      promptEditor.value = originalPromptContent || '';
       promptDisplay.style.display = 'block';
       promptEditor.style.display = 'none';
 
@@ -2546,10 +2529,6 @@ async function showPersonaPromptResult(prompt, title) {
   }
 }
 
-// Removed editPersonaPrompt - now using standard edit modal
-
-// Removed saveNewPersona - now handled in showPersonaPromptResult
-
 // Handle create topic form submission
 document.getElementById('createTopicForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2571,11 +2550,11 @@ document.getElementById('createTopicForm').addEventListener('submit', async (e) 
 function showTopicResult(content, title) {
   const resultDiv = document.getElementById('topicResult');
   const resultContent = document.getElementById('topicResultContent');
-  
+
   // Store content and title for saving
-  window.currentTopicContent = content;
-  window.currentTopicTitle = title;
-  
+  currentTopicContent = content;
+  currentTopicTitle = title;
+
   // Display the content
   resultContent.textContent = content;
   resultDiv.style.display = 'block';
@@ -2595,17 +2574,17 @@ function editTopicContent() {
   
   resultContent.innerHTML = '';
   resultContent.appendChild(textarea);
-  
+
   // Update the content when editing
   textarea.addEventListener('input', () => {
-    window.currentTopicContent = textarea.value;
+    currentTopicContent = textarea.value;
   });
 }
 
 async function saveNewTopic() {
-  const title = window.currentTopicTitle;
-  const content = window.currentTopicContent;
-  
+  const title = currentTopicTitle;
+  const content = currentTopicContent;
+
   if (!title || !content) {
     showError('Missing title or content');
     return;
