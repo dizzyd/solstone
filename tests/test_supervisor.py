@@ -43,6 +43,7 @@ def test_start_runners(tmp_path, monkeypatch):
         def __init__(self):
             self.stdout = io.StringIO()
             self.stderr = io.StringIO()
+            self.pid = 12345
 
         def terminate(self):
             pass
@@ -119,6 +120,9 @@ def test_run_process_day(tmp_path, monkeypatch):
     launch_calls = {}
 
     class DummyProcess:
+        def __init__(self):
+            self.pid = 12345
+
         def wait(self):
             return 0
 

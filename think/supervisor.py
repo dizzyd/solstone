@@ -133,6 +133,8 @@ def _launch_process(
     policy: RestartPolicy | None = None
     if restart:
         policy = _get_restart_policy(name)
+
+    logging.info(f"Starting {name}: {' '.join(cmd)}")
     try:
         proc = subprocess.Popen(
             cmd,
@@ -142,9 +144,11 @@ def _launch_process(
             bufsize=1,
             start_new_session=True,
         )
-    except Exception:
+    except Exception as exc:
+        logging.error(f"Failed to start {name}: {exc}")
         log_writer.close()
         raise
+    logging.info(f"Started {name} with PID {proc.pid}")
     threads = [
         threading.Thread(
             target=_stream_output,
@@ -607,6 +611,8 @@ def main() -> None:
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
 
+    logging.info("Supervisor starting...")
+
     procs: list[ManagedProcess] = []
     if not args.no_runners:
         procs.extend(start_runners())
@@ -614,6 +620,8 @@ def main() -> None:
         procs.append(start_cortex_server())
     if not args.no_dream:
         procs.append(start_dream_server(verbose=args.verbose))
+
+    logging.info(f"Started {len(procs)} processes, entering supervision loop")
     try:
         supervise(
             threshold=args.threshold,
