@@ -1,0 +1,1534 @@
+let availableAgents = [];
+let availableTopics = [];
+let availableTools = [];
+let toolPacks = {};
+let currentMainTab = 'log';
+let currentEditingItem = null;
+let currentEditingType = null; // 'agent' or 'topic'
+let isEditMode = false;
+let activePackFilter = 'all';
+let originalPromptContent = ''; // Store original content for cancel
+let currentTopicContent = '';
+let currentTopicTitle = '';
+
+// Switch between main tabs
+function switchMainTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.tab-button').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Update tab content
+  document.querySelectorAll('.main-tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+  document.getElementById(tabName + 'Tab').classList.add('active');
+  
+  currentMainTab = tabName;
+  
+  // Load data for the selected tab if needed
+  if (tabName === 'log') {
+    loadAgentSessions();
+    startAutoRefresh();
+  } else if (tabName === 'agents') {
+    stopAutoRefresh();
+    if (!document.getElementById('agentCards').children.length) {
+      loadAvailableAgents();
+    }
+  } else if (tabName === 'topics') {
+    stopAutoRefresh();
+    if (!document.getElementById('topicCards').children.length) {
+      loadAvailableTopics();
+    }
+  } else if (tabName === 'tools') {
+    stopAutoRefresh();
+    if (availableTools.length === 0) {
+      loadAvailableTools();
+    }
+  }
+}
+
+// Load available agents and render cards
+function loadAvailableAgents() {
+  fetch('{{ url_for('agents.available_agents') }}')
+    .then(r => r.json())
+    .then(agents => {
+      availableAgents = agents;
+      renderAgentCards();
+    });
+}
+
+// Load available topics and render cards
+function loadAvailableTopics() {
+  fetch('{{ url_for('agents.available_topics') }}')
+    .then(r => r.json())
+    .then(topics => {
+      availableTopics = topics;
+      renderTopicCards();
+    });
+}
+
+// Generic function to render cards for both agents and topics
+function renderCards(items, containerId, itemType, createModalFunc) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  
+  // Add Create card first
+  const createCard = document.createElement('div');
+  createCard.className = 'agent-card create-agent-card';
+  const itemLabel = itemType === 'agent' ? 'Agent' : 'Topic';
+  createCard.innerHTML = `
+    <h3>+ Create New ${itemLabel}</h3>
+  `;
+  createCard.addEventListener('click', createModalFunc);
+  container.appendChild(createCard);
+  
+  // Add existing items
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'agent-card';
+    
+    // Add disabled class for disabled topics
+    if (itemType === 'topic' && item.disabled) {
+      card.className += ' disabled';
+    }
+    
+    card.dataset.itemId = item.id;
+    card.dataset.itemType = itemType;
+    card.title = item.description; // Set description as tooltip
+    
+    // Add color border and hover effects for topics
+    if (itemType === 'topic' && item.color) {
+      card.style.borderLeftWidth = '4px';
+      card.style.borderLeftColor = item.color;
+      
+      // Set hover color to match topic color
+      card.addEventListener('mouseenter', () => {
+        card.style.borderColor = item.color;
+        card.style.boxShadow = `0 2px 8px ${item.color}33`; // 33 = 20% opacity in hex
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        card.style.borderColor = '#e0e0e0';
+        card.style.borderLeftColor = item.color; // Keep left border colored
+        card.style.boxShadow = '';
+      });
+    }
+    
+    // Create title with color indicator for topics
+    let titleHtml = item.title;
+    if (itemType === 'topic') {
+      if (item.color) {
+        titleHtml = `<span class="topic-indicator" style="background-color: ${item.color}"></span>${item.title}`;
+      }
+      if (item.disabled) {
+        titleHtml += ' <span style="color: #6c757d; font-size: 0.8em;">(disabled)</span>';
+      }
+    }
+    
+    // Build metadata badges HTML
+    let metadataHtml = '';
+    if (itemType === 'agent') {
+      const badges = [];
+
+      // Schedule badge
+      if (item.schedule === 'daily') {
+        badges.push('<span class="metadata-badge schedule"><span class="badge-icon">📅</span>Daily</span>');
+      }
+
+      // Priority badge
+      if (item.priority !== undefined && item.priority !== null) {
+        badges.push(`<span class="metadata-badge priority"><span class="badge-icon">⚡</span>P${item.priority}</span>`);
+      }
+
+      // Multi-domain badge
+      if (item.multi_domain) {
+        badges.push('<span class="metadata-badge multi-domain"><span class="badge-icon">🌐</span>Multi-Domain</span>');
+      }
+
+      // Tools badge (simplified)
+      if (item.tools) {
+        const toolsList = item.tools.split(',').map(t => t.trim());
+        if (toolsList.length === 1) {
+          badges.push(`<span class="metadata-badge tools"><span class="badge-icon">🔧</span>${toolsList[0]}</span>`);
+        } else {
+          badges.push(`<span class="metadata-badge tools"><span class="badge-icon">🔧</span>${toolsList.length} packs</span>`);
+        }
+      }
+
+      // Backend badge
+      if (item.backend) {
+        badges.push(`<span class="metadata-badge backend"><span class="badge-icon">🤖</span>${item.backend}</span>`);
+      }
+
+      if (badges.length > 0) {
+        metadataHtml = `<div class="agent-metadata">${badges.join('')}</div>`;
+      }
+    }
+
+    card.innerHTML = `
+      <h3>${titleHtml}</h3>
+      ${metadataHtml}
+    `;
+    
+    // Create chat link for agents only
+    if (itemType === 'agent') {
+      const chatLink = document.createElement('a');
+      chatLink.className = 'chat-link';
+      chatLink.href = `/chat?persona=${item.id}`;
+      chatLink.innerHTML = '💬';
+      chatLink.title = `Chat with ${item.title}`;
+      chatLink.onclick = (e) => {
+        e.stopPropagation(); // Prevent card click when clicking chat link
+      };
+      card.appendChild(chatLink);
+    }
+    
+    card.addEventListener('click', (e) => {
+      viewItemDetails(item.id, itemType, e);
+    });
+    
+    container.appendChild(card);
+  });
+}
+
+// Render agent selection cards
+function renderAgentCards() {
+  // Sort agents by priority (if scheduled) then by title
+  const sortedAgents = [...availableAgents].sort((a, b) => {
+    // Scheduled agents with priority come first
+    if (a.schedule === 'daily' && b.schedule === 'daily') {
+      // Both scheduled, sort by priority (lower number = higher priority)
+      const aPriority = a.priority ?? 50;
+      const bPriority = b.priority ?? 50;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+    } else if (a.schedule === 'daily') {
+      return -1; // a comes first
+    } else if (b.schedule === 'daily') {
+      return 1; // b comes first
+    }
+    // Fall back to alphabetical by title
+    return a.title.localeCompare(b.title);
+  });
+
+  renderCards(sortedAgents, 'agentCards', 'agent', openCreatePersonaModal);
+}
+
+// Render topic selection cards
+function renderTopicCards() {
+  renderCards(availableTopics, 'topicCards', 'topic', openCreateTopicModal);
+}
+
+// View item details in modal (generic for both agents and topics)
+function viewItemDetails(itemId, itemType, event) {
+  event.stopPropagation();
+
+  const items = itemType === 'agent' ? availableAgents : availableTopics;
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+
+  currentEditingItem = itemId;
+  currentEditingType = itemType;
+  originalPromptContent = ''; // Store original content for cancel
+
+  // Set title
+  const modalTitle = document.getElementById('modalTitle');
+  modalTitle.textContent = item.title;
+
+  // Show/hide metadata sections based on type
+  const agentMetadata = document.getElementById('agentMetadata');
+  const topicMetadata = document.getElementById('topicMetadata');
+  const promptLabel = document.getElementById('promptLabel');
+
+  if (itemType === 'agent') {
+    agentMetadata.style.display = 'grid';
+    topicMetadata.style.display = 'none';
+    promptLabel.textContent = 'System Prompt';
+  } else {
+    agentMetadata.style.display = 'none';
+    topicMetadata.style.display = 'grid';
+    promptLabel.textContent = 'Topic Content';
+    // Set topic metadata
+    document.getElementById('modalTopicEnabled').checked = !item.disabled;
+    document.getElementById('modalTopicColor').value = item.color || '#6c757d';
+  }
+
+  document.getElementById('promptDisplay').innerHTML = 'Loading...';
+  document.getElementById('itemModal').style.display = 'block';
+
+  // Determine the correct endpoint based on item type
+  const contentUrl = itemType === 'agent'
+    ? `{{ url_for('agents.agent_content', agent_id='') }}${itemId}`
+    : `{{ url_for('agents.topic_content', topic_id='') }}${itemId}`;
+
+  // Load agent's config if it's an agent
+  if (itemType === 'agent') {
+    // Set defaults first
+    document.getElementById('modalSchedule').checked = false;
+    document.getElementById('modalPriority').value = '';
+    document.getElementById('modalMultiDomain').checked = false;
+    document.getElementById('modalBackend').value = '';
+    document.getElementById('modalModel').value = '';
+    document.getElementById('modalTools').value = '';
+    document.getElementById('modalToolsCustom').style.display = 'none';
+
+    // Load from item metadata (already fetched)
+    if (item.schedule === 'daily') {
+      document.getElementById('modalSchedule').checked = true;
+    }
+    if (item.priority !== undefined && item.priority !== null) {
+      document.getElementById('modalPriority').value = item.priority;
+    }
+    if (item.multi_domain) {
+      document.getElementById('modalMultiDomain').checked = true;
+    }
+    if (item.backend) {
+      document.getElementById('modalBackend').value = item.backend;
+    }
+    if (item.model) {
+      document.getElementById('modalModel').value = item.model;
+    }
+    if (item.tools) {
+      const toolsSelect = document.getElementById('modalTools');
+      const toolsCustom = document.getElementById('modalToolsCustom');
+
+      // Check if tools match a predefined option
+      let matched = false;
+      for (let option of toolsSelect.options) {
+        if (option.value && option.value === item.tools) {
+          toolsSelect.value = item.tools;
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched && item.tools) {
+        // Custom tools
+        toolsSelect.value = 'custom';
+        toolsCustom.value = item.tools;
+        toolsCustom.style.display = 'block';
+      }
+    }
+  }
+
+  // Load and render item content
+  fetch(contentUrl)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('promptDisplay').innerHTML = `<p>Error: ${data.error}</p>`;
+        originalPromptContent = '';
+      } else {
+        // Store raw content for editing
+        const rawContent = data.content;
+        originalPromptContent = rawContent;
+        document.getElementById('itemContentEditor').value = rawContent;
+
+        // Display content
+        document.getElementById('promptDisplay').textContent = rawContent;
+      }
+    })
+    .catch(err => {
+      console.error('Failed to load content:', err);
+      document.getElementById('promptDisplay').innerHTML = `<p>Failed to load content</p>`;
+    });
+}
+
+// Title editing functions
+function startTitleEdit() {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalTitleInput = document.getElementById('modalTitleInput');
+
+  modalTitleInput.value = modalTitle.textContent;
+  modalTitle.style.display = 'none';
+  modalTitleInput.style.display = 'block';
+  modalTitleInput.focus();
+  modalTitleInput.select();
+}
+
+function saveTitleEdit() {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalTitleInput = document.getElementById('modalTitleInput');
+  const newTitle = modalTitleInput.value.trim();
+
+  if (newTitle && newTitle !== modalTitle.textContent) {
+    // Save the title change
+    saveMetadata({ title: newTitle });
+    modalTitle.textContent = newTitle;
+  }
+
+  modalTitle.style.display = 'block';
+  modalTitleInput.style.display = 'none';
+}
+
+function handleTitleKey(event) {
+  if (event.key === 'Enter') {
+    saveTitleEdit();
+  } else if (event.key === 'Escape') {
+    const modalTitle = document.getElementById('modalTitle');
+    const modalTitleInput = document.getElementById('modalTitleInput');
+    modalTitle.style.display = 'block';
+    modalTitleInput.style.display = 'none';
+  }
+}
+
+// Prompt editing functions
+function startPromptEdit() {
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('itemContentEditor');
+  const editBtn = document.getElementById('editPromptBtn');
+  const saveBtn = document.getElementById('savePromptBtn');
+  const cancelBtn = document.getElementById('cancelPromptBtn');
+
+  promptDisplay.style.display = 'none';
+  promptEditor.style.display = 'block';
+  editBtn.style.display = 'none';
+  saveBtn.style.display = 'inline-block';
+  cancelBtn.style.display = 'inline-block';
+  promptEditor.focus();
+}
+
+function savePromptEdit() {
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('itemContentEditor');
+  const newContent = promptEditor.value.trim();
+
+  if (!newContent) {
+    showError('Content cannot be empty');
+    return;
+  }
+
+  // Save the content
+  saveMetadata({ content: newContent });
+
+  promptDisplay.textContent = newContent;
+  originalPromptContent = newContent;
+
+  // Reset UI
+  promptDisplay.style.display = 'block';
+  promptEditor.style.display = 'none';
+  document.getElementById('editPromptBtn').style.display = 'inline-block';
+  document.getElementById('savePromptBtn').style.display = 'none';
+  document.getElementById('cancelPromptBtn').style.display = 'none';
+}
+
+function cancelPromptEdit() {
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('itemContentEditor');
+
+  // Restore original content
+  promptEditor.value = originalPromptContent;
+
+  // Reset UI
+  promptDisplay.style.display = 'block';
+  promptEditor.style.display = 'none';
+  document.getElementById('editPromptBtn').style.display = 'inline-block';
+  document.getElementById('savePromptBtn').style.display = 'none';
+  document.getElementById('cancelPromptBtn').style.display = 'none';
+}
+
+// Metadata saving function
+async function saveMetadata(updates = {}) {
+  const requestBody = {};
+
+  if (currentEditingType === 'agent') {
+    // Gather all current metadata values
+    const currentTitle = document.getElementById('modalTitle').textContent;
+    const currentContent = document.getElementById('itemContentEditor').value.trim();
+
+    requestBody.title = updates.title || currentTitle;
+    requestBody.content = updates.content || currentContent;
+
+    // Schedule
+    const isScheduled = document.getElementById('modalSchedule').checked;
+    if (isScheduled) {
+      requestBody.schedule = 'daily';
+    }
+
+    // Priority
+    const priority = document.getElementById('modalPriority').value;
+    if (priority !== '') {
+      requestBody.priority = parseInt(priority);
+    }
+
+    // Multi-domain
+    const isMultiDomain = document.getElementById('modalMultiDomain').checked;
+    if (isMultiDomain) {
+      requestBody.multi_domain = true;
+    }
+
+    // Backend
+    const backend = document.getElementById('modalBackend').value;
+    if (backend) {
+      requestBody.backend = backend;
+    }
+
+    // Model
+    const model = document.getElementById('modalModel').value.trim();
+    if (model) {
+      requestBody.model = model;
+    }
+
+    // Tools
+    const toolsSelect = document.getElementById('modalTools').value;
+    const toolsCustom = document.getElementById('modalToolsCustom').value.trim();
+
+    if (toolsSelect === 'custom' && toolsCustom) {
+      requestBody.tools = toolsCustom;
+    } else if (toolsSelect && toolsSelect !== '') {
+      requestBody.tools = toolsSelect;
+    }
+
+    const updateUrl = `{{ url_for('agents.update_agent', agent_id='') }}${currentEditingItem}`;
+
+    try {
+      const response = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Show saving indicator
+        showSavingIndicator();
+        // Reload the list to reflect changes
+        loadAvailableAgents();
+      } else {
+        showError(data.error || 'Failed to save changes');
+      }
+    } catch (error) {
+      showError('Error saving changes: ' + error.message);
+    }
+  }
+}
+
+// Topic metadata saving
+async function saveTopicMetadata() {
+  const requestBody = {
+    title: document.getElementById('modalTitle').textContent,
+    content: document.getElementById('itemContentEditor').value.trim(),
+    disabled: !document.getElementById('modalTopicEnabled').checked,
+    color: document.getElementById('modalTopicColor').value
+  };
+
+  const updateUrl = `{{ url_for('agents.update_topic', topic_id='') }}${currentEditingItem}`;
+
+  try {
+    const response = await fetch(updateUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      showSavingIndicator();
+      loadAvailableTopics();
+    } else {
+      showError(data.error || 'Failed to save changes');
+    }
+  } catch (error) {
+    showError('Error saving changes: ' + error.message);
+  }
+}
+
+// Helper functions
+function toggleSchedule() {
+  const checkbox = document.getElementById('modalSchedule');
+  checkbox.checked = !checkbox.checked;
+  saveMetadata();
+}
+
+function toggleMultiDomain() {
+  const checkbox = document.getElementById('modalMultiDomain');
+  checkbox.checked = !checkbox.checked;
+  saveMetadata();
+}
+
+function toggleTopicEnabled() {
+  const checkbox = document.getElementById('modalTopicEnabled');
+  checkbox.checked = !checkbox.checked;
+  saveTopicMetadata();
+}
+
+function showSavingIndicator() {
+  const indicator = document.getElementById('savingIndicator');
+  indicator.style.display = 'inline-block';
+  setTimeout(() => {
+    indicator.style.display = 'none';
+  }, 2000);
+}
+
+// Show prompt modal with prompt text
+function showPromptModal(promptText) {
+  const modal = document.getElementById('promptModal');
+  const editor = document.getElementById('promptEditor');
+  
+  // Set the prompt in the editor
+  editor.value = promptText;
+  
+  // Update preview
+  updatePromptPreview();
+  
+  // Load available agents
+  loadPersonas();
+  
+  // Show modal
+  modal.style.display = 'block';
+}
+
+// Close prompt modal
+function closePromptModal() {
+  document.getElementById('promptModal').style.display = 'none';
+}
+
+// Switch between tabs
+function switchTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.modal-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Update tab content
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+  document.getElementById(tabName + 'Tab').classList.add('active');
+  
+  // Update preview if switching to preview tab
+  if (tabName === 'preview') {
+    updatePromptPreview();
+  }
+}
+
+// Update markdown preview
+function updatePromptPreview() {
+  const editor = document.getElementById('promptEditor');
+  const preview = document.getElementById('promptPreview');
+  
+  if (editor.value.trim()) {
+    preview.innerHTML = marked.parse(editor.value);
+  } else {
+    preview.innerHTML = '<p><em>No prompt content to preview</em></p>';
+}
+}
+
+// Load available agents
+function loadPersonas() {
+  fetch('{{ url_for('agents.available_agents') }}')
+    .then(r => r.json())
+    .then(agents => {
+      const select = document.getElementById('agentPersona');
+      select.innerHTML = '<option value="default">Default</option>';
+      
+      agents.forEach(agent => {
+        const option = document.createElement('option');
+        option.value = agent.id;
+        option.textContent = agent.title;
+        select.appendChild(option);
+      });
+    })
+    .catch(err => {
+      console.error('Failed to load agents:', err);
+    });
+}
+
+// Start agent with current prompt and config
+async function startAgent() {
+  const prompt = document.getElementById('promptEditor').value.trim();
+  if (!prompt) {
+    showError('Please provide a prompt before starting the agent.');
+    return;
+  }
+  
+  const backend = document.getElementById('agentBackend').value;
+  const model = document.getElementById('agentModel').value.trim();
+  const maxTokens = parseInt(document.getElementById('maxTokens').value) || 0;
+  const persona = document.getElementById('agentPersona').value;
+  
+  // Build config object
+  const config = {};
+  if (model) config.model = model;
+  if (maxTokens) config.max_tokens = maxTokens;
+  
+  const startBtn = document.getElementById('startAgentBtn');
+  startBtn.disabled = true;
+  startBtn.textContent = '🚀 Starting...';
+  
+  try {
+    const response = await fetch('{{ url_for('agents.start_agent') }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        backend: backend,
+        config: config,
+        persona: persona
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to start agent');
+    }
+    
+    // Success - close modal and reload agents
+    closePromptModal();
+    loadAgentSessions();
+
+  } catch (error) {
+    showError('Error starting agent: ' + error.message);
+  } finally {
+    startBtn.disabled = false;
+    startBtn.textContent = '🚀 Start Agent';
+  }
+}
+
+// Close item modal function
+function closeItemModal() {
+  // Cancel any ongoing prompt edits if elements exist
+  const promptDisplay = document.getElementById('promptDisplay');
+  const promptEditor = document.getElementById('itemContentEditor');
+
+  if (promptDisplay && promptEditor) {
+    // Reset prompt editor if it was being edited
+    if (promptEditor.style.display === 'block') {
+      promptEditor.value = originalPromptContent || '';
+      promptDisplay.style.display = 'block';
+      promptEditor.style.display = 'none';
+
+      const editBtn = document.getElementById('editPromptBtn');
+      const saveBtn = document.getElementById('savePromptBtn');
+      const cancelBtn = document.getElementById('cancelPromptBtn');
+
+      if (editBtn) editBtn.style.display = 'inline-block';
+      if (saveBtn) saveBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+    }
+  }
+
+  // Reset title if editing
+  const modalTitle = document.getElementById('modalTitle');
+  const modalTitleInput = document.getElementById('modalTitleInput');
+  if (modalTitle && modalTitleInput) {
+    modalTitle.style.display = 'block';
+    modalTitleInput.style.display = 'none';
+  }
+
+  document.getElementById('itemModal').style.display = 'none';
+}
+
+// Moved to bottom of script with createPersonaModal handling
+
+// Pagination state
+let currentPage = 0;
+let pageSize = 20;
+let totalAgents = 0;
+
+// Session history table functions
+function buildRow(a) {
+  const tr = document.createElement('tr');
+  const short = a.prompt.length > 80 ? a.prompt.slice(0, 80) + '…' : a.prompt;
+  const chatLink = `{{ url_for('chat.chat_page') }}?agent=${a.id}`;
+  
+  // Status badge
+  const statusClass = `status-${a.status || 'unknown'}`;
+  const statusBadge = `<span class="status-badge ${statusClass}">${a.status || 'unknown'}</span>`;
+  
+  // PID indicator for running agents
+  const pidIndicator = a.pid ? ` (PID: ${a.pid})` : '';
+  
+  // Format runtime
+  let runtimeDisplay = '';
+  if (a.runtime_seconds !== undefined && a.runtime_seconds !== null) {
+    const totalSeconds = Math.floor(a.runtime_seconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    
+    if (totalSeconds > 59) {
+      // For 60 seconds or more, show just minutes
+      runtimeDisplay = `${minutes}m`;
+    } else {
+      // For less than 60 seconds, show as Xs
+      runtimeDisplay = `${totalSeconds}s`;
+    }
+  }
+  
+  tr.innerHTML = `
+    <td><a href="${chatLink}">${statusBadge}</a></td>
+    <td><a href="${chatLink}">${a.since}</a></td>
+    <td>${runtimeDisplay}</td>
+    <td>${a.model}${pidIndicator}</td>
+    <td>${a.persona_title || a.persona}</td>
+    <td title="${a.prompt}"><a href="${chatLink}">${short}</a></td>
+  `;
+  tr.style.cursor = 'pointer';
+  tr.onclick = () => window.location.href = chatLink;
+  return tr;
+}
+
+function loadAgentSessions(page = 0) {
+  const offset = page * pageSize;
+  fetch(`{{ url_for('agents.agents_list') }}?type=all&limit=${pageSize}&offset=${offset}`)
+    .then(r => {
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      return r.json();
+    })
+    .then(data => {
+      // Check for API error response
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      const agents = data.agents || [];
+      const pagination = data.pagination;
+      const liveCount = data.live_count || 0;
+      const historicalCount = data.historical_count || 0;
+      
+      // Separate live and historical agents
+      const liveAgents = agents.filter(a => a.status === 'running');
+      const historicalAgents = agents.filter(a => a.status !== 'running');
+      
+      // Update counts
+      document.getElementById('liveCount').textContent = liveCount;
+      document.getElementById('historicalCount').textContent = historicalCount;
+      
+      // Update live agents table
+      const liveTable = document.getElementById('liveAgentTable');
+      const liveEmpty = document.getElementById('liveEmpty');
+      
+      if (liveAgents.length > 0) {
+        liveTable.innerHTML = '<tr><th>Status</th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th></tr>';
+        liveAgents.forEach(a => liveTable.appendChild(buildRow(a)));
+        liveTable.style.display = 'table';
+        liveEmpty.style.display = 'none';
+      } else {
+        liveTable.style.display = 'none';
+        liveEmpty.style.display = 'block';
+      }
+      
+      // Update historical agents table
+      const histTable = document.getElementById('historicalAgentTable');
+      const histEmpty = document.getElementById('historicalEmpty');
+      
+      if (historicalAgents.length > 0) {
+        histTable.innerHTML = '<tr><th>Status</th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th></tr>';
+        historicalAgents.forEach(a => histTable.appendChild(buildRow(a)));
+        histTable.style.display = 'table';
+        histEmpty.style.display = 'none';
+      } else {
+        histTable.style.display = 'none';
+        histEmpty.style.display = 'block';
+      }
+      
+      // Update pagination if available
+      if (pagination && pagination.total > pagination.limit) {
+        currentPage = Math.floor(pagination.offset / pagination.limit);
+        totalAgents = pagination.total;
+        updatePagination(pagination);
+      } else {
+        document.getElementById('pagination').style.display = 'none';
+      }
+      
+      // Hide any previous error warnings
+      hideConnectionWarning();
+    })
+    .catch(err => {
+      console.error('Failed to load agents:', err);
+      
+      // Still try to load historical agents even if cortex is down
+      fetch(`{{ url_for('agents.agents_list') }}?type=historical&limit=${pageSize}&offset=${offset}`)
+        .then(r => r.json())
+        .then(data => {
+          const historicalAgents = data.agents || [];
+          const historicalCount = data.historical_count || 0;
+          
+          // Update historical count
+          document.getElementById('historicalCount').textContent = historicalCount;
+          
+          // Clear live agents section
+          document.getElementById('liveCount').textContent = '0';
+          document.getElementById('liveAgentTable').style.display = 'none';
+          document.getElementById('liveEmpty').style.display = 'block';
+          
+          // Update historical agents table
+          const histTable = document.getElementById('historicalAgentTable');
+          const histEmpty = document.getElementById('historicalEmpty');
+          
+          if (historicalAgents.length > 0) {
+            histTable.innerHTML = '<tr><th>Status</th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th></tr>';
+            historicalAgents.forEach(a => histTable.appendChild(buildRow(a)));
+            histTable.style.display = 'table';
+            histEmpty.style.display = 'none';
+          } else {
+            histTable.style.display = 'none';
+            histEmpty.style.display = 'block';
+          }
+          
+          // Update pagination
+          if (data.pagination && data.pagination.total > data.pagination.limit) {
+            updatePagination(data.pagination);
+          } else {
+            document.getElementById('pagination').style.display = 'none';
+          }
+        })
+        .catch(() => {
+          // Total failure - clear everything
+          document.getElementById('liveCount').textContent = '0';
+          document.getElementById('historicalCount').textContent = '0';
+          document.getElementById('liveAgentTable').style.display = 'none';
+          document.getElementById('liveEmpty').style.display = 'block';
+          document.getElementById('historicalAgentTable').style.display = 'none';
+          document.getElementById('historicalEmpty').style.display = 'block';
+          document.getElementById('pagination').style.display = 'none';
+        });
+    });
+}
+
+function updatePagination(pagination) {
+  const paginationDiv = document.getElementById('pagination');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const pageInfo = document.getElementById('pageInfo');
+  
+  if (pagination.total > pagination.limit) {
+    paginationDiv.style.display = 'flex';
+    
+    const currentPageNum = Math.floor(pagination.offset / pagination.limit) + 1;
+    const totalPages = Math.ceil(pagination.total / pagination.limit);
+    
+    pageInfo.textContent = `Page ${currentPageNum} of ${totalPages} (${pagination.total} total)`;
+    
+    prevBtn.disabled = pagination.offset === 0;
+    nextBtn.disabled = !pagination.has_more;
+  } else {
+    paginationDiv.style.display = 'none';
+  }
+}
+
+function changePage(delta) {
+  const newPage = currentPage + delta;
+  if (newPage >= 0) {
+    loadAgentSessions(newPage);
+  }
+}
+
+// Connection warning functions
+function showConnectionWarning(message) {
+  let warning = document.getElementById('connectionWarning');
+  if (!warning) {
+    warning = document.createElement('div');
+    warning.id = 'connectionWarning';
+    warning.style.cssText = 'background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:0.75rem;margin:1rem 0;border-radius:4px;text-align:center;';
+    const container = document.querySelector('.container');
+    const firstChild = container.children[1]; // Insert after h1
+    container.insertBefore(warning, firstChild);
+  }
+  warning.innerHTML = `⚠️ <strong>Cortex Service Unavailable:</strong> ${message}`;
+  warning.style.display = 'block';
+}
+
+function hideConnectionWarning() {
+  const warning = document.getElementById('connectionWarning');
+  if (warning) {
+    warning.style.display = 'none';
+  }
+}
+
+// Show error message
+function showError(message) {
+  alert(message); // Simple alert for now, can be improved with a toast notification
+}
+
+// Create Agent Modal Functions
+function openCreatePersonaModal() {
+  const modal = document.getElementById('createPersonaModal');
+  modal.style.display = 'block';
+  
+  // Reset form
+  document.getElementById('createPersonaForm').reset();
+  document.getElementById('createPersonaForm').style.display = 'block';
+  document.getElementById('createPersonaForm').classList.remove('busy');
+  document.getElementById('createPersonaPromptStatus').classList.remove('show');
+  document.getElementById('createPromptBtn').disabled = false;
+}
+
+function closeCreatePersonaModal() {
+  document.getElementById('createPersonaModal').style.display = 'none';
+}
+
+// Create Topic Modal Functions
+function openCreateTopicModal() {
+  const modal = document.getElementById('createTopicModal');
+  modal.style.display = 'block';
+  
+  // Reset form
+  document.getElementById('createTopicForm').reset();
+  document.getElementById('topicResult').style.display = 'none';
+  document.getElementById('createTopicBtn').disabled = false;
+}
+
+function closeCreateTopicModal() {
+  document.getElementById('createTopicModal').style.display = 'none';
+}
+
+// Handle create agent form submission
+document.getElementById('createPersonaForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const title = document.getElementById('personaTitle').value.trim();
+  const input = document.getElementById('personaInput').value.trim();
+  const form = e.target;
+  const status = document.getElementById('createPersonaPromptStatus');
+  const createBtn = document.getElementById('createPromptBtn');
+  
+  if (!title || !input) return;
+  
+  // Show prompt generation status
+  form.classList.add('busy');
+  status.classList.add('show');
+  createBtn.disabled = true;
+  
+  try {
+    const response = await fetch('{{ url_for('agents.create_plan') }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request: input,
+        model: '' // Uses Gemini Pro by default
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to create prompt');
+    }
+    
+    const generatedPrompt = data.prompt || data.plan;
+    if (!generatedPrompt) {
+      throw new Error('No prompt returned by planner');
+    }
+
+    // Show the generated prompt
+    showPersonaPromptResult(generatedPrompt, title);
+
+  } catch (error) {
+    showError('Error creating prompt: ' + error.message);
+    createBtn.disabled = false;
+  } finally {
+    // Remove busy state
+    form.classList.remove('busy');
+    status.classList.remove('show');
+  }
+});
+
+async function showPersonaPromptResult(prompt, title) {
+  // Auto-save the agent immediately
+  const isDaily = document.getElementById('personaDailySchedule').checked;
+  const priority = document.getElementById('personaPriority').value;
+  const toolsSelect = document.getElementById('personaToolPacks');
+  const personaId = title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+  try {
+    // Create the agent
+    const requestBody = {
+      title: title,
+      content: prompt
+    };
+
+    // Add schedule if daily is checked
+    if (isDaily) {
+      requestBody.schedule = 'daily';
+    }
+
+    // Add priority if specified
+    if (priority !== '') {
+      requestBody.priority = parseInt(priority);
+    }
+
+    // Add tools if specific packs are selected
+    const selectedTools = [];
+    for (let option of toolsSelect.options) {
+      if (option.selected && option.value !== '') {
+        selectedTools.push(option.value);
+      }
+    }
+    if (selectedTools.length > 0) {
+      requestBody.tools = selectedTools.join(',');
+    }
+
+    const response = await fetch(`{{ url_for('agents.update_agent', agent_id='') }}${personaId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // Close create modal
+      closeCreatePersonaModal();
+
+      // Reload agents list
+      await loadAvailableAgents();
+
+      // Open the edit modal with the new agent
+      setTimeout(() => {
+        // Find the new agent in the list
+        const newAgent = availableAgents.find(a => a.id === personaId);
+        if (newAgent) {
+          viewItemDetails(personaId, 'agent', { stopPropagation: () => {} });
+        }
+      }, 100);
+    } else {
+      throw new Error(data.error || 'Failed to save agent');
+    }
+  } catch (error) {
+    showError('Error saving agent: ' + error.message);
+    // Re-enable the form
+    document.getElementById('createPersonaForm').classList.remove('busy');
+    document.getElementById('createPersonaPromptStatus').classList.remove('show');
+    document.getElementById('createPromptBtn').disabled = false;
+  }
+}
+
+// Handle create topic form submission
+document.getElementById('createTopicForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const title = document.getElementById('topicTitle').value.trim();
+  const input = document.getElementById('topicInput').value.trim();
+  const form = e.target;
+  const createBtn = document.getElementById('createTopicBtn');
+  
+  if (!title || !input) return;
+  
+  // Show the topic content area
+  showTopicResult(input, title);
+  
+  // Hide form
+  form.style.display = 'none';
+});
+
+function showTopicResult(content, title) {
+  const resultDiv = document.getElementById('topicResult');
+  const resultContent = document.getElementById('topicResultContent');
+
+  // Store content and title for saving
+  currentTopicContent = content;
+  currentTopicTitle = title;
+
+  // Display the content
+  resultContent.textContent = content;
+  resultDiv.style.display = 'block';
+}
+
+function editTopicContent() {
+  const resultContent = document.getElementById('topicResultContent');
+  
+  // Convert to editable textarea
+  const textarea = document.createElement('textarea');
+  textarea.value = resultContent.textContent;
+  textarea.style.width = '100%';
+  textarea.style.minHeight = '400px';
+  textarea.style.padding = '1rem';
+  textarea.style.fontFamily = 'Monaco, Menlo, monospace';
+  textarea.style.fontSize = '0.9rem';
+  
+  resultContent.innerHTML = '';
+  resultContent.appendChild(textarea);
+
+  // Update the content when editing
+  textarea.addEventListener('input', () => {
+    currentTopicContent = textarea.value;
+  });
+}
+
+async function saveNewTopic() {
+  const title = currentTopicTitle;
+  const content = currentTopicContent;
+
+  if (!title || !content) {
+    showError('Missing title or content');
+    return;
+  }
+  
+  // Generate a unique ID for the new topic
+  const topicId = title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  
+  try {
+    // Create or update the topic
+    const response = await fetch(`{{ url_for('agents.update_topic', topic_id='') }}${topicId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: title,
+        content: content
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      alert('Topic saved successfully!');
+      closeCreateTopicModal();
+      // Reset form for next use
+      document.getElementById('createTopicForm').style.display = 'block';
+      document.getElementById('topicResult').style.display = 'none';
+      // Reload topics
+      loadAvailableTopics();
+    } else {
+      throw new Error(data.error || 'Failed to save topic');
+    }
+  } catch (error) {
+    showError('Error saving topic: ' + error.message);
+  }
+}
+
+// Update modal close handlers
+window.onclick = function(event) {
+  const itemModal = document.getElementById('itemModal');
+  const promptModal = document.getElementById('promptModal');
+  const createPersonaModal = document.getElementById('createPersonaModal');
+  const createTopicModal = document.getElementById('createTopicModal');
+  
+  if (event.target == itemModal) {
+    closeItemModal();
+  }
+  if (event.target == promptModal) {
+    promptModal.style.display = 'none';
+  }
+  if (event.target == createPersonaModal) {
+    createPersonaModal.style.display = 'none';
+  }
+  if (event.target == createTopicModal) {
+    createTopicModal.style.display = 'none';
+  }
+};
+
+// Auto-refresh live agents
+let refreshInterval = null;
+
+function startAutoRefresh() {
+  // Refresh every 5 seconds if on the log tab
+  if (currentMainTab === 'log' && !refreshInterval) {
+    refreshInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        // Only refresh the current page
+        loadAgentSessions(currentPage);
+      }
+    }, 5000);
+  }
+}
+
+function stopAutoRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+}
+
+// Start/stop refresh based on tab
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    stopAutoRefresh();
+  } else if (currentMainTab === 'log') {
+    startAutoRefresh();
+  }
+});
+
+// Handle tools dropdown change for modal
+document.addEventListener('DOMContentLoaded', () => {
+  const toolsSelect = document.getElementById('modalTools');
+  if (toolsSelect) {
+    toolsSelect.addEventListener('change', () => {
+      const customInput = document.getElementById('modalToolsCustom');
+      if (toolsSelect.value === 'custom') {
+        customInput.style.display = 'block';
+        customInput.focus();
+      } else {
+        customInput.style.display = 'none';
+      }
+      // Auto-save when tools change
+      if (currentEditingType === 'agent') {
+        saveMetadata();
+      }
+    });
+  }
+});
+
+// Load available tools and render them
+function loadAvailableTools() {
+  fetch('{{ url_for('agents.available_tools') }}')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('toolsGrid').innerHTML = `
+          <div class="tools-empty-state">
+            <h3>Error Loading Tools</h3>
+            <p>${data.error}</p>
+          </div>
+        `;
+        return;
+      }
+
+      availableTools = data.tools || [];
+      toolPacks = data.packs || {};
+      renderPackFilters();
+      renderToolsGrid();
+      setupToolsSearch();
+    })
+    .catch(err => {
+      console.error('Failed to load tools:', err);
+      document.getElementById('toolsGrid').innerHTML = `
+        <div class="tools-empty-state">
+          <h3>Failed to Load Tools</h3>
+          <p>Please ensure the MCP tools server is configured correctly.</p>
+        </div>
+      `;
+    });
+}
+
+// Render pack filter buttons
+function renderPackFilters() {
+  const container = document.getElementById('packFilters');
+  container.innerHTML = '';
+
+  // All tools button
+  const allBtn = document.createElement('button');
+  allBtn.className = 'pack-filter-btn active';
+  allBtn.innerHTML = `All<span class="count">${availableTools.length}</span>`;
+  allBtn.onclick = () => filterByPack('all');
+  container.appendChild(allBtn);
+
+  // Pack-specific buttons
+  Object.entries(toolPacks).forEach(([packName, packInfo]) => {
+    const btn = document.createElement('button');
+    btn.className = 'pack-filter-btn';
+    btn.innerHTML = `${packInfo.name}<span class="count">${packInfo.tools.length}</span>`;
+    btn.title = packInfo.description;
+    btn.onclick = () => filterByPack(packName);
+    container.appendChild(btn);
+  });
+
+  // Uncategorized button (tools not in any pack)
+  const uncategorized = availableTools.filter(t => t.packs.length === 0);
+  if (uncategorized.length > 0) {
+    const uncatBtn = document.createElement('button');
+    uncatBtn.className = 'pack-filter-btn';
+    uncatBtn.innerHTML = `Other<span class="count">${uncategorized.length}</span>`;
+    uncatBtn.onclick = () => filterByPack('uncategorized');
+    container.appendChild(uncatBtn);
+  }
+}
+
+// Filter tools by pack
+function filterByPack(pack) {
+  activePackFilter = pack;
+
+  // Update button states
+  document.querySelectorAll('.pack-filter-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+
+  // Apply filter
+  applyToolsFilter();
+}
+
+// Apply search and pack filters
+function applyToolsFilter() {
+  const searchTerm = document.getElementById('toolsSearch').value.toLowerCase();
+  const cards = document.querySelectorAll('.tool-card');
+
+  cards.forEach(card => {
+    const toolName = card.dataset.toolName;
+    const tool = availableTools.find(t => t.name === toolName);
+    if (!tool) return;
+
+    // Check pack filter
+    let packMatch = true;
+    if (activePackFilter !== 'all') {
+      if (activePackFilter === 'uncategorized') {
+        packMatch = tool.packs.length === 0;
+      } else {
+        packMatch = tool.packs.includes(activePackFilter);
+      }
+    }
+
+    // Check search filter
+    let searchMatch = true;
+    if (searchTerm) {
+      searchMatch = tool.name.toLowerCase().includes(searchTerm) ||
+                   (tool.description && tool.description.toLowerCase().includes(searchTerm));
+    }
+
+    // Show/hide card
+    if (packMatch && searchMatch) {
+      card.classList.remove('hidden');
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+}
+
+// Setup search functionality
+function setupToolsSearch() {
+  const searchInput = document.getElementById('toolsSearch');
+  searchInput.addEventListener('input', applyToolsFilter);
+}
+
+// Render tools grid
+function renderToolsGrid() {
+  const container = document.getElementById('toolsGrid');
+  container.innerHTML = '';
+
+  if (availableTools.length === 0) {
+    container.innerHTML = `
+      <div class="tools-empty-state">
+        <h3>No Tools Available</h3>
+        <p>MCP tools will appear here once configured.</p>
+      </div>
+    `;
+    return;
+  }
+
+  availableTools.forEach(tool => {
+    const card = createToolCard(tool);
+    container.appendChild(card);
+  });
+}
+
+// Create a tool card element
+function createToolCard(tool) {
+  const card = document.createElement('div');
+  card.className = 'tool-card';
+  card.dataset.toolName = tool.name;
+
+  // Header with name and pack badges
+  const header = document.createElement('div');
+  header.className = 'tool-header';
+
+  const name = document.createElement('h3');
+  name.className = 'tool-name';
+  name.textContent = tool.name;
+  header.appendChild(name);
+
+  if (tool.packs && tool.packs.length > 0) {
+    const packs = document.createElement('div');
+    packs.className = 'tool-packs';
+    tool.packs.forEach(packName => {
+      const badge = document.createElement('span');
+      badge.className = 'tool-pack-badge';
+      badge.textContent = packName;
+      packs.appendChild(badge);
+    });
+    header.appendChild(packs);
+  }
+
+  card.appendChild(header);
+
+  // Description
+  const desc = document.createElement('div');
+  desc.className = 'tool-description';
+  desc.innerHTML = marked.parse(tool.description || 'No description available');
+  card.appendChild(desc);
+
+  // Parameters (if available)
+  if (tool.input_schema && tool.input_schema.properties) {
+    const params = createParametersSection(tool.input_schema);
+    if (params) {
+      card.appendChild(params);
+    }
+  }
+
+  return card;
+}
+
+// Create parameters section for a tool
+function createParametersSection(schema) {
+  const properties = schema.properties || {};
+  const required = schema.required || [];
+
+  if (Object.keys(properties).length === 0) {
+    return null;
+  }
+
+  const section = document.createElement('div');
+  section.className = 'tool-params';
+
+  const title = document.createElement('div');
+  title.className = 'tool-params-toggle tool-params-title';
+  title.textContent = `Parameters (${Object.keys(properties).length})`;
+  title.onclick = () => section.classList.toggle('collapsed');
+  section.appendChild(title);
+
+  const list = document.createElement('div');
+  list.className = 'param-list';
+
+  Object.entries(properties).forEach(([paramName, paramSchema]) => {
+    const item = document.createElement('div');
+    item.className = 'param-item';
+
+    const name = document.createElement('span');
+    name.className = 'param-name';
+    name.textContent = paramName;
+    item.appendChild(name);
+
+    // Required/optional indicator
+    const reqSpan = document.createElement('span');
+    if (required.includes(paramName)) {
+      reqSpan.className = 'param-required';
+      reqSpan.textContent = '*';
+    } else {
+      reqSpan.className = 'param-optional';
+      reqSpan.textContent = '(optional)';
+    }
+    item.appendChild(reqSpan);
+
+    // Type
+    if (paramSchema.type) {
+      const type = document.createElement('span');
+      type.className = 'param-type';
+      type.textContent = `[${paramSchema.type}]`;
+      item.appendChild(type);
+    }
+
+    // Description
+    if (paramSchema.description) {
+      const desc = document.createElement('span');
+      desc.className = 'param-description';
+      desc.textContent = paramSchema.description;
+      item.appendChild(desc);
+    }
+
+    list.appendChild(item);
+  });
+
+  section.appendChild(list);
+
+  // Start collapsed if more than 3 parameters
+  if (Object.keys(properties).length > 3) {
+    section.classList.add('collapsed');
+  }
+
+  return section;
+}
+
+// Initialize - The Log tab is shown by default now
+setTimeout(() => {
+  loadAgentSessions();
+  startAutoRefresh();
+}, 100);
