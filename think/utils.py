@@ -103,33 +103,6 @@ def day_path(day: Optional[str] = None) -> Path:
     return path
 
 
-def list_domains() -> list[str]:
-    """List all domains in the journal.
-
-    Returns
-    -------
-    list[str]
-        List of domain names that have a domain.json file.
-
-    Raises
-    ------
-    RuntimeError
-        If JOURNAL_PATH is not set.
-    """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    domains = []
-    domains_dir = Path(journal) / "domains"
-    if domains_dir.exists():
-        for domain_path in domains_dir.iterdir():
-            if domain_path.is_dir() and (domain_path / "domain.json").exists():
-                domains.append(domain_path.name)
-    return sorted(domains)
-
-
 def _append_task_log(dir_path: str | Path, message: str) -> None:
     """Append ``message`` to ``task_log.txt`` inside ``dir_path``."""
     path = Path(dir_path) / "task_log.txt"
