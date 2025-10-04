@@ -16,7 +16,7 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 
 ## Review Process
 
-**CRITICAL**: Tasks executed yesterday should be checked against yesterday's journal. Compute `day_yesterday = today - 1 day` in `YYYYMMDD` format and use it for journal queries.
+**CRITICAL**: Tasks executed yesterday should be checked against yesterday's journal. Compute `day_yesterday = today - 1 day` in `YYYYMMDD` format and use it for journal queries. Check yesterday for tasks that were already completed but mistakenly re-added to today.
 
 **NOTE**: Consider calling `todo_upcoming()` at the start to be aware of tasks scheduled for future days - avoid marking future-scheduled tasks as complete unless there's clear evidence they were done early.
 

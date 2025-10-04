@@ -67,7 +67,7 @@ Each candidate must be:
 
 ### Phase 4: Prioritization & Scheduling
 
-Score tasks using urgency/impact/effort heuristics. Balance the day so there are no more than 8–10 active items.
+Score tasks using urgency/impact/effort heuristics. Balance so there are no more than 8–10 active items in a day, place or move things into other days if not time sensitive.
 
 Annotate each line so humans understand schedule and context:
 - Keep the action text concise and self-contained
