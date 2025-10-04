@@ -33,7 +33,8 @@ The `identity` block contains information about the journal owner that helps too
     },
     "aliases": ["Jer", "jeremie"],
     "email_addresses": ["jer@example.com"],
-    "timezone": "America/Los_Angeles"
+    "timezone": "America/Los_Angeles",
+    "entity": "Jeremie Miller (Jer)"
   }
 }
 ```
@@ -49,6 +50,7 @@ Fields:
 - `aliases` (array of strings) – Alternative names, nicknames, or usernames that may appear in transcripts
 - `email_addresses` (array of strings) – Email addresses associated with the user for participant detection
 - `timezone` (string) – IANA timezone identifier (e.g., "America/New_York", "Europe/London") for timestamp interpretation
+- `entity` (string) – Links to a Person entity from the top-level entities.md file for entity tracking and analysis. Auto-matches by name prefix if not set.
 
 This configuration helps meeting extraction identify the user as a participant, enables personalized agent interactions, and ensures timestamps are interpreted correctly across the journal.
 

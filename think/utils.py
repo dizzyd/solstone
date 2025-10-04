@@ -131,6 +131,7 @@ def get_config() -> dict[str, Any]:
         "aliases": [],
         "email_addresses": [],
         "timezone": "",
+        "entity": "",
     }
 
     load_dotenv()

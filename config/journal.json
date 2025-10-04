@@ -10,6 +10,7 @@
     },
     "aliases": ["Jer", "jeremie"],
     "email_addresses": ["jer@example.com"],
-    "timezone": "America/Los_Angeles"
+    "timezone": "America/Los_Angeles",
+    "entity": ""
   }
 }

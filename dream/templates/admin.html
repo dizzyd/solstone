@@ -79,6 +79,13 @@ pre { background:#f5f5f5; padding:0.5em; }
         <small>Comma-separated email addresses for participant detection</small>
       </div>
       <div class="form-group">
+        <label for="config-entity">Entity</label>
+        <select id="config-entity" data-field="entity">
+          <option value="">Select entity...</option>
+        </select>
+        <small id="entity-display" style="color: #666; margin-top: 0.3em;"></small>
+      </div>
+      <div class="form-group">
         <label for="config-timezone">Home Timezone</label>
         <input type="text" id="config-timezone" data-field="timezone" list="timezone-list" placeholder="e.g., America/New_York">
         <datalist id="timezone-list">
@@ -172,6 +179,7 @@ pre { background:#f5f5f5; padding:0.5em; }
 let taskDone=false;
 let configData = null;
 let saveTimeout = null;
+let personEntities = [];
 const tabs = document.querySelectorAll('.tab');
 const contents = document.querySelectorAll('.content');
 function showTab(id){
@@ -229,18 +237,41 @@ window.onclick=e=>{
 };
 
 // Config management functions
-function loadConfig(){
-  fetch('{{ url_for('admin.get_config') }}')
+function loadEntities(){
+  return fetch('{{ url_for('entities.entities_list') }}?type=Person')
     .then(r=>r.json())
-    .then(data=>{
-      configData = data;
-      populateConfigForm(data);
-      setupConfigAutoSave();
+    .then(entities=>{
+      personEntities = entities.filter(e=>e.top); // Only top-level entities
+      const select = document.getElementById('config-entity');
+      // Clear existing options except first
+      while(select.options.length > 1) select.remove(1);
+      // Add entity options
+      personEntities.forEach(entity=>{
+        const opt = document.createElement('option');
+        opt.value = entity.name;
+        opt.textContent = entity.name;
+        select.appendChild(opt);
+      });
     })
     .catch(err=>{
-      console.error('Error loading config:', err);
-      showConfigStatus('Error loading configuration', 'error');
+      console.error('Error loading entities:', err);
     });
+}
+
+function loadConfig(){
+  loadEntities().then(()=>{
+    fetch('{{ url_for('admin.get_config') }}')
+      .then(r=>r.json())
+      .then(data=>{
+        configData = data;
+        populateConfigForm(data);
+        setupConfigAutoSave();
+      })
+      .catch(err=>{
+        console.error('Error loading config:', err);
+        showConfigStatus('Error loading configuration', 'error');
+      });
+  });
 }
 
 function populateConfigForm(data){
@@ -259,6 +290,25 @@ function populateConfigForm(data){
 
   document.getElementById('config-aliases').value = Array.isArray(identity.aliases) ? identity.aliases.join(', ') : '';
   document.getElementById('config-emails').value = Array.isArray(identity.email_addresses) ? identity.email_addresses.join(', ') : '';
+
+  // Handle entity - auto-match by name prefix if not set
+  const entitySelect = document.getElementById('config-entity');
+  const entityDisplay = document.getElementById('entity-display');
+  let entityValue = identity.entity || '';
+
+  if (!entityValue && identity.name) {
+    // Try to auto-match by prefix
+    const name = identity.name.trim();
+    const match = personEntities.find(e => e.name.toLowerCase().startsWith(name.toLowerCase()));
+    if (match) {
+      entityValue = match.name;
+      // Auto-save the matched entity
+      setTimeout(() => saveConfig(), 500);
+    }
+  }
+
+  entitySelect.value = entityValue;
+  updateEntityDisplay();
 
   // Auto-detect timezone if not set
   const timezoneInput = document.getElementById('config-timezone');
@@ -279,11 +329,31 @@ function populateConfigForm(data){
   }
 }
 
+function updateEntityDisplay(){
+  const entitySelect = document.getElementById('config-entity');
+  const entityDisplay = document.getElementById('entity-display');
+  const selectedEntity = entitySelect.value;
+
+  if (selectedEntity) {
+    const entity = personEntities.find(e => e.name === selectedEntity);
+    if (entity) {
+      entityDisplay.textContent = `Selected: ${entity.name}`;
+    } else {
+      entityDisplay.textContent = `Selected: ${selectedEntity}`;
+    }
+  } else {
+    entityDisplay.textContent = '';
+  }
+}
+
 function setupConfigAutoSave(){
   const inputs = document.querySelectorAll('#config input[data-field], #config select[data-field]');
   inputs.forEach(input=>{
     input.addEventListener('blur', ()=>saveConfigField(input));
-    input.addEventListener('change', ()=>saveConfigField(input));
+    input.addEventListener('change', ()=>{
+      if(input.id === 'config-entity') updateEntityDisplay();
+      saveConfigField(input);
+    });
     input.addEventListener('keydown', e=>{
       if(e.key==='Enter'){
         e.preventDefault();
@@ -320,7 +390,8 @@ function saveConfig(){
     pronouns: pronouns,
     aliases: document.getElementById('config-aliases').value.split(',').map(s=>s.trim()).filter(s=>s),
     email_addresses: document.getElementById('config-emails').value.split(',').map(s=>s.trim()).filter(s=>s),
-    timezone: document.getElementById('config-timezone').value.trim()
+    timezone: document.getElementById('config-timezone').value.trim(),
+    entity: document.getElementById('config-entity').value.trim()
   };
 
   showConfigStatus('Saving...', 'saving');
