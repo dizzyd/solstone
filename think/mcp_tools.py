@@ -3,6 +3,7 @@
 
 import base64
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
@@ -101,6 +102,22 @@ def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
     """
 
     try:
+        # Validate that the day is not in the past
+        try:
+            todo_date = datetime.strptime(day, "%Y%m%d").date()
+            today = datetime.now().date()
+            if todo_date < today:
+                today_str = today.strftime("%Y%m%d")
+                return {
+                    "error": f"Cannot add todo to past date {day}",
+                    "suggestion": f"todos can only be added to today ({today_str}) or future days",
+                }
+        except ValueError:
+            return {
+                "error": f"Invalid day format '{day}'",
+                "suggestion": "use YYYYMMDD format (e.g., 20250104)",
+            }
+
         checklist = todo.TodoChecklist.load(day, ensure_day=True)
         checklist.add_entry(line_number, text)
         return {"day": day, "markdown": checklist.numbered()}
