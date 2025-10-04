@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 import types
-from datetime import datetime
+from datetime import datetime, timedelta
 from importlib import import_module
 from typing import Callable
 
@@ -110,6 +110,7 @@ def create_app(journal: str = "", password: str = "") -> Flask:
     )
     app.secret_key = os.getenv("DREAM_SECRET", "sunstone-secret")
     app.config["PASSWORD"] = password or _resolve_env_password()
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
     register_views(app)
 
     @app.context_processor

@@ -47,6 +47,7 @@ def login() -> Any:
     if request.method == "POST":
         if request.form.get("password") == current_app.config.get("PASSWORD"):
             session["logged_in"] = True
+            session.permanent = True
             return redirect(url_for("review.home"))
         error = "Invalid password"
     return render_template("login.html", error=error)
