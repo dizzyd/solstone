@@ -12,6 +12,19 @@ pre { background:#f5f5f5; padding:0.5em; }
 .spinner { display:inline-block; width:12px; height:12px; border:2px solid #ccc; border-top-color:#333; border-radius:50%; animation:spin 1s linear infinite; margin-left:4px; }
 #taskOutput { white-space: pre-wrap; word-wrap: break-word; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* Config form styles */
+.config-section { max-width: 600px; margin-top: 1em; }
+.config-section h3 { color: #333; font-size: 1.3em; margin: 1.5em 0 1em 0; border-bottom: 2px solid #eee; padding-bottom: 0.5em; }
+.form-group { margin-bottom: 1.5em; }
+.form-group label { display: block; font-weight: 600; color: #333; margin-bottom: 0.5em; font-size: 0.95em; }
+.form-group input { width: 100%; padding: 0.6em 0.75em; border: 2px solid #ddd; border-radius: 8px; font-size: 0.95em; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; box-sizing: border-box; }
+.form-group input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+.form-group small { display: block; margin-top: 0.3em; color: #666; font-size: 0.85em; line-height: 1.4; }
+.config-status { margin-top: 1em; padding: 0.75em 1em; border-radius: 8px; font-size: 0.9em; font-weight: 500; display: none; }
+.config-status.success { background: #d4edda; color: #155724; display: block; }
+.config-status.error { background: #f8d7da; color: #721c24; display: block; }
+.config-status.saving { background: #d1ecf1; color: #0c5460; display: block; }
 </style>
 {% endblock %}
 {% block body %}
@@ -22,13 +35,114 @@ pre { background:#f5f5f5; padding:0.5em; }
   <pre id="status"></pre>
   {% set cats = ['hear','see','reduce','summaries','entity'] %}
   <div class="tabs">
+    <div class="tab active" data-target="config">Config</div>
     {% for cat in cats %}
-    <div class="tab{% if loop.first %} active{% endif %}" data-target="{{ cat }}">{{ cat.capitalize() }}</div>
+    <div class="tab" data-target="{{ cat }}">{{ cat.capitalize() }}</div>
     {% endfor %}
     <div class="tab" data-target="log">Task Log</div>
   </div>
+  <div class="content" id="config">
+    <h2>Journal Configuration</h2>
+    <div class="config-section">
+      <h3>Identity</h3>
+      <div class="form-group">
+        <label for="config-name">Full Name</label>
+        <input type="text" id="config-name" data-field="name" placeholder="Your full name">
+        <small>Your full legal or formal name</small>
+      </div>
+      <div class="form-group">
+        <label for="config-preferred">Preferred Name</label>
+        <input type="text" id="config-preferred" data-field="preferred" placeholder="Your preferred name">
+        <small>Preferred name or nickname to be used when addressing you</small>
+      </div>
+      <div class="form-group">
+        <label for="config-pronouns">Pronouns</label>
+        <input type="text" id="config-pronouns" data-field="pronouns" placeholder="e.g., she/her, he/him, they/them">
+        <small>Use commas or slashes (e.g., "he/him" or "she, her")</small>
+      </div>
+      <div class="form-group">
+        <label for="config-aliases">Aliases</label>
+        <input type="text" id="config-aliases" data-field="aliases" placeholder="e.g., nickname1, nickname2">
+        <small>Comma-separated alternative names or nicknames that may appear in transcripts</small>
+      </div>
+      <div class="form-group">
+        <label for="config-emails">Email Addresses</label>
+        <input type="text" id="config-emails" data-field="email_addresses" placeholder="e.g., work@company.com, personal@example.com">
+        <small>Comma-separated email addresses for participant detection</small>
+      </div>
+      <div class="form-group">
+        <label for="config-timezone">Home Timezone</label>
+        <input type="text" id="config-timezone" data-field="timezone" list="timezone-list" placeholder="e.g., America/New_York">
+        <datalist id="timezone-list">
+          <option value="UTC">
+          <option value="GMT">
+          <option value="America/New_York">
+          <option value="America/Chicago">
+          <option value="America/Denver">
+          <option value="America/Phoenix">
+          <option value="America/Los_Angeles">
+          <option value="America/Anchorage">
+          <option value="America/Honolulu">
+          <option value="America/Toronto">
+          <option value="America/Vancouver">
+          <option value="America/Montreal">
+          <option value="America/Mexico_City">
+          <option value="America/Sao_Paulo">
+          <option value="America/Buenos_Aires">
+          <option value="America/Santiago">
+          <option value="America/Bogota">
+          <option value="America/Lima">
+          <option value="Europe/London">
+          <option value="Europe/Paris">
+          <option value="Europe/Berlin">
+          <option value="Europe/Rome">
+          <option value="Europe/Madrid">
+          <option value="Europe/Amsterdam">
+          <option value="Europe/Brussels">
+          <option value="Europe/Zurich">
+          <option value="Europe/Vienna">
+          <option value="Europe/Stockholm">
+          <option value="Europe/Oslo">
+          <option value="Europe/Copenhagen">
+          <option value="Europe/Helsinki">
+          <option value="Europe/Prague">
+          <option value="Europe/Warsaw">
+          <option value="Europe/Athens">
+          <option value="Europe/Istanbul">
+          <option value="Europe/Moscow">
+          <option value="Asia/Tokyo">
+          <option value="Asia/Shanghai">
+          <option value="Asia/Hong_Kong">
+          <option value="Asia/Singapore">
+          <option value="Asia/Seoul">
+          <option value="Asia/Kolkata">
+          <option value="Asia/Dubai">
+          <option value="Asia/Bangkok">
+          <option value="Asia/Manila">
+          <option value="Asia/Jakarta">
+          <option value="Asia/Taipei">
+          <option value="Asia/Jerusalem">
+          <option value="Asia/Riyadh">
+          <option value="Asia/Tehran">
+          <option value="Australia/Sydney">
+          <option value="Australia/Melbourne">
+          <option value="Australia/Brisbane">
+          <option value="Australia/Perth">
+          <option value="Australia/Adelaide">
+          <option value="Pacific/Auckland">
+          <option value="Pacific/Fiji">
+          <option value="Africa/Cairo">
+          <option value="Africa/Johannesburg">
+          <option value="Africa/Lagos">
+          <option value="Africa/Nairobi">
+        </datalist>
+        <small>IANA timezone identifier - type to search or select from list</small>
+      </div>
+      <div id="config-status" class="config-status"></div>
+    </div>
+  </div>
   {% for cat in cats %}
-  <ul class="content" id="{{ cat }}" style="{% if not loop.first %}display:none{% endif %}">
+  <ul class="content" id="{{ cat }}" style="display:none">
     {% for item in repair_data[cat] %}
     <li><a href="{{ url_for('admin.admin_day_page', day=item.day) }}">{{ item.day }}</a> - {{ item.count }}</li>
     {% else %}
@@ -48,11 +162,14 @@ pre { background:#f5f5f5; padding:0.5em; }
 </div>
 <script>
 let taskDone=false;
+let configData = null;
+let saveTimeout = null;
 const tabs = document.querySelectorAll('.tab');
 const contents = document.querySelectorAll('.content');
 function showTab(id){
   tabs.forEach(t=>t.classList.toggle('active', t.dataset.target===id));
   contents.forEach(c=>{c.style.display=c.id===id?'block':'none';});
+  if(id==='config' && !configData) loadConfig();
 }
 tabs.forEach(t=>t.addEventListener('click', ()=>showTab(t.dataset.target)));
 function runTask(data){
@@ -102,6 +219,116 @@ document.querySelectorAll('#taskModal .close')[0].onclick=hideModal;
 window.onclick=e=>{
   if(e.target==document.getElementById('taskModal')) hideModal();
 };
+
+// Config management functions
+function loadConfig(){
+  fetch('{{ url_for('admin.get_config') }}')
+    .then(r=>r.json())
+    .then(data=>{
+      configData = data;
+      populateConfigForm(data);
+      setupConfigAutoSave();
+    })
+    .catch(err=>{
+      console.error('Error loading config:', err);
+      showConfigStatus('Error loading configuration', 'error');
+    });
+}
+
+function populateConfigForm(data){
+  const identity = data.identity || {};
+  document.getElementById('config-name').value = identity.name || '';
+  document.getElementById('config-preferred').value = identity.preferred || '';
+  document.getElementById('config-pronouns').value = Array.isArray(identity.pronouns) ? identity.pronouns.join('/') : '';
+  document.getElementById('config-aliases').value = Array.isArray(identity.aliases) ? identity.aliases.join(', ') : '';
+  document.getElementById('config-emails').value = Array.isArray(identity.email_addresses) ? identity.email_addresses.join(', ') : '';
+
+  // Auto-detect timezone if not set
+  const timezoneInput = document.getElementById('config-timezone');
+  if (!identity.timezone || identity.timezone === '') {
+    try {
+      const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (detectedTz) {
+        timezoneInput.value = detectedTz;
+        // Auto-save the detected timezone
+        setTimeout(() => saveConfig(), 500);
+      }
+    } catch (e) {
+      console.warn('Could not auto-detect timezone:', e);
+      timezoneInput.value = '';
+    }
+  } else {
+    timezoneInput.value = identity.timezone;
+  }
+}
+
+function setupConfigAutoSave(){
+  const inputs = document.querySelectorAll('#config input[data-field]');
+  inputs.forEach(input=>{
+    input.addEventListener('blur', ()=>saveConfigField(input));
+    input.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        saveConfigField(input);
+      }
+    });
+  });
+}
+
+function saveConfigField(input){
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(()=>saveConfig(), 500);
+}
+
+function saveConfig(){
+  const identity = {
+    name: document.getElementById('config-name').value.trim(),
+    preferred: document.getElementById('config-preferred').value.trim(),
+    pronouns: document.getElementById('config-pronouns').value.split(/[,\/]/).map(s=>s.trim()).filter(s=>s),
+    aliases: document.getElementById('config-aliases').value.split(',').map(s=>s.trim()).filter(s=>s),
+    email_addresses: document.getElementById('config-emails').value.split(',').map(s=>s.trim()).filter(s=>s),
+    timezone: document.getElementById('config-timezone').value.trim()
+  };
+
+  showConfigStatus('Saving...', 'saving');
+
+  fetch('{{ url_for('admin.update_config') }}', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({identity})
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    if(data.success){
+      configData = data.config;
+      showConfigStatus('Saved', 'success');
+      setTimeout(()=>hideConfigStatus(), 2000);
+    } else {
+      showConfigStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+    }
+  })
+  .catch(err=>{
+    console.error('Error saving config:', err);
+    showConfigStatus('Error saving configuration', 'error');
+  });
+}
+
+function showConfigStatus(msg, type){
+  const status = document.getElementById('config-status');
+  status.textContent = msg;
+  status.className = 'config-status ' + type;
+}
+
+function hideConfigStatus(){
+  const status = document.getElementById('config-status');
+  status.className = 'config-status';
+}
+
+// Load config on page load if config tab is active
+if(document.querySelector('.tab.active').dataset.target === 'config'){
+  loadConfig();
+}
+
 loadLog();
 </script>
 {% endblock %}

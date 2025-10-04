@@ -7,9 +7,41 @@ This document describes the layout of a **journal** directory where all audio, s
 - `entities.md` – top list of entities gathered across days. Used by several tools.
 - `entity_review.log` – operations performed in the web UI are appended here.
 - `task_log.txt` – optional log of utility runs in `[epoch]\tmessage` format.
+- `config/journal.json` – user configuration for the journal (optional, see below).
 - `domains/` – domain-specific organization folders described below.
 - `inbox/` – asynchronous messaging system for agent communications described below.
 - `YYYYMMDD/` – individual day folders described below.
+
+## User configuration
+
+The optional `config/journal.json` file allows customization of journal processing and presentation based on user preferences. This file should be created at the journal root and contains personal settings that affect how the system processes and interprets journal data.
+
+### Identity configuration
+
+The `identity` block contains information about the journal owner that helps tools correctly identify the user in transcripts, meetings, and other captured content:
+
+```json
+{
+  "identity": {
+    "name": "Jeremie Miller",
+    "preferred": "Jer",
+    "pronouns": ["he", "him"],
+    "aliases": ["Jer", "jeremie"],
+    "email_addresses": ["jer@example.com"],
+    "timezone": "America/Los_Angeles"
+  }
+}
+```
+
+Fields:
+- `name` (string) – Full legal or formal name of the journal owner
+- `preferred` (string) – Preferred name or nickname to be used when addressing the user
+- `pronouns` (array of strings) – Pronouns the user prefers (e.g., `["she", "her"]`, `["they", "them"]`)
+- `aliases` (array of strings) – Alternative names, nicknames, or usernames that may appear in transcripts
+- `email_addresses` (array of strings) – Email addresses associated with the user for participant detection
+- `timezone` (string) – IANA timezone identifier (e.g., "America/New_York", "Europe/London") for timestamp interpretation
+
+This configuration helps meeting extraction identify the user as a participant, enables personalized agent interactions, and ensures timestamps are interpreted correctly across the journal.
 
 ## Domain folders
 

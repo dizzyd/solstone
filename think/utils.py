@@ -103,6 +103,64 @@ def day_path(day: Optional[str] = None) -> Path:
     return path
 
 
+def get_config() -> dict[str, Any]:
+    """Return the journal configuration from config/journal.json.
+
+    Returns
+    -------
+    dict
+        Journal configuration with at least an 'identity' key containing
+        name, preferred, pronouns, aliases, email_addresses, and timezone fields.
+        Returns default empty structure if config file doesn't exist.
+
+    Raises
+    ------
+    RuntimeError
+        If JOURNAL_PATH is not set.
+    """
+    # Default identity structure - defined once
+    default_identity = {
+        "name": "",
+        "preferred": "",
+        "pronouns": [],
+        "aliases": [],
+        "email_addresses": [],
+        "timezone": "",
+    }
+
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+
+    config_path = Path(journal) / "config" / "journal.json"
+
+    # Return default structure if file doesn't exist
+    if not config_path.exists():
+        return {"identity": default_identity.copy()}
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+
+        # Ensure identity section exists with all required fields
+        if "identity" not in config:
+            config["identity"] = {}
+
+        # Fill in any missing fields with defaults
+        for key, default in default_identity.items():
+            if key not in config["identity"]:
+                config["identity"][key] = default
+
+        return config
+    except (json.JSONDecodeError, OSError) as exc:
+        # Log error but return default structure to avoid breaking callers
+        logging.getLogger(__name__).warning(
+            "Failed to load config from %s: %s", config_path, exc
+        )
+        return {"identity": default_identity.copy()}
+
+
 def _append_task_log(dir_path: str | Path, message: str) -> None:
     """Append ``message`` to ``task_log.txt`` inside ``dir_path``."""
     path = Path(dir_path) / "task_log.txt"
