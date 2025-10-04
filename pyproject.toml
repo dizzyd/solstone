@@ -99,12 +99,12 @@ think-planner = "think.planner:main"
 think-journal-stats = "think.journal_stats:main"
 think-importer = "think.importer:main"
 think-process-day = "think.process_day:main"
-think-mcp-tools = "think.mcp_tools:main"
+think-mcp-tools = "muse.mcp_tools:main"
 think-indexer = "think.indexer:main"
-think-agents = "think.agents:main"
+think-agents = "muse.agents:main"
 think-supervisor = "think.supervisor:main"
 think-detect-created = "think.detect_created:main"
-think-cortex = "think.cortex:main"
+think-cortex = "muse.cortex:main"
 think-messages = "think.messages:main"
 gnome-screencast = "observe.gnome.screencast:main"
 gnome-screencast-viewer = "observe.gnome.screencast_viewer:main"
@@ -117,12 +117,13 @@ Documentation = "https://github.com/yourusername/sunstone/blob/main/README.md"
 "Bug Tracker" = "https://github.com/yourusername/sunstone/issues"
 
 [tool.setuptools.packages.find]
-include = ["hear*", "see*", "think*", "convey*", "observe*"]
+include = ["hear*", "see*", "think*", "convey*", "observe*", "muse*"]
 
 [tool.setuptools.package-data]
 hear = ["*.txt"]
 see = ["*.txt"]
-think = ["*.txt", "topics/*.txt", "agents/*.txt", "agents/*.json"]
+think = ["*.txt", "topics/*.txt"]
+muse = ["agents/*.txt", "agents/*.json"]
 convey = [
     "templates/*.html",
     "static/*",

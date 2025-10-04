@@ -1,4 +1,4 @@
-"""Tests for NDJSON-only input in think.agents."""
+"""Tests for NDJSON-only input in muse.agents."""
 
 import asyncio
 import json
@@ -76,18 +76,18 @@ def test_ndjson_single_request(mock_journal, monkeypatch, capsys):
     mock_openai.run_agent = mock_run_agent
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", mock_openai)
-    monkeypatch.setitem(sys.modules, "think.anthropic", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", mock_openai)
+    monkeypatch.setitem(sys.modules, "muse.anthropic", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
 
     # Mock agents module to prevent actual imports
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
     # Now import after mocks are in place
-    from think.agents import main_async
+    from muse.agents import main_async
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key"):
             asyncio.run(main_async())
 
@@ -146,15 +146,15 @@ def test_ndjson_multiple_requests(mock_journal, monkeypatch, capsys):
     mock_anthropic.run_agent = mock_run_agent
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", mock_openai)
-    monkeypatch.setitem(sys.modules, "think.anthropic", mock_anthropic)
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", mock_openai)
+    monkeypatch.setitem(sys.modules, "muse.anthropic", mock_anthropic)
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
-    from think.agents import main_async
+    from muse.agents import main_async
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key"):
             asyncio.run(main_async())
 
@@ -193,15 +193,15 @@ not valid json
     mock_openai.run_agent = mock_run_agent
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", mock_openai)
-    monkeypatch.setitem(sys.modules, "think.anthropic", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", mock_openai)
+    monkeypatch.setitem(sys.modules, "muse.anthropic", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
-    from think.agents import main_async
+    from muse.agents import main_async
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key"):
             asyncio.run(main_async())
 
@@ -236,15 +236,15 @@ def test_ndjson_missing_prompt(mock_journal, monkeypatch, capsys):
     mock_args.verbose = False
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.anthropic", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.anthropic", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
-    from think.agents import main_async
+    from muse.agents import main_async
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key"):
             asyncio.run(main_async())
 
@@ -276,15 +276,15 @@ def test_ndjson_empty_lines(mock_journal, monkeypatch, capsys):
     mock_openai.run_agent = mock_run_agent
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", mock_openai)
-    monkeypatch.setitem(sys.modules, "think.anthropic", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", mock_openai)
+    monkeypatch.setitem(sys.modules, "muse.anthropic", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
-    from think.agents import main_async
+    from muse.agents import main_async
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key"):
             asyncio.run(main_async())
 
@@ -313,15 +313,15 @@ def test_default_values(mock_journal, monkeypatch, capsys):
     mock_openai.run_agent = mock_run_agent
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", mock_openai)
-    monkeypatch.setitem(sys.modules, "think.anthropic", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", mock_openai)
+    monkeypatch.setitem(sys.modules, "muse.anthropic", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
-    from think.agents import main_async
+    from muse.agents import main_async
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key"):
             asyncio.run(main_async())
 
@@ -357,17 +357,17 @@ def test_openai_key_setting(mock_journal, monkeypatch, capsys):
     mock_openai.run_agent = mock_run_agent
 
     # Mock the modules in sys.modules before import
-    monkeypatch.setitem(sys.modules, "think.openai", mock_openai)
-    monkeypatch.setitem(sys.modules, "think.anthropic", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.google", MagicMock())
-    monkeypatch.setitem(sys.modules, "think.claude", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.openai", mock_openai)
+    monkeypatch.setitem(sys.modules, "muse.anthropic", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.google", MagicMock())
+    monkeypatch.setitem(sys.modules, "muse.claude", MagicMock())
     monkeypatch.setitem(sys.modules, "agents", MagicMock())
 
-    from think.agents import main_async
+    from muse.agents import main_async
 
     mock_set_key = MagicMock()
 
-    with patch("think.agents.setup_cli", return_value=mock_args):
+    with patch("muse.agents.setup_cli", return_value=mock_args):
         with patch("agents.set_default_openai_key", mock_set_key):
             asyncio.run(main_async())
 

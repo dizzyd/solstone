@@ -16,7 +16,7 @@ DATE_RE = re.compile(r"\d{8}")
 
 # Topic colors are now stored in each topic's JSON metadata file
 
-AGENT_DIR = Path(__file__).with_name("agents")
+AGENT_DIR = Path(__file__).parent.parent / "muse" / "agents"
 
 
 class PromptContent(NamedTuple):

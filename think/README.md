@@ -89,7 +89,7 @@ The Cortex service (`think-cortex`) is the central system for managing AI agent 
 To spawn agents programmatically, use the cortex_client functions:
 
 ```python
-from think.cortex_client import cortex_run, cortex_request, cortex_watch
+from muse.cortex_client import cortex_run, cortex_request, cortex_watch
 
 # Simple synchronous run
 result = cortex_run(
@@ -126,9 +126,9 @@ The provider can be ``openai`` (default), ``google`` or ``anthropic``. Set the c
 ### Common interface
 
 The `AgentSession` context manager powers all the CLIs. Use
-`think.openai.AgentSession`, `think.google.AgentSession` or
-`think.anthropic.AgentSession` depending on the backend. The shared
-`BaseAgentSession` interface lives in `think.agents`:
+`muse.openai.AgentSession`, `muse.google.AgentSession` or
+`muse.anthropic.AgentSession` depending on the backend. The shared
+`BaseAgentSession` interface lives in `muse.agents`:
 
 ```python
 async with AgentSession() as agent:
@@ -159,10 +159,10 @@ Cortex is the central agent management system that all agent spawning should go 
 
 ### Using cortex_client
 
-The `think.cortex_client` module provides functions for interacting with Cortex:
+The `muse.cortex_client` module provides functions for interacting with Cortex:
 
 ```python
-from think.cortex_client import cortex_run, cortex_agents
+from muse.cortex_client import cortex_run, cortex_agents
 
 # Simple synchronous agent run
 result = cortex_run("Your prompt", persona="default", backend="openai")

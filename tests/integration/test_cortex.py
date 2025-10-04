@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from think.cortex import CortexService
-from think.cortex_client import cortex_agents, cortex_request, cortex_run
+from muse.cortex import CortexService
+from muse.cortex_client import cortex_agents, cortex_request, cortex_run
 
 
 @pytest.mark.integration

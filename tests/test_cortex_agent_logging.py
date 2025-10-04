@@ -12,7 +12,7 @@ from pathlib import Path
 
 def test_json_event_writer():
     """Test that JSONEventWriter outputs to stdout and optionally to file."""
-    from think.agents import JSONEventWriter
+    from muse.agents import JSONEventWriter
 
     # Test with file output (for -o option compatibility)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
@@ -45,7 +45,7 @@ def test_agent_no_file_creation():
         agents_dir.mkdir(parents=True, exist_ok=True)
 
         # Import the deprecated JournalEventWriter
-        from think.agents import JournalEventWriter
+        from muse.agents import JournalEventWriter
 
         # Create a journal writer (should no longer create files)
         with tempfile.TemporaryDirectory() as journal_tmp:
@@ -102,7 +102,7 @@ def test_cortex_style_capture():
         # Run agent and capture stdout
         ndjson_input = json.dumps({"prompt": "Say hello", "backend": "openai"})
         proc = subprocess.Popen(
-            [sys.executable, "-m", "think.agents"],
+            [sys.executable, "-m", "muse.agents"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

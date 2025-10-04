@@ -220,7 +220,7 @@ def generate_todos(day: str):  # type: ignore[override]
     if not DATE_RE.fullmatch(day):
         return "", 404
 
-    from think.cortex_client import cortex_request
+    from muse.cortex_client import cortex_request
 
     day_date = datetime.strptime(day, "%Y%m%d")
     yesterday = (day_date - timedelta(days=1)).strftime("%Y%m%d")
@@ -274,7 +274,7 @@ def todo_generation_status(day: str):  # type: ignore[override]
     if not agent_id:
         return jsonify({"status": "none", "agent_id": None})
 
-    from think.cortex_client import cortex_agents
+    from muse.cortex_client import cortex_agents
 
     todo_path = _todo_path(day)
 

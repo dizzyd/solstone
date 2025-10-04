@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-import think.mcp_tools as mcp_tools
+import muse.mcp_tools as mcp_tools
 
 
 def test_todo_list_success_returns_numbered_markdown():
@@ -40,7 +40,7 @@ def test_search_news_success():
         },
     ]
 
-    with patch("think.mcp_tools.search_news_impl") as mock_search:
+    with patch("muse.mcp_tools.search_news_impl") as mock_search:
         mock_search.return_value = (2, mock_results)
         result = mcp_tools.search_news("breakthrough", limit=5, offset=0)
 
@@ -70,7 +70,7 @@ def test_search_news_with_filters():
         },
     ]
 
-    with patch("think.mcp_tools.search_news_impl") as mock_search:
+    with patch("muse.mcp_tools.search_news_impl") as mock_search:
         mock_search.return_value = (1, mock_results)
         result = mcp_tools.search_news(
             "product", limit=10, offset=0, domain="work", day="20250118"
@@ -84,7 +84,7 @@ def test_search_news_with_filters():
 
 def test_search_news_empty_results():
     """Test news search with no results."""
-    with patch("think.mcp_tools.search_news_impl") as mock_search:
+    with patch("muse.mcp_tools.search_news_impl") as mock_search:
         mock_search.return_value = (0, [])
         result = mcp_tools.search_news("nonexistent", limit=5, offset=0)
 
@@ -96,7 +96,7 @@ def test_search_news_empty_results():
 
 def test_search_news_error_handling():
     """Test news search error handling."""
-    with patch("think.mcp_tools.search_news_impl") as mock_search:
+    with patch("muse.mcp_tools.search_news_impl") as mock_search:
         mock_search.side_effect = RuntimeError("Database error")
         result = mcp_tools.search_news("test", limit=5, offset=0)
 

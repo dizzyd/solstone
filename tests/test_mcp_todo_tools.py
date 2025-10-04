@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from think import mcp_tools
+from muse import mcp_tools
 
 
 def call_tool(tool, *args, **kwargs):

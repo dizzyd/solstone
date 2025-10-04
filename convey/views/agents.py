@@ -179,7 +179,7 @@ def _get_agents_list(agent_type: str) -> object:
     offset = max(0, offset)
 
     # Get agents directly from cortex_agents function
-    from think.cortex_client import cortex_agents
+    from muse.cortex_client import cortex_agents
     from think.utils import get_agents
 
     from ..utils import time_since
@@ -384,7 +384,7 @@ def start_agent() -> object:
 
     try:
         # Use cortex_client to spawn agent
-        from think.cortex_client import cortex_request
+        from muse.cortex_client import cortex_request
 
         # Create the agent request
         request_file = cortex_request(
@@ -492,9 +492,9 @@ def toggle_topic(topic_id: str) -> object:
 
 @bp.route("/agents/api/tools")
 def available_tools() -> object:
-    """Return list of available MCP tools from think.mcp_tools."""
+    """Return list of available MCP tools from muse.mcp_tools."""
     try:
-        from think.mcp_tools import TOOL_PACKS, mcp
+        from muse.mcp_tools import TOOL_PACKS, mcp
 
         # Get all tools asynchronously
         async def get_all_tools():

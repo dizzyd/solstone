@@ -90,7 +90,7 @@ def agent_events(agent_id: str) -> Any:
         return jsonify({"error": "Journal root not configured"}), 500
 
     # First, try to check if the agent is still running in Cortex
-    from think.cortex_client import cortex_agents
+    from muse.cortex_client import cortex_agents
 
     try:
         # Get list of running agents from Cortex

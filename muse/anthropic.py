@@ -18,8 +18,8 @@ from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam, ToolParam, ToolUseBlock
 
 from .agents import JSONEventCallback, ThinkingEvent
-from .models import CLAUDE_SONNET_4
-from .utils import create_mcp_client
+from think.models import CLAUDE_SONNET_4
+from think.utils import create_mcp_client
 
 # Default values are now handled internally
 _DEFAULT_MODEL = CLAUDE_SONNET_4

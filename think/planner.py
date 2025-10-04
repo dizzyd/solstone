@@ -16,7 +16,7 @@ async def _get_mcp_tools() -> str:
     """Return formatted MCP tools information for the prompt."""
 
     try:
-        from think.mcp_tools import mcp
+        from muse.mcp_tools import mcp
 
         tools = await mcp.get_tools()
         if not tools:

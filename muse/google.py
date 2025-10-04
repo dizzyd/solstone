@@ -17,8 +17,8 @@ from google import genai
 from google.genai import types
 
 from .agents import JSONEventCallback, ThinkingEvent
-from .models import GEMINI_FLASH
-from .utils import create_mcp_client
+from think.models import GEMINI_FLASH
+from think.utils import create_mcp_client
 
 # Default values are now handled internally
 _DEFAULT_MODEL = GEMINI_FLASH

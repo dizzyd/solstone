@@ -51,7 +51,7 @@ except Exception:  # pragma: no cover
 # Agent configuration is now loaded via get_agent() in cortex.py
 
 from .agents import JSONEventCallback, ThinkingEvent
-from .models import GPT_5
+from think.models import GPT_5
 
 
 class WorkaroundConversations(Session):
@@ -102,7 +102,7 @@ _DEFAULT_MODEL = os.getenv("OPENAI_AGENT_MODEL", GPT_5)
 _DEFAULT_MAX_TOKENS = int(os.getenv("OPENAI_AGENT_MAX_TOKENS", "16384"))
 _DEFAULT_MAX_TURNS = int(os.getenv("OPENAI_AGENT_MAX_TURNS", "64"))
 
-LOG = logging.getLogger("think.openai")
+LOG = logging.getLogger("muse.openai")
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:

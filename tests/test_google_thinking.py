@@ -69,9 +69,9 @@ def test_google_thinking_events(monkeypatch, tmp_path, capsys):
     _setup_genai_stub(monkeypatch)
     install_agents_stub()
 
-    sys.modules.pop("think.google", None)
-    importlib.reload(importlib.import_module("think.google"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    sys.modules.pop("muse.google", None)
+    importlib.reload(importlib.import_module("muse.google"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()

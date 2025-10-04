@@ -124,7 +124,7 @@ class CortexService:
         if self.mcp_thread and self.mcp_thread.is_alive():
             return
 
-        from think.mcp_tools import mcp
+        from muse.mcp_tools import mcp
 
         host = os.getenv("SUNSTONE_MCP_HOST", "127.0.0.1")
         port = int(os.getenv("SUNSTONE_MCP_PORT", "6270"))
@@ -283,7 +283,7 @@ class CortexService:
                 return
 
             # Load persona and merge with request
-            from think.mcp_tools import get_tools
+            from muse.mcp_tools import get_tools
             from think.utils import get_agent
 
             persona = request.get("persona", "default")
@@ -724,7 +724,7 @@ class CortexService:
     ) -> None:
         """Spawn a handoff agent from a completed agent's result."""
         try:
-            from think.cortex_client import cortex_request
+            from muse.cortex_client import cortex_request
 
             if not handoff:
                 self.logger.debug(

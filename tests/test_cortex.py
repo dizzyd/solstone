@@ -23,7 +23,7 @@ def mock_journal(tmp_path, monkeypatch):
 @pytest.fixture
 def cortex_service(mock_journal, monkeypatch):
     """Create a CortexService instance for testing."""
-    from think.cortex import CortexService
+    from muse.cortex import CortexService
 
     monkeypatch.setattr(CortexService, "_start_mcp_server", lambda self: None)
     monkeypatch.setattr(
@@ -36,7 +36,7 @@ def cortex_service(mock_journal, monkeypatch):
 
 def test_agent_process_creation():
     """Test AgentProcess class initialization and methods."""
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     mock_process = MagicMock()
     mock_process.poll.return_value = None  # Running
@@ -129,7 +129,7 @@ def test_handle_active_file_valid_request(cortex_service, mock_journal):
             mock_mcp_tools = MagicMock()
             mock_mcp_tools.get_tools = MagicMock(return_value=[])
 
-            with patch.dict("sys.modules", {"think.mcp_tools": mock_mcp_tools}):
+            with patch.dict("sys.modules", {"muse.mcp_tools": mock_mcp_tools}):
                 # Mock get_agent to return a config
                 mock_get_agent.return_value = {
                     "instruction": "Default instruction",
@@ -164,7 +164,7 @@ def test_handle_active_file_multiple_tool_packs(cortex_service, mock_journal):
 
     mock_mcp_tools.get_tools.side_effect = fake_get_tools
 
-    with patch.dict("sys.modules", {"think.mcp_tools": mock_mcp_tools}):
+    with patch.dict("sys.modules", {"muse.mcp_tools": mock_mcp_tools}):
         with patch("think.utils.get_agent") as mock_get_agent:
             mock_get_agent.return_value = {
                 "instruction": "todo",
@@ -233,9 +233,9 @@ def test_handle_active_file_empty_prompt(cortex_service, mock_journal):
         assert "Empty prompt" in mock_error.call_args[0][1]
 
 
-@patch("think.cortex.subprocess.Popen")
-@patch("think.cortex.threading.Thread")
-@patch("think.cortex.threading.Timer")
+@patch("muse.cortex.subprocess.Popen")
+@patch("muse.cortex.threading.Thread")
+@patch("muse.cortex.threading.Timer")
 def test_spawn_agent(mock_timer, mock_thread, mock_popen, cortex_service, mock_journal):
     """Test spawning an agent subprocess."""
     mock_process = MagicMock()
@@ -303,7 +303,7 @@ def test_spawn_agent(mock_timer, mock_thread, mock_popen, cortex_service, mock_j
     mock_timer_instance.start.assert_called_once()
 
 
-@patch("think.cortex.subprocess.Popen")
+@patch("muse.cortex.subprocess.Popen")
 def test_spawn_agent_with_handoff_from(mock_popen, cortex_service, mock_journal):
     """Test spawning an agent with handoff_from parameter."""
     mock_process = MagicMock()
@@ -325,7 +325,7 @@ def test_spawn_agent_with_handoff_from(mock_popen, cortex_service, mock_journal)
         "handoff_from": "parent123",
     }
 
-    with patch("think.cortex.threading.Thread"):
+    with patch("muse.cortex.threading.Thread"):
         cortex_service._spawn_agent(agent_id, file_path, request)
 
     # Check handoff_from was included in NDJSON
@@ -338,7 +338,7 @@ def test_monitor_stdout_json_events(cortex_service, mock_journal):
     """Test monitoring stdout with JSON events."""
     from io import StringIO
 
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     agent_id = "123456789"
     log_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
@@ -374,7 +374,7 @@ def test_monitor_stdout_non_json_output(cortex_service, mock_journal):
     """Test monitoring stdout with non-JSON output."""
     from io import StringIO
 
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     agent_id = "123456789"
     log_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
@@ -405,7 +405,7 @@ def test_monitor_stdout_with_handoff(cortex_service, mock_journal):
     """Test monitoring stdout with handoff in finish event."""
     from io import StringIO
 
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     agent_id = "123456789"
     log_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
@@ -440,7 +440,7 @@ def test_monitor_stdout_no_finish_event(cortex_service, mock_journal):
     """Test monitoring stdout when process exits without finish event."""
     from io import StringIO
 
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     agent_id = "123456789"
     log_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
@@ -469,7 +469,7 @@ def test_monitor_stderr(cortex_service, mock_journal):
     """Test monitoring stderr for errors."""
     from io import StringIO
 
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     agent_id = "123456789"
     log_path = mock_journal / "agents" / f"{agent_id}_active.jsonl"
@@ -566,7 +566,7 @@ def test_spawn_handoff(cortex_service, mock_journal):
         "max_turns": 5,
     }
 
-    with patch("think.cortex_client.cortex_request") as mock_request:
+    with patch("muse.cortex_client.cortex_request") as mock_request:
         mock_request.return_value = (
             mock_journal / "agents" / "987654321000_active.jsonl"
         )
@@ -591,7 +591,7 @@ def test_spawn_handoff_with_explicit_prompt(cortex_service, mock_journal):
         "prompt": "Review this analysis",  # Explicit prompt
     }
 
-    with patch("think.cortex_client.cortex_request") as mock_request:
+    with patch("muse.cortex_client.cortex_request") as mock_request:
         cortex_service._spawn_handoff(parent_id, result, handoff)
 
         # Check cortex_request was called with explicit prompt
@@ -606,7 +606,7 @@ def test_spawn_handoff_with_explicit_prompt(cortex_service, mock_journal):
 
 def test_stop_service(cortex_service):
     """Test stopping the Cortex service."""
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     # Add running agents
     mock_process1 = MagicMock()
@@ -643,7 +643,7 @@ def test_stop_service(cortex_service):
 
 def test_get_status(cortex_service):
     """Test getting service status."""
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     # Empty status
     status = cortex_service.get_status()
@@ -665,7 +665,7 @@ def test_get_status(cortex_service):
 
 def test_agent_file_handler_on_moved(cortex_service, mock_journal):
     """Test AgentFileHandler handles moved files (pending -> active)."""
-    from think.cortex import AgentFileHandler
+    from muse.cortex import AgentFileHandler
 
     handler = AgentFileHandler(cortex_service)
 
@@ -681,7 +681,7 @@ def test_agent_file_handler_on_moved(cortex_service, mock_journal):
 
 def test_agent_file_handler_on_created(cortex_service, mock_journal):
     """Test AgentFileHandler handles created files."""
-    from think.cortex import AgentFileHandler
+    from muse.cortex import AgentFileHandler
 
     handler = AgentFileHandler(cortex_service)
 
@@ -691,14 +691,14 @@ def test_agent_file_handler_on_created(cortex_service, mock_journal):
     mock_event.src_path = str(mock_journal / "agents" / "456_active.jsonl")
 
     with patch.object(cortex_service, "_handle_active_file") as mock_handle:
-        with patch("think.cortex.time.sleep"):  # Skip delay
+        with patch("muse.cortex.time.sleep"):  # Skip delay
             handler.on_created(mock_event)
             mock_handle.assert_called_once_with("456", Path(mock_event.src_path))
 
 
 def test_agent_file_handler_ignores_directories(cortex_service, mock_journal):
     """Test AgentFileHandler ignores directory events."""
-    from think.cortex import AgentFileHandler
+    from muse.cortex import AgentFileHandler
 
     handler = AgentFileHandler(cortex_service)
 
@@ -712,7 +712,7 @@ def test_agent_file_handler_ignores_directories(cortex_service, mock_journal):
         mock_handle.assert_not_called()
 
 
-@patch("think.cortex.Observer")
+@patch("muse.cortex.Observer")
 def test_start_with_watchdog(mock_observer_class, cortex_service, mock_journal):
     """Test starting service with watchdog Observer."""
     mock_observer = MagicMock()
@@ -726,7 +726,7 @@ def test_start_with_watchdog(mock_observer_class, cortex_service, mock_journal):
         with patch.object(
             cortex_service.stop_event, "is_set", side_effect=[False, True]
         ):
-            with patch("think.cortex.time.sleep"):
+            with patch("muse.cortex.time.sleep"):
                 cortex_service.start()
 
     # Check observer was configured
@@ -822,7 +822,7 @@ def test_save_agent_result_with_invalid_day(cortex_service, mock_journal, caplog
 
 def test_monitor_stdout_with_save(cortex_service, mock_journal):
     """Test monitor_stdout saves result when save field is present."""
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     # Create agent with save in request
     agent_id = "save_test"
@@ -864,7 +864,7 @@ def test_monitor_stdout_with_save(cortex_service, mock_journal):
 
 def test_monitor_stdout_with_save_and_day(cortex_service, mock_journal):
     """Test monitor_stdout saves result to specific day when day field is present."""
-    from think.cortex import AgentProcess
+    from muse.cortex import AgentProcess
 
     # Create agent with save and day in request
     agent_id = "save_day_test"

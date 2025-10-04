@@ -656,7 +656,7 @@ def create_matter(domain_name: str) -> Any:
         # Import cortex request function
         from pathlib import Path as PathLib
 
-        from think.cortex_client import cortex_request
+        from muse.cortex_client import cortex_request
 
         # Prepare the prompt for the matter_editor persona
         priority = data.get("priority", "medium")

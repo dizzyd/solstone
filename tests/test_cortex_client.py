@@ -8,7 +8,7 @@ from threading import Event, Thread
 
 import pytest
 
-from think.cortex_client import cortex_agents, cortex_request, cortex_run, cortex_watch
+from muse.cortex_client import cortex_agents, cortex_request, cortex_run, cortex_watch
 
 
 def test_cortex_request(tmp_path, monkeypatch):

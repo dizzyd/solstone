@@ -26,8 +26,8 @@ def test_openai_main(monkeypatch, tmp_path, capsys):
     last_kwargs, DummyRunner = _setup_openai_mocks(monkeypatch, tmp_path)
     DummyRunner.events_to_stream = []  # Reset for this test
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -78,8 +78,8 @@ def test_openai_thinking_events(monkeypatch, tmp_path, capsys):
 
     DummyRunner.events_to_stream = [reasoning_event]
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -124,8 +124,8 @@ def test_openai_mcp_headers(monkeypatch, tmp_path):
     DummyRunner.events_to_stream = []
     last_kwargs.clear()
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -156,8 +156,8 @@ def test_openai_outfile(monkeypatch, tmp_path, capsys):
     last_kwargs, DummyRunner = _setup_openai_mocks(monkeypatch, tmp_path)
     DummyRunner.events_to_stream = []  # Reset for this test
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -210,8 +210,8 @@ def test_openai_thinking_events_stdout(monkeypatch, tmp_path, capsys):
 
     DummyRunner.events_to_stream = [reasoning_event]
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -266,8 +266,8 @@ def test_openai_outfile_error(monkeypatch, tmp_path, capsys):
     # Override run_streamed to return error stream
     DummyRunner.run_streamed = lambda *a, **k: ErrorStreamResult()
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -316,8 +316,8 @@ def test_openai_thinking_events_error(monkeypatch, tmp_path, capsys):
 
     DummyRunner.events_to_stream = [reasoning_event]
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()
@@ -378,8 +378,8 @@ def test_openai_tool_call_events(monkeypatch, tmp_path, capsys):
 
     DummyRunner.events_to_stream = [tool_call_event, tool_output_event]
 
-    importlib.reload(importlib.import_module("think.openai"))
-    mod = importlib.reload(importlib.import_module("think.agents"))
+    importlib.reload(importlib.import_module("muse.openai"))
+    mod = importlib.reload(importlib.import_module("muse.agents"))
 
     journal = tmp_path / "journal"
     journal.mkdir()

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TextIO
 
-from think.cortex_client import cortex_request
+from muse.cortex_client import cortex_request
 from think.domains import get_domains
 from think.utils import get_agents, setup_cli
 

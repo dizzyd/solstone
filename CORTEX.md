@@ -35,7 +35,7 @@ The first line of a request file must be a JSON object with `event: "request"`:
   "ts": 1234567890123,              // Required: millisecond timestamp (must match filename)
   "prompt": "Analyze this code for security issues",  // Required: the task or question
   "backend": "openai",              // Required: openai, google, anthropic, or claude
-  "persona": "default",              // Optional: agent persona from think/agents/*.txt
+  "persona": "default",              // Optional: agent persona from muse/agents/*.txt
   "model": "gpt-4o",               // Optional: backend-specific override
   "max_tokens": 8192,               // Optional: token limit (if supported)
   "continue": "1234567890122",      // Optional: reuse prior run's conversation
@@ -220,7 +220,7 @@ Agents can transfer control to other agents for specialized tasks. When an agent
 
 ## Agent Personas
 
-Agents use persona configurations stored in the `think/agents/` directory. Each persona consists of:
+Agents use persona configurations stored in the `muse/agents/` directory. Each persona consists of:
 - A `.txt` file containing system instructions and prompts
 - An optional `.json` file with metadata and configuration
 
@@ -230,7 +230,7 @@ When spawning an agent:
 3. Request parameters override persona defaults in the merged configuration
 4. The full configuration (including instruction text) is passed to the agent process
 
-Personas define specialized behaviors, tool usage patterns, and domain expertise. Available personas can be discovered using the `get_agents()` function or by listing files in the `think/agents/` directory.
+Personas define specialized behaviors, tool usage patterns, and domain expertise. Available personas can be discovered using the `get_agents()` function or by listing files in the `muse/agents/` directory.
 
 ### Persona Configuration Options
 
@@ -261,7 +261,7 @@ The Model Context Protocol (MCP) provides tools for agent-journal interaction:
 - **Claude**: Uses filesystem tools instead; requires `domain` configuration in spawn request
 
 ### Tool Discovery
-MCP tools are provided by the `think.mcp_tools` FastMCP server, which:
+MCP tools are provided by the `muse.mcp_tools` FastMCP server, which:
 - Runs inside Cortex as a background HTTP service
 - Shares its URL directly with agent runs (`mcp_server_url`) so no discovery file is needed
 - Exposes journal search and retrieval capabilities
@@ -271,10 +271,10 @@ MCP tools are provided by the `think.mcp_tools` FastMCP server, which:
 
 The system supports multiple AI backends, each implementing the same event interface:
 
-- **OpenAI** (`think/openai.py`): GPT models with OpenAI Agents SDK
-- **Google** (`think/google.py`): Gemini models with Google AI SDK
-- **Anthropic** (`think/anthropic.py`): Claude models with Anthropic SDK
-- **Claude** (`think/claude.py`): Claude models via Claude Code SDK
+- **OpenAI** (`muse/openai.py`): GPT models with OpenAI Agents SDK
+- **Google** (`muse/google.py`): Gemini models with Google AI SDK
+- **Anthropic** (`muse/anthropic.py`): Claude models with Anthropic SDK
+- **Claude** (`muse/claude.py`): Claude models via Claude Code SDK
   - Uses filesystem tools (Read, Write, Edit, etc.) instead of MCP
   - Requires `domain` configuration specifying journal domain directory
   - Operates within domain-scoped file permissions

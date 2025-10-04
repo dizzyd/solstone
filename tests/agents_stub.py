@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 
 def install_agents_stub():
-    """Install a dummy `agents` package with the pieces used by `think.openai`."""
+    """Install a dummy `agents` package with the pieces used by `muse.openai`."""
     agents_stub = types.ModuleType("agents")
     agents_mcp_stub = types.ModuleType("agents.mcp")
     agents_mcp_server_stub = types.ModuleType("agents.mcp.server")
@@ -106,6 +106,6 @@ def install_agents_stub():
     sys.modules["agents.items"] = agents_items_stub
     sys.modules["agents.run"] = agents_run_stub
     sys.modules["agents.model_settings"] = agents_model_settings_stub
-    sys.modules.pop("think.openai", None)
+    sys.modules.pop("muse.openai", None)
 
     return last_kwargs, DummyRunner

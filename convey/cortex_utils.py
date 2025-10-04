@@ -7,8 +7,8 @@ import os
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
-from think.cortex_client import cortex_run as cortex_run_agent
-from think.cortex_client import cortex_watch
+from muse.cortex_client import cortex_run as cortex_run_agent
+from muse.cortex_client import cortex_watch
 
 from . import state
 from .push import push_server
