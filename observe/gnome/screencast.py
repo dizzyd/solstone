@@ -6,23 +6,56 @@ Requirements:
   pip install dbus-next
 
 Examples:
-  # 10s sample at 30 fps with cursor, saved to ./screencast.webm
-  python gnome_screencast.py --screencast 10
+  # 5 minute recording (default), saved to journal
+  gnome-screencast
 
-  # 5s sample at 15 fps without cursor, custom path
-  python gnome_screencast.py --screencast 5 --fps 15 --no-cursor --out /tmp/sample.webm
+  # 10 second recording with custom path
+  gnome-screencast --screencast 10 --out /tmp/sample.webm
+
+  # 5 minute recording at 15 fps without cursor
+  gnome-screencast --fps 15 --no-cursor
 """
 
 import argparse
 import asyncio
+import datetime
+import logging
+import os
 import signal
 import subprocess
 import sys
+import time
 
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 
-from observe.gnome.dbus import get_monitor_geometries, start_screencast, stop_screencast
+from observe.gnome.dbus import (
+    get_idle_time_ms,
+    get_monitor_geometries,
+    is_power_save_active,
+    is_screen_locked,
+    start_screencast,
+    stop_screencast,
+)
+from think.utils import day_path, setup_cli, touch_health
+
+
+def recent_audio_activity(window: int = 120) -> bool:
+    """Return True if an *_audio.json file was modified in the last ``window`` seconds."""
+    day_dir = day_path()  # Uses today by default, creates if needed, returns Path
+    if not day_dir.exists():
+        return False
+    cutoff = time.time() - window
+    for name in os.listdir(day_dir):
+        if not name.endswith("_audio.json"):
+            continue
+        path = day_dir / name
+        try:
+            if os.path.getmtime(path) >= cutoff:
+                return True
+        except OSError:
+            continue
+    return False
 
 
 class Screencaster:
@@ -69,6 +102,34 @@ async def run_screencast(
     duration_s: int, out_path: str, fps: int, draw_cursor: bool
 ) -> int:
     """Record screencast with monitor geometry metadata."""
+    # Pre-flight checks: screen state, idle detection, audio activity
+    bus = await MessageBus(bus_type=BusType.SESSION).connect()
+
+    # Check if screen is locked or in power save mode
+    locked = await is_screen_locked(bus)
+    if locked:
+        logging.info("Screen is locked; skipping screencast.")
+        touch_health("screencast")
+        return 0
+
+    power_save = await is_power_save_active(bus)
+    if power_save:
+        logging.info("Screen is in power save mode; skipping screencast.")
+        touch_health("screencast")
+        return 0
+
+    # Check idle time and audio activity
+    recent_audio = recent_audio_activity()
+    idle_ms = await get_idle_time_ms(bus)
+    idle_threshold_ms = 60000  # 60 seconds
+
+    if not recent_audio and idle_ms > idle_threshold_ms:
+        logging.info(
+            f"No recent audio activity and desktop idle for {idle_ms/1000:.0f}s; skipping screencast."
+        )
+        touch_health("screencast")
+        return 0
+
     # Capture monitor geometries before starting recording
     geometries = get_monitor_geometries()
 
@@ -126,43 +187,51 @@ async def run_screencast(
     except FileNotFoundError:
         print("Warning: mkvpropedit not found, skipping title update", file=sys.stderr)
 
+    touch_health("screencast")
     return 0
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Minimal GNOME Shell screencast via D-Bus.")
-    p.add_argument(
+def main():
+    parser = argparse.ArgumentParser(
+        description="GNOME Shell screencast via D-Bus with journal integration."
+    )
+    parser.add_argument(
         "--screencast",
         type=int,
         metavar="SECONDS",
-        help="Record a screencast for the given number of seconds, then stop.",
+        default=300,
+        help="Record a screencast for the given number of seconds (default: 300 = 5 minutes).",
     )
-    p.add_argument(
+    parser.add_argument(
         "--out",
-        default="./screencast.webm",
-        help="Output file path for the screencast (default: ./screencast.webm).",
+        default=None,
+        help="Output file path for the screencast (default: <journal>/YYYYMMDD/HHMMSS_screencast.webm).",
     )
-    p.add_argument(
+    parser.add_argument(
         "--fps",
         type=int,
         default=30,
         help="Framerate for the screencast (default: 30).",
     )
-    p.add_argument(
+    parser.add_argument(
         "--no-cursor", action="store_true", help="Do not draw the mouse cursor."
     )
-    return p.parse_args(argv)
 
+    args = setup_cli(parser)
 
-def main():
-    args = parse_args(sys.argv[1:])
+    # Compute output path if not specified
+    out_path = args.out
+    if out_path is None:
+        journal_path = os.getenv("JOURNAL_PATH")
+        if not journal_path:
+            print("ERROR: JOURNAL_PATH not set and --out not specified.", file=sys.stderr)
+            sys.exit(1)
 
-    if args.screencast is None:
-        print(
-            "Nothing to do. Example:\n  python gnome_screencast.py --screencast 10\n",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        date_part, time_part = timestamp.split("_", 1)
+        day_dir = os.path.join(journal_path, date_part)
+        os.makedirs(day_dir, exist_ok=True)
+        out_path = os.path.join(day_dir, f"{time_part}_screencast.webm")
 
     # Basic sanity on FPS
     fps = max(1, int(args.fps))
@@ -171,7 +240,7 @@ def main():
         rc = asyncio.run(
             run_screencast(
                 duration_s=int(args.screencast),
-                out_path=args.out,
+                out_path=out_path,
                 fps=fps,
                 draw_cursor=not args.no_cursor,
             )
