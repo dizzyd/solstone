@@ -2,14 +2,21 @@
 """
 screencast_diff.py — find the most visually different frames in a screencast
 
-Efficiently scans video and computes the minimum distance from each frame to
-all earlier frames using intensity, gradient, and histogram-based scoring.
-Frames with high min-distance are novel (never seen before), while repeated
-frames (e.g., A→B→A toggles) score low. Identifies the top 10 most divergent
-frames, then re-extracts only those frames as WebP images.
+Two methods available:
+
+1. packet-size (default, fast): Reads compressed packet sizes without decoding.
+   Larger packets indicate more complex/detailed frames with more visual change.
+
+2. visual-diff (slower, more accurate): Computes the minimum distance from each
+   frame to all earlier frames using intensity, gradient, and histogram-based
+   scoring. Frames with high min-distance are novel (never seen before), while
+   repeated frames (e.g., A→B→A toggles) score low.
+
+Both methods identify the top 10 most divergent frames and extract them as WebP.
 
 Usage:
   gnome-screencast-diff screencast.webm
+  gnome-screencast-diff screencast.webm --method visual-diff
   gnome-screencast-diff screencast.webm --interval 0.5  # sample every 0.5s
 """
 
@@ -22,8 +29,10 @@ from pathlib import Path
 
 import av
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy.spatial.distance import jensenshannon
+
+from observe.utils import compare_frames, get_frames
 
 # Frame comparison helper functions
 
@@ -113,12 +122,15 @@ def compute_frame_score(
 
 
 class ScreencastDiffer:
-    def __init__(self, video_path: str, sample_interval: float = 1.0):
+    def __init__(
+        self, video_path: str, sample_interval: float = 1.0, method: str = "packet-size"
+    ):
         self.video_path = Path(video_path)
         if not self.video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
         self.sample_interval = sample_interval
+        self.method = method
         self.frame_scores = []  # List of (timestamp, score) - computed during scan
         self.divergence_scores = []  # List of (timestamp, score) - sorted by score
         self.top_frames = {}  # Dict of {idx: (timestamp, score, webp_bytes)} for top 10
@@ -133,23 +145,61 @@ class ScreencastDiffer:
             "histogram": 0.0,
             "score_compute": 0.0,
             "top_frames_extract": 0.0,
+            "top_frames_decode": 0.0,
+            "top_frames_compare": 0.0,
+            "top_frames_draw": 0.0,
+            "top_frames_to_pil": 0.0,
             "webp_encode": 0.0,
+            "packet_scan": 0.0,
         }
 
-        print(
-            f"Scanning {video_path} with min-distance-to-history comparison...",
-            file=sys.stderr,
-        )
-        self._process_video()
+        if method == "packet-size":
+            print(
+                f"Scanning {video_path} with packet-size method...",
+                file=sys.stderr,
+            )
+            self._process_packets()
+        elif method == "visual-diff":
+            print(
+                f"Scanning {video_path} with min-distance-to-history comparison...",
+                file=sys.stderr,
+            )
+            self._process_video()
+        else:
+            raise ValueError(f"Unknown method: {method}")
+
         print("Sorting divergence scores...", file=sys.stderr)
         self._compute_divergence()
-        print("Extracting top 10 frames as WebP...", file=sys.stderr)
+        print("Extracting top 20 frames as WebP...", file=sys.stderr)
         self._extract_top_frames()
         print(
-            f"Found {len(self.divergence_scores)} scored frames, ready to serve top 10",
+            f"Found {len(self.divergence_scores)} scored frames, ready to serve top 20",
             file=sys.stderr,
         )
         self._print_timings()
+
+    def _process_packets(self):
+        """Scan video packets and record compressed frame sizes using utility."""
+        try:
+            t_scan_start = time.perf_counter()
+
+            # Use utility function to get all frames sorted by packet size
+            with av.open(str(self.video_path)) as container:
+                self.frame_scores = get_frames(container)
+
+            self.timings["packet_scan"] = time.perf_counter() - t_scan_start
+
+            print(
+                f"  Scanned {len(self.frame_scores)} frames using packet-size method",
+                file=sys.stderr,
+            )
+
+        except Exception as e:
+            print(f"ERROR: Failed to process packets: {e}", file=sys.stderr)
+            import traceback
+
+            traceback.print_exc(file=sys.stderr)
+            raise
 
     def _process_video(self):
         """Scan video at intervals and compute min distance to any earlier frame."""
@@ -251,19 +301,33 @@ class ScreencastDiffer:
             self.frame_scores, key=lambda x: x[1], reverse=True
         )
 
-    def _extract_top_frames(self, n: int = 10):
-        """Extract and encode top N most divergent frames as WebP."""
+    def _extract_top_frames(self, n: int = 20):
+        """Extract and encode top N most divergent frames as WebP with bounding boxes."""
         if not self.divergence_scores:
             return
 
         t_extract_start = time.perf_counter()
 
-        # Create mapping from timestamp to rank (1-indexed)
-        timestamp_to_idx = {
-            ts: idx for idx, (ts, _) in enumerate(self.divergence_scores[:n], 1)
+        # Get top N frames by divergence score
+        top_n_by_score = self.divergence_scores[:n]
+
+        # Re-order by timestamp (chronological order)
+        top_n_chronological = sorted(top_n_by_score, key=lambda x: x[0])
+
+        # Create mapping from timestamp to (original_rank, score)
+        timestamp_to_data = {
+            ts: (idx, score)
+            for idx, (ts, score) in enumerate(top_n_by_score, 1)
         }
 
+        # Collect set of timestamps we need
+        target_timestamps = {ts for ts, _ in top_n_chronological}
+
         try:
+            # First pass: decode all target frames in order
+            t_decode_start = time.perf_counter()
+            frames_dict = {}  # timestamp -> av.VideoFrame
+
             with av.open(str(self.video_path)) as container:
                 last_sampled = -self.sample_interval
 
@@ -275,33 +339,68 @@ class ScreencastDiffer:
 
                     # Sample at intervals and check if this is a top frame
                     if timestamp - last_sampled >= self.sample_interval:
-                        if timestamp in timestamp_to_idx:
-                            # Convert frame to image
-                            img = frame.to_image()
-
-                            # Encode as WebP with quality setting
-                            t_webp_start = time.perf_counter()
-                            buf = io.BytesIO()
-                            img.save(buf, format="WEBP", quality=85)
-                            webp_bytes = buf.getvalue()
-                            self.timings["webp_encode"] += (
-                                time.perf_counter() - t_webp_start
-                            )
-
-                            # Find the divergence score for this timestamp
-                            score = next(
-                                s for ts, s in self.divergence_scores if ts == timestamp
-                            )
-
-                            # Store with index based on divergence rank
-                            idx = timestamp_to_idx[timestamp]
-                            self.top_frames[idx] = (timestamp, score, webp_bytes)
+                        if timestamp in target_timestamps:
+                            # Store the decoded frame
+                            frames_dict[timestamp] = frame
 
                             # Exit early if we've found all top frames
-                            if len(self.top_frames) >= n:
+                            if len(frames_dict) >= n:
                                 break
 
                         last_sampled = timestamp
+
+            self.timings["top_frames_decode"] = time.perf_counter() - t_decode_start
+
+            # Second pass: compare consecutive frames and draw bounding boxes
+            previous_frame = None
+
+            for i, (timestamp, _) in enumerate(top_n_chronological):
+                if timestamp not in frames_dict:
+                    continue
+
+                current_frame = frames_dict[timestamp]
+                original_rank, score = timestamp_to_data[timestamp]
+
+                # Convert to PIL image
+                t_pil_start = time.perf_counter()
+                img = current_frame.to_image()
+                self.timings["top_frames_to_pil"] += time.perf_counter() - t_pil_start
+
+                # If not the first frame, compute bounding boxes and draw them
+                if previous_frame is not None:
+                    # Compare with previous frame to get change regions
+                    t_compare_start = time.perf_counter()
+                    boxes = compare_frames(previous_frame, current_frame)
+                    self.timings["top_frames_compare"] += time.perf_counter() - t_compare_start
+
+                    # Draw red 5px rectangles around changed regions
+                    if boxes:
+                        t_draw_start = time.perf_counter()
+                        draw = ImageDraw.Draw(img)
+                        for box_data in boxes:
+                            y_min, x_min, y_max, x_max = box_data["box_2d"]
+                            # Draw rectangle with 5px red border
+                            for offset in range(5):
+                                draw.rectangle(
+                                    [x_min + offset, y_min + offset,
+                                     x_max - offset, y_max - offset],
+                                    outline="red",
+                                    width=1
+                                )
+                        self.timings["top_frames_draw"] += time.perf_counter() - t_draw_start
+
+                # Encode as WebP with quality setting
+                t_webp_start = time.perf_counter()
+                buf = io.BytesIO()
+                img.save(buf, format="WEBP", quality=85)
+                webp_bytes = buf.getvalue()
+                self.timings["webp_encode"] += time.perf_counter() - t_webp_start
+
+                # Store with original divergence rank as key
+                self.top_frames[original_rank] = (timestamp, score, webp_bytes)
+
+                # Update previous frame for next iteration
+                previous_frame = current_frame
 
         except Exception as e:
             print(f"ERROR: Failed to extract top frames: {e}", file=sys.stderr)
@@ -312,9 +411,18 @@ class ScreencastDiffer:
 
         self.timings["top_frames_extract"] = time.perf_counter() - t_extract_start
 
-    def get_top_divergent(self, n: int = 10):
+    def get_top_divergent(self, n: int = 20):
         """Get the top N most divergent frames."""
         return self.divergence_scores[:n]
+
+    def get_top_chronological(self, n: int = 20):
+        """Get the top N frames in chronological order with their divergence rank."""
+        top_by_score = self.divergence_scores[:n]
+        # Create rank mapping (1-indexed)
+        rank_map = {ts: idx for idx, (ts, _) in enumerate(top_by_score, 1)}
+        # Sort by timestamp and add rank
+        chronological = sorted(top_by_score, key=lambda x: x[0])
+        return [(ts, score, rank_map[ts]) for ts, score in chronological]
 
     def _print_timings(self):
         """Print performance timing breakdown."""
@@ -378,29 +486,42 @@ def make_handler(differ: ScreencastDiffer):
                     ".frame { margin: 20px 0; padding: 10px; border: 1px solid #444; background: #2e2e2e; }"
                 )
                 html.append(
-                    ".frame img { max-width: 800px; display: block; margin: 10px 0; }"
+                    ".frame img { width: 100%; display: block; margin: 10px 0; }"
                 )
                 html.append(".info { color: #8cf; }")
+                html.append(".rank { color: #f90; font-weight: bold; }")
                 html.append("</style>")
                 html.append("</head><body>")
-                html.append("<h1>Top 10 Most Divergent Frames</h1>")
+                html.append("<h1>Top 20 Most Divergent Frames (Chronological Order)</h1>")
                 html.append(f"<p>Video: {differ.video_path.name}</p>")
-                html.append(
-                    "<p>Scoring method: Min distance to any earlier frame (intensity + gradient + histogram JSD)</p>"
-                )
+
+                if differ.method == "packet-size":
+                    html.append(
+                        "<p>Scoring method: Compressed packet size (larger = more complex frame)</p>"
+                    )
+                else:
+                    html.append(
+                        "<p>Scoring method: Min distance to any earlier frame (intensity + gradient + histogram JSD)</p>"
+                    )
+
                 html.append(
                     f"<p>Total frames analyzed: {len(differ.frame_scores)} (sampled every {differ.sample_interval}s)</p>"
                 )
+                html.append("<p>Frames shown in chronological order with red boxes highlighting changes from previous frame</p>")
 
-                for idx, (timestamp, score) in enumerate(
-                    differ.get_top_divergent(10), 1
-                ):
+                for timestamp, score, rank in differ.get_top_chronological(20):
                     html.append('<div class="frame">')
+
+                    if differ.method == "packet-size":
+                        score_label = f"Packet Size: {int(score):,} bytes"
+                    else:
+                        score_label = f"Divergence Score: {score:.4f}"
+
                     html.append(
-                        f'<div class="info">#{idx} - Timestamp: {timestamp:.2f}s - Divergence Score: {score}</div>'
+                        f'<div class="info"><span class="rank">Rank #{rank}</span> - Timestamp: {timestamp:.2f}s - {score_label}</div>'
                     )
                     html.append(
-                        f'<img src="/frame/{idx}" alt="Frame at {timestamp:.2f}s">'
+                        f'<img src="/frame/{rank}" alt="Frame at {timestamp:.2f}s">'
                     )
                     html.append("</div>")
 
@@ -442,11 +563,19 @@ def main():
         help="Sample interval in seconds (default: 1.0)",
     )
     parser.add_argument(
+        "--method",
+        choices=["packet-size", "visual-diff"],
+        default="packet-size",
+        help="Scoring method: packet-size (fast, default) or visual-diff (slower, more accurate)",
+    )
+    parser.add_argument(
         "--port", type=int, default=9999, help="Server port (default: 9999)"
     )
     args = parser.parse_args()
 
-    differ = ScreencastDiffer(args.video, sample_interval=args.interval)
+    differ = ScreencastDiffer(
+        args.video, sample_interval=args.interval, method=args.method
+    )
 
     print(f"\nServer running at http://0.0.0.0:{args.port}/")
     print("Press Ctrl+C to stop")
