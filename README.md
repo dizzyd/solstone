@@ -13,7 +13,6 @@ A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal
   - `hear-capture` - Records system audio segments
   - `hear-transcribe` - Transcribes audio via AI APIs
   - `hear-runner` - Runs capture and transcription in a loop
-  - `hear-live` - Real-time transcription display
   
 - **See** 👁️ - Visual capture and analysis
   - `see-scan` - Takes screenshots with diff detection

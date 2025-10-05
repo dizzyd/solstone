@@ -26,8 +26,7 @@ hear-transcribe [-p PROMPT] [-v] [--repair DAY]
 ```
 
 The `hear-runner` command runs both of the above tools in a loop so audio capture
-and transcription continue until interrupted. For live text output from the
-recorder's WebSocket stream you can use `hear-live`.
+and transcription continue until interrupted.
 
 Use `-d` to enable debug mode and `-t` to adjust the speech processing interval.
 The `hear-transcribe` command accepts `-p` to specify a prompt file, `-v` for
@@ -93,10 +92,4 @@ You can load the bytes in Python with:
 
 ```python
 samples = np.frombuffer(msg, dtype=np.float32).reshape(-1, 2)
-```
-
-To display transcriptions from this stream in real time run:
-
-```bash
-hear-live --ws-url ws://localhost:9987
 ```
