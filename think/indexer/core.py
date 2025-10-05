@@ -6,7 +6,7 @@ import sqlite3
 import time
 from typing import Callable, Dict, List, Union
 
-from think.utils import day_dirs
+from think.utils import day_dirs, day_path
 
 # Common regex patterns
 DATE_RE = re.compile(r"\d{8}")
@@ -120,7 +120,7 @@ def get_index(
     if index == "transcripts":
         if not day:
             raise ValueError("day required for transcripts index")
-        db_dir = os.path.join(journal, day, INDEX_DIR)
+        db_dir = str(day_path(day) / INDEX_DIR)
     else:
         db_dir = os.path.join(journal, INDEX_DIR)
 
@@ -138,10 +138,10 @@ def reset_index(journal: str, index: str, *, day: str | None = None) -> None:
 
     if index == "transcripts":
         if day:
-            paths = [os.path.join(journal, day, INDEX_DIR, DB_NAMES[index])]
+            paths = [str(day_path(day) / INDEX_DIR / DB_NAMES[index])]
         else:
             paths = [
-                os.path.join(journal, d, INDEX_DIR, DB_NAMES[index]) for d in day_dirs()
+                str(day_path(d) / INDEX_DIR / DB_NAMES[index]) for d in day_dirs().keys()
             ]
     else:
         paths = [os.path.join(journal, INDEX_DIR, DB_NAMES[index])]

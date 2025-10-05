@@ -148,8 +148,7 @@ def process_once(journal, min_threshold):
                 )
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 date_part, time_part = timestamp.split("_", 1)
-                day_dir = os.path.join(journal, date_part)
-                os.makedirs(day_dir, exist_ok=True)
+                day_dir = day_path(date_part)
                 base = os.path.join(day_dir, f"{time_part}_monitor_{idx}_diff")
                 img_filename = base + ".png"
 

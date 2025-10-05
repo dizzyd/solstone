@@ -33,7 +33,7 @@ from observe.gnome.dbus import (
     start_screencast,
     stop_screencast,
 )
-from think.utils import setup_cli, touch_health
+from think.utils import day_path, setup_cli, touch_health
 
 
 class Screencaster:
@@ -204,9 +204,7 @@ def main():
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         date_part, time_part = timestamp.split("_", 1)
-        day_dir = os.path.join(journal_path, date_part)
-        os.makedirs(day_dir, exist_ok=True)
-        out_path = os.path.join(day_dir, f"{time_part}_screencast.webm")
+        out_path = str(day_path(date_part) / f"{time_part}_screencast.webm")
 
     # Basic sanity on FPS
     fps = max(1, int(args.fps))

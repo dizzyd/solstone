@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from think.indexer import parse_entity_line
 from think.models import GEMINI_FLASH, gemini_generate
-from think.utils import day_dirs, get_topics
+from think.utils import day_dirs, day_path, get_topics
 
 DATE_RE = re.compile(r"\d{8}")
 
@@ -136,7 +136,7 @@ def modify_entity_file(
 
     Returns True if the operation was successful, False otherwise.
     """
-    file_path = os.path.join(journal, day, "entities.md")
+    file_path = str(day_path(day) / "entities.md")
     success = modify_entity_in_file(
         file_path, etype, name, new_name, operation, require_match=True
     )

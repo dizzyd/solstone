@@ -20,7 +20,7 @@ from see.screen_compare import compare_images
 from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
 from think.models import GEMINI_PRO, gemini_generate
-from think.utils import PromptNotFoundError, load_prompt, setup_cli
+from think.utils import PromptNotFoundError, day_path, load_prompt, setup_cli
 
 try:
     from pypdf import PdfReader
@@ -591,8 +591,7 @@ def main() -> None:
 
     base_dt = dt.datetime.strptime(args.timestamp, "%Y%m%d_%H%M%S")
     logger.info(f"Using provided timestamp: {args.timestamp}")
-    day_dir = os.path.join(journal, base_dt.strftime("%Y%m%d"))
-    os.makedirs(day_dir, exist_ok=True)
+    day_dir = str(day_path(base_dt.strftime("%Y%m%d")))
 
     # Track all created files and processing metadata
     all_created_files = []

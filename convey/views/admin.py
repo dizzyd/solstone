@@ -8,7 +8,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, render_template, request
 
-from think.utils import get_config as get_journal_config
+from think.utils import day_path, get_config as get_journal_config
 
 from .. import state
 from ..task_runner import run_task
@@ -196,13 +196,12 @@ def task_log(day: str | None = None) -> Any:
     """Return task log entries for the journal or a specific day."""
     path = None
     if state.journal_root:
-        base = Path(state.journal_root)
         if day:
             if not _valid_day(day):
                 return jsonify([])
-            path = base / day / "task_log.txt"
+            path = day_path(day) / "task_log.txt"
         else:
-            path = base / "task_log.txt"
+            path = Path(state.journal_root) / "task_log.txt"
     entries: list[dict[str, Any]] = []
     if path and path.is_file():
         try:

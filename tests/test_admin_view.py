@@ -94,6 +94,7 @@ def test_task_log_api_day(monkeypatch, tmp_path):
     log = day / "task_log.txt"
     log.write_text("60\tdid thing\n")
     review.journal_root = str(tmp_path)
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     monkeypatch.setattr("time.time", lambda: 120)
     with review.app.test_request_context("/admin/api/20240101/task_log"):
         resp = review.task_log("20240101")

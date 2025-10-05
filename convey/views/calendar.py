@@ -7,7 +7,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, render_template, request
 
-from think.utils import day_dirs
+from think.utils import day_dirs, day_path
 
 from .. import state
 from ..utils import (
@@ -29,7 +29,7 @@ def calendar_page() -> str:
 def calendar_day(day: str) -> str:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    day_dir = os.path.join(state.journal_root, day)
+    day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
         return "", 404
     from think.utils import get_topics
@@ -318,7 +318,7 @@ def serve_media_file(day: str, encoded_path: str) -> Any:
         full_path = os.path.join(state.journal_root, day, rel_path)
 
         # Security check: ensure the path is within the day directory
-        day_dir = os.path.join(state.journal_root, day)
+        day_dir = str(day_path(day))
         if not os.path.commonpath([full_path, day_dir]) == day_dir:
             return "", 403
 
@@ -501,8 +501,8 @@ def calendar_occurrences() -> Any:
             topics = get_topics()
 
             for day in new_days:
-                day_path = os.path.join(state.journal_root, day)
-                topics_dir = os.path.join(day_path, "topics")
+                day_directory = str(day_path(day))
+                topics_dir = os.path.join(day_directory, "topics")
 
                 if os.path.isdir(topics_dir):
                     occs = []

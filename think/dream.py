@@ -5,7 +5,7 @@ import os
 import subprocess
 from datetime import datetime, timedelta
 
-from think.utils import day_log, get_topics, setup_cli
+from think.utils import day_log, day_path, get_topics, setup_cli
 
 
 def run_command(cmd: list[str], day: str) -> bool:
@@ -114,9 +114,9 @@ def main() -> None:
     day = args.day
     if day is None:
         day = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-    day_dir = os.path.join(journal, day)
+    day_dir = day_path(day)
 
-    if not os.path.isdir(day_dir):
+    if not day_dir.is_dir():
         parser.error(f"Day folder not found: {day_dir}")
 
     if args.rebuild:
