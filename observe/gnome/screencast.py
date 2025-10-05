@@ -15,62 +15,48 @@ Examples:
 
 import argparse
 import asyncio
-import os
 import signal
 import subprocess
 import sys
-from typing import Tuple
 
-from dbus_next import Variant
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 
-from see.screen_dbus import get_monitor_geometries
-
-SCREencast_BUS = "org.gnome.Shell.Screencast"
-SCREencast_PATH = "/org/gnome/Shell/Screencast"
-SCREencast_IFACE = "org.gnome.Shell.Screencast"
+from observe.gnome.dbus import get_monitor_geometries, start_screencast, stop_screencast
 
 
 class Screencaster:
+    """Higher-level screencast manager with state tracking."""
+
     def __init__(self):
         self.bus: MessageBus | None = None
-        self.iface = None
         self._started = False
 
     async def connect(self):
-        self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
-        introspection = await self.bus.introspect(SCREencast_BUS, SCREencast_PATH)
-        obj = self.bus.get_proxy_object(SCREencast_BUS, SCREencast_PATH, introspection)
-        self.iface = obj.get_interface(SCREencast_IFACE)
+        """Establish DBus session connection."""
+        if self.bus is None:
+            self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
 
     async def start(
         self, out_path: str, framerate: int = 30, draw_cursor: bool = True
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
-        Call org.gnome.Shell.Screencast.Screencast("file://...", { 'framerate': u, 'draw-cursor': b })
-        Returns (ok: bool, resolved_output_path: str)
+        Start screencast recording.
+
+        Returns:
+            Tuple of (ok: bool, resolved_output_path: str)
         """
-        if self.iface is None:
-            await self.connect()
-
-        # GNOME expects a file:// URI (not a plain filesystem path)
-        uri = f"{out_path}"
-        options = {
-            "framerate": Variant("u", int(framerate)),
-            "draw-cursor": Variant("b", bool(draw_cursor)),
-            # Additional options that GNOME understands exist, but these two keep it simple and robust.
-        }
-
-        ok, resolved = await self.iface.call_screencast(uri, options)
+        await self.connect()
+        ok, resolved = await start_screencast(self.bus, out_path, framerate, draw_cursor)
         self._started = bool(ok)
         return bool(ok), resolved
 
     async def stop(self):
-        if self.iface is None:
+        """Stop screencast recording."""
+        if self.bus is None:
             return
         try:
-            await self.iface.call_stop_screencast()
+            await stop_screencast(self.bus)
         finally:
             self._started = False
 
@@ -82,6 +68,7 @@ class Screencaster:
 async def run_screencast(
     duration_s: int, out_path: str, fps: int, draw_cursor: bool
 ) -> int:
+    """Record screencast with monitor geometry metadata."""
     # Capture monitor geometries before starting recording
     geometries = get_monitor_geometries()
 
