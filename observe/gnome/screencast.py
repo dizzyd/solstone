@@ -24,38 +24,15 @@ import os
 import signal
 import subprocess
 import sys
-import time
 
 from dbus_next.aio import MessageBus
-from dbus_next.constants import BusType
 
 from observe.gnome.dbus import (
-    get_idle_time_ms,
     get_monitor_geometries,
-    is_power_save_active,
-    is_screen_locked,
     start_screencast,
     stop_screencast,
 )
-from think.utils import day_path, setup_cli, touch_health
-
-
-def recent_audio_activity(window: int = 120) -> bool:
-    """Return True if an *_audio.json file was modified in the last ``window`` seconds."""
-    day_dir = day_path()  # Uses today by default, creates if needed, returns Path
-    if not day_dir.exists():
-        return False
-    cutoff = time.time() - window
-    for name in os.listdir(day_dir):
-        if not name.endswith("_audio.json"):
-            continue
-        path = day_dir / name
-        try:
-            if os.path.getmtime(path) >= cutoff:
-                return True
-        except OSError:
-            continue
-    return False
+from think.utils import setup_cli, touch_health
 
 
 class Screencaster:
@@ -102,34 +79,6 @@ async def run_screencast(
     duration_s: int, out_path: str, fps: int, draw_cursor: bool
 ) -> int:
     """Record screencast with monitor geometry metadata."""
-    # Pre-flight checks: screen state, idle detection, audio activity
-    bus = await MessageBus(bus_type=BusType.SESSION).connect()
-
-    # Check if screen is locked or in power save mode
-    locked = await is_screen_locked(bus)
-    if locked:
-        logging.info("Screen is locked; skipping screencast.")
-        touch_health("screencast")
-        return 0
-
-    power_save = await is_power_save_active(bus)
-    if power_save:
-        logging.info("Screen is in power save mode; skipping screencast.")
-        touch_health("screencast")
-        return 0
-
-    # Check idle time and audio activity
-    recent_audio = recent_audio_activity()
-    idle_ms = await get_idle_time_ms(bus)
-    idle_threshold_ms = 60000  # 60 seconds
-
-    if not recent_audio and idle_ms > idle_threshold_ms:
-        logging.info(
-            f"No recent audio activity and desktop idle for {idle_ms/1000:.0f}s; skipping screencast."
-        )
-        touch_health("screencast")
-        return 0
-
     # Capture monitor geometries before starting recording
     geometries = get_monitor_geometries()
 
