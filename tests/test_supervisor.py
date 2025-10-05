@@ -114,7 +114,7 @@ def test_main_no_daily(tmp_path, monkeypatch):
     assert called.get("daily") is False
 
 
-def test_run_process_day(tmp_path, monkeypatch):
+def test_run_dream(tmp_path, monkeypatch):
     mod = importlib.import_module("think.supervisor")
 
     launch_calls = {}
@@ -157,11 +157,11 @@ def test_run_process_day(tmp_path, monkeypatch):
         mod.logging, "info", lambda msg, *a: messages.append(msg % a if a else msg)
     )
 
-    assert mod.run_process_day() is True
+    assert mod.run_dream() is True
 
     name, cmd, restart, log_name = launch_calls["args"]
-    assert name == "process_day"
-    assert cmd == ["think-process-day", "-v"]
+    assert name == "dream"
+    assert cmd == ["think-dream", "-v"]
     assert restart is False
     assert log_name is None
     assert os.environ["JOURNAL_PATH"] == str(tmp_path)

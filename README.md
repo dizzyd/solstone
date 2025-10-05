@@ -28,7 +28,7 @@ A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal
   - `think-entity-roll` - Extracts and tracks entities
   - `think-indexer` - Builds searchable database
   - `think-supervisor` - Orchestrates agent workflows
-  - `think-process-day` - Full daily data pipeline
+  - `think-dream` - Full daily data pipeline
 
 - **Convey** 🌐 - Web interface and review
   - `convey` - Launch web UI (with `--password` for auth)
@@ -102,10 +102,10 @@ ANTHROPIC_API_KEY=your-api-key      # For Claude services
 3. **Process captured data**:
    ```bash
    # Run full processing pipeline for today
-   think-process-day
-   
+   think-dream
+
    # Or process specific date
-   think-process-day 20240101
+   think-dream 20240101
    ```
 
 4. **Review in web UI**:

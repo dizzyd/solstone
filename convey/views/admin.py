@@ -186,7 +186,7 @@ def admin_process(day: str) -> Any:
     if not _valid_day(day):
         return jsonify({"error": "invalid day"}), 404
 
-    run_task("process_day", day)
+    run_task("dream", day)
     return jsonify({"status": "ok"})
 
 

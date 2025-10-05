@@ -142,7 +142,7 @@ def main() -> None:
         else:
             fail_count += 1
 
-    msg = f"think-process-day {success_count}"
+    msg = f"think-dream {success_count}"
     if fail_count:
         msg += f" failed {fail_count}"
     if args.force:

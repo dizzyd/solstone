@@ -56,15 +56,15 @@ def test_spawn_scheduled_agents(mock_get_agents, mock_cortex_request):
 
 
 @patch("think.supervisor.spawn_scheduled_agents")
-@patch("think.supervisor.run_process_day")
-def test_supervisor_runs_scheduled_after_process_day(
-    mock_run_process_day, mock_spawn_scheduled
+@patch("think.supervisor.run_dream")
+def test_supervisor_runs_scheduled_after_dream(
+    mock_run_dream, mock_spawn_scheduled
 ):
-    """Test that scheduled agents run only after successful process_day."""
+    """Test that scheduled agents run only after successful dream."""
     from think.supervisor import supervise
 
-    # Test successful process_day
-    mock_run_process_day.return_value = True
+    # Test successful dream
+    mock_run_dream.return_value = True
 
     with patch("think.supervisor.datetime") as mock_datetime:
         with patch("think.supervisor.time.sleep") as mock_sleep:
@@ -73,7 +73,7 @@ def test_supervisor_runs_scheduled_after_process_day(
                 mock_now = Mock()
                 mock_now.date.side_effect = [
                     Mock(name="day1"),
-                    Mock(name="day2"),  # Different day triggers process_day
+                    Mock(name="day2"),  # Different day triggers dream
                     Mock(name="day2"),  # Same day after processing
                 ]
                 mock_datetime.now.return_value = mock_now
@@ -90,20 +90,20 @@ def test_supervisor_runs_scheduled_after_process_day(
                     except KeyboardInterrupt:
                         pass
 
-                mock_run_process_day.assert_called_once()
+                mock_run_dream.assert_called_once()
                 mock_spawn_scheduled.assert_called_once_with()
 
 
 @patch("think.supervisor.spawn_scheduled_agents")
-@patch("think.supervisor.run_process_day")
-def test_supervisor_skips_scheduled_on_process_day_failure(
-    mock_run_process_day, mock_spawn_scheduled
+@patch("think.supervisor.run_dream")
+def test_supervisor_skips_scheduled_on_dream_failure(
+    mock_run_dream, mock_spawn_scheduled
 ):
-    """Test that scheduled agents don't run if process_day fails."""
+    """Test that scheduled agents don't run if dream fails."""
     from think.supervisor import supervise
 
-    # Test failed process_day
-    mock_run_process_day.return_value = False
+    # Test failed dream
+    mock_run_dream.return_value = False
 
     with patch("think.supervisor.datetime") as mock_datetime:
         with patch("think.supervisor.time.sleep") as mock_sleep:
@@ -112,7 +112,7 @@ def test_supervisor_skips_scheduled_on_process_day_failure(
                 mock_now = Mock()
                 mock_now.date.side_effect = [
                     Mock(name="day1"),
-                    Mock(name="day2"),  # Different day triggers process_day
+                    Mock(name="day2"),  # Different day triggers dream
                     Mock(name="day2"),  # Same day after processing
                 ]
                 mock_datetime.now.return_value = mock_now
@@ -129,5 +129,5 @@ def test_supervisor_skips_scheduled_on_process_day_failure(
                     except KeyboardInterrupt:
                         pass
 
-                mock_run_process_day.assert_called_once()
+                mock_run_dream.assert_called_once()
                 mock_spawn_scheduled.assert_not_called()

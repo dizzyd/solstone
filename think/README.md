@@ -20,7 +20,7 @@ The package exposes several commands:
 - `see-describe` and `hear-transcribe` include a `--repair` option to process
   any missing screenshot or audio descriptions for a day.
 - `think-entity-roll` collects entities across days and writes a rollup file.
-- `think-process-day` runs the above tools for a single day.
+- `think-dream` runs the above tools for a single day.
 - `think-supervisor` monitors hear and see heartbeats. Use `--no-runners` to skip starting them automatically.
 - `muse-mcp-tools` starts an MCP server exposing search capabilities for both summary text and raw transcripts.
 - `muse-cortex` starts a WebSocket API server for managing AI agent instances.
@@ -29,7 +29,7 @@ The package exposes several commands:
 think-summarize YYYYMMDD [-f PROMPT] [-p] [-c] [--force] [-v]
 think-cluster YYYYMMDD [--start HHMMSS --length MINUTES]
 think-entity-roll
-think-process-day [--day YYYYMMDD] [--force] [--repair] [--rebuild]
+think-dream [--day YYYYMMDD] [--force] [--repair] [--rebuild]
 think-supervisor [--no-runners]
 muse-mcp-tools [--transport http] [--port PORT] [--path PATH]
 muse-cortex [--host HOST] [--port PORT] [--path PATH]
@@ -51,7 +51,7 @@ no discovery files or environment variables are required.
 
 ## Automating daily processing
 
-The `think-process-day` command can be triggered by a systemd timer. Below is a
+The `think-dream` command can be triggered by a systemd timer. Below is a
 minimal service and timer that process yesterday's folder every morning at
 06:00:
 
@@ -61,7 +61,7 @@ Description=Process sunstone journal
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/think-process-day --repair
+ExecStart=/usr/local/bin/think-dream --repair
 
 [Install]
 WantedBy=multi-user.target
@@ -69,12 +69,12 @@ WantedBy=multi-user.target
 
 ```ini
 [Unit]
-Description=Run think-process-day daily
+Description=Run think-dream daily
 
 [Timer]
 OnCalendar=*-*-* 06:00:00
 Persistent=true
-Unit=think-process-day.service
+Unit=think-dream.service
 
 [Install]
 WantedBy=timers.target

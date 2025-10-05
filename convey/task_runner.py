@@ -274,11 +274,11 @@ def run_task(
                     if use_stop
                     else _run_command(cmd, logger)
                 )
-            elif name == "process_day":
+            elif name == "dream":
                 if not day:
                     raise ValueError("day required")
                 cmd = [
-                    "think-process-day",
+                    "think-dream",
                     "--day",
                     day,
                     "--verbose",

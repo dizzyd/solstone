@@ -200,21 +200,21 @@ def send_notification(message: str, command: str = "notify-send") -> None:
         logging.error("Failed to send notification: %s", exc)
 
 
-def run_process_day() -> bool:
-    """Run ``think.process_day`` while mirroring output to a dedicated log.
+def run_dream() -> bool:
+    """Run ``think.dream`` while mirroring output to a dedicated log.
 
     Returns ``True`` when the subprocess exits successfully.
     """
 
     start = time.time()
-    managed = _launch_process("process_day", ["think-process-day", "-v"])
+    managed = _launch_process("dream", ["think-dream", "-v"])
     try:
         return_code = managed.process.wait()
     finally:
         managed.cleanup()
 
     duration = int(time.time() - start)
-    logging.info("think.process_day finished in %s seconds", duration)
+    logging.info("think.dream finished in %s seconds", duration)
     return return_code == 0
 
 
@@ -523,7 +523,7 @@ def supervise(
 
         # Check for daily processing (fast date comparison)
         if daily and datetime.now().date() != last_day:
-            if run_process_day():
+            if run_dream():
                 spawn_scheduled_agents()
             last_day = datetime.now().date()
 
