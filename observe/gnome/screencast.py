@@ -27,6 +27,7 @@ import sys
 import tempfile
 
 from dbus_next.aio import MessageBus
+from dbus_next.constants import BusType
 
 from observe.gnome.dbus import (
     get_monitor_geometries,
@@ -34,6 +35,8 @@ from observe.gnome.dbus import (
     stop_screencast,
 )
 from think.utils import day_path, setup_cli, touch_health
+
+logger = logging.getLogger(__name__)
 
 
 class Screencaster:
@@ -58,8 +61,12 @@ class Screencaster:
             Tuple of (ok: bool, resolved_output_path: str)
         """
         await self.connect()
-        ok, resolved = await start_screencast(self.bus, out_path, framerate, draw_cursor)
+        ok, resolved = await start_screencast(
+            self.bus, out_path, framerate, draw_cursor
+        )
         self._started = bool(ok)
+        if not ok:
+            logger.error("Failed to start screencast via DBus")
         return bool(ok), resolved
 
     async def stop(self):
@@ -82,6 +89,7 @@ async def run_screencast(
     """Record screencast with monitor geometry metadata."""
     # Capture monitor geometries before starting recording
     geometries = get_monitor_geometries()
+    logger.info(f"Detected {len(geometries)} monitor(s)")
 
     # Create temp file in same directory for atomic move
     out_dir = os.path.dirname(out_path)
@@ -136,16 +144,22 @@ async def run_screencast(
 
         try:
             subprocess.run(
-                ["mkvpropedit", resolved_path, "--edit", "info", "--set", f"title={title}"],
+                [
+                    "mkvpropedit",
+                    resolved_path,
+                    "--edit",
+                    "info",
+                    "--set",
+                    f"title={title}",
+                ],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            print(f"Updated video title with monitor dimensions: {title}")
         except subprocess.CalledProcessError as e:
-            print(f"Warning: Failed to update video title: {e.stderr}", file=sys.stderr)
+            logger.warning(f"Failed to update video title: {e.stderr}")
         except FileNotFoundError:
-            print("Warning: mkvpropedit not found, skipping title update", file=sys.stderr)
+            logger.warning("mkvpropedit not found, skipping title update")
 
         # Atomically move temp file to final location
         os.replace(resolved_path, out_path)
@@ -156,6 +170,7 @@ async def run_screencast(
 
     except Exception as e:
         # Move temp file to error location for debugging
+        logger.error(f"Screencast failed: {e}", exc_info=True)
         if os.path.exists(temp_path):
             try:
                 error_path = out_path.replace(".webm", ".webm.error")
@@ -199,7 +214,9 @@ def main():
     if out_path is None:
         journal_path = os.getenv("JOURNAL_PATH")
         if not journal_path:
-            print("ERROR: JOURNAL_PATH not set and --out not specified.", file=sys.stderr)
+            print(
+                "ERROR: JOURNAL_PATH not set and --out not specified.", file=sys.stderr
+            )
             sys.exit(1)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -208,6 +225,8 @@ def main():
 
     # Basic sanity on FPS
     fps = max(1, int(args.fps))
+    if fps != args.fps:
+        logger.warning(f"FPS adjusted from {args.fps} to {fps}")
 
     try:
         rc = asyncio.run(
@@ -221,6 +240,7 @@ def main():
         sys.exit(rc)
     except Exception as e:
         # Common issues: not running GNOME Shell; calling from a non-GNOME compositor session.
+        logger.error(f"Fatal error: {e}", exc_info=True)
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
