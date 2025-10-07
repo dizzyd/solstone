@@ -365,9 +365,10 @@ class ScreencastDiffer:
                 current_frame = frames_dict[timestamp]
                 original_rank, score = timestamp_to_data[timestamp]
 
-                # Convert to PIL image
+                # Convert to numpy array then PIL image (more efficient than to_image())
                 t_pil_start = time.perf_counter()
-                img = current_frame.to_image()
+                arr = current_frame.to_ndarray(format="rgb24")
+                img = Image.fromarray(arr, "RGB")
                 self.timings["top_frames_to_pil"] += time.perf_counter() - t_pil_start
 
                 # Initialize box statistics
@@ -384,7 +385,7 @@ class ScreencastDiffer:
 
                     # Calculate box statistics
                     if boxes:
-                        img_width, img_height = img.size
+                        img_height, img_width = arr.shape[:2]
                         total_pixels = img_width * img_height
                         total_area = 0
                         largest_area = 0
