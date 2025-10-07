@@ -12,12 +12,13 @@ Two methods available:
    scoring. Frames with high min-distance are novel (never seen before), while
    repeated frames (e.g., A→B→A toggles) score low.
 
-Both methods identify the top 10 most divergent frames and extract them as WebP.
+Both methods identify the most divergent frames and extract them as WebP (default: top 10).
 
 Usage:
   gnome-screencast-diff screencast.webm
   gnome-screencast-diff screencast.webm --method visual-diff
   gnome-screencast-diff screencast.webm --interval 0.5  # sample every 0.5s
+  gnome-screencast-diff screencast.webm --count 20  # extract top 20 frames
 """
 
 import argparse
@@ -123,7 +124,7 @@ def compute_frame_score(
 
 class ScreencastDiffer:
     def __init__(
-        self, video_path: str, sample_interval: float = 1.0, method: str = "packet-size"
+        self, video_path: str, sample_interval: float = 1.0, method: str = "packet-size", count: int = 10
     ):
         self.video_path = Path(video_path)
         if not self.video_path.exists():
@@ -131,9 +132,10 @@ class ScreencastDiffer:
 
         self.sample_interval = sample_interval
         self.method = method
+        self.count = count
         self.frame_scores = []  # List of (timestamp, score) - computed during scan
         self.divergence_scores = []  # List of (timestamp, score) - sorted by score
-        self.top_frames = {}  # Dict of {idx: (timestamp, score, webp_bytes)} for top 10
+        self.top_frames = {}  # Dict of {idx: (timestamp, score, webp_bytes)} for top N
 
         # Performance timing
         self.timings = {
@@ -170,10 +172,10 @@ class ScreencastDiffer:
 
         print("Sorting divergence scores...", file=sys.stderr)
         self._compute_divergence()
-        print("Extracting top 20 frames as WebP...", file=sys.stderr)
+        print(f"Extracting top {self.count} frames as WebP...", file=sys.stderr)
         self._extract_top_frames()
         print(
-            f"Found {len(self.divergence_scores)} scored frames, ready to serve top 20",
+            f"Found {len(self.divergence_scores)} scored frames, ready to serve top {self.count}",
             file=sys.stderr,
         )
         self._print_timings()
@@ -301,7 +303,7 @@ class ScreencastDiffer:
             self.frame_scores, key=lambda x: x[1], reverse=True
         )
 
-    def _extract_top_frames(self, n: int = 20):
+    def _extract_top_frames(self):
         """Extract and encode top N most divergent frames as WebP with bounding boxes."""
         if not self.divergence_scores:
             return
@@ -309,7 +311,7 @@ class ScreencastDiffer:
         t_extract_start = time.perf_counter()
 
         # Get top N frames by divergence score
-        top_n_by_score = self.divergence_scores[:n]
+        top_n_by_score = self.divergence_scores[:self.count]
 
         # Re-order by timestamp (chronological order)
         top_n_chronological = sorted(top_n_by_score, key=lambda x: x[0])
@@ -344,7 +346,7 @@ class ScreencastDiffer:
                             frames_dict[timestamp] = frame
 
                             # Exit early if we've found all top frames
-                            if len(frames_dict) >= n:
+                            if len(frames_dict) >= self.count:
                                 break
 
                         last_sampled = timestamp
@@ -411,12 +413,16 @@ class ScreencastDiffer:
 
         self.timings["top_frames_extract"] = time.perf_counter() - t_extract_start
 
-    def get_top_divergent(self, n: int = 20):
+    def get_top_divergent(self, n: int = None):
         """Get the top N most divergent frames."""
+        if n is None:
+            n = self.count
         return self.divergence_scores[:n]
 
-    def get_top_chronological(self, n: int = 20):
+    def get_top_chronological(self, n: int = None):
         """Get the top N frames in chronological order with their divergence rank."""
+        if n is None:
+            n = self.count
         top_by_score = self.divergence_scores[:n]
         # Create rank mapping (1-indexed)
         rank_map = {ts: idx for idx, (ts, _) in enumerate(top_by_score, 1)}
@@ -492,7 +498,7 @@ def make_handler(differ: ScreencastDiffer):
                 html.append(".rank { color: #f90; font-weight: bold; }")
                 html.append("</style>")
                 html.append("</head><body>")
-                html.append("<h1>Top 20 Most Divergent Frames (Chronological Order)</h1>")
+                html.append(f"<h1>Top {differ.count} Most Divergent Frames (Chronological Order)</h1>")
                 html.append(f"<p>Video: {differ.video_path.name}</p>")
 
                 if differ.method == "packet-size":
@@ -509,7 +515,7 @@ def make_handler(differ: ScreencastDiffer):
                 )
                 html.append("<p>Frames shown in chronological order with red boxes highlighting changes from previous frame</p>")
 
-                for timestamp, score, rank in differ.get_top_chronological(20):
+                for timestamp, score, rank in differ.get_top_chronological():
                     html.append('<div class="frame">')
 
                     if differ.method == "packet-size":
@@ -571,10 +577,13 @@ def main():
     parser.add_argument(
         "--port", type=int, default=9999, help="Server port (default: 9999)"
     )
+    parser.add_argument(
+        "--count", type=int, default=10, help="Number of top divergent frames to extract (default: 10)"
+    )
     args = parser.parse_args()
 
     differ = ScreencastDiffer(
-        args.video, sample_interval=args.interval, method=args.method
+        args.video, sample_interval=args.interval, method=args.method, count=args.count
     )
 
     print(f"\nServer running at http://0.0.0.0:{args.port}/")
