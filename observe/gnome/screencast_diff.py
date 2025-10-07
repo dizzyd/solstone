@@ -33,52 +33,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy.spatial.distance import jensenshannon
 
-from observe.utils import get_frames
+from observe.utils import compare_frames, get_frames
 
 # Frame comparison helper functions
-
-
-def fast_boxes(prev_rgb: np.ndarray, curr_rgb: np.ndarray, ds: int = 8, thr: int = 12):
-    """
-    Fast change detection using downscaled grayscale diff.
-
-    Args:
-        prev_rgb: Previous frame as HxWx3 uint8 array
-        curr_rgb: Current frame as HxWx3 uint8 array
-        ds: Downscale factor (default 8)
-        thr: Threshold for change detection (default 12)
-
-    Returns:
-        List of dicts with 'box_2d' key containing [y_min, x_min, y_max, x_max]
-    """
-    # Convert to grayscale using standard weights
-    Yp = (
-        0.299 * prev_rgb[..., 0] + 0.587 * prev_rgb[..., 1] + 0.114 * prev_rgb[..., 2]
-    ).astype(np.float32)
-    Yc = (
-        0.299 * curr_rgb[..., 0] + 0.587 * curr_rgb[..., 1] + 0.114 * curr_rgb[..., 2]
-    ).astype(np.float32)
-
-    # Downscale by block mean
-    h = (Yp.shape[0] // ds) * ds
-    w = (Yp.shape[1] // ds) * ds
-    Yp_ds = Yp[:h, :w].reshape(h // ds, ds, w // ds, ds).mean((1, 3))
-    Yc_ds = Yc[:h, :w].reshape(h // ds, ds, w // ds, ds).mean((1, 3))
-
-    # Compute absolute difference and threshold
-    D = np.abs(Yc_ds - Yp_ds)
-    M = (D > thr).astype(np.uint8)
-
-    # Get bounding box of changed regions
-    ys, xs = np.where(M)
-    if len(xs) == 0:
-        return []
-
-    # Simple bounding box around all changed pixels (upscaled back to full res)
-    y0, y1 = ys.min() * ds, min((ys.max() + 1) * ds, prev_rgb.shape[0]) - 1
-    x0, x1 = xs.min() * ds, min((xs.max() + 1) * ds, prev_rgb.shape[1]) - 1
-
-    return [{"box_2d": [y0, x0, y1, x1]}]
 
 
 def to_luma(img: Image.Image) -> np.ndarray:
@@ -223,7 +180,7 @@ class ScreencastDiffer:
         print(f"Extracting top {self.count} frames as WebP...", file=sys.stderr)
         self._extract_top_frames()
         print(
-            f"Found {len(self.divergence_scores)} scored frames, successfully extracted {len(self.top_frames)} of top {self.count}",
+            f"Found {len(self.divergence_scores)} scored frames, ready to serve top {self.count}",
             file=sys.stderr,
         )
         self._print_timings()
@@ -376,47 +333,40 @@ class ScreencastDiffer:
         target_timestamps = {ts for ts, _ in top_n_chronological}
 
         try:
-            # Decode only the specific frames we need using seek
+            # First pass: decode all target frames in order
             t_decode_start = time.perf_counter()
             frames_dict = {}  # timestamp -> av.VideoFrame
 
             with av.open(str(self.video_path)) as container:
-                v = container.streams.video[0]
-                v.thread_type = "AUTO"
-                v.codec_context.thread_count = 0  # 0 = ffmpeg auto
+                # Enable frame-level multithreading for faster decode
+                stream = container.streams.video[0]
+                stream.thread_type = "AUTO"
+                stream.codec_context.thread_count = 0  # 0 = ffmpeg auto
 
-                # Convert seconds -> stream ticks (offset is in stream.time_base)
-                tb = float(v.time_base)
+                last_sampled = -self.sample_interval
 
-                for ts in sorted(target_timestamps):
-                    try:
-                        # Seek close to the frame we want
-                        container.seek(
-                            int(ts / tb), stream=v, any_frame=True, backward=True
-                        )
-
-                        # Flush codec to reset decoder state after seek
-                        v.codec_context.flush_buffers()
-
-                        # Decode forward until we reach that timestamp
-                        for frame in container.decode(video=0):
-                            if frame.pts is None:
-                                continue
-                            if (frame.time or 0.0) + 1e-6 >= ts:
-                                frames_dict[ts] = frame
-                                break
-                    except av.error.InvalidDataError as e:
-                        # Skip frames that can't be decoded (corrupt or missing references)
-                        print(
-                            f"WARNING: Could not decode frame at {ts:.2f}s: {e}",
-                            file=sys.stderr,
-                        )
+                for frame in container.decode(video=0):
+                    if frame.pts is None:
                         continue
+
+                    timestamp = frame.time if frame.time is not None else 0.0
+
+                    # Sample at intervals and check if this is a top frame
+                    if timestamp - last_sampled >= self.sample_interval:
+                        if timestamp in target_timestamps:
+                            # Store the decoded frame
+                            frames_dict[timestamp] = frame
+
+                            # Exit early if we've found all top frames
+                            if len(frames_dict) >= self.count:
+                                break
+
+                        last_sampled = timestamp
 
             self.timings["top_frames_decode"] = time.perf_counter() - t_decode_start
 
-            # Compare consecutive frames and draw bounding boxes
-            previous_arr = None
+            # Second pass: compare consecutive frames and draw bounding boxes
+            previous_frame = None
 
             for i, (timestamp, _) in enumerate(top_n_chronological):
                 if timestamp not in frames_dict:
@@ -435,10 +385,10 @@ class ScreencastDiffer:
                 box_stats = None
 
                 # If not the first frame, compute bounding boxes and draw them
-                if previous_arr is not None:
-                    # Compare with previous frame to get change regions (fast downscaled diff)
+                if previous_frame is not None:
+                    # Compare with previous frame to get change regions
                     t_compare_start = time.perf_counter()
-                    boxes = fast_boxes(previous_arr, arr)
+                    boxes = compare_frames(previous_frame, current_frame)
                     self.timings["top_frames_compare"] += (
                         time.perf_counter() - t_compare_start
                     )
@@ -506,8 +456,8 @@ class ScreencastDiffer:
                     box_stats,
                 )
 
-                # Update previous array for next iteration
-                previous_arr = arr
+                # Update previous frame for next iteration
+                previous_frame = current_frame
 
         except Exception as e:
             print(f"ERROR: Failed to extract top frames: {e}", file=sys.stderr)
@@ -523,23 +473,15 @@ class ScreencastDiffer:
         return self.divergence_scores[:n]
 
     def get_top_chronological(self, n: int = None):
-        """Get the top N frames in chronological order with their divergence rank.
-
-        Only returns frames that were successfully decoded and are in top_frames.
-        """
+        """Get the top N frames in chronological order with their divergence rank."""
         if n is None:
             n = self.count
         top_by_score = self.divergence_scores[:n]
         # Create rank mapping (1-indexed)
         rank_map = {ts: idx for idx, (ts, _) in enumerate(top_by_score, 1)}
-        # Sort by timestamp and add rank, filtering to only successfully decoded frames
+        # Sort by timestamp and add rank
         chronological = sorted(top_by_score, key=lambda x: x[0])
-        # Only return frames that exist in top_frames (i.e., were successfully decoded)
-        return [
-            (ts, score, rank_map[ts])
-            for ts, score in chronological
-            if rank_map[ts] in self.top_frames
-        ]
+        return [(ts, score, rank_map[ts]) for ts, score in chronological]
 
     def _print_timings(self):
         """Print performance timing breakdown."""
@@ -610,13 +552,9 @@ def make_handler(differ: ScreencastDiffer):
                 html.append("</style>")
                 html.append("</head><body>")
                 html.append(
-                    f"<h1>Top {len(differ.top_frames)} Most Divergent Frames (Chronological Order)</h1>"
+                    f"<h1>Top {differ.count} Most Divergent Frames (Chronological Order)</h1>"
                 )
                 html.append(f"<p>Video: {differ.video_path.name}</p>")
-                if len(differ.top_frames) < differ.count:
-                    html.append(
-                        f"<p><em>Note: {differ.count - len(differ.top_frames)} frames failed to decode and were skipped</em></p>"
-                    )
 
                 if differ.method == "packet-size":
                     html.append(
