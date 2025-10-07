@@ -214,6 +214,11 @@ class ScreencastDiffer:
             t_scan_start = time.perf_counter()
             with av.open(str(self.video_path)) as container:
                 stream = container.streams.video[0]
+
+                # Enable frame-level multithreading for faster decode
+                stream.thread_type = "AUTO"
+                stream.codec_context.thread_count = 0  # 0 = ffmpeg auto
+
                 duration = (
                     float(stream.duration * stream.time_base)
                     if stream.duration
@@ -333,6 +338,11 @@ class ScreencastDiffer:
             frames_dict = {}  # timestamp -> av.VideoFrame
 
             with av.open(str(self.video_path)) as container:
+                # Enable frame-level multithreading for faster decode
+                stream = container.streams.video[0]
+                stream.thread_type = "AUTO"
+                stream.codec_context.thread_count = 0  # 0 = ffmpeg auto
+
                 last_sampled = -self.sample_interval
 
                 for frame in container.decode(video=0):
