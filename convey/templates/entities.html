@@ -1286,16 +1286,53 @@ document.getElementById('generateEntityDescBtn').onclick = async function() {
 
     const data = await response.json();
 
-    if (response.ok && data.success) {
-      // Update the description field
-      descriptionTextarea.value = data.description;
-    } else {
+    if (!response.ok || !data.success) {
       showNewEntityError(data.error || 'Failed to generate description');
+      btn.disabled = false;
+      btn.classList.remove('generating');
+      generateText.textContent = 'Generate';
+      return;
     }
+
+    // Subscribe to events from the shared watcher
+    const agentId = data.agent_id;
+
+    const eventHandler = (event) => {
+      // Only process events for our agent
+      if (event.agent_id !== agentId) return;
+
+      if (event.event === 'finish') {
+        // Clean up description - remove quotes (view-specific)
+        let description = event.result || '';
+        description = description.trim();
+        if (description.startsWith('"') && description.endsWith('"')) {
+          description = description.slice(1, -1);
+        }
+
+        // Update the description field
+        descriptionTextarea.value = description;
+
+        // Re-enable button and reset state
+        btn.disabled = false;
+        btn.classList.remove('generating');
+        generateText.textContent = 'Generate';
+      } else if (event.event === 'error') {
+        showNewEntityError(event.error || 'Failed to generate description');
+
+        // Re-enable button and reset state
+        btn.disabled = false;
+        btn.classList.remove('generating');
+        generateText.textContent = 'Generate';
+      }
+    };
+
+    // Listen for events on the 'entities' view
+    appEvents.listen('entities', eventHandler);
+
   } catch (error) {
     console.error('Error generating description:', error);
     showNewEntityError('Failed to generate description: ' + error.message);
-  } finally {
+
     // Re-enable button and reset state
     btn.disabled = false;
     btn.classList.remove('generating');

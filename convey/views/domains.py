@@ -12,8 +12,6 @@ from flask import Blueprint, jsonify, render_template, request
 from think.domains import get_domain_news, get_domains, get_matter, get_matters
 from think.indexer import search_entities
 
-from ..cortex_utils import run_agent_via_cortex
-
 bp = Blueprint("domains", __name__, template_folder="../templates")
 
 
@@ -402,15 +400,20 @@ def generate_domain_description(domain_name: str) -> Any:
 
 Generate a clear, engaging 1-2 sentence description that captures the essence and purpose of this domain. The description should help users understand what they'll find in this domain and be appropriate for a personal knowledge management system."""
 
-        # Use Cortex to generate description
-        description = run_agent_via_cortex(
+        # Create agent request - events will be broadcast by shared watcher
+        from muse.cortex_client import cortex_request
+        from pathlib import Path
+
+        agent_file = cortex_request(
             prompt=prompt,
             persona="domain_describe",
             backend="google",
-            timeout=60,  # 1 minute for description generation
         )
 
-        return jsonify({"success": True, "description": description.strip()})
+        # Extract agent_id from the filename
+        agent_id = Path(agent_file).stem.replace("_active", "")
+
+        return jsonify({"success": True, "agent_id": agent_id})
 
     except Exception as e:
         return jsonify({"error": f"Failed to generate description: {str(e)}"}), 500
@@ -513,15 +516,20 @@ def generate_entity_description(domain_name: str) -> Any:
 
 Generate a clear, concise description (1-2 sentences) that captures what this {entity_type.lower()} is and why it's relevant. The description should be appropriate for a personal knowledge management system and help users understand the entity's significance or role."""
 
-        # Use Cortex to generate description
-        description = run_agent_via_cortex(
+        # Create agent request - events will be broadcast by shared watcher
+        from muse.cortex_client import cortex_request
+        from pathlib import Path
+
+        agent_file = cortex_request(
             prompt=prompt,
             persona="domain_describe",
             backend="google",
-            timeout=60,  # 1 minute for description generation
         )
 
-        return jsonify({"success": True, "description": description.strip()})
+        # Extract agent_id from the filename
+        agent_id = Path(agent_file).stem.replace("_active", "")
+
+        return jsonify({"success": True, "agent_id": agent_id})
 
     except Exception as e:
         return (

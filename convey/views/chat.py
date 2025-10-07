@@ -8,15 +8,6 @@ import markdown  # type: ignore
 from flask import Blueprint, jsonify, render_template, request
 
 from .. import state
-from ..cortex_utils import build_cortex_event_payload, run_agent_via_cortex
-from ..push import push_server
-
-
-def _push_event(event: dict) -> None:
-    """Forward agent events to connected chat clients."""
-    payload = build_cortex_event_payload(event, source="direct")
-    push_server.push(payload)
-
 
 bp = Blueprint("chat", __name__, template_folder="../templates")
 
@@ -56,19 +47,27 @@ def send_message() -> Any:
         return resp
 
     try:
-        # Use the shared utility with event forwarding to push server
-        result = run_agent_via_cortex(
-            prompt=message,
-            attachments=attachments,
+        from muse.cortex_client import cortex_request
+        from pathlib import Path
+
+        # Prepare the full prompt with attachments
+        if attachments:
+            full_prompt = "\n".join([message] + attachments)
+        else:
+            full_prompt = message
+
+        # Create agent request - events will be broadcast by shared watcher
+        agent_file = cortex_request(
+            prompt=full_prompt,
+            persona=persona,
             backend=backend,
-            persona=persona,  # Pass the persona to the agent
             config=config,
-            timeout=300,  # 5 minutes for chat
-            on_event=_push_event,  # Forward events to push server
         )
-        # Render markdown to HTML server-side
-        html_result = markdown.markdown(result, extensions=["extra"])
-        return jsonify(text=result, html=html_result)
+
+        # Extract agent_id from the filename
+        agent_id = Path(agent_file).stem.replace("_active", "")
+
+        return jsonify(agent_id=agent_id)
     except Exception as e:
         resp = jsonify({"error": str(e)})
         resp.status_code = 500

@@ -419,14 +419,13 @@ document.getElementById('inputArea').onsubmit=async e=>{
   activeRunAgentId=null;
 
   const r=await fetch(sendUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  
+
   if(r.ok){
     const d=await r.json();
-    // Pass both HTML and raw markdown text
-    addMessage(d.html||d.text,'from-bot',!!d.html, d.text);
-    // Response complete - force hide after a short delay
-    responseInProgress = false;
-    setTimeout(forceHideActivityIndicator, 1000);
+    // Get the agent_id and subscribe to events from shared watcher
+    activeRunAgentId = d.agent_id;
+    // Events will be handled by the global appEvents.listen('chat', ...) handler
+    // The finish event will add the final message and clean up
   }else{
     responseInProgress = false;
     forceHideActivityIndicator();
@@ -583,6 +582,8 @@ function processEvent(event) {
             nextContinueAgentId = null;
           }
           activeRunAgentId = null;
+          responseInProgress = false;
+          setTimeout(forceHideActivityIndicator, 1000);
         }
       }
       break;

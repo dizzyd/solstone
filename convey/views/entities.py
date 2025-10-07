@@ -428,8 +428,7 @@ def api_generate_entity_description() -> Any:
         return jsonify({"error": "JOURNAL_PATH not set"}), 500
 
     try:
-        # Import the run_agent_via_cortex function
-        from ..cortex_utils import run_agent_via_cortex
+        from muse.cortex_client import cortex_request
 
         # Build context for the agent
         prompt = f"""Generate a single complete sentence description for this entity:
@@ -439,21 +438,19 @@ Entity Name: {name}
 
 Use the search tools to research this entity in the journal, then create a precise, informative single sentence that captures the entity's role, purpose, and significance."""
 
-        # Use the entity_describe persona with cortex
-        description = run_agent_via_cortex(prompt=prompt, persona="entity_describe")
+        # Create agent request - events will be broadcast by shared watcher
+        agent_file = cortex_request(
+            prompt=prompt,
+            persona="entity_describe",
+            backend="openai",
+        )
 
-        if description:
-            # Clean up the description - remove any quotes or extra formatting
-            description = description.strip()
-            if description.startswith('"') and description.endswith('"'):
-                description = description[1:-1]
+        # Extract agent_id from the filename
+        from pathlib import Path
 
-            return jsonify({"success": True, "description": description})
-        else:
-            return (
-                jsonify({"success": False, "error": "Failed to generate description"}),
-                500,
-            )
+        agent_id = Path(agent_file).stem.replace("_active", "")
+
+        return jsonify({"success": True, "agent_id": agent_id})
 
     except Exception as e:
         logging.error(f"Error generating entity description: {e}")

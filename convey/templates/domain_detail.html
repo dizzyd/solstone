@@ -1729,14 +1729,14 @@ function generateDescription() {
   const textarea = document.getElementById('descriptionText');
   const generateIcon = generateBtn.querySelector('.generate-icon');
   const generateText = generateBtn.querySelector('.generate-text');
-  
+
   // Update button state
   generateBtn.disabled = true;
   generateBtn.classList.add('generating');
   generateText.textContent = 'Generating...';
-  
+
   const currentDescription = textarea.value.trim();
-  
+
   fetch(`/api/domains/${encodeURIComponent(domainName)}/generate-description`, {
     method: 'POST',
     headers: {
@@ -1749,22 +1749,50 @@ function generateDescription() {
   })
   .then(response => response.json())
   .then(data => {
-    if (data.success && data.description) {
-      textarea.value = data.description;
-      textarea.focus();
-    } else {
+    if (!data.success) {
       alert('Error generating description: ' + (data.error || 'Unknown error'));
+      generateBtn.disabled = false;
+      generateBtn.classList.remove('generating');
+      generateText.textContent = 'Generate';
+      return;
     }
-    
-    // Reset button state
-    generateBtn.disabled = false;
-    generateBtn.classList.remove('generating');
-    generateText.textContent = 'Generate';
+
+    // Subscribe to events from the shared watcher
+    const agentId = data.agent_id;
+
+    const eventHandler = (event) => {
+      // Only process events for our agent
+      if (event.agent_id !== agentId) return;
+
+      if (event.event === 'finish') {
+        // Clean up description - strip whitespace
+        let description = event.result || '';
+        description = description.trim();
+
+        textarea.value = description;
+        textarea.focus();
+
+        // Reset button state
+        generateBtn.disabled = false;
+        generateBtn.classList.remove('generating');
+        generateText.textContent = 'Generate';
+      } else if (event.event === 'error') {
+        alert('Error generating description: ' + (event.error || 'Unknown error'));
+
+        // Reset button state
+        generateBtn.disabled = false;
+        generateBtn.classList.remove('generating');
+        generateText.textContent = 'Generate';
+      }
+    };
+
+    // Listen for events on the 'domains' view
+    appEvents.listen('domains', eventHandler);
   })
   .catch(error => {
     console.error('Error generating description:', error);
     alert('Network error: ' + error.message);
-    
+
     // Reset button state
     generateBtn.disabled = false;
     generateBtn.classList.remove('generating');
@@ -1953,22 +1981,50 @@ function generateDescription() {
   })
   .then(response => response.json())
   .then(data => {
-    if (data.success && data.description) {
-      textarea.value = data.description;
-      textarea.focus();
-    } else {
+    if (!data.success) {
       alert('Error generating description: ' + (data.error || 'Unknown error'));
+      generateBtn.disabled = false;
+      generateBtn.classList.remove('generating');
+      generateText.textContent = 'Generate';
+      return;
     }
-    
-    // Reset button state
-    generateBtn.disabled = false;
-    generateBtn.classList.remove('generating');
-    generateText.textContent = 'Generate';
+
+    // Subscribe to events from the shared watcher
+    const agentId = data.agent_id;
+
+    const eventHandler = (event) => {
+      // Only process events for our agent
+      if (event.agent_id !== agentId) return;
+
+      if (event.event === 'finish') {
+        // Clean up description - strip whitespace
+        let description = event.result || '';
+        description = description.trim();
+
+        textarea.value = description;
+        textarea.focus();
+
+        // Reset button state
+        generateBtn.disabled = false;
+        generateBtn.classList.remove('generating');
+        generateText.textContent = 'Generate';
+      } else if (event.event === 'error') {
+        alert('Error generating description: ' + (event.error || 'Unknown error'));
+
+        // Reset button state
+        generateBtn.disabled = false;
+        generateBtn.classList.remove('generating');
+        generateText.textContent = 'Generate';
+      }
+    };
+
+    // Listen for events on the 'domains' view
+    appEvents.listen('domains', eventHandler);
   })
   .catch(error => {
     console.error('Error generating description:', error);
     alert('Network error: ' + error.message);
-    
+
     // Reset button state
     generateBtn.disabled = false;
     generateBtn.classList.remove('generating');
