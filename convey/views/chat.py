@@ -4,7 +4,6 @@ import json
 import os
 from typing import Any
 
-import markdown  # type: ignore
 from flask import Blueprint, jsonify, render_template, request
 
 from .. import state
@@ -116,29 +115,9 @@ def agent_events(agent_id: str) -> Any:
                                     if not event:
                                         continue
 
-                                    # Add HTML rendering for finish and error events
-                                    if event.get("event") == "finish":
-                                        result_text = event.get("result", "")
-                                        event["html"] = markdown.markdown(
-                                            result_text, extensions=["extra"]
-                                        )
-                                    elif event.get("event") == "error":
-                                        # Format error message
-                                        error_msg = event.get("error", "Unknown error")
-                                        trace = event.get("trace", "")
-                                        error_text = (
-                                            f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                                            if trace
-                                            else f"❌ **Error**: {error_msg}"
-                                        )
-                                        event["html"] = markdown.markdown(
-                                            error_text, extensions=["extra"]
-                                        )
-                                        event["result"] = error_text
-
                                     events.append(event)
 
-                                    # Build chat history for display
+                                    # Build chat history for display (raw data only)
                                     if event.get("event") == "start":
                                         history.append(
                                             {
@@ -147,33 +126,18 @@ def agent_events(agent_id: str) -> Any:
                                             }
                                         )
                                     elif event.get("event") == "finish":
-                                        result_text = event.get("result", "")
-                                        html_result = markdown.markdown(
-                                            result_text, extensions=["extra"]
-                                        )
                                         history.append(
                                             {
                                                 "role": "assistant",
-                                                "text": result_text,
-                                                "html": html_result,
+                                                "text": event.get("result", ""),
                                             }
                                         )
                                     elif event.get("event") == "error":
                                         error_msg = event.get("error", "Unknown error")
-                                        trace = event.get("trace", "")
-                                        error_text = (
-                                            f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                                            if trace
-                                            else f"❌ **Error**: {error_msg}"
-                                        )
-                                        html_result = markdown.markdown(
-                                            error_text, extensions=["extra"]
-                                        )
                                         history.append(
                                             {
                                                 "role": "assistant",
-                                                "text": error_text,
-                                                "html": html_result,
+                                                "text": error_msg,
                                             }
                                         )
                         except Exception:
@@ -209,47 +173,18 @@ def agent_events(agent_id: str) -> Any:
                 if not event:
                     continue
 
-                # Add HTML rendering for finish and error events
-                if event.get("event") == "finish":
-                    result_text = event.get("result", "")
-                    event["html"] = markdown.markdown(result_text, extensions=["extra"])
-                elif event.get("event") == "error":
-                    # Format error message
-                    error_msg = event.get("error", "Unknown error")
-                    trace = event.get("trace", "")
-                    error_text = (
-                        f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                        if trace
-                        else f"❌ **Error**: {error_msg}"
-                    )
-                    event["html"] = markdown.markdown(error_text, extensions=["extra"])
-                    event["result"] = error_text  # Add result field for consistency
-
                 events.append(event)
 
-                # Build chat history for display
+                # Build chat history for display (raw data only)
                 if event.get("event") == "start":
                     history.append({"role": "user", "text": event.get("prompt", "")})
                 elif event.get("event") == "finish":
-                    result_text = event.get("result", "")
-                    # Convert markdown to HTML for proper display
-                    html_result = markdown.markdown(result_text, extensions=["extra"])
                     history.append(
-                        {"role": "assistant", "text": result_text, "html": html_result}
+                        {"role": "assistant", "text": event.get("result", "")}
                     )
                 elif event.get("event") == "error":
-                    # Format error message for history
                     error_msg = event.get("error", "Unknown error")
-                    trace = event.get("trace", "")
-                    error_text = (
-                        f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-                        if trace
-                        else f"❌ **Error**: {error_msg}"
-                    )
-                    html_result = markdown.markdown(error_text, extensions=["extra"])
-                    history.append(
-                        {"role": "assistant", "text": error_text, "html": html_result}
-                    )
+                    history.append({"role": "assistant", "text": error_msg})
 
     except Exception as e:
         return jsonify({"error": f"Failed to read agent file: {str(e)}"}), 500

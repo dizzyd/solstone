@@ -88,6 +88,7 @@ body {height:100vh; overflow:hidden;}
     </form>
   </div>
 </div>
+<script src="{{ url_for('static', filename='marked.min.js') }}"></script>
 <script>
 const sendUrl = '{{ url_for('chat.send_message') }}';
 const historyUrl = '{{ url_for('chat.chat_history') }}';
@@ -118,6 +119,35 @@ function shouldSkipEvent(event) {
 
 function resetEventTracking() {
   processedEventIds.clear();
+}
+
+// Single source of truth for event rendering
+function enrichEvent(event) {
+  const enriched = {...event};
+
+  // Render finish events
+  if (event.event === 'finish') {
+    const resultText = event.result || '';
+    enriched.html = marked.parse(resultText, {
+      breaks: true,  // nl2br equivalent
+      gfm: true      // GitHub Flavored Markdown
+    });
+    enriched.rawMarkdown = resultText;
+  }
+
+  // Render error events
+  else if (event.event === 'error') {
+    const errorMsg = event.error || 'Unknown error';
+    const trace = event.trace || '';
+    const errorText = trace
+      ? `❌ **Error**: ${errorMsg}\n\n\`\`\`\n${trace}\n\`\`\``
+      : `❌ **Error**: ${errorMsg}`;
+    enriched.html = marked.parse(errorText, {breaks: true, gfm: true});
+    enriched.rawMarkdown = errorText;
+    enriched.result = errorText;
+  }
+
+  return enriched;
 }
 
 // Parse URL parameters for persona and agent ID
@@ -498,30 +528,28 @@ async function loadHistoricalAgent(agentId){
   // Process events in chronological order
   // This maintains the proper sequence of messages and tool calls
   for(const event of events){
-    if(event.event === 'start'){
+    // Enrich event with client-side rendering
+    const enriched = enrichEvent(event);
+
+    if(enriched.event === 'start'){
       // User message
-      addMessage(event.prompt || '', 'from-user');
-    } else if(event.event === 'finish'){
-      // Assistant final response - use HTML if available for markdown formatting
-      const text = event.result || '';
-      const html = event.html || text;
-      // Pass raw markdown for copy functionality
-      addMessage(html, 'from-bot', !!event.html, text);
-    } else if(event.event === 'error'){
+      addMessage(enriched.prompt || '', 'from-user');
+    } else if(enriched.event === 'finish'){
+      // Assistant final response - use enriched HTML for markdown formatting
+      addMessage(enriched.html, 'from-bot', true, enriched.rawMarkdown);
+    } else if(enriched.event === 'error'){
       // Error event - display as final response
-      const text = event.result || event.error || 'Unknown error occurred';
-      const html = event.html || text;
-      // Pass raw markdown for copy functionality
-      addMessage(html, 'from-bot', !!event.html, text);
+      addMessage(enriched.html, 'from-bot', true, enriched.rawMarkdown);
     } else {
       // All other events (tool calls, thinking, etc.)
-      handleHistoricalEvent(event);
+      handleHistoricalEvent(enriched);
     }
   }
 
   if(!isLive && finishEvent){
     activeRunAgentId = agentId;
-    processEvent(finishEvent);
+    const enrichedFinish = enrichEvent(finishEvent);
+    processEvent(enrichedFinish);
   }
 
   if(!isLive){
@@ -569,10 +597,9 @@ function processEvent(event) {
       if(event.agent_id){
         const matchesActive = activeRunAgentId ? event.agent_id === activeRunAgentId : responseInProgress;
         if(event.source === 'cortex'){
-          const text = event.result || '';
-          const html = event.html || text;
-          if(html || text){
-            addMessage(html || text, 'from-bot', Boolean(event.html), text || html);
+          // Event is already enriched with html and rawMarkdown
+          if(event.html){
+            addMessage(event.html, 'from-bot', true, event.rawMarkdown);
           }
         }
         if(matchesActive){
@@ -866,9 +893,12 @@ function initChatControls(){
       return; // Skip irrelevant events
     }
 
+    // Enrich event with client-side rendering
+    const enriched = enrichEvent(e);
+
     // Show activity for relevant events
     showActivityIndicator();
-    processEvent(e);
+    processEvent(enriched);
 
     // Handle completion for watched agents
     if (window.watchingAgentId && e.agent_id === window.watchingAgentId) {

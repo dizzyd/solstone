@@ -7,8 +7,6 @@ import os
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
-import markdown  # type: ignore
-
 from muse.cortex_client import cortex_watch
 
 from . import state
@@ -50,24 +48,8 @@ def build_cortex_event_payload(
 
 
 def _broadcast_cortex_event(event: Dict[str, Any]) -> Optional[bool]:
-    """Broadcast Cortex event to all connected clients with server-side HTML rendering."""
-    # Add server-rendered HTML for finish and error events
-    if event.get("event") == "finish":
-        result_text = event.get("result", "")
-        event["html"] = markdown.markdown(result_text, extensions=["extra"])
-    elif event.get("event") == "error":
-        # Format error message with emoji and code blocks
-        error_msg = event.get("error", "Unknown error")
-        trace = event.get("trace", "")
-        error_text = (
-            f"❌ **Error**: {error_msg}\n\n```\n{trace}\n```"
-            if trace
-            else f"❌ **Error**: {error_msg}"
-        )
-        event["html"] = markdown.markdown(error_text, extensions=["extra"])
-        event["result"] = error_text
-
-    # Broadcast to all views so clients can filter by agent_id
+    """Broadcast raw Cortex event to all connected clients."""
+    # Broadcast raw events - client handles rendering
     for view in ["chat", "entities", "domains"]:
         payload = build_cortex_event_payload(event, view=view)
         try:
