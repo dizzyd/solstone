@@ -19,6 +19,8 @@ Usage:
   gnome-screencast-diff screencast.webm --method visual-diff
   gnome-screencast-diff screencast.webm --interval 0.5  # sample every 0.5s
   gnome-screencast-diff screencast.webm --count 20  # extract top 20 frames
+  gnome-screencast-diff screencast.webm --show-sizes  # display compressed byte sizes
+  gnome-screencast-diff screencast.webm --show-all  # draw all bounding boxes
 """
 
 import argparse
@@ -129,6 +131,8 @@ class ScreencastDiffer:
         sample_interval: float = 1.0,
         method: str = "packet-size",
         count: int = 10,
+        show_sizes: bool = False,
+        show_all: bool = False,
     ):
         self.video_path = Path(video_path)
         if not self.video_path.exists():
@@ -137,6 +141,8 @@ class ScreencastDiffer:
         self.sample_interval = sample_interval
         self.method = method
         self.count = count
+        self.show_sizes = show_sizes
+        self.show_all = show_all
         self.frame_scores = []  # List of (timestamp, score) - computed during scan
         self.divergence_scores = []  # List of (timestamp, score) - sorted by score
         self.top_frames = (
@@ -200,6 +206,17 @@ class ScreencastDiffer:
                 f"  Scanned {len(self.frame_scores)} frames using packet-size method",
                 file=sys.stderr,
             )
+
+            # Show frame sizes if requested
+            if self.show_sizes:
+                print("\n  Frame sizes (timestamp, compressed bytes):", file=sys.stderr)
+                # Sort by timestamp for chronological order
+                sorted_frames = sorted(self.frame_scores, key=lambda x: x[0])
+                for timestamp, size in sorted_frames:
+                    print(
+                        f"    {timestamp:7.2f}s: {int(size):7,} bytes", file=sys.stderr
+                    )
+                print("", file=sys.stderr)
 
         except Exception as e:
             print(f"ERROR: Failed to process packets: {e}", file=sys.stderr)
@@ -423,7 +440,11 @@ class ScreencastDiffer:
                         # Draw red 5px rectangles around changed regions
                         t_draw_start = time.perf_counter()
                         draw = ImageDraw.Draw(img)
-                        for box_data in boxes:
+
+                        # Determine which boxes to draw
+                        boxes_to_draw = boxes if self.show_all else [largest_box]
+
+                        for box_data in boxes_to_draw:
                             y_min, x_min, y_max, x_max = box_data["box_2d"]
                             # Draw rectangle with 5px red border
                             for offset in range(5):
@@ -568,8 +589,14 @@ def make_handler(differ: ScreencastDiffer):
                 html.append(
                     f"<p>Total frames analyzed: {len(differ.frame_scores)} (sampled every {differ.sample_interval}s)</p>"
                 )
+
+                box_mode = (
+                    "all change regions"
+                    if differ.show_all
+                    else "largest change region only"
+                )
                 html.append(
-                    "<p>Frames shown in chronological order with red boxes highlighting changes from previous frame</p>"
+                    f"<p>Frames shown in chronological order with red boxes highlighting {box_mode}</p>"
                 )
 
                 for timestamp, score, rank in differ.get_top_chronological():
@@ -671,10 +698,25 @@ def main():
         default=10,
         help="Number of top divergent frames to extract (default: 10)",
     )
+    parser.add_argument(
+        "--show-sizes",
+        action="store_true",
+        help="Show compressed byte size of each frame during packet-size scan",
+    )
+    parser.add_argument(
+        "--show-all",
+        action="store_true",
+        help="Draw all bounding boxes (default: only draw the largest box by area)",
+    )
     args = parser.parse_args()
 
     differ = ScreencastDiffer(
-        args.video, sample_interval=args.interval, method=args.method, count=args.count
+        args.video,
+        sample_interval=args.interval,
+        method=args.method,
+        count=args.count,
+        show_sizes=args.show_sizes,
+        show_all=args.show_all,
     )
 
     print(f"\nServer running at http://0.0.0.0:{args.port}/")
