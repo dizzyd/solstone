@@ -24,7 +24,6 @@ import os
 import signal
 import subprocess
 import sys
-import tempfile
 
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
@@ -91,32 +90,19 @@ async def run_screencast(
     geometries = get_monitor_geometries()
     logger.info(f"Detected {len(geometries)} monitor(s)")
 
-    # Create temp file path in same directory for atomic move
-    # Using same directory ensures os.replace() will be atomic (same filesystem)
-    out_dir = os.path.dirname(out_path)
-    temp_fd, temp_path = tempfile.mkstemp(dir=out_dir, suffix=".webm.tmp")
-    os.close(temp_fd)  # Close fd, we just need the path
-    os.unlink(temp_path)  # Remove empty file, GNOME Shell will create it
+    # Record to .live file, then atomically rename when complete
+    live_path = out_path + ".live"
 
     try:
         sc = Screencaster()
-        ok, resolved_path = await sc.start(temp_path, fps, draw_cursor)
+        ok, _ = await sc.start(live_path, fps, draw_cursor)
         if not ok:
             print("ERROR: Failed to start screencast.", file=sys.stderr)
-            # Check both temp_path and resolved_path for partial recordings
-            for path in [temp_path, resolved_path]:
-                if path and os.path.exists(path):
-                    error_path = out_path.replace(".webm", ".webm.error")
-                    os.replace(path, error_path)
-                    print(f"Moved failed recording to {error_path}", file=sys.stderr)
-                    break
+            if os.path.exists(live_path):
+                error_path = out_path + ".error"
+                os.replace(live_path, error_path)
+                print(f"Moved failed recording to {error_path}", file=sys.stderr)
             return 1
-
-        # Verify GNOME Shell wrote to expected location
-        if resolved_path != temp_path:
-            logger.warning(
-                f"GNOME Shell used different path: {resolved_path} != {temp_path}"
-            )
 
         print(f"Recording… ({duration_s}s) -> {out_path}")
 
@@ -143,7 +129,7 @@ async def run_screencast(
             await sc.stop()
             print("Stopped.")
 
-        # Update video title with monitor dimensions
+        # Build monitor geometry metadata for video title
         # Format: "connector-id:position,x1,y1,x2,y2 connector-id:position,x1,y1,x2,y2 ..."
         title_parts = []
         for geom_info in geometries:
@@ -153,16 +139,12 @@ async def run_screencast(
             )
         title = " ".join(title_parts)
 
-        # Verify recording file exists before post-processing
-        if not os.path.exists(resolved_path):
-            raise FileNotFoundError(f"Recording file not found: {resolved_path}")
-
         # Update video title with monitor dimensions
         try:
             subprocess.run(
                 [
                     "mkvpropedit",
-                    resolved_path,
+                    live_path,
                     "--edit",
                     "info",
                     "--set",
@@ -177,26 +159,24 @@ async def run_screencast(
         except FileNotFoundError:
             logger.warning("mkvpropedit not found, skipping title update")
 
-        # Atomically move temp file to final destination
+        # Atomically rename to final destination
         # This ensures filesystem watchers only see the complete file
-        os.replace(resolved_path, out_path)
+        os.replace(live_path, out_path)
         print(f"Saved to {out_path}")
 
         touch_health("screencast")
         return 0
 
     except Exception as e:
-        # Clean up any partial recordings on failure
+        # Clean up partial recording on failure
         logger.error(f"Screencast failed: {e}", exc_info=True)
-        for path in [temp_path, resolved_path]:
-            if path and os.path.exists(path):
-                try:
-                    error_path = out_path.replace(".webm", ".webm.error")
-                    os.replace(path, error_path)
-                    print(f"Moved partial recording to {error_path}", file=sys.stderr)
-                    break
-                except OSError:
-                    pass
+        if os.path.exists(live_path):
+            try:
+                error_path = out_path + ".error"
+                os.replace(live_path, error_path)
+                print(f"Moved partial recording to {error_path}", file=sys.stderr)
+            except OSError:
+                pass
         raise
 
 
