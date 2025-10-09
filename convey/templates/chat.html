@@ -13,6 +13,14 @@ body {height:100vh; overflow:hidden;}
 .copy-markdown-btn:hover {background:rgba(0,0,0,0.1); color:#333;}
 .from-bot:hover .copy-markdown-btn {opacity:1;}
 .copy-markdown-btn.copied {background:#4caf50; color:white; border-color:#4caf50;}
+.copy-markdown-btn-bottom {position:relative; display:block; margin-bottom:0.75em; margin-top:-0.5em; margin-left:0; padding-left:0; text-align:left; align-self:flex-start; max-width:75%; margin-right:20%;}
+.copy-markdown-btn-bottom button {background:transparent; border:1px solid rgba(0,0,0,0.15); border-radius:6px; padding:0.4em 0.5em; cursor:pointer; font-size:1em; color:#666; transition:all 0.2s; line-height:1;}
+.copy-markdown-btn-bottom button:hover {background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.25);}
+.copy-markdown-btn-bottom button.copied {background:#4caf50; color:white; border-color:#4caf50;}
+.copy-user-btn-bottom {position:relative; display:flex; gap:0.3em; justify-content:flex-end; margin-bottom:0.75em; margin-top:0.25em; margin-right:0; padding-right:0; text-align:right; align-self:flex-end; max-width:75%; margin-left:20%;}
+.copy-user-btn-bottom button {background:transparent; border:1px solid rgba(255,255,255,0.3); border-radius:4px; padding:0.3em 0.4em; cursor:pointer; font-size:0.85em; color:rgba(255,255,255,0.7); transition:all 0.2s; line-height:1; display:inline-flex; align-items:center; justify-content:center;}
+.copy-user-btn-bottom button:hover {background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.5); color:rgba(255,255,255,0.9);}
+.copy-user-btn-bottom button.copied {background:#4caf50; color:white; border-color:#4caf50;}
 @keyframes fadeInUp {from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 #messages .event-card{background:#fff4e5;border:1px solid #f0ad4e;border-radius:6px;padding:0.5em 0.75em;margin-bottom:0.75em;font-size:0.85em;max-width:80%;align-self:flex-start;cursor:help;}
 #messages .event-card a{text-decoration:none;color:#007bff;}
@@ -79,12 +87,11 @@ body {height:100vh; overflow:hidden;}
     <form id="inputArea" class="input-area">
       <select id="backendSelect">
         <option value="google">🔵 Google</option>
-        <option value="openai" selected>🟢 OpenAI</option>
-        <option value="anthropic">🟣 Claude</option>
+        <option value="openai">🟢 OpenAI</option>
+        <option value="anthropic" selected>🟣 Claude</option>
       </select>
       <textarea id="messageInput" rows="1" placeholder="Send a message..."></textarea>
       <button type="submit">Send</button>
-      <button type="button" id="clearBtn">Clear</button>
     </form>
   </div>
 </div>
@@ -362,17 +369,17 @@ const messageMarkdown = new WeakMap();
 function addMessage(text, cls, isHtml=false, rawMarkdown=null){
   const div=document.createElement('div');
   div.className='message '+cls;
-  
+
   // Use HTML for bot messages if provided, otherwise plain text
   if(isHtml && cls === 'from-bot'){
     div.innerHTML = text;
-    
+
     // Store raw markdown if provided
     if(rawMarkdown) {
       messageMarkdown.set(div, rawMarkdown);
     }
-    
-    // Add copy button for bot messages
+
+    // Add top copy button for bot messages
     const copyBtn = document.createElement('button');
     copyBtn.className = 'copy-markdown-btn';
     copyBtn.innerHTML = '📋';
@@ -383,9 +390,58 @@ function addMessage(text, cls, isHtml=false, rawMarkdown=null){
     div.appendChild(copyBtn);
   } else {
     div.textContent = text;
+
+    // Store plain text for user messages
+    if(cls === 'from-user') {
+      messageMarkdown.set(div, text);
+    }
   }
-  
+
   messagesDiv.insertBefore(div, activityIndicator);
+
+  // Add bottom copy button AFTER the message div for bot messages
+  if(isHtml && cls === 'from-bot' && rawMarkdown){
+    const bottomCopyWrapper = document.createElement('div');
+    bottomCopyWrapper.className = 'copy-markdown-btn-bottom';
+    const bottomCopyBtn = document.createElement('button');
+    bottomCopyBtn.innerHTML = '📋';
+    bottomCopyBtn.title = 'Copy to clipboard';
+    bottomCopyBtn.onclick = (e) => {
+      e.stopPropagation();
+      copyMessageMarkdown(div, bottomCopyBtn);
+    };
+    bottomCopyWrapper.appendChild(bottomCopyBtn);
+    messagesDiv.insertBefore(bottomCopyWrapper, activityIndicator);
+  }
+
+  // Add bottom copy button for user messages
+  if(cls === 'from-user'){
+    const userCopyWrapper = document.createElement('div');
+    userCopyWrapper.className = 'copy-user-btn-bottom';
+
+    // Recycle button (reuse message)
+    const recycleBtn = document.createElement('button');
+    recycleBtn.innerHTML = '♻️';
+    recycleBtn.title = 'Reuse this message';
+    recycleBtn.onclick = (e) => {
+      e.stopPropagation();
+      reuseMessage(div);
+    };
+    userCopyWrapper.appendChild(recycleBtn);
+
+    // Copy button
+    const userCopyBtn = document.createElement('button');
+    userCopyBtn.innerHTML = '📋';
+    userCopyBtn.title = 'Copy to clipboard';
+    userCopyBtn.onclick = (e) => {
+      e.stopPropagation();
+      copyMessageMarkdown(div, userCopyBtn);
+    };
+    userCopyWrapper.appendChild(userCopyBtn);
+
+    messagesDiv.insertBefore(userCopyWrapper, activityIndicator);
+  }
+
   ensureActivityIndicatorAtBottom();
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
 }
@@ -393,12 +449,12 @@ function addMessage(text, cls, isHtml=false, rawMarkdown=null){
 function copyMessageMarkdown(messageDiv, copyBtn) {
   const markdown = messageMarkdown.get(messageDiv);
   if(!markdown) return;
-  
+
   navigator.clipboard.writeText(markdown).then(() => {
     // Show success feedback
     copyBtn.innerHTML = '✓';
     copyBtn.classList.add('copied');
-    
+
     // Reset after 2 seconds
     setTimeout(() => {
       copyBtn.innerHTML = '📋';
@@ -411,6 +467,49 @@ function copyMessageMarkdown(messageDiv, copyBtn) {
       copyBtn.innerHTML = '📋';
     }, 2000);
   });
+}
+
+function reuseMessage(messageDiv) {
+  const text = messageMarkdown.get(messageDiv);
+  if(!text) return;
+
+  // Clear the current chat
+  messagesDiv.innerHTML='';
+  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
+  messagesDiv.appendChild(activityIndicator);
+  previousAgent = null;
+  responseInProgress = false;
+  nextContinueAgentId = null;
+  activeRunAgentId = null;
+  forceHideActivityIndicator();
+  resetEventTracking();
+
+  // Clear backend history
+  fetch(clearUrl, {method:'POST'}).catch(err => console.error('Failed to clear history:', err));
+
+  // Remove historical notice if present
+  const historicalNotice = document.getElementById('historicalNotice');
+  if(historicalNotice) {
+    historicalNotice.remove();
+  }
+
+  // Show and enable the form
+  form.style.display = '';
+  input.disabled = false;
+  input.placeholder = 'Send a message...';
+
+  // Pre-fill the input with the message text
+  input.value = text;
+  input.focus();
+
+  // Auto-resize the textarea
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+
+  // Clear historical state
+  isHistorical = false;
+  historicalAgentId = null;
+  window.watchingAgentId = null;
 }
 document.getElementById('inputArea').onsubmit=async e=>{
   e.preventDefault();
