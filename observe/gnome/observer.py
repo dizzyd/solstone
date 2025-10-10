@@ -238,7 +238,7 @@ class Observer:
         try:
             os.replace(live_path, screencast_path)
             logger.info(f"Finalized screencast: {screencast_path}")
-            touch_health("screencast")
+            touch_health("see")
         except OSError as e:
             logger.error(f"Failed to rename {live_path} to {screencast_path}: {e}")
 
@@ -299,8 +299,13 @@ class Observer:
                 )
                 await self.handle_boundary(is_active)
 
-            # Touch health file
-            touch_health("observer")
+            # Touch health for audio processing (always)
+            touch_health("hear")
+
+            # Touch health for screencast when idle/locked (healthy not to record)
+            # When recording, health is touched only on successful finalization
+            if is_idle:
+                touch_health("see")
 
         # Cleanup on exit
         logger.info("Observer loop stopped, cleaning up...")
