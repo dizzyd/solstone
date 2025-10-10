@@ -10,7 +10,6 @@ import sys
 import threading
 import time
 from queue import Queue
-from typing import Optional, Set
 
 import numpy as np
 import soundfile as sf
@@ -25,22 +24,11 @@ BLOCK_SIZE = 1024
 
 
 class AudioRecorder:
-    def __init__(
-        self,
-        journal=None,
-        debug=False,
-        timer_interval=60,
-        websocket_port=None,
-    ):
-        self.save_dir = journal or os.getcwd()
+    def __init__(self):
         # Queue now holds stereo chunks (mic=left, sys=right)
         self.audio_queue = Queue()
         self._running = True
-        self.debug = debug
-        self.timer_interval = timer_interval
-        self.websocket_port = websocket_port
-        self.ws_loop: Optional[asyncio.AbstractEventLoop] = None
-        self.ws_clients: Set[websockets.WebSocketServerProtocol] = set()
+        self.recording_thread = None
 
     def detect(self):
         mic, loopback = input_detect()
@@ -137,90 +125,64 @@ class AudioRecorder:
 
         return buf.getvalue()
 
-    async def _ws_handler(self, websocket):
-        self.ws_clients.add(websocket)
+    def start_recording(self):
+        """Start the recording thread."""
+        self._running = True
+        self.recording_thread = threading.Thread(target=self.record_both, daemon=True)
+        self.recording_thread.start()
+
+    def stop_recording(self):
+        """Stop the recording thread."""
+        self._running = False
+        if self.recording_thread:
+            self.recording_thread.join(timeout=2.0)
+
+
+# Standalone helper functions
+
+
+def save_flac(flac_bytes, journal_path, suffix="raw"):
+    """Save FLAC bytes to a dated directory."""
+    from think.utils import day_path
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    date_part, time_part = timestamp.split("_", 1)
+    day_dir = day_path(date_part)  # Will create if doesn't exist, returns Path
+
+    flac_filepath = day_dir / f"{time_part}_{suffix}.flac"
+    with open(flac_filepath, "wb") as f:
+        f.write(flac_bytes)
+    logging.info(f"Saved audio to {flac_filepath}")
+    touch_health("hear")
+
+
+def websocket_server(port, clients_set, loop_holder):
+    """Run websocket server."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop_holder["loop"] = loop
+
+    async def ws_handler(websocket):
+        clients_set.add(websocket)
         try:
             await websocket.wait_closed()
         finally:
-            self.ws_clients.remove(websocket)
+            clients_set.remove(websocket)
 
-    def websocket_server(self):
-        self.ws_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.ws_loop)
+    async def start_server():
+        server = await websockets.serve(ws_handler, "0.0.0.0", port)
+        await server.wait_closed()
 
-        async def start_server():
-            server = await websockets.serve(
-                self._ws_handler, "0.0.0.0", self.websocket_port
-            )
-            await server.wait_closed()
+    loop.run_until_complete(start_server())
 
-        self.ws_loop.run_until_complete(start_server())
 
-    def broadcast_audio(self, stereo_data: np.ndarray):
-        if not (self.ws_loop and self.ws_clients and stereo_data.size > 0):
-            return
-        audio_bytes = stereo_data.astype(np.float32).tobytes()
-        for ws in list(self.ws_clients):
-            asyncio.run_coroutine_threadsafe(ws.send(audio_bytes), self.ws_loop)
-
-    def speech_processing_timer(self):
-        accumulated_data = np.array([], dtype=np.float32).reshape(0, 2)
-        last_save_time = time.time()
-
-        while self._running:
-            time.sleep(1)
-            stereo_data = self.get_buffers()
-
-            if stereo_data.size > 0:
-                accumulated_data = np.vstack((accumulated_data, stereo_data))
-            self.broadcast_audio(stereo_data)
-
-            current_time = time.time()
-            if current_time - last_save_time >= self.timer_interval:
-                if accumulated_data.size == 0:
-                    logging.warning(
-                        "Timer interval elapsed with no accumulated audio data"
-                    )
-                else:
-                    raw_bytes = self.create_flac_bytes(accumulated_data)
-                    self.save_flac(raw_bytes, suffix="raw")
-                    accumulated_data = np.array([], dtype=np.float32).reshape(0, 2)
-                last_save_time = current_time
-
-    def save_flac(self, flac_bytes, suffix="_audio"):
-        """Save the audio to a dated directory."""
-        from think.utils import day_path
-
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        date_part, time_part = timestamp.split("_", 1)
-        day_dir = day_path(date_part)  # Will create if doesn't exist, returns Path
-
-        flac_filepath = day_dir / f"{time_part}_{suffix}.flac"
-        with open(flac_filepath, "wb") as f:
-            f.write(flac_bytes)
-        logging.info(f"Saved audio to {flac_filepath}")
-        touch_health("hear")
-
-    def start(self):
-        threads = [
-            threading.Thread(target=self.record_both, daemon=True),
-            threading.Thread(target=self.speech_processing_timer, daemon=True),
-        ]
-        if self.websocket_port:
-            threads.append(threading.Thread(target=self.websocket_server, daemon=True))
-        for thread in threads:
-            thread.start()
-
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self._running = False
-            logging.info("\nRecording stopped (Ctrl+C pressed)")
-        except Exception as e:
-            self._running = False
-            logging.error(f"Error during recording: {e}")
+def broadcast_audio(stereo_data: np.ndarray, clients_set, loop):
+    """Broadcast audio data to websocket clients."""
+    if not (loop and clients_set and stereo_data.size > 0):
+        return
+    audio_bytes = stereo_data.astype(np.float32).tobytes()
+    for ws in list(clients_set):
+        asyncio.run_coroutine_threadsafe(ws.send(audio_bytes), loop)
 
 
 def main():
@@ -244,20 +206,66 @@ def main():
     # Enable faulthandler to help diagnose crashes
     faulthandler.enable()
 
-    # 4. Create the recorder
-    recorder = AudioRecorder(
-        journal=journal,
-        debug=args.debug,
-        timer_interval=args.timer_interval,
-        websocket_port=args.ws_port,
-    )
+    # Create the recorder
+    recorder = AudioRecorder()
 
-    # 5. Detect devices or exit
+    # Detect devices or exit
     if not recorder.detect():
         sys.exit("No suitable audio devices found.")
 
-    # 6. Start recording
-    recorder.start()
+    # Start recording thread
+    recorder.start_recording()
+
+    # Optional: Start websocket server
+    ws_clients = set()
+    ws_loop_holder = {}
+    if args.ws_port:
+        ws_thread = threading.Thread(
+            target=websocket_server,
+            args=(args.ws_port, ws_clients, ws_loop_holder),
+            daemon=True,
+        )
+        ws_thread.start()
+        logging.info(f"WebSocket server started on port {args.ws_port}")
+
+    # Timer loop for accumulation and saving
+    accumulated_data = np.array([], dtype=np.float32).reshape(0, 2)
+    last_save_time = time.time()
+
+    try:
+        while True:
+            time.sleep(1)
+
+            # Get latest buffers from recorder
+            stereo_data = recorder.get_buffers()
+
+            if stereo_data.size > 0:
+                accumulated_data = np.vstack((accumulated_data, stereo_data))
+
+                # Broadcast if websocket enabled
+                ws_loop = ws_loop_holder.get("loop")
+                if ws_loop and ws_clients:
+                    broadcast_audio(stereo_data, ws_clients, ws_loop)
+
+            # Save on timer interval
+            current_time = time.time()
+            if current_time - last_save_time >= args.timer_interval:
+                if accumulated_data.size == 0:
+                    logging.warning(
+                        "Timer interval elapsed with no accumulated audio data"
+                    )
+                else:
+                    flac_bytes = recorder.create_flac_bytes(accumulated_data)
+                    save_flac(flac_bytes, journal, suffix="raw")
+                    accumulated_data = np.array([], dtype=np.float32).reshape(0, 2)
+                last_save_time = current_time
+
+    except KeyboardInterrupt:
+        recorder.stop_recording()
+        logging.info("\nRecording stopped (Ctrl+C pressed)")
+    except Exception as e:
+        recorder.stop_recording()
+        logging.error(f"Error during recording: {e}")
 
 
 if __name__ == "__main__":
