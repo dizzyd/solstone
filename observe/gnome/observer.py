@@ -198,9 +198,6 @@ class Observer:
             logger.warning(f"Screencast file not found: {live_path}")
             return
 
-        # Wait a bit for file to be fully written
-        await asyncio.sleep(0.5)
-
         # Build monitor geometry metadata
         try:
             geometries = get_monitor_geometries()
@@ -248,6 +245,7 @@ class Observer:
 
         while self.running:
             # Process any pending screencast finalizations
+            finalize_start = time.monotonic()
             now = time.time()
             for path, queued_time in list(self.pending_finalizations):
                 live_path = path + ".live"
@@ -261,15 +259,26 @@ class Observer:
                         f"Pending screencast not found after {age:.1f}s, giving up: {live_path}"
                     )
                     self.pending_finalizations.remove((path, queued_time))
+            finalize_duration_ms = (time.monotonic() - finalize_start) * 1000
 
             # Sleep for chunk duration
             await asyncio.sleep(CHUNK_DURATION)
 
-            # Check idle status
-            is_idle, activation_edge = await self.check_idle_status()
+            # Check idle status (track timing for diagnostics)
+            idle_start = time.monotonic()
+            idle_time = await get_idle_time_ms(self.bus)
+            idle_duration_ms = (time.monotonic() - idle_start) * 1000
+
+            lock_start = time.monotonic()
+            screen_locked = await is_screen_locked(self.bus)
+            lock_duration_ms = (time.monotonic() - lock_start) * 1000
+
+            is_idle = (idle_time > IDLE_THRESHOLD_MS) or screen_locked
             is_active = not is_idle
+            activation_edge = is_active and not self.screencast_running
 
             # Capture audio buffer for this chunk
+            audio_start = time.monotonic()
             audio_chunk = self.audio_recorder.get_buffers()
 
             if audio_chunk.size > 0:
@@ -287,6 +296,7 @@ class Observer:
                     )
             else:
                 logger.debug("No audio data in chunk")
+            audio_duration_ms = (time.monotonic() - audio_start) * 1000
 
             # Check for window boundary (use monotonic to avoid DST/clock jumps)
             now_mono = time.monotonic()
@@ -295,7 +305,9 @@ class Observer:
 
             if is_boundary:
                 logger.info(
-                    f"Window boundary: elapsed={elapsed:.1f}s, activation_edge={activation_edge}"
+                    f"Boundary: elapsed={elapsed:.1f}s edge={activation_edge} "
+                    f"finalize={finalize_duration_ms:.0f}ms idle={idle_duration_ms:.0f}ms "
+                    f"lock={lock_duration_ms:.0f}ms audio={audio_duration_ms:.0f}ms hits={self.threshold_hits}/{MIN_HITS_FOR_SAVE}"
                 )
                 await self.handle_boundary(is_active)
 
