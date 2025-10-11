@@ -9,22 +9,16 @@ and qualifies frames that meet the 400x400 threshold for Gemini processing.
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import logging
-import os
 import re
-import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import av
 import numpy as np
-from watchdog.events import PatternMatchingEventHandler
-from watchdog.observers import Observer
 
-from observe.utils import compare_frames
-from think.utils import day_path, setup_cli
+from think.utils import setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -343,105 +337,41 @@ class VideoProcessor:
         return boxes
 
 
-class Describer:
-    """Watch for new screencast videos and process them."""
+def output_qualified_frames(
+    processor: VideoProcessor, qualified_frames: Dict[str, List[dict]]
+) -> None:
+    """Output qualified frames as JSON."""
+    output = {
+        "video": str(processor.video_path.name),
+        "monitors": [],
+    }
 
-    def __init__(self, journal_dir: Path):
-        self.journal_dir = journal_dir
-        self.watch_dir: Optional[Path] = None
-        self.observer: Optional[Observer] = None
-
-    def _handle_video(self, video_path: Path) -> None:
-        """Process a screencast video file."""
-        logger.info(f"Processing video: {video_path}")
-
-        try:
-            processor = VideoProcessor(video_path)
-            qualified_frames = processor.process()
-
-            # For now, output as JSON (stub for Gemini processing)
-            self._output_qualified_frames(processor, qualified_frames)
-
-        except Exception as e:
-            logger.error(f"Failed to process {video_path}: {e}", exc_info=True)
-
-    def _output_qualified_frames(
-        self, processor: VideoProcessor, qualified_frames: Dict[str, List[dict]]
-    ) -> None:
-        """Output qualified frames as JSON for testing."""
-        output = {
-            "video": str(processor.video_path.name),
-            "monitors": [],
+    for monitor_id, frames in qualified_frames.items():
+        monitor_info = processor.monitors[monitor_id]
+        monitor_data = {
+            "name": monitor_info.get("name", monitor_id),
+            "bounds": [
+                monitor_info["x1"],
+                monitor_info["y1"],
+                monitor_info["x2"],
+                monitor_info["y2"],
+            ],
+            "frames": [
+                {
+                    "frame_id": frame["frame_id"],
+                    "timestamp": frame["timestamp"],
+                    "box_2d": frame["box_2d"],
+                }
+                for frame in frames
+            ],
         }
+        # Only include position if it's not "unknown"
+        position = monitor_info.get("position")
+        if position and position != "unknown":
+            monitor_data["position"] = position
+        output["monitors"].append(monitor_data)
 
-        for monitor_id, frames in qualified_frames.items():
-            monitor_info = processor.monitors[monitor_id]
-            monitor_data = {
-                "name": monitor_info.get("name", monitor_id),
-                "bounds": [
-                    monitor_info["x1"],
-                    monitor_info["y1"],
-                    monitor_info["x2"],
-                    monitor_info["y2"],
-                ],
-                "frames": [
-                    {
-                        "frame_id": frame["frame_id"],
-                        "timestamp": frame["timestamp"],
-                        "box_2d": frame["box_2d"],
-                    }
-                    for frame in frames
-                ],
-            }
-            # Only include position if it's not "unknown"
-            position = monitor_info.get("position")
-            if position and position != "unknown":
-                monitor_data["position"] = position
-            output["monitors"].append(monitor_data)
-
-        print(json.dumps(output, indent=2))
-
-    def start(self):
-        """Start watching for new video files."""
-        handler = PatternMatchingEventHandler(
-            patterns=["*.webm"],
-            ignore_directories=True,
-            ignore_patterns=["*_live.webm"],
-        )
-
-        def on_created(event):
-            video_path = Path(event.src_path)
-            logger.info(f"New video detected: {video_path}")
-            self._handle_video(video_path)
-
-        handler.on_created = on_created
-
-        self.observer = None
-        current_day: Optional[str] = None
-
-        try:
-            while True:
-                today_str = datetime.datetime.now().strftime("%Y%m%d")
-                day_dir = day_path()
-
-                if day_dir.exists() and (current_day != today_str):
-                    if self.observer:
-                        self.observer.stop()
-                        self.observer.join()
-                    self.observer = Observer()
-                    self.observer.schedule(handler, str(day_dir), recursive=False)
-                    self.observer.start()
-                    self.watch_dir = day_dir
-                    current_day = today_str
-                    logger.info(f"Watching {day_dir}")
-
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            if self.observer:
-                self.observer.stop()
-                self.observer.join()
+    print(json.dumps(output, indent=2))
 
 
 def main():
@@ -450,28 +380,25 @@ def main():
         description="Describe screencast videos by detecting significant frame changes"
     )
     parser.add_argument(
-        "--process",
+        "video_path",
         type=str,
-        help="Process a specific video file (for testing)",
+        help="Path to video file to process",
     )
     args = setup_cli(parser)
 
-    journal = Path(os.getenv("JOURNAL_PATH", ""))
-    if not journal.is_dir():
-        parser.error("JOURNAL_PATH not set or invalid")
+    video_path = Path(args.video_path)
+    if not video_path.exists():
+        parser.error(f"Video file not found: {video_path}")
 
-    if args.process:
-        # Process a specific video file
-        video_path = Path(args.process)
-        if not video_path.exists():
-            parser.error(f"Video file not found: {video_path}")
+    logger.info(f"Processing video: {video_path}")
 
-        describer = Describer(journal)
-        describer._handle_video(video_path)
-    else:
-        # Start watching for new videos
-        describer = Describer(journal)
-        describer.start()
+    try:
+        processor = VideoProcessor(video_path)
+        qualified_frames = processor.process()
+        output_qualified_frames(processor, qualified_frames)
+    except Exception as e:
+        logger.error(f"Failed to process {video_path}: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

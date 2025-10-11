@@ -9,16 +9,13 @@ import io
 import json
 import logging
 import os
-import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import soundfile as sf
 from google import genai
 from silero_vad import load_silero_vad
-from watchdog.events import PatternMatchingEventHandler
-from watchdog.observers import Observer
 
 from hear.audio_utils import (
     SAMPLE_RATE,
@@ -31,7 +28,6 @@ from think.crumbs import CrumbBuilder
 from think.models import GEMINI_FLASH
 from think.utils import (
     PromptNotFoundError,
-    day_log,
     load_entity_names,
     load_prompt,
     setup_cli,
@@ -50,7 +46,6 @@ class Transcriber:
         prompt_name: str = "transcribe",
     ):
         self.journal_dir = journal_dir
-        self.watch_dir: Optional[Path] = None
         self.client = genai.Client(api_key=api_key)
 
         try:
@@ -67,7 +62,6 @@ class Transcriber:
         load_entity_names(journal_dir, required=True)
 
         self.vad_model = load_silero_vad()
-        self.observer: Optional[Observer] = None
 
     def _move_to_heard(self, audio_path: Path) -> None:
         """Move processed audio_path into the day 'heard' directory."""
@@ -221,106 +215,13 @@ class Transcriber:
         if success:
             self._move_to_heard(raw_path)
 
-    @staticmethod
-    def scan_day(day_dir: Path) -> dict[str, list[str]]:
-        """Return lists of raw, processed and repairable files within day_dir."""
-        heard_dir = day_dir / "heard"
-        raw = (
-            [f"heard/{p.name}" for p in sorted(heard_dir.glob("*.flac"))]
-            if heard_dir.is_dir()
-            else []
-        )
-        processed = sorted(p.name for p in day_dir.glob("*_audio.json"))
-        repairable = sorted(p.name for p in day_dir.glob("*.flac"))
-        return {"raw": raw, "processed": processed, "repairable": repairable}
-
-    def repair_day(self, date_str: str, files: list[str], dry_run: bool = False) -> int:
-        """Process files belonging to date_str and return the count."""
-        day_dir = self.journal_dir / date_str
-        if not day_dir.exists():
-            logging.error(f"Day directory {day_dir} does not exist")
-            return 0
-
-        logging.info(f"Repairing day {date_str} in {day_dir}")
-
-        if dry_run:
-            return len(files)
-
-        success = 0
-        files_sorted = sorted(files, key=lambda n: n.split("_")[0])
-
-        for name in files_sorted:
-            audio_path = day_dir / name
-            if not audio_path.exists():
-                logging.warning(f"Skipping missing audio file {audio_path}")
-                continue
-
-            logging.info(f"Processing audio file: {audio_path}")
-            json_path = self._get_json_path(audio_path)
-
-            if json_path.exists():
-                self._move_to_heard(audio_path)
-                logging.info(f"Skipping already processed file: {json_path}")
-                success += 1
-                continue
-
-            self._handle_raw(audio_path)
-            if json_path.exists():
-                success += 1
-
-        return success
-
-    def start(self):
-        """Start watching for new audio files."""
-        handler = PatternMatchingEventHandler(
-            patterns=["*.flac"],
-            ignore_directories=True,
-            ignore_patterns=["*/trash/*", "*/heard/*"],
-        )
-
-        def on_created(event):
-            raw_path = Path(event.src_path)
-            logging.info(f"New raw audio file detected: {raw_path}")
-            self._handle_raw(raw_path)
-
-        handler.on_created = on_created
-
-        from think.utils import day_path
-
-        self.observer = None
-        current_day: Optional[str] = None
-
-        try:
-            while True:
-                today_str = datetime.datetime.now().strftime("%Y%m%d")
-                day_dir = day_path()
-
-                if day_dir.exists() and (current_day != today_str):
-                    if self.observer:
-                        self.observer.stop()
-                        self.observer.join()
-                    self.observer = Observer()
-                    self.observer.schedule(handler, str(day_dir), recursive=True)
-                    self.observer.start()
-                    self.watch_dir = day_dir
-                    current_day = today_str
-                    logging.info(f"Watching {day_dir}")
-
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            if self.observer:
-                self.observer.stop()
-                self.observer.join()
-
 
 def main():
     parser = argparse.ArgumentParser(description="Transcribe FLAC files using Gemini")
     parser.add_argument(
-        "--repair",
+        "audio_path",
         type=str,
-        help="Repair mode: process incomplete files for specified day (YYYYMMDD format)",
+        help="Path to audio file to process",
     )
     args = setup_cli(parser)
 
@@ -337,22 +238,14 @@ def main():
     if not ent_path.is_file():
         parser.error(f"entities file not found: {ent_path}")
 
-    transcriber = Transcriber(journal, api_key)
+    audio_path = Path(args.audio_path)
+    if not audio_path.exists():
+        parser.error(f"Audio file not found: {audio_path}")
 
-    if args.repair:
-        try:
-            datetime.datetime.strptime(args.repair, "%Y%m%d")
-        except ValueError:
-            parser.error(f"Invalid date format: {args.repair}. Use YYYYMMDD format.")
-        info = Transcriber.scan_day(journal / args.repair)
-        repaired = transcriber.repair_day(args.repair, info["repairable"])
-        failed = len(info["repairable"]) - repaired
-        msg = f"observe-transcribe repaired {repaired}"
-        if failed:
-            msg += f" failed {failed}"
-        day_log(args.repair, msg)
-    else:
-        transcriber.start()
+    logging.info(f"Processing audio: {audio_path}")
+
+    transcriber = Transcriber(journal, api_key)
+    transcriber._handle_raw(audio_path)
 
 
 if __name__ == "__main__":

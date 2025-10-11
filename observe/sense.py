@@ -283,10 +283,10 @@ def main():
     sensor = FileSensor(journal)
 
     # Register handlers
-    sensor.register("*.webm", "describe", ["observe-describe", "--process", "{file}"])
-    sensor.register(
-        "*.flac", "transcribe", ["observe-transcribe", "--process", "{file}"]
-    )
+    sensor.register("*_screencast.webm", "describe", ["observe-describe", "{file}"])
+    sensor.register("*_screencast.mp4", "describe", ["observe-describe", "{file}"])
+    sensor.register("*_raw.flac", "transcribe", ["observe-transcribe", "{file}"])
+    sensor.register("*_raw.m4a", "transcribe", ["observe-transcribe", "{file}"])
 
     logger.info("Starting observe sensor...")
     try:
