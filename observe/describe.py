@@ -44,8 +44,8 @@ class VideoProcessor:
         """
         Parse monitor metadata from video title.
 
-        Expected format: "0:primary,0,0,1920,1080 1:secondary,1920,0,3840,1080"
-        Returns: {monitor_id: {position, x1, y1, x2, y2}}
+        Expected format: "DP-3:center,1920,0,5360,1440 HDMI-4:right,5360,219,7280,1299"
+        Returns: {monitor_name: {position, x1, y1, x2, y2}}
         """
         try:
             with av.open(str(self.video_path)) as container:
@@ -58,13 +58,15 @@ class VideoProcessor:
             monitors = {}
             # Parse space-separated monitor entries
             for entry in title.split():
-                # Format: "0:primary,0,0,1920,1080"
+                # Format: "DP-3:center,1920,0,5360,1440"
+                # Monitor name can be any character except ':' or whitespace
                 match = re.match(
-                    r"(\d+):([^,]+),(\d+),(\d+),(\d+),(\d+)", entry.strip()
+                    r"([^:\s]+):([^,]+),(\d+),(\d+),(\d+),(\d+)", entry.strip()
                 )
                 if match:
-                    monitor_id, position, x1, y1, x2, y2 = match.groups()
-                    monitors[monitor_id] = {
+                    monitor_name, position, x1, y1, x2, y2 = match.groups()
+                    monitors[monitor_name] = {
+                        "name": monitor_name,
                         "position": position,
                         "x1": int(x1),
                         "y1": int(y1),
@@ -375,8 +377,7 @@ class Describer:
         for monitor_id, frames in qualified_frames.items():
             monitor_info = processor.monitors[monitor_id]
             monitor_data = {
-                "monitor_id": monitor_id,
-                "position": monitor_info.get("position"),
+                "name": monitor_info.get("name", monitor_id),
                 "bounds": [
                     monitor_info["x1"],
                     monitor_info["y1"],
@@ -392,6 +393,10 @@ class Describer:
                     for frame in frames
                 ],
             }
+            # Only include position if it's not "unknown"
+            position = monitor_info.get("position")
+            if position and position != "unknown":
+                monitor_data["position"] = position
             output["monitors"].append(monitor_data)
 
         print(json.dumps(output, indent=2))
