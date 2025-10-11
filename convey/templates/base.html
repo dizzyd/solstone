@@ -83,12 +83,31 @@
       <pre id="errorMessage"></pre>
     </div>
   </div>
+  <div id="error-log"></div>
   <script>
     (function(){
       const home = document.getElementById('homeIcon');
+      const errorLog = document.getElementById('error-log');
+
+      function logError(text) {
+        if(errorLog) {
+          errorLog.insertAdjacentHTML(
+            'beforeend',
+            text.replace(/</g,'&lt;') + '<br>'
+          );
+          errorLog.style.display = 'block';
+        }
+      }
+
       if(home){
-        window.addEventListener('error', () => home.classList.add('error'));
-        window.addEventListener('unhandledrejection', () => home.classList.add('error'));
+        window.addEventListener('error', (e) => {
+          home.classList.add('error');
+          logError(`❌ ${e.message} @ ${e.filename}:${e.lineno}`);
+        });
+        window.addEventListener('unhandledrejection', (e) => {
+          home.classList.add('error');
+          logError(`⚠️ Promise: ${e.reason}`);
+        });
       }
     })();
   </script>
