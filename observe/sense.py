@@ -98,8 +98,6 @@ class FileSensor:
 
     def __init__(self, journal_dir: Path):
         self.journal_dir = journal_dir
-        self.health_dir = journal_dir / "health"
-        self.health_dir.mkdir(parents=True, exist_ok=True)
 
         # Registry: {glob_pattern: (handler_name, command_template)}
         self.handlers: Dict[str, tuple[str, List[str]]] = {}
@@ -153,8 +151,9 @@ class FileSensor:
         # Replace {file} placeholder with actual file path
         cmd = [str(file_path) if arg == "{file}" else arg for arg in command]
 
-        # Create log file: health/sense_{handler_name}.log
-        log_writer = ProcessLogWriter(self.health_dir / f"sense_{handler_name}.log")
+        # Create log file in day-specific health directory: YYYYMMDD/health/sense_{handler_name}.log
+        day_health_dir = file_path.parent / "health"
+        log_writer = ProcessLogWriter(day_health_dir / f"sense_{handler_name}.log")
 
         logger.info(f"Spawning {handler_name} for {file_path.name}: {' '.join(cmd)}")
 
@@ -264,11 +263,53 @@ class FileSensor:
             time.sleep(1)
 
     def stop(self):
-        """Stop watching and cleanup."""
+        """Stop watching and cleanup running processes."""
         self.running_flag = False
         if self.observer:
             self.observer.stop()
             self.observer.join()
+
+        # Gracefully terminate any running handler processes
+        with self.lock:
+            running_handlers = list(self.running.values())
+
+        if running_handlers:
+            logger.info(f"Terminating {len(running_handlers)} running handler(s)...")
+
+        for handler_proc in running_handlers:
+            try:
+                # Send SIGTERM for graceful shutdown
+                handler_proc.process.terminate()
+                logger.debug(
+                    f"Sent SIGTERM to {handler_proc.handler_name} for {handler_proc.file_path.name}"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"Failed to terminate {handler_proc.handler_name} for {handler_proc.file_path.name}: {exc}"
+                )
+
+        # Wait up to 5 seconds for processes to terminate gracefully
+        import signal
+
+        deadline = time.time() + 5
+        for handler_proc in running_handlers:
+            try:
+                timeout = max(0.1, deadline - time.time())
+                handler_proc.process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # Force kill if still running
+                logger.warning(
+                    f"Force killing {handler_proc.handler_name} for {handler_proc.file_path.name}"
+                )
+                handler_proc.process.kill()
+                handler_proc.process.wait()
+
+            # Cleanup threads and log files
+            handler_proc.cleanup()
+
+        # Clear running dict
+        with self.lock:
+            self.running.clear()
 
 
 def main():
