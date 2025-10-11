@@ -21,7 +21,6 @@ __all__ = [
     "TodoLineNumberError",
     "TodoGuardMismatchError",
     "TodoEmptyTextError",
-    "TodoDomainError",
     "get_todos",
     "todo_file_path",
     "format_numbered",
@@ -30,11 +29,11 @@ __all__ = [
     "parse_item",
     "parse_items",
     "upcoming",
+    "get_domains_with_todos",
 ]
 
 TODO_ENTRY_RE = re.compile(r"^- \[( |x|X)\]\s?(.*)$")
 LEADING_MARKUP_RE = re.compile(r"\*\*([^*]+)\*\*:\s*(.*)")
-DOMAIN_RE = re.compile(r"\s#([a-zA-Z][\w-]*)\b")
 TIME_RE = re.compile(r"\((\d{1,2}:[0-5]\d)\)\s*$")
 
 
@@ -66,20 +65,12 @@ class TodoEmptyTextError(TodoError):
         super().__init__("todo text cannot be empty")
 
 
-class TodoDomainError(TodoError):
-    """Raised when an invalid domain is specified in a todo entry."""
-
-    def __init__(self, invalid_domain: str, valid_domains: list[str]) -> None:
-        super().__init__(f"Unknown domain: {invalid_domain}")
-        self.invalid_domain = invalid_domain
-        self.valid_domains = valid_domains
-
-
 @dataclass(slots=True)
 class TodoChecklist:
     """In-memory representation of a day's todo checklist."""
 
     day: str
+    domain: str
     path: Path
     entries: list[str]
     exists: bool
@@ -104,42 +95,32 @@ class TodoChecklist:
         return index, entry, completed, body
 
     @classmethod
-    def load(cls, day: str, *, ensure_day: bool = False) -> "TodoChecklist":
-        """Load checklist entries for ``day``.
+    def load(cls, day: str, domain: str) -> "TodoChecklist":
+        """Load checklist entries for ``day`` and ``domain``.
 
         Args:
             day: Journal day in ``YYYYMMDD`` format.
-            ensure_day: When ``True`` the day directory is created if missing.
+            domain: Domain name (e.g., "personal", "work").
 
-        Raises:
-            FileNotFoundError: If the day directory does not exist and ``ensure_day``
-                is ``False``.
+        Returns:
+            TodoChecklist instance with entries loaded from disk, or empty if file doesn't exist.
         """
 
-        path = todo_file_path(day)
-        day_dir = path.parents[1]
-
-        if ensure_day:
-            journal = os.getenv("JOURNAL_PATH")
-            if not journal:
-                raise RuntimeError("JOURNAL_PATH not set")
-            day_dir.mkdir(parents=True, exist_ok=True)
-        elif not day_dir.is_dir():
-            raise FileNotFoundError(f"day folder '{day}' not found")
+        path = todo_file_path(day, domain)
 
         exists = path.is_file()
         if not exists:
-            path.parent.mkdir(parents=True, exist_ok=True)
             entries: list[str] = []
         else:
             text = path.read_text(encoding="utf-8")
             entries = [line.rstrip("\n") for line in text.splitlines() if line.strip()]
 
-        return cls(day=day, path=path, entries=entries, exists=exists)
+        return cls(day=day, domain=domain, path=path, entries=entries, exists=exists)
 
     def save(self) -> None:
-        """Persist the checklist back to disk."""
+        """Persist the checklist back to disk, creating parent directories if needed."""
 
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         content = "\n".join(self.entries)
         if self.entries:
             content += "\n"
@@ -169,16 +150,6 @@ class TodoChecklist:
         item = parse_item(entry_line, len(self.entries) + 1)
         if item is None:
             raise TodoError(f"Failed to create valid todo entry from: {body}")
-
-        # Validate domain if specified
-        if item.domain:
-            try:
-                domains = get_domains()
-                valid_domains = list(domains.keys())
-                if item.domain not in valid_domains:
-                    raise TodoDomainError(item.domain, valid_domains)
-            except RuntimeError:  # JOURNAL_PATH not set
-                pass  # Skip domain validation if journal path not available
 
         self.entries.append(entry_line)
         self.save()
@@ -225,7 +196,6 @@ class TodoItem:
     index: int
     raw: str
     text: str
-    domain: str | None
     time: str | None
     completed: bool
     cancelled: bool
@@ -237,19 +207,26 @@ class TodoItem:
             "index": self.index,
             "raw": self.raw,
             "text": self.text,
-            "domain": self.domain,
             "time": self.time,
             "completed": self.completed,
             "cancelled": self.cancelled,
         }
 
 
-def todo_file_path(day: str) -> Path:
-    """Return the absolute path to ``todos/today.md`` for ``day``."""
+def todo_file_path(day: str, domain: str) -> Path:
+    """Return the absolute path to ``domains/{domain}/todos/{day}.md``.
+
+    Args:
+        day: Journal day in ``YYYYMMDD`` format.
+        domain: Domain name (e.g., "personal", "work").
+
+    Returns:
+        Path to the domain-scoped todo file for the specified day.
+    """
 
     load_dotenv()
     journal = os.getenv("JOURNAL_PATH", "journal")
-    return Path(journal) / day / "todos" / "today.md"
+    return Path(journal) / "domains" / domain / "todos" / f"{day}.md"
 
 
 def format_numbered(entries: Sequence[str]) -> str:
@@ -318,14 +295,6 @@ def parse_item(line: str, index: int) -> TodoItem | None:
     if markup_match:
         description = markup_match.group(2).strip()
 
-    domain: str | None = None
-    domain_match = DOMAIN_RE.search(description)
-    if domain_match:
-        domain = domain_match.group(1)
-        before = description[: domain_match.start()].rstrip()
-        after = description[domain_match.end() :].strip()
-        description = (before + (f" {after}" if after else "")).strip()
-
     time: str | None = None
     time_match = TIME_RE.search(description)
     if time_match:
@@ -341,7 +310,6 @@ def parse_item(line: str, index: int) -> TodoItem | None:
         index=index,
         raw=stripped,
         text=description,
-        domain=domain,
         time=time,
         completed=completed,
         cancelled=cancelled,
@@ -364,12 +332,12 @@ def parse_items(entries: Iterable[str]) -> list[TodoItem]:
     return items
 
 
-def get_todos(day: str, *, ensure_day: bool = True) -> list[dict[str, Any]] | None:
-    """Load todos for ``day`` returning checklist metadata dictionaries.
+def get_todos(day: str, domain: str) -> list[dict[str, Any]] | None:
+    """Load todos for ``day`` and ``domain`` returning checklist metadata dictionaries.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
-        ensure_day: When ``True`` the day directory is created when missing.
+        domain: Domain name (e.g., "personal", "work").
 
     Returns:
         List of parsed todo entries or ``None`` when the checklist does not
@@ -377,9 +345,9 @@ def get_todos(day: str, *, ensure_day: bool = True) -> list[dict[str, Any]] | No
     """
 
     try:
-        checklist = TodoChecklist.load(day, ensure_day=ensure_day)
+        checklist = TodoChecklist.load(day, domain)
     except OSError as exc:  # pragma: no cover - filesystem failure
-        logging.debug("Failed reading todos for %s: %s", day, exc)
+        logging.debug("Failed reading todos for %s/%s: %s", domain, day, exc)
         return None
 
     if not checklist.exists:
@@ -388,16 +356,17 @@ def get_todos(day: str, *, ensure_day: bool = True) -> list[dict[str, Any]] | No
     return [item.as_dict() for item in parse_items(checklist.entries)]
 
 
-def upcoming(limit: int = 20, *, today: str | None = None) -> str:
+def upcoming(limit: int = 20, domain: str | None = None, *, today: str | None = None) -> str:
     """Return a markdown summary of upcoming todo entries.
 
     Args:
         limit: Maximum number of todo items to include.
+        domain: Optional domain filter. When ``None`` aggregates todos from all domains.
         today: Optional ``YYYYMMDD`` override for the current day, useful for testing.
 
     Returns:
-        Markdown with a ``### YYYYMMDD`` section per day followed by raw todo
-        checklist lines. When no upcoming items exist the string
+        Markdown with sections per domain and day. Format is ``### {Domain Title}: YYYYMMDD``
+        followed by raw todo checklist lines. When no upcoming items exist the string
         ``"No upcoming todos."`` is returned.
     """
 
@@ -411,49 +380,91 @@ def upcoming(limit: int = 20, *, today: str | None = None) -> str:
 
     today_str = today if today is not None else datetime.now().strftime("%Y%m%d")
 
+    # Determine which domains to scan
+    domains_dir = root / "domains"
+    if not domains_dir.is_dir():
+        return "No upcoming todos."
+
     try:
-        sorted_days = sorted(
-            day.name
-            for day in root.iterdir()
-            if day.is_dir()
-            and len(day.name) == 8
-            and day.name.isdigit()
-            and day.name > today_str
-        )
+        if domain is not None:
+            # Single domain mode
+            domain_paths = [(domain, domains_dir / domain)]
+        else:
+            # All domains mode
+            domain_paths = [
+                (d.name, d)
+                for d in domains_dir.iterdir()
+                if d.is_dir()
+            ]
     except OSError:  # pragma: no cover - filesystem failure
         return "No upcoming todos."
 
-    remaining = limit
-    sections: list[str] = []
+    if not domain_paths:
+        return "No upcoming todos."
 
-    for day in sorted_days:
-        todo_path = root / day / "todos" / "today.md"
-        if not todo_path.is_file():
+    # Collect all todos across domains
+    all_todos: list[tuple[str, str, list[str]]] = []  # (domain, day, lines)
+
+    for domain_name, domain_path in domain_paths:
+        todos_dir = domain_path / "todos"
+        if not todos_dir.is_dir():
             continue
 
         try:
-            lines = [
-                line.rstrip("\n")
-                for line in todo_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
+            todo_files = sorted(
+                f.stem
+                for f in todos_dir.iterdir()
+                if f.is_file()
+                and f.suffix == ".md"
+                and len(f.stem) == 8
+                and f.stem.isdigit()
+                and f.stem > today_str
+            )
         except OSError:  # pragma: no cover - filesystem failure
             continue
 
-        items = parse_items(lines)
-        if not items:
-            continue
+        for day in todo_files:
+            todo_path = todos_dir / f"{day}.md"
+            try:
+                lines = [
+                    line.rstrip("\n")
+                    for line in todo_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+            except OSError:  # pragma: no cover - filesystem failure
+                continue
+
+            items = parse_items(lines)
+            if items:
+                all_todos.append((domain_name, day, [item.raw for item in items]))
+
+    if not all_todos:
+        return "No upcoming todos."
+
+    # Sort by day, then domain
+    all_todos.sort(key=lambda x: (x[1], x[0]))
+
+    # Build output sections
+    remaining = limit
+    sections: list[str] = []
+
+    for domain_name, day, lines in all_todos:
+        # Get domain title for better display
+        try:
+            domains = get_domains()
+            domain_title = domains.get(domain_name, {}).get("title", domain_name.title())
+        except (RuntimeError, KeyError):
+            domain_title = domain_name.title()
 
         day_lines: list[str] = []
-
-        for item in items:
-            day_lines.append(item.raw)
+        for line in lines:
+            day_lines.append(line)
             remaining -= 1
             if remaining == 0:
                 break
 
         if day_lines:
-            section = "\n".join([f"### {day}"] + day_lines)
+            section = "\n".join([f"### {domain_title}: {day}"] + day_lines)
             sections.append(section)
 
         if remaining == 0:
@@ -463,3 +474,37 @@ def upcoming(limit: int = 20, *, today: str | None = None) -> str:
         return "No upcoming todos."
 
     return "\n\n".join(sections)
+
+
+def get_domains_with_todos(day: str) -> list[str]:
+    """Return a list of domain names that have todos for the given day.
+
+    Args:
+        day: Journal day in ``YYYYMMDD`` format.
+
+    Returns:
+        List of domain names that have todo files for the specified day.
+        Returns empty list if no domains have todos or if journal path is invalid.
+    """
+
+    journal = os.getenv("JOURNAL_PATH", "journal")
+    root = Path(journal)
+    domains_dir = root / "domains"
+
+    if not domains_dir.is_dir():
+        return []
+
+    domains_with_todos: list[str] = []
+
+    try:
+        for domain_dir in domains_dir.iterdir():
+            if not domain_dir.is_dir():
+                continue
+
+            todo_path = domain_dir / "todos" / f"{day}.md"
+            if todo_path.is_file():
+                domains_with_todos.append(domain_dir.name)
+    except OSError:  # pragma: no cover - filesystem failure
+        return []
+
+    return sorted(domains_with_todos)

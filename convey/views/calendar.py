@@ -587,9 +587,11 @@ def calendar_stats() -> Any:
                 day_stats["has_transcripts"] = True
                 break
 
-        # Check for todos
-        todos_path = os.path.join(path, "todos", "today.md")
-        if os.path.exists(todos_path):
+        # Check for todos in any domain
+        from think.todo import get_domains_with_todos
+
+        domains_with_todos = get_domains_with_todos(name)
+        if domains_with_todos:
             day_stats["has_todos"] = True
 
         # Check for topics and count occurrences

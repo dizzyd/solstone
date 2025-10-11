@@ -265,15 +265,22 @@ objective_performance_optimization/
 
 The presence of `OUTCOME.md` indicates objective completion. Directory timestamps (created/modified) provide temporal tracking without requiring separate metadata files.
 
-## todos/today.md Format
+## Domain-Scoped Todos
 
-Each day folder stores a simple markdown checklist at `todos/today.md`. The
-file is a flat list—no sections or headers—so the tools can treat every line as
-a single actionable entry.
+Todos are organized by domain in `domains/{domain}/todos/{day}.md` where each file stores a simple markdown checklist. Todos belong to a specific domain (e.g., "personal", "work", "research") and are completely separated by scope.
+
+**File path pattern:**
+```
+domains/personal/todos/20250110.md
+domains/work/todos/20250110.md
+domains/research/todos/20250112.md
+```
+
+Each file is a flat list—no sections or headers—so the tools can treat every line as a single actionable entry.
 
 ```markdown
 - [ ] Draft standup update
-- [ ] Review PR #1234 for indexing tweaks
+- [ ] Review PR #1234 for indexing tweaks (14:30)
 - [x] Morning planning session notes
 - [ ] ~~Cancel meeting with vendor~~
 ```
@@ -283,30 +290,37 @@ a single actionable entry.
 **Line structure:**
 
 ```
-- [checkbox] optional-context
+- [checkbox] task description with optional time annotation
 ```
 
 **Components:**
 - `- [ ]` – Uncompleted task checkbox
 - `- [x]` – Completed task checkbox (lower- or upper-case `x` accepted)
-- `optional-context` – Free-form markdown content; include timestamps,
-  annotations, or a single `#domain` tag for cross-referencing (e.g., `Sync
-  with design @ 14:00`, `File weekly review #think`).
-- `~~text~~` – Wrap any portion of the line to mark cancellation while keeping
-  the original wording visible.
+- `task description` – Free-form markdown content describing the task
+- `(HH:MM)` – Optional time annotation for scheduled work (e.g., `(14:30)`)
+- `~~text~~` – Wrap any portion of the line to mark cancellation while keeping the original wording visible
+
+**Domain context:**
+- Domain is determined by the file location, not inline tags
+- Each domain has its own independent todo list for each day
+- Work todos (`domains/work/todos/`) are completely separate from personal todos (`domains/personal/todos/`)
+- No `#domain` tags are needed in the content since the domain context comes from the file path
 
 **Rules:**
-- Every checklist line becomes the source of truth for agent tools; external
-  callers provide numbered views on demand rather than storing numbering in the
-  file.
-- Append new todos at the end of the file to maintain stable numbering
-  semantics for concurrent tooling.
-- Keep completed items in place by switching the checkbox to `[x]`.
-- Use consistent phrasing so guard checks (which compare the full line) remain
-  reliable.
+- Every checklist line becomes the source of truth for agent tools; external callers provide numbered views on demand rather than storing numbering in the file
+- Append new todos at the end of the file to maintain stable numbering semantics for concurrent tooling
+- Keep completed items in place by switching the checkbox to `[x]`
+- Use consistent phrasing so guard checks (which compare the full line) remain reliable
 
-This minimalist structure keeps manual editing simple while enabling automated
-tools to manage tasks deterministically.
+**MCP Tool Access:**
+All todo operations require both `day` and `domain` parameters:
+- `todo_list(day, domain)` – view numbered checklist for a specific domain
+- `todo_add(day, domain, line_number, text)` – add new todo
+- `todo_done(day, domain, line_number, guard)` – mark complete
+- `todo_remove(day, domain, line_number, guard)` – remove entry
+- `todo_upcoming(limit, domain=None)` – view upcoming todos (optionally filtered by domain)
+
+This domain-scoped structure provides true separation of concerns while keeping manual editing simple and enabling automated tools to manage tasks deterministically.
 
 ## Inbox
 

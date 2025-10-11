@@ -381,9 +381,9 @@
 <div class="container">
   {{ macros.day_heading(
         title,
-        prev_day and url_for('todos.todos_day', day=prev_day),
-        next_day and url_for('todos.todos_day', day=next_day),
-        today_url=url_for('todos.todos_day', day=today_day)
+        prev_day and url_for('todos.todos_day', day=prev_day, domain=domain),
+        next_day and url_for('todos.todos_day', day=next_day, domain=domain),
+        today_url=url_for('todos.todos_day', day=today_day, domain=domain)
       ) }}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -398,10 +398,11 @@
 
   <form method="post" class="add-form">
     <input type="hidden" name="action" value="add">
+    <input type="hidden" name="domain" value="{{ domain }}">
     <input
       type="text"
       name="text"
-      placeholder="Add a new todo (e.g., Merge PR #think (15:30))"
+      placeholder="Add a new todo (e.g., Review PR (15:30))"
       autocomplete="off"
     >
     <button type="submit">Add Todo</button>
@@ -416,6 +417,7 @@
           <div class="todo-side todo-side-check">
             <form method="post" class="todo-check-form">
               <input type="hidden" name="action" value="{{ 'uncomplete' if item.completed else 'complete' }}">
+              <input type="hidden" name="domain" value="{{ domain }}">
               <input type="hidden" name="index" value="{{ item.index }}">
               <input type="hidden" name="guard" value="{{ item.raw }}">
               <input
@@ -439,23 +441,9 @@
                 <span class="todo-time">{{ item.time }}</span>
               {% endif %}
             </div>
-            {% if item.domain %}
-              {% set domain_info = domain_lookup.get(item.domain, {}) %}
-              {% set domain_color = domain_info.get('color') or '#e5e7eb' %}
-              {% set domain_symbol = domain_info.get('emoji') or item.domain[0]|upper %}
-              {% set domain_title = domain_info.get('title') or item.domain %}
-              {% set domain_text_color = '#374151' if not domain_info.get('color') else '#ffffff' %}
-              <span
-                class="todo-domain-icon"
-                style="background: {{ domain_color }}; color: {{ domain_text_color }};"
-                title="{{ domain_title }}"
-              >
-                <span aria-hidden="true">{{ domain_symbol }}</span>
-                <span class="sr-only">Domain {{ domain_title }}</span>
-              </span>
-            {% endif %}
             <form method="post" class="todo-edit-form" hidden>
               <input type="hidden" name="action" value="edit">
+              <input type="hidden" name="domain" value="{{ domain }}">
               <input type="hidden" name="index" value="{{ item.index }}">
               <input type="hidden" name="guard" value="{{ item.raw }}">
               <input
@@ -499,6 +487,7 @@
           <div class="todo-side todo-side-remove">
             <form method="post">
               <input type="hidden" name="action" value="remove">
+              <input type="hidden" name="domain" value="{{ domain }}">
               <input type="hidden" name="index" value="{{ item.index }}">
               <input type="hidden" name="guard" value="{{ item.raw }}">
               <button
@@ -535,6 +524,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var closeActiveMove = null;
   var moveEndpoint = {{ url_for('todos.move_todo', day=day)|tojson }};
   var currentDay = {{ day|tojson }};
+  var currentDomain = {{ domain|tojson }};
   var startAgentEndpoint = {{ url_for('agents.start_agent')|tojson }};
 
   if (addForm) {
@@ -916,6 +906,7 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         body: JSON.stringify({
           target_day: targetDay,
+          domain: currentDomain,
           guard: guardValue,
           index: indexNumber,
         }),

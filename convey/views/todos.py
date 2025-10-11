@@ -28,20 +28,27 @@ from ..utils import DATE_RE, adjacent_days, format_date
 bp = Blueprint("todos", __name__, template_folder="../templates")
 
 
-def _todo_path(day: str) -> Path:
-    return Path(state.journal_root) / day / "todos" / "today.md"
+def _todo_path(day: str, domain: str) -> Path:
+    return Path(state.journal_root) / "domains" / domain / "todos" / f"{day}.md"
 
 
 @bp.route("/todos")
 def todos_page() -> str:
     today = date.today().strftime("%Y%m%d")
-    return redirect(url_for("todos.todos_day", day=today))
+    domain = request.args.get("domain", "personal")
+    return redirect(url_for("todos.todos_day", day=today, domain=domain))
 
 
 @bp.route("/todos/<day>", methods=["GET", "POST"])
 def todos_day(day: str):  # type: ignore[override]
     if not DATE_RE.fullmatch(day):
         return "", 404
+
+    # Get domain from query parameter or form, default to "personal"
+    if request.method == "POST":
+        domain = request.form.get("domain", "personal")
+    else:
+        domain = request.args.get("domain", "personal")
 
     if request.method == "POST":
         action = request.form.get("action")
@@ -52,12 +59,12 @@ def todos_day(day: str):  # type: ignore[override]
                 flash("Cannot add an empty todo", "error")
             else:
                 try:
-                    checklist = TodoChecklist.load(day, ensure_day=True)
+                    checklist = TodoChecklist.load(day, domain)
                     checklist.append_entry(text)
-                except (TodoEmptyTextError, FileNotFoundError, RuntimeError) as exc:
-                    bp.logger.debug("Failed to append todo for %s: %s", day, exc)
+                except (TodoEmptyTextError, RuntimeError) as exc:
+                    bp.logger.debug("Failed to append todo for %s/%s: %s", domain, day, exc)
                     flash("Unable to add todo right now", "error")
-            return redirect(url_for("todos.todos_day", day=day))
+            return redirect(url_for("todos.todos_day", day=day, domain=domain))
 
         index_str = request.form.get("index")
         guard = request.form.get("guard", "").strip()
@@ -69,14 +76,14 @@ def todos_day(day: str):  # type: ignore[override]
 
         if not index:
             flash("Missing todo index", "error")
-            return redirect(url_for("todos.todos_day", day=day))
+            return redirect(url_for("todos.todos_day", day=day, domain=domain))
 
         try:
-            checklist = TodoChecklist.load(day)
-        except (FileNotFoundError, RuntimeError) as exc:
-            bp.logger.debug("Failed to load checklist for %s: %s", day, exc)
+            checklist = TodoChecklist.load(day, domain)
+        except RuntimeError as exc:
+            bp.logger.debug("Failed to load checklist for %s/%s: %s", domain, day, exc)
             flash("Todo list changed, please refresh and try again", "error")
-            return redirect(url_for("todos.todos_day", day=day))
+            return redirect(url_for("todos.todos_day", day=day, domain=domain))
 
         try:
             if action == "complete":
@@ -89,15 +96,15 @@ def todos_day(day: str):  # type: ignore[override]
                 checklist.update_entry_text(index, guard, request.form.get("text", ""))
             else:
                 flash("Unknown action", "error")
-                return redirect(url_for("todos.todos_day", day=day))
+                return redirect(url_for("todos.todos_day", day=day, domain=domain))
         except TodoEmptyTextError:
             flash("Cannot update todo to empty text", "error")
         except (TodoGuardMismatchError, TodoLineNumberError, IndexError, ValueError):
             flash("Todo list changed, please refresh and try again", "error")
 
-        return redirect(url_for("todos.todos_day", day=day))
+        return redirect(url_for("todos.todos_day", day=day, domain=domain))
 
-    todos = get_todos(day) or []
+    todos = get_todos(day, domain) or []
     try:
         domain_map = get_domains()
     except Exception as exc:  # pragma: no cover - metadata is optional
@@ -111,6 +118,7 @@ def todos_day(day: str):  # type: ignore[override]
         active="todos",
         title=format_date(day),
         day=day,
+        domain=domain,
         prev_day=prev_day,
         next_day=next_day,
         today_day=today_day,
@@ -126,6 +134,7 @@ def move_todo(day: str):  # type: ignore[override]
 
     payload = request.get_json(silent=True) or {}
     target_day = (payload.get("target_day") or "").strip()
+    domain = (payload.get("domain") or "personal").strip()
     index_value = payload.get("index")
     guard = (payload.get("guard") or "").strip()
 
@@ -148,23 +157,23 @@ def move_todo(day: str):  # type: ignore[override]
             {
                 "status": "noop",
                 "message": "Todo is already on that day.",
-                "redirect": url_for("todos.todos_day", day=day),
+                "redirect": url_for("todos.todos_day", day=day, domain=domain),
             }
         )
 
     try:
-        source_checklist = TodoChecklist.load(day)
-    except (FileNotFoundError, RuntimeError) as exc:
-        bp.logger.debug("Failed to load source todo list for %s: %s", day, exc)
+        source_checklist = TodoChecklist.load(day, domain)
+    except RuntimeError as exc:
+        bp.logger.debug("Failed to load source todo list for %s/%s: %s", domain, day, exc)
         return (
             jsonify({"error": "Todo list changed, please refresh and try again."}),
             409,
         )
 
     try:
-        target_checklist = TodoChecklist.load(target_day, ensure_day=True)
-    except (RuntimeError, FileNotFoundError) as exc:
-        bp.logger.debug("Failed to load target todo list for %s: %s", target_day, exc)
+        target_checklist = TodoChecklist.load(target_day, domain)
+    except RuntimeError as exc:
+        bp.logger.debug("Failed to load target todo list for %s/%s: %s", domain, target_day, exc)
         return jsonify({"error": "Unable to access target day."}), 500
 
     try:
@@ -211,7 +220,7 @@ def move_todo(day: str):  # type: ignore[override]
             409,
         )
 
-    redirect_url = url_for("todos.todos_day", day=target_day)
+    redirect_url = url_for("todos.todos_day", day=target_day, domain=domain)
     return jsonify({"status": "ok", "redirect": redirect_url, "target_day": target_day})
 
 
@@ -220,11 +229,14 @@ def generate_todos(day: str):  # type: ignore[override]
     if not DATE_RE.fullmatch(day):
         return "", 404
 
+    payload = request.get_json(silent=True) or {}
+    domain = (payload.get("domain") or "personal").strip()
+
     from muse.cortex_client import cortex_request
 
     day_date = datetime.strptime(day, "%Y%m%d")
     yesterday = (day_date - timedelta(days=1)).strftime("%Y%m%d")
-    yesterday_path = _todo_path(yesterday)
+    yesterday_path = _todo_path(yesterday, domain)
 
     yesterday_content = ""
     if yesterday_path.exists():
@@ -233,16 +245,17 @@ def generate_todos(day: str):  # type: ignore[override]
         except OSError:
             yesterday_content = ""
 
-    prompt = f"""Generate a TODO checklist for {day_date.strftime('%Y-%m-%d')}.
+    prompt = f"""Generate a TODO checklist for {day_date.strftime('%Y-%m-%d')} in the {domain} domain.
 
 Current date/time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 Target day: {day_date.strftime('%Y-%m-%d')}
-Target day folder: {day}
+Target domain: {domain}
+Target file: domains/{domain}/todos/{day}.md
 
-Yesterday's todos/today.md content:
+Yesterday's todos content:
 {yesterday_content if yesterday_content else "(No todos recorded yesterday)"}
 
-Write the generated checklist to {day}/todos/today.md"""
+Write the generated checklist to domains/{domain}/todos/{day}.md"""
 
     try:
         active_file = cortex_request(
@@ -267,6 +280,7 @@ def todo_generation_status(day: str):  # type: ignore[override]
     if not DATE_RE.fullmatch(day):
         return "", 404
 
+    domain = request.args.get("domain", "personal")
     agent_id = request.args.get("agent_id")
     if not agent_id and hasattr(state, "todo_generation_agents"):
         agent_id = state.todo_generation_agents.get(day)
@@ -276,7 +290,7 @@ def todo_generation_status(day: str):  # type: ignore[override]
 
     from muse.cortex_client import cortex_agents
 
-    todo_path = _todo_path(day)
+    todo_path = _todo_path(day, domain)
 
     agents_dir = Path(state.journal_root) / "agents"
     agent_file = agents_dir / f"{agent_id}.jsonl"

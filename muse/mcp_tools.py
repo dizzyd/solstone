@@ -67,11 +67,12 @@ TOOL_PACKS = {
 
 
 @register_tool(annotations=HINTS)
-def todo_list(day: str) -> dict[str, Any]:
-    """Return the numbered markdown checklist for ``day``'s todos.
+def todo_list(day: str, domain: str) -> dict[str, Any]:
+    """Return the numbered markdown checklist for ``day``'s todos in a specific domain.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
+        domain: Domain name (e.g., "personal", "work").
 
     Returns:
         Dictionary containing the formatted ``markdown`` view with ``N:`` line
@@ -79,20 +80,21 @@ def todo_list(day: str) -> dict[str, Any]:
     """
 
     try:
-        checklist = todo.TodoChecklist.load(day)
-        return {"day": day, "markdown": checklist.numbered()}
+        checklist = todo.TodoChecklist.load(day, domain)
+        return {"day": day, "domain": domain, "markdown": checklist.numbered()}
     except FileNotFoundError:
-        return {"error": f"Day '{day}' has no entries"}
+        return {"error": f"No todos found for domain '{domain}' on day '{day}'"}
     except Exception as exc:  # pragma: no cover - unexpected failure
         return {"error": f"Failed to list todos: {exc}"}
 
 
 @register_tool(annotations=HINTS)
-def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
+def todo_add(day: str, domain: str, line_number: int, text: str) -> dict[str, Any]:
     """Append a new unchecked todo entry using the next sequential line number.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
+        domain: Domain name (e.g., "personal", "work").
         line_number: Expected next line value; must be ``current_count + 1``.
         text: Body of the todo item (stored after the ``- [ ]`` prefix).
 
@@ -118,9 +120,9 @@ def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
                 "suggestion": "use YYYYMMDD format (e.g., 20250104)",
             }
 
-        checklist = todo.TodoChecklist.load(day, ensure_day=True)
+        checklist = todo.TodoChecklist.load(day, domain)
         checklist.add_entry(line_number, text)
-        return {"day": day, "markdown": checklist.numbered()}
+        return {"day": day, "domain": domain, "markdown": checklist.numbered()}
     except RuntimeError as exc:
         return {"error": str(exc)}
     except todo.TodoLineNumberError as exc:
@@ -133,22 +135,17 @@ def todo_add(day: str, line_number: int, text: str) -> dict[str, Any]:
             "error": str(exc),
             "suggestion": "provide a short description of the task",
         }
-    except todo.TodoDomainError as exc:
-        valid_domains_str = ", ".join(exc.valid_domains)
-        return {
-            "error": str(exc),
-            "suggestion": f"use one of the valid domains: {valid_domains_str}",
-        }
     except Exception as exc:  # pragma: no cover - unexpected failure
         return {"error": f"Failed to add todo: {exc}"}
 
 
 @register_tool(annotations=HINTS)
-def todo_remove(day: str, line_number: int, guard: str) -> dict[str, Any]:
+def todo_remove(day: str, domain: str, line_number: int, guard: str) -> dict[str, Any]:
     """Delete an existing todo entry after verifying its current text.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
+        domain: Domain name (e.g., "personal", "work").
         line_number: 1-based index of the entry to remove.
         guard: Full todo line (e.g., ``- [ ] Review logs``) expected on the numbered line.
 
@@ -158,13 +155,13 @@ def todo_remove(day: str, line_number: int, guard: str) -> dict[str, Any]:
     """
 
     try:
-        checklist = todo.TodoChecklist.load(day)
+        checklist = todo.TodoChecklist.load(day, domain)
         checklist.remove_entry(line_number, guard)
-        return {"day": day, "markdown": checklist.numbered()}
+        return {"day": day, "domain": domain, "markdown": checklist.numbered()}
     except FileNotFoundError:
         return {
-            "error": f"Day '{day}' not found",
-            "suggestion": "verify the day folder exists before removing todos",
+            "error": f"No todos found for domain '{domain}' on day '{day}'",
+            "suggestion": "verify the domain and day exist before removing todos",
         }
     except todo.TodoGuardMismatchError as exc:
         return {
@@ -183,11 +180,12 @@ def todo_remove(day: str, line_number: int, guard: str) -> dict[str, Any]:
 
 
 @register_tool(annotations=HINTS)
-def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
+def todo_done(day: str, domain: str, line_number: int, guard: str) -> dict[str, Any]:
     """Mark a todo entry as completed by switching its checkbox to ``[x]``.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
+        domain: Domain name (e.g., "personal", "work").
         line_number: 1-based index of the entry to mark as done.
         guard: Full todo line (e.g., ``- [ ] Review logs``) expected on the numbered line.
 
@@ -197,13 +195,13 @@ def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
     """
 
     try:
-        checklist = todo.TodoChecklist.load(day)
+        checklist = todo.TodoChecklist.load(day, domain)
         checklist.mark_done(line_number, guard)
-        return {"day": day, "markdown": checklist.numbered()}
+        return {"day": day, "domain": domain, "markdown": checklist.numbered()}
     except FileNotFoundError:
         return {
-            "error": f"Day '{day}' not found",
-            "suggestion": "verify the day folder exists before updating todos",
+            "error": f"No todos found for domain '{domain}' on day '{day}'",
+            "suggestion": "verify the domain and day exist before updating todos",
         }
     except todo.TodoGuardMismatchError as exc:
         return {
@@ -222,33 +220,37 @@ def todo_done(day: str, line_number: int, guard: str) -> dict[str, Any]:
 
 
 @register_tool(annotations=HINTS)
-def todo_upcoming(limit: int = 20) -> dict[str, Any]:
+def todo_upcoming(limit: int = 20, domain: str | None = None) -> dict[str, Any]:
     """Return upcoming todos across future days as markdown sections.
 
-    This tool retrieves todos from future journal days, organized by date.
+    This tool retrieves todos from future journal days, organized by domain and date.
     Use this before adding any todo with a scope beyond today to check if
     it has already been scheduled for another upcoming day, avoiding duplicates
     and ensuring proper task organization across the timeline.
 
     Args:
         limit: Maximum number of todos to return (default: 20)
+        domain: Optional domain filter. When None, aggregates todos from all domains.
+                When specified, only returns todos for that domain.
 
     Returns:
         Dictionary containing:
         - limit: The limit value used for this query
-        - markdown: Formatted markdown with todos grouped by day, each section
-                   showing the day's date and its todo items
+        - domain: The domain filter used (or None for all domains)
+        - markdown: Formatted markdown with todos grouped by domain and day, each section
+                   showing "Domain Title: YYYYMMDD" and its todo items
         - error: Error message if the operation fails (only on exception)
 
     Examples:
-        - todo_upcoming()  # Return up to 20 upcoming todos
-        - todo_upcoming(limit=10)  # Return up to 10 upcoming todos
-        - todo_upcoming(limit=50)  # Return up to 50 upcoming todos
+        - todo_upcoming()  # Return up to 20 upcoming todos from all domains
+        - todo_upcoming(limit=10)  # Return up to 10 upcoming todos from all domains
+        - todo_upcoming(domain="personal")  # Return personal domain todos only
+        - todo_upcoming(limit=50, domain="work")  # Return up to 50 work todos
     """
 
     try:
-        markdown = todo.upcoming(limit=limit)
-        return {"limit": limit, "markdown": markdown}
+        markdown = todo.upcoming(limit=limit, domain=domain)
+        return {"limit": limit, "domain": domain, "markdown": markdown}
     except Exception as exc:  # pragma: no cover - unexpected failure
         return {"error": f"Failed to load upcoming todos: {exc}"}
 
@@ -714,7 +716,7 @@ async def get_resource(uri: str) -> object:
     - ``journal://transcripts/audio/{day}/{time}/{length}`` — audio transcripts only
     - ``journal://transcripts/screen/{day}/{time}/{length}`` — screen summaries only
     - ``journal://media/{day}/{name}`` — raw FLAC or PNG media files
-    - ``journal://todo/{day}`` — daily ``todos/today.md`` checklist file
+    - ``journal://todo/{domain}/{day}`` — domain-scoped todo checklist file
     - ``journal://news/{domain}/{day}`` — domain news markdown for a specific day
 
     Args:
@@ -907,25 +909,25 @@ def get_media(day: str, name: str) -> FileResource:
     )
 
 
-@mcp.resource("journal://todo/{day}")
-def get_todo(day: str) -> TextResource:
-    """Return the ``todos/today.md`` checklist for ``day``."""
+@mcp.resource("journal://todo/{domain}/{day}")
+def get_todo(domain: str, day: str) -> TextResource:
+    """Return the domain-scoped todo checklist for a specific day."""
 
-    todo_path = todo.todo_file_path(day)
+    todo_path = todo.todo_file_path(day, domain)
 
     if not todo_path.is_file():
-        day_path = todo_path.parents[1]
-        if not day_path.is_dir():
-            text = f"No journal entries for {day}."
+        domain_path = todo_path.parents[1]  # domains/{domain}/todos
+        if not domain_path.is_dir():
+            text = f"No todos folder for domain '{domain}'."
         else:
-            text = "(No todos recorded.)"
+            text = f"(No todos recorded for {day} in domain '{domain}'.)"
     else:
         text = todo_path.read_text(encoding="utf-8")
 
     return TextResource(
-        uri=f"journal://todo/{day}",
-        name=f"Todos: {day}",
-        description=f"Checklist entries for {day}",
+        uri=f"journal://todo/{domain}/{day}",
+        name=f"Todos: {domain}/{day}",
+        description=f"Checklist entries for domain '{domain}' on {day}",
         mime_type="text/markdown",
         text=text,
     )

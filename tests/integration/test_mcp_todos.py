@@ -29,27 +29,35 @@ def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
     journal_copy = tmp_path / "journal"
     shutil.copytree(FIXTURES_JOURNAL, journal_copy)
 
-    day = "20240101"
-    day_dir = journal_copy / day
-    (day_dir / "todos").mkdir(parents=True, exist_ok=True)
-    todo_path = day_dir / "todos" / "today.md"
+    day = "20991231"  # Use future date to avoid date validation
+    domain = "personal"
+    todos_dir = journal_copy / "domains" / domain / "todos"
+    todos_dir.mkdir(parents=True, exist_ok=True)
+    todo_path = todos_dir / f"{day}.md"
     todo_path.write_text("- [ ] Fixture task\n", encoding="utf-8")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal_copy))
 
-    list_result = call_tool(mcp_tools.todo_list, day)
-    assert list_result == {"day": day, "markdown": "1: - [ ] Fixture task"}
+    list_result = call_tool(mcp_tools.todo_list, day, domain)
+    assert list_result == {
+        "day": day,
+        "domain": domain,
+        "markdown": "1: - [ ] Fixture task",
+    }
 
     add_result = call_tool(
-        mcp_tools.todo_add, day, line_number=2, text="Follow up task"
+        mcp_tools.todo_add, day, domain, line_number=2, text="Follow up task"
     )
+    # Check for error first
+    if "error" in add_result:
+        raise AssertionError(f"todo_add failed: {add_result}")
     assert add_result["markdown"].splitlines() == [
         "1: - [ ] Fixture task",
         "2: - [ ] Follow up task",
     ]
 
     done_result = call_tool(
-        mcp_tools.todo_done, day, line_number=2, guard="- [ ] Follow up task"
+        mcp_tools.todo_done, day, domain, line_number=2, guard="- [ ] Follow up task"
     )
     assert done_result["markdown"].splitlines() == [
         "1: - [ ] Fixture task",
@@ -57,13 +65,21 @@ def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
     ]
 
     removed_done = call_tool(
-        mcp_tools.todo_remove, day, line_number=2, guard="- [x] Follow up task"
+        mcp_tools.todo_remove, day, domain, line_number=2, guard="- [x] Follow up task"
     )
-    assert removed_done == {"day": day, "markdown": "1: - [ ] Fixture task"}
+    assert removed_done == {
+        "day": day,
+        "domain": domain,
+        "markdown": "1: - [ ] Fixture task",
+    }
 
     empty_result = call_tool(
-        mcp_tools.todo_remove, day, line_number=1, guard="- [ ] Fixture task"
+        mcp_tools.todo_remove, day, domain, line_number=1, guard="- [ ] Fixture task"
     )
-    assert empty_result == {"day": day, "markdown": "0: (no todos)"}
+    assert empty_result == {
+        "day": day,
+        "domain": domain,
+        "markdown": "0: (no todos)",
+    }
 
     assert todo_path.read_text(encoding="utf-8") == ""
