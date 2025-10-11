@@ -112,7 +112,48 @@ def todos_day(day: str):  # type: ignore[override]
             elif action == "remove":
                 checklist.remove_entry(index, guard)
             elif action == "edit":
-                checklist.update_entry_text(index, guard, request.form.get("text", ""))
+                import re
+                text = request.form.get("text", "").strip()
+
+                # Check if text contains a domain hashtag
+                domain_match = re.search(r'#([a-z][a-z0-9_-]*)', text, re.IGNORECASE)
+                if domain_match:
+                    new_domain = domain_match.group(1).lower()
+                    # Remove the hashtag from the text
+                    text = re.sub(r'\s*#' + re.escape(domain_match.group(1)) + r'\b', '', text, count=1, flags=re.IGNORECASE).strip()
+
+                    # Validate new domain exists
+                    try:
+                        domain_map = get_domains()
+                    except Exception:
+                        domain_map = {}
+
+                    if new_domain not in domain_map:
+                        flash(f"Domain #{new_domain} does not exist", "error")
+                        return redirect(url_for("todos.todos_day", day=day))
+
+                    # If domain changed, move the todo
+                    if new_domain != domain:
+                        # Get the completed status before moving
+                        _, source_entry, completed, _ = checklist._entry_components(index, guard)
+
+                        # Add to new domain
+                        new_checklist = TodoChecklist.load(day, new_domain)
+                        new_checklist.append_entry(text)
+                        new_index = len(new_checklist.entries)
+                        new_guard = new_checklist.entries[new_index - 1]
+
+                        # Preserve completed status
+                        if completed:
+                            new_checklist.mark_done(new_index, new_guard)
+
+                        # Remove from old domain
+                        checklist.remove_entry(index, source_entry)
+
+                        return redirect(url_for("todos.todos_day", day=day))
+
+                # No domain change, just update text
+                checklist.update_entry_text(index, guard, text)
             else:
                 flash("Unknown action", "error")
                 return redirect(url_for("todos.todos_day", day=day))

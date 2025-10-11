@@ -153,6 +153,18 @@
   cursor: text;
 }
 
+.todo-text-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #2563eb;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  color: #111827;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
 .todo-row.completed .todo-text {
   text-decoration: line-through;
   color: #6b7280;
@@ -307,7 +319,13 @@
               </form>
 
               <div class="todo-content">
-                <span class="todo-text" title="{{ item.text }}">{{ item.text }}</span>
+                <span
+                  class="todo-text"
+                  title="{{ item.text }}"
+                  data-index="{{ item.index }}"
+                  data-guard="{{ item.raw }}"
+                  data-domain="{{ domain_name }}"
+                >{{ item.text }}</span>
                 {% if item.time %}
                   <span class="todo-time">{{ item.time }}</span>
                 {% endif %}
@@ -436,6 +454,107 @@ document.addEventListener('DOMContentLoaded', function() {
       // Add to DOM and trigger picker
       document.body.appendChild(dateInput);
       dateInput.showPicker();
+    });
+  });
+
+  // Setup double-click to edit todo text
+  document.querySelectorAll('.todo-text').forEach(span => {
+    const index = parseInt(span.dataset.index, 10);
+    const guard = span.dataset.guard;
+    const domain = span.dataset.domain;
+    const originalText = span.textContent;
+
+    span.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+
+      // Create input element
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'todo-text-input';
+      input.value = originalText;
+
+      // Replace span with input
+      const content = span.parentElement;
+      content.replaceChild(input, span);
+      input.focus();
+      input.select();
+
+      let isEditing = true;
+
+      // Save function
+      const save = async () => {
+        if (!isEditing) return;
+
+        const newText = input.value.trim();
+
+        if (!newText) {
+          alert('Todo text cannot be empty');
+          input.focus();
+          return;
+        }
+
+        if (newText === originalText) {
+          // No change, just restore span
+          cancel();
+          return;
+        }
+
+        isEditing = false;
+
+        // Save via form submission
+        const form = new FormData();
+        form.append('action', 'edit');
+        form.append('domain', domain);
+        form.append('index', index);
+        form.append('guard', guard);
+        form.append('text', newText);
+
+        try {
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: form
+          });
+
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            alert('Failed to update todo - please refresh and try again');
+            if (input.parentElement === content) {
+              content.replaceChild(span, input);
+            }
+          }
+        } catch (error) {
+          alert('Network error - please try again');
+          if (input.parentElement === content) {
+            content.replaceChild(span, input);
+          }
+        }
+      };
+
+      // Cancel function
+      const cancel = () => {
+        if (!isEditing) return;
+        isEditing = false;
+        if (input.parentElement === content) {
+          content.replaceChild(span, input);
+        }
+      };
+
+      // Handle Enter key
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          save();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancel();
+        }
+      });
+
+      // Handle blur (click outside)
+      input.addEventListener('blur', () => {
+        setTimeout(cancel, 100);
+      });
     });
   });
 
