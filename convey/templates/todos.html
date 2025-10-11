@@ -309,7 +309,7 @@
   {% endif %}
 
   {% if todos_by_domain %}
-    {% for domain_name, domain_todos in todos_by_domain.items() | sort %}
+    {% for domain_name, domain_todos in todos_by_domain.items() %}
       {% set domain_info = domain_map.get(domain_name, {}) %}
       {% set domain_title = domain_info.get('title', domain_name.title()) %}
       {% set domain_color = domain_info.get('color', '#6b7280') %}

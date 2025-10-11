@@ -186,6 +186,21 @@ def todos_day(day: str):  # type: ignore[override]
                 todo["domain"] = domain_name
             todos_by_domain[domain_name] = domain_todos
 
+    # Sort domains for initial page load:
+    # 1. Domains with incomplete items first, sorted by incomplete count (descending)
+    # 2. Fully completed domains last, sorted alphabetically
+    def domain_sort_key(item):
+        domain_name, domain_todos = item
+        incomplete_count = sum(1 for todo in domain_todos if not todo.get("completed"))
+        all_complete = incomplete_count == 0
+        # Return tuple: (all_complete, -incomplete_count, domain_name)
+        # all_complete=False sorts before all_complete=True
+        # -incomplete_count sorts higher counts first
+        # domain_name for alphabetical tie-breaking
+        return (all_complete, -incomplete_count, domain_name)
+
+    sorted_todos_by_domain = dict(sorted(todos_by_domain.items(), key=domain_sort_key))
+
     prev_day, next_day = adjacent_days(state.journal_root, day)
     today_day = date.today().strftime("%Y%m%d")
 
@@ -197,7 +212,7 @@ def todos_day(day: str):  # type: ignore[override]
         prev_day=prev_day,
         next_day=next_day,
         today_day=today_day,
-        todos_by_domain=todos_by_domain,
+        todos_by_domain=sorted_todos_by_domain,
         domain_map=domain_map,
     )
 
