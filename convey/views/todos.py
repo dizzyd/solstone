@@ -58,6 +58,16 @@ def todos_day(day: str):  # type: ignore[override]
                     domain = domain_match.group(1).lower()
                     # Remove the hashtag from the text
                     text = re.sub(r'\s*#' + re.escape(domain_match.group(1)) + r'\b', '', text, count=1, flags=re.IGNORECASE).strip()
+
+                    # Validate domain exists
+                    try:
+                        domain_map = get_domains()
+                    except Exception:
+                        domain_map = {}
+
+                    if domain not in domain_map:
+                        flash(f"Domain #{domain} does not exist", "error")
+                        return redirect(url_for("todos.todos_day", day=day))
                 else:
                     # Default to personal if no hashtag
                     domain = "personal"

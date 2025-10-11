@@ -5,7 +5,7 @@
 {% block head %}
 <style>
 .todo-container {
-  max-width: 800px;
+  max-width: 90vw;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -83,15 +83,15 @@
 }
 
 .domain-section {
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .domain-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
   border-bottom: 2px solid;
 }
 
@@ -101,12 +101,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0;
-}
-
-.domain-count {
-  font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 400;
+  color: #374151;
 }
 
 .todo-list {
@@ -119,7 +114,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0;
+  padding: 0.1rem 0;
   border-bottom: 1px solid #f3f4f6;
 }
 
@@ -289,12 +284,10 @@
       {% set domain_info = domain_map.get(domain_name, {}) %}
       {% set domain_title = domain_info.get('title', domain_name.title()) %}
       {% set domain_color = domain_info.get('color', '#6b7280') %}
-      {% set active_count = domain_todos | selectattr('completed', 'equalto', False) | list | length %}
 
       <div class="domain-section">
         <div class="domain-header" style="border-color: {{ domain_color }};">
-          <h2 class="domain-title" style="color: {{ domain_color }};">{{ domain_title }}</h2>
-          <span class="domain-count">({{ active_count }})</span>
+          <h2 class="domain-title">{{ domain_title }}</h2>
         </div>
 
         <ul class="todo-list">
