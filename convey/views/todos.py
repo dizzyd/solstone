@@ -5,6 +5,7 @@ from pathlib import Path
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -79,7 +80,7 @@ def todos_day(day: str):  # type: ignore[override]
                         checklist = TodoChecklist.load(day, domain)
                         checklist.append_entry(text)
                     except (TodoEmptyTextError, RuntimeError) as exc:
-                        bp.logger.debug("Failed to append todo for %s/%s: %s", domain, day, exc)
+                        current_app.logger.debug("Failed to append todo for %s/%s: %s", domain, day, exc)
                         flash("Unable to add todo right now", "error")
             return redirect(url_for("todos.todos_day", day=day))
 
@@ -100,7 +101,7 @@ def todos_day(day: str):  # type: ignore[override]
         try:
             checklist = TodoChecklist.load(day, domain)
         except RuntimeError as exc:
-            bp.logger.debug("Failed to load checklist for %s/%s: %s", domain, day, exc)
+            current_app.logger.debug("Failed to load checklist for %s/%s: %s", domain, day, exc)
             flash("Todo list changed, please refresh and try again", "error")
             return redirect(url_for("todos.todos_day", day=day))
 
@@ -162,13 +163,17 @@ def todos_day(day: str):  # type: ignore[override]
         except (TodoGuardMismatchError, TodoLineNumberError, IndexError, ValueError):
             flash("Todo list changed, please refresh and try again", "error")
 
+        # If AJAX request, return JSON
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+            return jsonify({"status": "ok"})
+
         return redirect(url_for("todos.todos_day", day=day))
 
     # Load todos from all domains
     try:
         domain_map = get_domains()
     except Exception as exc:  # pragma: no cover - metadata is optional
-        bp.logger.debug("Failed to load domain metadata: %s", exc)
+        current_app.logger.debug("Failed to load domain metadata: %s", exc)
         domain_map = {}
 
     # Collect todos from each domain
@@ -234,7 +239,7 @@ def move_todo(day: str):  # type: ignore[override]
     try:
         source_checklist = TodoChecklist.load(day, domain)
     except RuntimeError as exc:
-        bp.logger.debug("Failed to load source todo list for %s/%s: %s", domain, day, exc)
+        current_app.logger.debug("Failed to load source todo list for %s/%s: %s", domain, day, exc)
         return (
             jsonify({"error": "Todo list changed, please refresh and try again."}),
             409,
@@ -243,7 +248,7 @@ def move_todo(day: str):  # type: ignore[override]
     try:
         target_checklist = TodoChecklist.load(target_day, domain)
     except RuntimeError as exc:
-        bp.logger.debug("Failed to load target todo list for %s/%s: %s", domain, target_day, exc)
+        current_app.logger.debug("Failed to load target todo list for %s/%s: %s", domain, target_day, exc)
         return jsonify({"error": "Unable to access target day."}), 500
 
     try:
@@ -251,7 +256,7 @@ def move_todo(day: str):  # type: ignore[override]
             index, guard
         )
     except (TodoLineNumberError, TodoGuardMismatchError, IndexError, ValueError) as exc:
-        bp.logger.debug("Failed to locate todo %s on %s: %s", index, day, exc)
+        current_app.logger.debug("Failed to locate todo %s on %s: %s", index, day, exc)
         return (
             jsonify({"error": "Todo list changed, please refresh and try again."}),
             409,
@@ -260,7 +265,7 @@ def move_todo(day: str):  # type: ignore[override]
     try:
         target_checklist.append_entry(body)
     except TodoEmptyTextError as exc:
-        bp.logger.debug("Failed to append todo to %s: %s", target_day, exc)
+        current_app.logger.debug("Failed to append todo to %s: %s", target_day, exc)
         return jsonify({"error": "Unable to move todo to the selected day."}), 400
 
     new_index = len(target_checklist.entries)
@@ -271,20 +276,20 @@ def move_todo(day: str):  # type: ignore[override]
             target_checklist.mark_done(new_index, new_guard)
             new_guard = target_checklist.entries[new_index - 1]
         except (TodoGuardMismatchError, TodoLineNumberError, IndexError) as exc:
-            bp.logger.debug(
+            current_app.logger.debug(
                 "Failed to mark moved todo complete on %s: %s", target_day, exc
             )
 
     try:
         source_checklist.remove_entry(index, source_entry)
     except (TodoGuardMismatchError, TodoLineNumberError, IndexError) as exc:
-        bp.logger.debug(
+        current_app.logger.debug(
             "Failed to remove todo %s from %s after move: %s", index, day, exc
         )
         try:
             target_checklist.remove_entry(new_index, new_guard)
         except Exception:  # pragma: no cover - best effort cleanup
-            bp.logger.debug("Failed to roll back moved todo on %s", target_day)
+            current_app.logger.debug("Failed to roll back moved todo on %s", target_day)
         return (
             jsonify({"error": "Todo list changed, please refresh and try again."}),
             409,

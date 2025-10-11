@@ -86,6 +86,10 @@
   margin-bottom: 1.5rem;
 }
 
+.domain-section.collapsed .todo-list {
+  display: none;
+}
+
 .domain-header {
   display: flex;
   align-items: center;
@@ -93,6 +97,12 @@
   margin-bottom: 0.5rem;
   padding-bottom: 0.25rem;
   border-bottom: 2px solid;
+  cursor: pointer;
+  user-select: none;
+}
+
+.domain-header:hover {
+  opacity: 0.8;
 }
 
 .domain-title {
@@ -102,6 +112,11 @@
   letter-spacing: 0.05em;
   margin: 0;
   color: #374151;
+}
+
+.domain-count {
+  margin-left: auto;
+  font-size: 1.1rem;
 }
 
 .todo-list {
@@ -298,15 +313,25 @@
       {% set domain_info = domain_map.get(domain_name, {}) %}
       {% set domain_title = domain_info.get('title', domain_name.title()) %}
       {% set domain_color = domain_info.get('color', '#6b7280') %}
+      {% set incomplete_count = domain_todos | selectattr('completed', 'equalto', false) | list | length %}
+      {% set total_count = domain_todos | length %}
+      {% if incomplete_count == 0 %}
+        {% set count_emoji = '✅' %}
+      {% elif incomplete_count < 10 %}
+        {% set count_emoji = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'][incomplete_count] %}
+      {% else %}
+        {% set count_emoji = '*️⃣' %}
+      {% endif %}
 
-      <div class="domain-section">
+      <div class="domain-section" data-domain="{{ domain_name }}">
         <div class="domain-header" style="border-color: {{ domain_color }};">
           <h2 class="domain-title">{{ domain_title }}</h2>
+          <span class="domain-count">{{ count_emoji }}</span>
         </div>
 
         <ul class="todo-list">
           {% for item in domain_todos %}
-            <li class="todo-row {% if item.completed %}completed{% endif %}">
+            <li class="todo-row {% if item.completed %}completed{% endif %}" data-todo-row>
               <form method="post" style="display: contents;">
                 <input type="hidden" name="action" value="{{ 'uncomplete' if item.completed else 'complete' }}">
                 <input type="hidden" name="domain" value="{{ domain_name }}">
@@ -316,7 +341,10 @@
                   type="checkbox"
                   class="todo-checkbox"
                   {% if item.completed %}checked{% endif %}
-                  onchange="this.form.submit()"
+                  data-index="{{ item.index }}"
+                  data-guard="{{ item.raw }}"
+                  data-domain="{{ domain_name }}"
+                  data-completed="{{ 'true' if item.completed else 'false' }}"
                 >
               </form>
 
@@ -346,15 +374,16 @@
                   📅
                 </button>
 
-                <form method="post" style="display: contents;">
-                  <input type="hidden" name="action" value="remove">
-                  <input type="hidden" name="domain" value="{{ domain_name }}">
-                  <input type="hidden" name="index" value="{{ item.index }}">
-                  <input type="hidden" name="guard" value="{{ item.raw }}">
-                  <button type="submit" class="todo-action-btn remove" title="Remove">
-                    🗑️
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  class="todo-action-btn remove"
+                  title="Remove"
+                  data-index="{{ item.index }}"
+                  data-guard="{{ item.raw }}"
+                  data-domain="{{ domain_name }}"
+                >
+                  🗑️
+                </button>
               </div>
             </li>
           {% endfor %}
@@ -372,6 +401,104 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const moveEndpoint = {{ url_for('todos.move_todo', day=day) | tojson }};
+  const currentDay = {{ day | tojson }};
+  const storageKey = `todos_collapsed_${currentDay}`;
+
+  // Load collapsed state from sessionStorage
+  function loadCollapsedState() {
+    try {
+      const stored = sessionStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // Save collapsed state to sessionStorage
+  function saveCollapsedState(collapsedState) {
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(collapsedState));
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+
+  // Toggle domain collapse state
+  function toggleDomainCollapse(domainSection, collapse) {
+    const domain = domainSection.dataset.domain;
+    const collapsedState = loadCollapsedState();
+
+    if (collapse === undefined) {
+      // Toggle
+      collapse = !domainSection.classList.contains('collapsed');
+    }
+
+    if (collapse) {
+      domainSection.classList.add('collapsed');
+      collapsedState[domain] = true;
+    } else {
+      domainSection.classList.remove('collapsed');
+      delete collapsedState[domain];
+    }
+
+    saveCollapsedState(collapsedState);
+  }
+
+  // Utility function to update domain count emoji
+  function updateDomainCount(domainSection) {
+    const countSpan = domainSection.querySelector('.domain-count');
+    if (!countSpan) return;
+
+    const todoRows = Array.from(domainSection.querySelectorAll('[data-todo-row]'));
+    const incompleteCount = todoRows.filter(row => !row.classList.contains('completed')).length;
+
+    const emojis = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+
+    const wasAllComplete = countSpan.textContent === '✅';
+    const isAllComplete = incompleteCount === 0;
+
+    if (isAllComplete) {
+      countSpan.textContent = '✅';
+      // Auto-collapse when all items are done
+      if (!wasAllComplete) {
+        toggleDomainCollapse(domainSection, true);
+      }
+    } else if (incompleteCount < 10) {
+      countSpan.textContent = emojis[incompleteCount];
+    } else {
+      countSpan.textContent = '*️⃣';
+    }
+  }
+
+  // Initialize collapsed state from sessionStorage
+  const collapsedState = loadCollapsedState();
+  document.querySelectorAll('.domain-section').forEach(section => {
+    const domain = section.dataset.domain;
+
+    // Check if all items in this domain are completed
+    const countSpan = section.querySelector('.domain-count');
+    const isAllComplete = countSpan && countSpan.textContent === '✅';
+
+    // Collapse if: (1) stored as collapsed, OR (2) all items are complete
+    if (collapsedState[domain] || isAllComplete) {
+      section.classList.add('collapsed');
+      if (isAllComplete && !collapsedState[domain]) {
+        // Save the auto-collapsed state
+        collapsedState[domain] = true;
+        saveCollapsedState(collapsedState);
+      }
+    }
+  });
+
+  // Setup click handlers for domain headers
+  document.querySelectorAll('.domain-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      const domainSection = header.closest('.domain-section');
+      if (domainSection) {
+        toggleDomainCollapse(domainSection);
+      }
+    });
+  });
 
   // Utility functions
   function dayToInputValue(dayString) {
@@ -383,12 +510,31 @@ document.addEventListener('DOMContentLoaded', function() {
     return inputValue ? inputValue.replace(/-/g, '') : '';
   }
 
+  // Utility function to update all guard values in a todo row
+  function updateRowGuards(todoRow, newGuard) {
+    if (!newGuard) return;
+
+    // Update all elements with data-guard in this row
+    const elementsWithGuard = todoRow.querySelectorAll('[data-guard]');
+    elementsWithGuard.forEach(el => {
+      el.dataset.guard = newGuard;
+    });
+
+    // Also update the hidden input if present
+    const guardInput = todoRow.querySelector('input[name="guard"]');
+    if (guardInput) {
+      guardInput.value = newGuard;
+    }
+  }
+
   async function moveTodo(targetDay, domain, index, guard, button) {
     if (!targetDay) return;
 
     const originalText = button.textContent;
     button.disabled = true;
     button.textContent = '⏳';
+
+    const todoRow = button.closest('[data-todo-row]');
 
     try {
       const response = await fetch(moveEndpoint, {
@@ -400,13 +546,36 @@ document.addEventListener('DOMContentLoaded', function() {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || 'Failed to move todo');
-        button.disabled = false;
-        button.textContent = originalText;
+        if (response.status === 409) {
+          // Guard mismatch - reload to get fresh data
+          alert(data.error || 'Todo list changed, refreshing...');
+          window.location.reload();
+        } else {
+          alert(data.error || 'Failed to move todo');
+          button.disabled = false;
+          button.textContent = originalText;
+        }
         return;
       }
 
-      window.location.href = data.redirect || window.location.href;
+      // Remove the todo item from the DOM with a fade-out animation
+      todoRow.style.transition = 'opacity 0.2s ease-out';
+      todoRow.style.opacity = '0';
+      setTimeout(() => {
+        const domainSection = todoRow.closest('.domain-section');
+        todoRow.remove();
+
+        // Check if domain section is now empty and remove it if so
+        const todoList = domainSection?.querySelector('.todo-list');
+        if (todoList && todoList.children.length === 0) {
+          if (domainSection) {
+            domainSection.remove();
+          }
+        } else if (domainSection) {
+          // Update the count emoji
+          updateDomainCount(domainSection);
+        }
+      }, 200);
     } catch (error) {
       alert('Network error - please try again');
       button.disabled = false;
@@ -416,13 +585,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Setup move functionality with native date picker
   document.querySelectorAll('.todo-action-btn.move').forEach(button => {
-    const index = parseInt(button.dataset.index, 10);
-    const guard = button.dataset.guard;
-    const domain = button.dataset.domain;
-    const currentDay = button.dataset.currentDay;
-
     button.addEventListener('click', (e) => {
       e.stopPropagation();
+
+      // Read values fresh from dataset (they may have been updated after a delete)
+      const index = parseInt(button.dataset.index, 10);
+      const guard = button.dataset.guard;
+      const domain = button.dataset.domain;
+      const currentDay = button.dataset.currentDay;
 
       // Create native date input positioned near the button
       const dateInput = document.createElement('input');
@@ -459,11 +629,169 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Setup remove functionality with AJAX
+  document.querySelectorAll('.todo-action-btn.remove').forEach(button => {
+    button.addEventListener('click', async (e) => {
+      e.stopPropagation();
+
+      // Read values fresh from dataset (they may have been updated after a delete)
+      const index = parseInt(button.dataset.index, 10);
+      const guard = button.dataset.guard;
+      const domain = button.dataset.domain;
+
+      const todoRow = button.closest('[data-todo-row]');
+      const originalText = button.textContent;
+      button.disabled = true;
+
+      try {
+        const form = new FormData();
+        form.append('action', 'remove');
+        form.append('domain', domain);
+        form.append('index', index);
+        form.append('guard', guard);
+
+        const response = await fetch(window.location.href, {
+          method: 'POST',
+          body: form
+        });
+
+        if (response.ok) {
+          // Remove the todo item from the DOM with a fade-out animation
+          todoRow.style.transition = 'opacity 0.2s ease-out';
+          todoRow.style.opacity = '0';
+          setTimeout(() => {
+            const domainSection = todoRow.closest('.domain-section');
+            const removedIndex = index;
+
+            todoRow.remove();
+
+            // Update indices of all subsequent items in this domain
+            if (domainSection) {
+              const allRows = Array.from(domainSection.querySelectorAll('[data-todo-row]'));
+              allRows.forEach(row => {
+                const elementsWithIndex = row.querySelectorAll('[data-index]');
+                elementsWithIndex.forEach(el => {
+                  const currentIndex = parseInt(el.dataset.index, 10);
+                  if (currentIndex > removedIndex) {
+                    el.dataset.index = (currentIndex - 1).toString();
+                  }
+                });
+
+                // Also update hidden input
+                const indexInput = row.querySelector('input[name="index"]');
+                if (indexInput) {
+                  const currentIndex = parseInt(indexInput.value, 10);
+                  if (currentIndex > removedIndex) {
+                    indexInput.value = (currentIndex - 1).toString();
+                  }
+                }
+              });
+            }
+
+            // Check if domain section is now empty and remove it if so
+            const todoList = domainSection?.querySelector('.todo-list');
+            if (todoList && todoList.children.length === 0) {
+              if (domainSection) {
+                domainSection.remove();
+              }
+            } else if (domainSection) {
+              // Update the count emoji
+              updateDomainCount(domainSection);
+            }
+          }, 200);
+        } else {
+          alert('Failed to remove todo - please refresh and try again');
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      } catch (error) {
+        alert('Network error - please try again');
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    });
+  });
+
+  // Setup checkbox toggle with AJAX
+  document.querySelectorAll('.todo-checkbox').forEach(checkbox => {
+    let isCompleted = checkbox.dataset.completed === 'true';
+
+    checkbox.addEventListener('change', async (e) => {
+      e.preventDefault();
+
+      // Read values fresh from dataset (they may have been updated after a delete)
+      const index = parseInt(checkbox.dataset.index, 10);
+      const guard = checkbox.dataset.guard;
+      const domain = checkbox.dataset.domain;
+
+      const todoRow = checkbox.closest('[data-todo-row]');
+      const wasChecked = checkbox.checked;
+
+      // Optimistically update UI
+      checkbox.disabled = true;
+
+      try {
+        const form = new FormData();
+        form.append('action', isCompleted ? 'uncomplete' : 'complete');
+        form.append('domain', domain);
+        form.append('index', index);
+        form.append('guard', guard);
+
+        const response = await fetch(window.location.href, {
+          method: 'POST',
+          body: form
+        });
+
+        if (response.ok) {
+          // Update state
+          isCompleted = !isCompleted;
+          checkbox.dataset.completed = isCompleted ? 'true' : 'false';
+
+          // Update UI
+          if (isCompleted) {
+            todoRow.classList.add('completed');
+          } else {
+            todoRow.classList.remove('completed');
+          }
+
+          // Update form action for next click
+          const actionInput = checkbox.form.querySelector('input[name="action"]');
+          actionInput.value = isCompleted ? 'uncomplete' : 'complete';
+
+          // Update guard by flipping the checkbox marker
+          const oldGuard = guard;
+          let newGuard;
+          if (isCompleted) {
+            // Changed from [ ] to [x]
+            newGuard = oldGuard.replace('- [ ]', '- [x]');
+          } else {
+            // Changed from [x] to [ ]
+            newGuard = oldGuard.replace('- [x]', '- [ ]');
+          }
+          updateRowGuards(todoRow, newGuard);
+
+          // Update domain count emoji
+          const domainSection = todoRow.closest('.domain-section');
+          if (domainSection) {
+            updateDomainCount(domainSection);
+          }
+        } else {
+          // Revert on error
+          checkbox.checked = !wasChecked;
+          alert('Failed to update todo - please refresh and try again');
+        }
+      } catch (error) {
+        // Revert on error
+        checkbox.checked = !wasChecked;
+        alert('Network error - please try again');
+      } finally {
+        checkbox.disabled = false;
+      }
+    });
+  });
+
   // Setup double-click to edit todo text
   document.querySelectorAll('.todo-text').forEach(span => {
-    const index = parseInt(span.dataset.index, 10);
-    const guard = span.dataset.guard;
-    const domain = span.dataset.domain;
     const originalText = span.textContent;
 
     span.addEventListener('dblclick', (e) => {
@@ -503,6 +831,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         isEditing = false;
 
+        // Read values fresh from dataset (they may have been updated after a delete)
+        const index = parseInt(span.dataset.index, 10);
+        const guard = span.dataset.guard;
+        const domain = span.dataset.domain;
+
+        // Check if text contains a domain hashtag
+        const domainMatch = newText.match(/#([a-z][a-z0-9_-]*)/i);
+        const hasDomainChange = domainMatch && domainMatch[1].toLowerCase() !== domain;
+
         // Save via form submission
         const form = new FormData();
         form.append('action', 'edit');
@@ -518,7 +855,29 @@ document.addEventListener('DOMContentLoaded', function() {
           });
 
           if (response.ok) {
-            window.location.reload();
+            if (hasDomainChange) {
+              // Domain changed, reload to show it in new location
+              window.location.reload();
+            } else {
+              // Same domain, just update the text in place
+              const cleanText = newText.replace(/#[a-z][a-z0-9_-]*/gi, '').trim();
+              span.textContent = cleanText;
+              span.title = cleanText;
+              content.replaceChild(span, input);
+
+              // Update guard by replacing the text portion
+              const todoRow = span.closest('[data-todo-row]');
+              if (todoRow) {
+                const oldGuard = guard;
+                // Extract the prefix (e.g., "- [ ] " or "- [x] ")
+                const match = oldGuard.match(/^(- \[[x ]\] )/);
+                if (match) {
+                  const prefix = match[1];
+                  const newGuard = prefix + cleanText;
+                  updateRowGuards(todoRow, newGuard);
+                }
+              }
+            }
           } else {
             alert('Failed to update todo - please refresh and try again');
             if (input.parentElement === content) {
