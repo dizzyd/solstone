@@ -4,8 +4,5 @@
   "schedule": "daily",
   "priority": 20,
   "tools": "journal, todo",
-  "handoff": {
-    "persona": "todo_review",
-    "prompt": "Please review and update today's todo checklist by checking yesterday's journal evidence for completed tasks. Use todo_list/todo_done as needed, review every todo item."
-  }
+  "multi_domain": true
 }

@@ -1,5 +1,7 @@
 {
   "title": "TODO Review",
   "description": "Validates checklist entries against journal evidence and marks items complete via MCP todo tools.",
-  "tools": "journal, todo"
+  "tools": "journal, todo",
+  "multi_domain": true,
+  "schedule": "daily"
 }
