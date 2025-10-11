@@ -11,22 +11,29 @@ import pytest
 def test_count_pending_todos_today_counts_incomplete(monkeypatch):
     """Unfinished todos should increment the nav badge count."""
 
-    calls: list[dict[str, Any]] = []
+    def fake_get_domains_with_todos(day: str):
+        return ["personal", "work"]
 
-    def fake_get_todos(day: str, *, ensure_day: bool = False):
-        calls.append({"day": day, "ensure_day": ensure_day})
-        return [
-            {"completed": False, "cancelled": False},
-            {"completed": True, "cancelled": False},
-            {"completed": False, "cancelled": True},
-        ]
+    def fake_get_todos(day: str, domain: str):
+        # Return different todos for each domain
+        if domain == "personal":
+            return [
+                {"completed": False, "cancelled": False},
+                {"completed": True, "cancelled": False},
+            ]
+        elif domain == "work":
+            return [
+                {"completed": False, "cancelled": True},
+            ]
+        return []
 
+    monkeypatch.setattr(convey_app.todo_store, "get_domains_with_todos", fake_get_domains_with_todos)
     monkeypatch.setattr(convey_app.todo_store, "get_todos", fake_get_todos)
 
     count = convey_app._count_pending_todos_today()
 
+    # Should count only 1 incomplete, non-cancelled todo from personal domain
     assert count == 1
-    assert calls and calls[0]["ensure_day"] is False
 
 
 def test_resolve_nav_badges_filters_zero(monkeypatch):

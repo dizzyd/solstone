@@ -72,16 +72,30 @@ def _count_pending_todos_today() -> int:
 
     today = datetime.now().strftime("%Y%m%d")
     try:
-        todos = todo_store.get_todos(today, ensure_day=False)
+        # Get all domains that have todos for today
+        domains = todo_store.get_domains_with_todos(today)
     except (FileNotFoundError, RuntimeError, ValueError):
         return 0
-    if not todos:
+
+    if not domains:
         return 0
-    return sum(
-        1
-        for todo in todos
-        if not bool(todo.get("completed")) and not bool(todo.get("cancelled"))
-    )
+
+    # Count pending todos across all domains
+    count = 0
+    for domain in domains:
+        try:
+            todos = todo_store.get_todos(today, domain)
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+        if not todos:
+            continue
+        count += sum(
+            1
+            for todo in todos
+            if not bool(todo.get("completed")) and not bool(todo.get("cancelled"))
+        )
+
+    return count
 
 
 BadgeProvider = Callable[[], int]
