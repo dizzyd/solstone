@@ -440,13 +440,35 @@ class VideoProcessor:
         contents.append(image)
         return contents
 
+    def _create_crumb(
+        self, output_path: Path, used_prompts: set, used_models: set
+    ) -> None:
+        """Create crumb file for the analysis output."""
+        from think.crumbs import CrumbBuilder
+
+        crumb_builder = CrumbBuilder()
+        crumb_builder.add_file(self.video_path)
+
+        # Add prompt files that were used
+        observe_dir = Path(__file__).parent
+        for prompt_file in sorted(used_prompts):
+            crumb_builder.add_file(observe_dir / prompt_file)
+
+        # Add models that were used
+        for model in sorted(used_models):
+            crumb_builder.add_model(model)
+
+        crumb_path = crumb_builder.commit(str(output_path))
+        logger.info(f"Crumb saved to {crumb_path}")
+
     async def process_with_vision(
         self,
         use_prompt: str = "describe_json.txt",
         max_concurrent: int = 5,
+        output_path: Optional[Path] = None,
     ) -> None:
         """
-        Process video and stream vision analysis results to stdout as JSONL.
+        Process video and write vision analysis results to file.
 
         Parameters
         ----------
@@ -454,9 +476,15 @@ class VideoProcessor:
             Prompt template filename to use (default: describe_json.txt)
         max_concurrent : int
             Maximum number of concurrent API requests (default: 5)
+        output_path : Optional[Path]
+            Path to write JSONL output (default: {video_stem}_analysis.jsonl)
         """
         from think.batch import GeminiBatch
         from think.models import GEMINI_FLASH, GEMINI_LITE
+
+        # Track prompts and models used for crumb file
+        used_prompts = {use_prompt}
+        used_models = set()
 
         # Load prompt templates
         prompt_path = Path(__file__).parent / use_prompt
@@ -484,6 +512,9 @@ class VideoProcessor:
 
         # Create batch processor
         batch = GeminiBatch(max_concurrent=max_concurrent)
+
+        # Open output file if specified
+        output_file = open(output_path, "w") if output_path else None
 
         # Create vision requests for all qualified frames
         for monitor_id, frames in qualified_frames.items():
@@ -576,6 +607,7 @@ class VideoProcessor:
                 # Check for meeting analysis
                 if visible_category == "meeting":
                     logger.info(f"Frame {req.frame_id}: Triggering meeting analysis")
+                    used_prompts.add("describe_meeting.txt")
                     # Need full frame for meeting analysis (not cropped)
                     frame = req.frame_data["frame"]
                     arr = frame.to_ndarray(format="rgb24")
@@ -604,6 +636,7 @@ class VideoProcessor:
                     logger.info(
                         f"Frame {req.frame_id}: Triggering text extraction for category '{visible_category}'"
                     )
+                    used_prompts.add("describe_text.txt")
                     # Update request for text extraction and re-add
                     batch.update(
                         req,
@@ -647,8 +680,22 @@ class VideoProcessor:
             if req.request_type == RequestType.DESCRIBE_TEXT and req.response:
                 result["extracted_text"] = req.response
 
-            # Output as JSONL (one JSON object per line)
-            print(json.dumps(result), flush=True)
+            # Track model usage
+            if req.model_used:
+                used_models.add(req.model_used)
+
+            # Write to file and optionally to stdout
+            result_line = json.dumps(result)
+            if output_file:
+                output_file.write(result_line + "\n")
+                output_file.flush()
+            if logger.isEnabledFor(logging.INFO):
+                print(result_line, flush=True)
+
+        # Close output file and create crumb
+        if output_file:
+            output_file.close()
+            self._create_crumb(output_path, used_prompts, used_models)
 
 
 def output_qualified_frames(
@@ -716,11 +763,26 @@ async def async_main():
         action="store_true",
         help="Only output frame metadata without vision analysis",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing analysis file if present",
+    )
     args = setup_cli(parser)
 
     video_path = Path(args.video_path)
     if not video_path.exists():
         parser.error(f"Video file not found: {video_path}")
+
+    # Check for existing output file (unless --frames-only or --force)
+    output_path = None
+    if not args.frames_only:
+        output_path = video_path.parent / f"{video_path.stem}_analysis.jsonl"
+        if output_path.exists() and not args.force:
+            parser.error(
+                f"Output file already exists: {output_path}\n"
+                f"Use --force to overwrite"
+            )
 
     logger.info(f"Processing video: {video_path}")
 
@@ -736,6 +798,7 @@ async def async_main():
             await processor.process_with_vision(
                 use_prompt=args.prompt,
                 max_concurrent=args.jobs,
+                output_path=output_path,
             )
     except Exception as e:
         logger.error(f"Failed to process {video_path}: {e}", exc_info=True)
