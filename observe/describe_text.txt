@@ -7,7 +7,7 @@ Extract all visible text from the image and format it as markdown.
 ## Text Extraction Guidelines
 
 **Start with a header**:
-- If you can see an application name and/or window title, include it as: `# [App Name - Window Title]`
+- If you can see an application name and/or window title or active browser tab, include it as: `# [App Name - Title]`
 - If not explicitly visible, make your best guess based on the content and UI elements
 
 Extract ALL visible text using appropriate markdown formatting:

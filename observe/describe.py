@@ -31,6 +31,7 @@ class RequestType(Enum):
 
     DESCRIBE_JSON = "describe_json"
     DESCRIBE_TEXT = "describe_text"
+    DESCRIBE_MEETING = "describe_meeting"
 
 
 def _load_config() -> dict:
@@ -456,6 +457,13 @@ class VideoProcessor:
 
         text_system_instruction = text_prompt_path.read_text()
 
+        # Load meeting analysis prompt
+        meeting_prompt_path = Path(__file__).parent / "describe_meeting.txt"
+        if not meeting_prompt_path.exists():
+            raise FileNotFoundError(f"Meeting prompt not found: {meeting_prompt_path}")
+
+        meeting_system_instruction = meeting_prompt_path.read_text()
+
         # Process video to get qualified frames (synchronous)
         qualified_frames = self.process()
 
@@ -488,9 +496,11 @@ class VideoProcessor:
                 req.monitor = monitor_id
                 req.box_2d = frame_data["box_2d"]
                 req.retry_count = 0
+                req.frame_data = frame_data  # Store for potential full frame access
                 req.cropped_img = cropped_img  # Store for potential text extraction
                 req.request_type = RequestType.DESCRIBE_JSON
                 req.json_analysis = None  # Will store the JSON analysis result
+                req.meeting_analysis = None  # Will store meeting analysis if applicable
                 req.requests = []  # Track all requests for this frame
 
                 batch.add(req)
@@ -507,7 +517,15 @@ class VideoProcessor:
                     # Parse JSON analysis
                     try:
                         analysis = json.loads(req.response)
-                        req.json_analysis = analysis  # Store for text extraction
+                        req.json_analysis = analysis  # Store for follow-up analysis
+                    except json.JSONDecodeError as e:
+                        has_error = True
+                        error_msg = f"Invalid JSON response: {e}"
+                elif req.request_type == RequestType.DESCRIBE_MEETING:
+                    # Parse meeting analysis
+                    try:
+                        meeting_data = json.loads(req.response)
+                        req.meeting_analysis = meeting_data  # Store meeting analysis
                     except json.JSONDecodeError as e:
                         has_error = True
                         error_msg = f"Invalid JSON response: {e}"
@@ -532,15 +550,43 @@ class VideoProcessor:
 
             req.requests.append(request_record)
 
-            # Check if we should trigger text extraction
-            should_extract_text = (
+            # Check if we should trigger follow-up analysis
+            should_process_further = (
                 not has_error
                 and req.request_type == RequestType.DESCRIBE_JSON
                 and req.json_analysis
             )
 
-            if should_extract_text:
+            if should_process_further:
                 visible_category = req.json_analysis.get("visible", "")
+
+                # Check for meeting analysis
+                if visible_category == "meeting":
+                    logger.info(
+                        f"Frame {req.frame_id}: Triggering meeting analysis"
+                    )
+                    # Need full frame for meeting analysis (not cropped)
+                    frame = req.frame_data["frame"]
+                    arr = frame.to_ndarray(format="rgb24")
+                    full_image = Image.fromarray(arr)
+
+                    batch.update(
+                        req,
+                        contents=[
+                            "Analyze this meeting screenshot.",
+                            full_image,
+                        ],
+                        model=GEMINI_FLASH,
+                        system_instruction=meeting_system_instruction,
+                        json_output=True,
+                        max_output_tokens=10240,
+                        thinking_budget=6144,
+                    )
+                    req.request_type = RequestType.DESCRIBE_MEETING
+                    req.retry_count = 0
+                    continue  # Don't output yet, wait for meeting analysis
+
+                # Check for text extraction
                 text_categories = CONFIG.get("text_extraction_categories", [])
                 if visible_category in text_categories:
                     logger.info(
@@ -579,6 +625,10 @@ class VideoProcessor:
             # Add analysis if we have it
             if req.json_analysis:
                 result["analysis"] = req.json_analysis
+
+            # Add meeting analysis if we have it (from DESCRIBE_MEETING)
+            if req.meeting_analysis:
+                result["meeting_analysis"] = req.meeting_analysis
 
             # Add extracted text if we have it (from DESCRIBE_TEXT)
             if req.request_type == RequestType.DESCRIBE_TEXT and req.response:

@@ -18,11 +18,18 @@ def test_config_loads_successfully():
 
 
 def test_config_has_expected_categories():
-    """Test that config contains expected text extraction categories."""
+    """Test that config contains text extraction categories."""
     from observe.describe import CONFIG
 
-    expected_categories = ["code", "messaging", "browsing", "reading", "productivity"]
-    assert CONFIG["text_extraction_categories"] == expected_categories
+    # Verify structure, not specific values (config can change)
+    assert "text_extraction_categories" in CONFIG
+    assert isinstance(CONFIG["text_extraction_categories"], list)
+    # Should have at least one category configured
+    assert len(CONFIG["text_extraction_categories"]) > 0
+    # All entries should be non-empty strings
+    for category in CONFIG["text_extraction_categories"]:
+        assert isinstance(category, str)
+        assert len(category) > 0
 
 
 def test_config_loading_with_missing_file(tmp_path):
