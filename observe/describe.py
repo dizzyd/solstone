@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import re
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -23,6 +24,49 @@ from PIL import Image, ImageDraw
 from think.utils import setup_cli
 
 logger = logging.getLogger(__name__)
+
+
+class RequestType(Enum):
+    """Type of vision analysis request."""
+
+    DESCRIBE_JSON = "describe_json"
+    DESCRIBE_TEXT = "describe_text"
+
+
+def _load_config() -> dict:
+    """
+    Load describe.json configuration file.
+
+    Returns
+    -------
+    dict
+        Configuration dictionary
+
+    Raises
+    ------
+    SystemExit
+        If config file is missing or invalid
+    """
+    config_path = Path(__file__).parent / "describe.json"
+    if not config_path.exists():
+        logger.error(f"Configuration file not found: {config_path}")
+        raise SystemExit(1)
+
+    try:
+        with open(config_path) as f:
+            config = json.load(f)
+        logger.debug(f"Loaded configuration from {config_path}")
+        return config
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in configuration file {config_path}: {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        logger.error(f"Failed to load configuration from {config_path}: {e}")
+        raise SystemExit(1)
+
+
+# Load configuration at module level
+CONFIG = _load_config()
 
 
 class VideoProcessor:
@@ -396,14 +440,21 @@ class VideoProcessor:
             Maximum number of concurrent API requests (default: 5)
         """
         from think.batch import GeminiBatch
-        from think.models import GEMINI_LITE
+        from think.models import GEMINI_FLASH, GEMINI_LITE
 
-        # Load prompt template
+        # Load prompt templates
         prompt_path = Path(__file__).parent / use_prompt
         if not prompt_path.exists():
             raise FileNotFoundError(f"Prompt template not found: {prompt_path}")
 
         system_instruction = prompt_path.read_text()
+
+        # Load text extraction prompt
+        text_prompt_path = Path(__file__).parent / "describe_text.txt"
+        if not text_prompt_path.exists():
+            raise FileNotFoundError(f"Text prompt not found: {text_prompt_path}")
+
+        text_system_instruction = text_prompt_path.read_text()
 
         # Process video to get qualified frames (synchronous)
         qualified_frames = self.process()
@@ -437,33 +488,29 @@ class VideoProcessor:
                 req.monitor = monitor_id
                 req.box_2d = frame_data["box_2d"]
                 req.retry_count = 0
+                req.cropped_img = cropped_img  # Store for potential text extraction
+                req.request_type = RequestType.DESCRIBE_JSON
+                req.json_analysis = None  # Will store the JSON analysis result
+                req.requests = []  # Track all requests for this frame
 
                 batch.add(req)
 
         # Stream results as they complete, with retry logic
         async for req in batch.drain_batch():
-            result = {
-                "frame_id": req.frame_id,
-                "timestamp": req.timestamp,
-                "monitor": req.monitor,
-                "box_2d": req.box_2d,
-            }
+            # Check for errors
+            has_error = bool(req.error)
+            error_msg = req.error
 
-            # Check for errors or JSON decode issues
-            has_error = False
-            error_msg = None
-
-            if req.error:
-                has_error = True
-                error_msg = req.error
-            else:
-                try:
-                    result["analysis"] = json.loads(req.response)
-                    result["model_used"] = req.model_used
-                    result["duration"] = req.duration
-                except json.JSONDecodeError as e:
-                    has_error = True
-                    error_msg = f"Invalid JSON response: {e}"
+            # Handle based on request type
+            if not has_error:
+                if req.request_type == RequestType.DESCRIBE_JSON:
+                    # Parse JSON analysis
+                    try:
+                        analysis = json.loads(req.response)
+                        req.json_analysis = analysis  # Store for text extraction
+                    except json.JSONDecodeError as e:
+                        has_error = True
+                        error_msg = f"Invalid JSON response: {e}"
 
             # Retry logic (up to 5 attempts total, so 4 retries)
             if has_error and req.retry_count < 4:
@@ -474,12 +521,68 @@ class VideoProcessor:
                 )
                 continue  # Don't output, wait for retry result
 
-            # Final result (success or max retries exceeded)
+            # Record this request's result (after retries are done)
+            request_record = {
+                "type": req.request_type.value,
+                "model": req.model_used,
+                "duration": req.duration,
+            }
+            if req.retry_count > 0:
+                request_record["retries"] = req.retry_count
+
+            req.requests.append(request_record)
+
+            # Check if we should trigger text extraction
+            should_extract_text = (
+                not has_error
+                and req.request_type == RequestType.DESCRIBE_JSON
+                and req.json_analysis
+            )
+
+            if should_extract_text:
+                visible_category = req.json_analysis.get("visible", "")
+                text_categories = CONFIG.get("text_extraction_categories", [])
+                if visible_category in text_categories:
+                    logger.info(
+                        f"Frame {req.frame_id}: Triggering text extraction for category '{visible_category}'"
+                    )
+                    # Update request for text extraction and re-add
+                    batch.update(
+                        req,
+                        contents=[
+                            "Extract text from this screenshot frame.",
+                            req.cropped_img,
+                        ],
+                        model=GEMINI_FLASH,
+                        system_instruction=text_system_instruction,
+                        json_output=False,
+                        max_output_tokens=8192,
+                        thinking_budget=4096,
+                    )
+                    req.request_type = RequestType.DESCRIBE_TEXT
+                    req.retry_count = 0
+                    continue  # Don't output yet, wait for text extraction
+
+            # Final output - this frame is complete
+            result = {
+                "frame_id": req.frame_id,
+                "timestamp": req.timestamp,
+                "monitor": req.monitor,
+                "box_2d": req.box_2d,
+                "requests": req.requests,
+            }
+
+            # Add error at top level if any request failed
             if has_error:
                 result["error"] = error_msg
 
-            if req.retry_count > 0:
-                result["retry_count"] = req.retry_count
+            # Add analysis if we have it
+            if req.json_analysis:
+                result["analysis"] = req.json_analysis
+
+            # Add extracted text if we have it (from DESCRIBE_TEXT)
+            if req.request_type == RequestType.DESCRIBE_TEXT and req.response:
+                result["extracted_text"] = req.response
 
             # Output as JSONL (one JSON object per line)
             print(json.dumps(result), flush=True)

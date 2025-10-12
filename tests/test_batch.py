@@ -354,3 +354,60 @@ async def test_gemini_batch_concurrency_limit(mock_get_client, mock_agenerate):
     assert len(results) == 5
     # Should never exceed max_concurrent=2
     assert max_concurrent_seen <= 2
+
+
+@pytest.mark.asyncio
+@patch("think.batch.gemini_agenerate", new_callable=AsyncMock)
+@patch("think.batch._get_or_create_client")
+async def test_gemini_batch_update_method(mock_get_client, mock_agenerate):
+    """Test batch.update() method for modifying and re-adding requests."""
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    # Track which model was used in each call
+    call_models = []
+
+    async def mock_track_model(*args, **kwargs):
+        call_models.append(kwargs.get("model", "unknown"))
+        return f"Response from {kwargs.get('model', 'unknown')}"
+
+    mock_agenerate.side_effect = mock_track_model
+
+    batch = GeminiBatch(max_concurrent=5)
+
+    # Create initial request
+    req = batch.create(contents="Initial prompt", model=GEMINI_FLASH)
+    req.stage = "initial"
+    batch.add(req)
+
+    results = []
+    result_count = 0
+    async for completed_req in batch.drain_batch():
+        result_count += 1
+        # Capture the response at this point
+        results.append((result_count, completed_req.response, completed_req.stage))
+
+        # After first result, update and re-add with different model
+        if result_count == 1:
+            batch.update(
+                completed_req,
+                contents="Updated prompt",
+                model=GEMINI_LITE,
+                stage="updated",  # Update custom attribute too
+                custom_field="test_value",  # Add new custom attribute
+            )
+
+    # Should have both results
+    assert len(results) == 2
+    assert results[0][2] == "initial"  # First result was initial stage
+    assert results[1][2] == "updated"  # Second result was updated stage
+
+    # Verify models used
+    assert call_models == [GEMINI_FLASH, GEMINI_LITE]
+
+    # Verify correct responses at each stage
+    assert results[0][1] == f"Response from {GEMINI_FLASH}"
+    assert results[1][1] == f"Response from {GEMINI_LITE}"
+
+    # Verify custom attribute was set
+    assert req.custom_field == "test_value"

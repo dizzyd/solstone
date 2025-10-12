@@ -155,6 +155,42 @@ class GeminiBatch:
         task = asyncio.create_task(self._execute_request(request))
         self.pending_tasks.add(task)
 
+    def update(self, request: GeminiRequest, **kwargs) -> None:
+        """
+        Update request attributes and re-add to batch for execution.
+
+        This is useful for retries or multi-stage processing where you want
+        to reuse the same request object with different parameters.
+
+        Parameters
+        ----------
+        request : GeminiRequest
+            Request to update and re-execute
+        **kwargs
+            Any attributes to update on the request object
+
+        Example
+        -------
+        >>> batch.update(
+        ...     req,
+        ...     model=GEMINI_FLASH,
+        ...     contents="New prompt",
+        ...     temperature=0.8,
+        ...     custom_attr="foo"
+        ... )
+        """
+        # Update any provided attributes
+        for key, value in kwargs.items():
+            setattr(request, key, value)
+
+        # Clear previous execution results
+        request.response = None
+        request.error = None
+        request.duration = 0.0
+
+        # Re-add to batch
+        self.add(request)
+
     def is_drained(self) -> bool:
         """
         Check if batch is fully drained.

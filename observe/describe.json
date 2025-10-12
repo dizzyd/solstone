@@ -1,0 +1,9 @@
+{
+  "text_extraction_categories": [
+    "code",
+    "messaging",
+    "browsing",
+    "reading",
+    "productivity"
+  ]
+}

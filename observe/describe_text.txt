@@ -1,12 +1,14 @@
 # Screenshot Text Extraction
 
-You are extracting text and describing the focused content from a screenshot. You receive:
-1. A full screenshot with a red box highlighting the focus area
-2. A cropped image of that focus area
+You are extracting text from a desktop screenshot cropped to focus on a specific area.
 
-Extract all visible text from the focus area and format it as markdown.
+Extract all visible text from the image and format it as markdown.
 
 ## Text Extraction Guidelines
+
+**Start with a header**:
+- If you can see an application name and/or window title, include it as: `# [App Name - Window Title]`
+- If not explicitly visible, make your best guess based on the content and UI elements
 
 Extract ALL visible text using appropriate markdown formatting:
 
