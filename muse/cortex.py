@@ -549,11 +549,33 @@ class CortexService:
                         if event.get("event") == "finish":
                             result = event.get("result", "")
 
-                            # Save result if requested (thread-safe access)
+                            # Get original request (thread-safe access)
                             with self.lock:
                                 original_request = self.agent_requests.get(
                                     agent.agent_id
                                 )
+
+                            # Log token usage if available
+                            usage_data = event.get("usage")
+                            if usage_data and original_request:
+                                try:
+                                    from think.models import log_token_usage
+
+                                    model = original_request.get("model", "unknown")
+                                    persona = original_request.get("persona", "unknown")
+                                    context = f"agent.{persona}.{agent.agent_id}"
+
+                                    log_token_usage(
+                                        model=model,
+                                        usage=usage_data,
+                                        context=context,
+                                    )
+                                except Exception as e:
+                                    self.logger.warning(
+                                        f"Failed to log token usage for agent {agent.agent_id}: {e}"
+                                    )
+
+                            # Save result if requested
                             if original_request and original_request.get("save"):
                                 self._save_agent_result(
                                     agent.agent_id,

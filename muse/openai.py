@@ -454,11 +454,37 @@ async def run_agent(
                 or conversation_id_in
             )
 
+            # Extract usage information from result
+            usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
+            usage_dict = None
+            if usage:
+                usage_dict = {
+                    "requests": getattr(usage, "requests", None),
+                    "input_tokens": getattr(usage, "input_tokens", None),
+                    "output_tokens": getattr(usage, "output_tokens", None),
+                    "total_tokens": getattr(usage, "total_tokens", None),
+                    "details": {
+                        "input": getattr(usage, "input_tokens_details", None)
+                        and {
+                            "cached_tokens": getattr(
+                                usage.input_tokens_details, "cached_tokens", None
+                            )
+                        },
+                        "output": getattr(usage, "output_tokens_details", None)
+                        and {
+                            "reasoning_tokens": getattr(
+                                usage.output_tokens_details, "reasoning_tokens", None
+                            )
+                        },
+                    },
+                }
+
             cb.emit(
                 {
                     "event": "finish",
                     "result": final_text,
                     "conversation_id": conversation_id_out,
+                    "usage": usage_dict,
                     "ts": _now_ms(),
                 }
             )

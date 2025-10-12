@@ -237,15 +237,30 @@ class JournalStats:
             for model in sorted(self.token_totals.keys()):
                 tokens = self.token_totals[model]
                 total = tokens.get("total_tokens", 0)
-                prompt = tokens.get("prompt_tokens", 0)
+
+                # Use unified field names (input/output) with fallback to old names
+                input_tokens = tokens.get("input_tokens", tokens.get("prompt_tokens", 0))
+                output_tokens = tokens.get("output_tokens", tokens.get("candidates_tokens", 0))
+
                 print(f"  {model}:")
                 print(
-                    f"    Total: {total:,} | Prompt: {prompt:,} | Response: {tokens.get('candidates_tokens', 0):,}"
+                    f"    Total: {total:,} | Input: {input_tokens:,} | Output: {output_tokens:,}"
                 )
-                if tokens.get("cached_tokens", 0) > 0:
-                    print(
-                        f"    Cached: {tokens.get('cached_tokens', 0):,} | Thoughts: {tokens.get('thoughts_tokens', 0):,}"
-                    )
+
+                # Show optional fields if present
+                cached = tokens.get("cached_tokens", 0)
+                reasoning = tokens.get("reasoning_tokens", tokens.get("thoughts_tokens", 0))
+                requests = tokens.get("requests", 0)
+
+                if cached > 0 or reasoning > 0 or requests > 0:
+                    parts = []
+                    if cached > 0:
+                        parts.append(f"Cached: {cached:,}")
+                    if reasoning > 0:
+                        parts.append(f"Reasoning: {reasoning:,}")
+                    if requests > 0:
+                        parts.append(f"Requests: {requests:,}")
+                    print(f"    {' | '.join(parts)}")
 
         # per-day audio hours
         if day_count:
@@ -310,16 +325,29 @@ class JournalStats:
             for model in sorted(self.token_totals.keys()):
                 tokens = self.token_totals[model]
                 total = tokens.get("total_tokens", 0)
-                prompt = tokens.get("prompt_tokens", 0)
-                response = tokens.get("candidates_tokens", 0)
+
+                # Use unified field names (input/output) with fallback to old names
+                input_tokens = tokens.get("input_tokens", tokens.get("prompt_tokens", 0))
+                output_tokens = tokens.get("output_tokens", tokens.get("candidates_tokens", 0))
                 cached = tokens.get("cached_tokens", 0)
-                thoughts = tokens.get("thoughts_tokens", 0)
+                reasoning = tokens.get("reasoning_tokens", tokens.get("thoughts_tokens", 0))
+                requests = tokens.get("requests", 0)
 
                 lines.append(f"### {model}")
                 lines.append(f"- Total: {total:,} tokens")
-                lines.append(f"- Prompt: {prompt:,} | Response: {response:,}")
-                if cached > 0 or thoughts > 0:
-                    lines.append(f"- Cached: {cached:,} | Thoughts: {thoughts:,}")
+                lines.append(f"- Input: {input_tokens:,} | Output: {output_tokens:,}")
+
+                # Show optional fields if present
+                if cached > 0 or reasoning > 0 or requests > 0:
+                    parts = []
+                    if cached > 0:
+                        parts.append(f"Cached: {cached:,}")
+                    if reasoning > 0:
+                        parts.append(f"Reasoning: {reasoning:,}")
+                    if requests > 0:
+                        parts.append(f"Requests: {requests:,}")
+                    lines.append(f"- {' | '.join(parts)}")
+
                 lines.append("")
 
         if self.topic_counts:

@@ -3,7 +3,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 from google import genai
@@ -116,59 +116,129 @@ def _validate_response(response, max_output_tokens: int) -> str:
     return response.text
 
 
+def log_token_usage(
+    model: str,
+    usage: Dict[str, Any],
+    context: Optional[str] = None,
+) -> None:
+    """Log token usage to journal with unified schema.
+
+    Parameters
+    ----------
+    model : str
+        Model name (e.g., "gpt-5", "gemini-2.5-flash")
+    usage : dict
+        Usage data in provider-specific format. Supports:
+        - OpenAI format: {input_tokens, output_tokens, total_tokens,
+                         details: {input: {cached_tokens}, output: {reasoning_tokens}}}
+        - Gemini format: {prompt_token_count, candidates_token_count,
+                         cached_content_token_count, thoughts_token_count, total_token_count}
+        - Unified format: {input_tokens, output_tokens, total_tokens,
+                          cached_tokens, reasoning_tokens, requests}
+    context : str, optional
+        Context string (e.g., "module.function:123" or "agent.persona.id").
+        If None, auto-detects from call stack.
+    """
+    try:
+        journal = os.getenv("JOURNAL_PATH")
+        if not journal:
+            return
+
+        # Auto-detect calling context if not provided
+        if context is None:
+            frame = inspect.currentframe()
+            if frame and frame.f_back:
+                caller_frame = frame.f_back
+                module_name = caller_frame.f_globals.get("__name__", "unknown")
+                func_name = caller_frame.f_code.co_name
+                line_num = caller_frame.f_lineno
+
+                # Clean up module name
+                for prefix in ["think.", "hear.", "see.", "convey.", "muse."]:
+                    if module_name.startswith(prefix):
+                        module_name = module_name[len(prefix):]
+                        break
+
+                context = f"{module_name}.{func_name}:{line_num}"
+
+        # Normalize usage data to unified schema
+        normalized_usage: Dict[str, int] = {}
+
+        # Handle OpenAI format with nested details
+        if "input_tokens" in usage or "output_tokens" in usage:
+            normalized_usage["input_tokens"] = usage.get("input_tokens", 0)
+            normalized_usage["output_tokens"] = usage.get("output_tokens", 0)
+            normalized_usage["total_tokens"] = usage.get("total_tokens", 0)
+
+            # Extract nested details
+            details = usage.get("details", {})
+            if details:
+                input_details = details.get("input", {})
+                if input_details and input_details.get("cached_tokens"):
+                    normalized_usage["cached_tokens"] = input_details["cached_tokens"]
+
+                output_details = details.get("output", {})
+                if output_details and output_details.get("reasoning_tokens"):
+                    normalized_usage["reasoning_tokens"] = output_details["reasoning_tokens"]
+
+            # Optional requests field for OpenAI
+            if "requests" in usage and usage["requests"] is not None:
+                normalized_usage["requests"] = usage["requests"]
+
+        # Handle Gemini format
+        elif "prompt_token_count" in usage or "candidates_token_count" in usage:
+            normalized_usage["input_tokens"] = usage.get("prompt_token_count", 0)
+            normalized_usage["output_tokens"] = usage.get("candidates_token_count", 0)
+            normalized_usage["total_tokens"] = usage.get("total_token_count", 0)
+
+            if usage.get("cached_content_token_count"):
+                normalized_usage["cached_tokens"] = usage["cached_content_token_count"]
+            if usage.get("thoughts_token_count"):
+                normalized_usage["reasoning_tokens"] = usage["thoughts_token_count"]
+
+        # Already in unified format
+        else:
+            normalized_usage = {k: v for k, v in usage.items() if isinstance(v, int)}
+
+        # Build token log entry
+        token_data = {
+            "timestamp": time.time(),
+            "timestamp_str": time.strftime("%Y%m%d_%H%M%S"),
+            "model": model,
+            "context": context,
+            "usage": normalized_usage,
+        }
+
+        # Save to journal/tokens/<timestamp>.json
+        tokens_dir = Path(journal) / "tokens"
+        tokens_dir.mkdir(exist_ok=True)
+
+        filename = f"{int(time.time() * 1000)}.json"
+        filepath = tokens_dir / filename
+
+        with open(filepath, "w") as f:
+            json.dump(token_data, f, indent=2)
+
+    except Exception:
+        # Silently fail - logging shouldn't break the main flow
+        pass
+
+
 def _log_token_usage(response, model: str) -> None:
-    """Log token usage to journal."""
+    """Log Gemini token usage to journal (legacy wrapper)."""
     if hasattr(response, "usage_metadata"):
         try:
-            journal = os.getenv("JOURNAL_PATH")
-            if journal:
-                # Auto-detect calling context
-                context = None
-                frame = inspect.currentframe()
-                if frame and frame.f_back and frame.f_back.f_back:
-                    # Go back 2 frames to skip this helper and get to actual caller
-                    caller_frame = frame.f_back.f_back
-                    module_name = caller_frame.f_globals.get("__name__", "unknown")
-                    func_name = caller_frame.f_code.co_name
-                    line_num = caller_frame.f_lineno
+            usage = response.usage_metadata
+            usage_dict = {
+                "prompt_token_count": getattr(usage, "prompt_token_count", 0),
+                "candidates_token_count": getattr(usage, "candidates_token_count", 0),
+                "cached_content_token_count": getattr(usage, "cached_content_token_count", 0),
+                "thoughts_token_count": getattr(usage, "thoughts_token_count", 0),
+                "total_token_count": getattr(usage, "total_token_count", 0),
+            }
 
-                    # Clean up module name
-                    for prefix in ["think.", "hear.", "see.", "convey."]:
-                        if module_name.startswith(prefix):
-                            module_name = module_name[len(prefix) :]
-                            break
-
-                    context = f"{module_name}.{func_name}:{line_num}"
-
-                # Build token log entry
-                usage = response.usage_metadata
-                token_data = {
-                    "timestamp": time.time(),
-                    "timestamp_str": time.strftime("%Y%m%d_%H%M%S"),
-                    "model": model,
-                    "context": context,
-                    "usage": {
-                        "prompt_tokens": getattr(usage, "prompt_token_count", 0),
-                        "candidates_tokens": getattr(
-                            usage, "candidates_token_count", 0
-                        ),
-                        "cached_tokens": getattr(
-                            usage, "cached_content_token_count", 0
-                        ),
-                        "thoughts_tokens": getattr(usage, "thoughts_token_count", 0),
-                        "total_tokens": getattr(usage, "total_token_count", 0),
-                    },
-                }
-
-                # Save to journal/tokens/<timestamp>.json
-                tokens_dir = Path(journal) / "tokens"
-                tokens_dir.mkdir(exist_ok=True)
-
-                filename = f"{int(time.time() * 1000)}.json"
-                filepath = tokens_dir / filename
-
-                with open(filepath, "w") as f:
-                    json.dump(token_data, f, indent=2)
+            # Use unified logging function
+            log_token_usage(model=model, usage=usage_dict)
 
         except Exception:
             # Silently fail - logging shouldn't break the main flow
@@ -316,4 +386,5 @@ __all__ = [
     "CLAUDE_SONNET_4",
     "gemini_generate",
     "gemini_agenerate",
+    "log_token_usage",
 ]
