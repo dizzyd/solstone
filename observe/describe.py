@@ -575,9 +575,7 @@ class VideoProcessor:
 
                 # Check for meeting analysis
                 if visible_category == "meeting":
-                    logger.info(
-                        f"Frame {req.frame_id}: Triggering meeting analysis"
-                    )
+                    logger.info(f"Frame {req.frame_id}: Triggering meeting analysis")
                     # Need full frame for meeting analysis (not cropped)
                     frame = req.frame_data["frame"]
                     arr = frame.to_ndarray(format="rgb24")

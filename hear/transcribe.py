@@ -51,8 +51,6 @@ class Transcriber:
 
         self.prompt_path = prompt_data.path
         self.prompt_text = prompt_data.text
-        # Validate entities file exists at startup
-        load_entity_names(journal_dir, required=True)
         self.model = load_silero_vad()
         self.merged_stash = np.array([], dtype=np.float32)
         self.processing: list[Path] = []
@@ -251,7 +249,7 @@ class Transcriber:
         attempts = 0
         while attempts < 2:
             try:
-                entity_names = load_entity_names(self.journal_dir, spoken=True)
+                entity_names = load_entity_names(spoken=True)
                 # If no entity names found, use empty string
                 # Convert list to comma-delimited string for prompt
                 if entity_names:

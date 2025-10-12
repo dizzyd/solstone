@@ -9,7 +9,7 @@ import pytest
 from think.utils import load_entity_names
 
 
-def test_load_entity_names_with_valid_file():
+def test_load_entity_names_with_valid_file(monkeypatch):
     """Test loading entity names from a valid entities.md file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -24,7 +24,8 @@ def test_load_entity_names_with_valid_file():
 """
         )
 
-        result = load_entity_names(tmpdir)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names()
         assert (
             result == "John Smith, Acme Corp, Project X, Hammer, Jane Doe, Widget Inc"
         )
@@ -40,32 +41,26 @@ def test_load_entity_names_with_valid_file():
         assert "Widget Inc" in names
 
 
-def test_load_entity_names_missing_file_not_required():
-    """Test that missing file returns None when not required."""
+def test_load_entity_names_missing_file(monkeypatch):
+    """Test that missing file returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        result = load_entity_names(tmpdir, required=False)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names()
         assert result is None
 
 
-def test_load_entity_names_missing_file_required():
-    """Test that missing file raises FileNotFoundError when required."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with pytest.raises(FileNotFoundError) as exc_info:
-            load_entity_names(tmpdir, required=True)
-        assert "entities.md" in str(exc_info.value)
-
-
-def test_load_entity_names_empty_file():
+def test_load_entity_names_empty_file(monkeypatch):
     """Test that empty file returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
         entities_path.write_text("")
 
-        result = load_entity_names(tmpdir)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names()
         assert result is None
 
 
-def test_load_entity_names_no_valid_entries():
+def test_load_entity_names_no_valid_entries(monkeypatch):
     """Test file with no parseable entity lines returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -77,11 +72,12 @@ Not a valid entity line
 """
         )
 
-        result = load_entity_names(tmpdir)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names()
         assert result is None
 
 
-def test_load_entity_names_with_duplicates():
+def test_load_entity_names_with_duplicates(monkeypatch):
     """Test that duplicate names are filtered out."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -94,14 +90,15 @@ def test_load_entity_names_with_duplicates():
 """
         )
 
-        result = load_entity_names(tmpdir)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names()
         assert result == "John Smith, Acme Corp"
 
         names = result.split(", ")
         assert len(names) == 2
 
 
-def test_load_entity_names_handles_special_characters():
+def test_load_entity_names_handles_special_characters(monkeypatch):
     """Test that names with special characters are handled correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -114,7 +111,8 @@ def test_load_entity_names_handles_special_characters():
 """
         )
 
-        result = load_entity_names(tmpdir)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names()
         assert "Jean-Pierre O'Malley" in result
         assert "AT&T" in result
         assert "C++ Compiler" in result
@@ -133,24 +131,23 @@ def test_load_entity_names_with_env_var(monkeypatch):
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
 
-        # Should use env var when journal_path is None
-        result = load_entity_names(None)
+        # Should use env var
+        result = load_entity_names()
         assert result == "Test User"
 
 
 def test_load_entity_names_missing_env_var(monkeypatch):
-    """Test that missing JOURNAL_PATH raises ValueError when needed."""
+    """Test that missing JOURNAL_PATH returns None."""
     # Ensure JOURNAL_PATH is not set, even after load_dotenv
     monkeypatch.delenv("JOURNAL_PATH", raising=False)
     # Mock load_dotenv to prevent it from loading a .env file
     monkeypatch.setattr("think.utils.load_dotenv", lambda: None)
 
-    with pytest.raises(ValueError) as exc_info:
-        load_entity_names(None)
-    assert "JOURNAL_PATH not set" in str(exc_info.value)
+    result = load_entity_names()
+    assert result is None
 
 
-def test_load_entity_names_spoken_mode():
+def test_load_entity_names_spoken_mode(monkeypatch):
     """Test spoken mode returns shortened forms optimized for speech recognition."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -168,7 +165,8 @@ def test_load_entity_names_spoken_mode():
 """
         )
 
-        result = load_entity_names(tmpdir, spoken=True)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
 
         # Should return a list, not a string
         assert isinstance(result, list)
@@ -205,7 +203,7 @@ def test_load_entity_names_spoken_mode():
         assert "Docker" not in result
 
 
-def test_load_entity_names_spoken_mode_empty():
+def test_load_entity_names_spoken_mode_empty(monkeypatch):
     """Test spoken mode with only tools returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -216,12 +214,13 @@ def test_load_entity_names_spoken_mode_empty():
 """
         )
 
-        result = load_entity_names(tmpdir, spoken=True)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
         # All entities are tools, so result should be None
         assert result is None
 
 
-def test_load_entity_names_spoken_mode_duplicates():
+def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
     """Test spoken mode filters out duplicate shortened forms."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
@@ -234,7 +233,8 @@ def test_load_entity_names_spoken_mode_duplicates():
 """
         )
 
-        result = load_entity_names(tmpdir, spoken=True)
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
 
         # Should have only one "John" and one "Acme" even though there are two of each
         assert result.count("John") == 1

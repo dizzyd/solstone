@@ -58,9 +58,6 @@ class Transcriber:
         self.prompt_path = prompt_data.path
         self.prompt_text = prompt_data.text
 
-        # Validate entities file exists at startup
-        load_entity_names(journal_dir, required=True)
-
         self.vad_model = load_silero_vad()
 
     def _move_to_heard(self, audio_path: Path) -> None:
@@ -72,7 +69,6 @@ class Transcriber:
             logging.info("Moved %s to %s", audio_path, heard_dir)
         except Exception as exc:
             logging.error("Failed to move %s to heard: %s", audio_path, exc)
-
 
     def _process_audio(self, raw_path: Path) -> List[Dict[str, object]] | None:
         """Process audio file and return segments for transcription."""
@@ -149,7 +145,7 @@ class Transcriber:
         json_path = self._get_json_path(raw_path)
 
         try:
-            entity_names = load_entity_names(self.journal_dir, spoken=True)
+            entity_names = load_entity_names(spoken=True)
             if entity_names:
                 entities_str = ", ".join(entity_names)
                 entities_text = f"Known entities: {entities_str}"
@@ -213,9 +209,6 @@ def main():
     journal = Path(os.getenv("JOURNAL_PATH", ""))
     if not journal.is_dir():
         parser.error("JOURNAL_PATH not set or invalid")
-    ent_path = journal / "entities.md"
-    if not ent_path.is_file():
-        parser.error(f"entities file not found: {ent_path}")
 
     audio_path = Path(args.audio_path)
     if not audio_path.exists():

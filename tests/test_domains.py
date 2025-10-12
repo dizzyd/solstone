@@ -152,7 +152,7 @@ def test_get_domains_with_entities(monkeypatch):
     # Instead, verify entities can be loaded via load_entity_names()
     from think.utils import load_entity_names
 
-    entity_names = load_entity_names(journal_path=FIXTURES_PATH, domain="test-domain")
+    entity_names = load_entity_names(domain="test-domain")
     assert entity_names is not None
 
     # Check that specific entities are in the comma-delimited string
@@ -183,9 +183,7 @@ def test_get_domains_empty_entities(monkeypatch):
         # Verify load_entity_names returns None for domains without entities.md
         from think.utils import load_entity_names
 
-        entity_names = load_entity_names(
-            journal_path=FIXTURES_PATH, domain="minimal-domain"
-        )
+        entity_names = load_entity_names(domain="minimal-domain")
         assert entity_names is None
 
 

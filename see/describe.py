@@ -24,8 +24,6 @@ class Describer:
         """Watch the journal and describe new screenshot diffs for the current day."""
         self.journal_dir = journal_dir
         self.watch_dir: Optional[Path] = None
-        # Validate entities file exists at startup
-        load_entity_names(journal_dir, required=True)
         self.processed: set[str] = set()
         self.observer: Optional[Observer] = None
         self.executor = ThreadPoolExecutor()
@@ -98,7 +96,7 @@ class Describer:
                 logging.warning(
                     f"No box_2d metadata found in {img_path}, using full image dimensions: {box}"
                 )
-            entity_names = load_entity_names(self.journal_dir, spoken=True)
+            entity_names = load_entity_names(spoken=True)
             # Convert list to comma-delimited string for prompt
             if entity_names:
                 entities_str = ", ".join(entity_names)

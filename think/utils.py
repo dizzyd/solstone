@@ -610,8 +610,7 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
 
 
 def load_entity_names(
-    journal_path: str | Path | None = None,
-    required: bool = False,
+    *,
     domain: str | None = None,
     spoken: bool = False,
 ) -> str | list[str] | None:
@@ -629,9 +628,6 @@ def load_entity_names(
     - Tools: Excluded entirely
 
     Args:
-        journal_path: Path to journal directory. If None, uses JOURNAL_PATH env var.
-        required: If True, raises FileNotFoundError when entities.md is missing.
-                 If False, returns None when missing.
         domain: Optional domain name. If provided, loads from domains/{domain}/entities.md
                 instead of the top-level entities.md file.
         spoken: If True, returns list of shortened forms for speech recognition.
@@ -639,20 +635,16 @@ def load_entity_names(
 
     Returns:
         When spoken=False: Comma-delimited string of entity names (e.g., "John Smith, Acme Corp"),
-                          or None if the file is not found and required=False.
-        When spoken=True: List of shortened entity names for speech, or None if file not found.
-
-    Raises:
-        FileNotFoundError: If required=True and entities.md doesn't exist.
-        ValueError: If journal_path is not provided and JOURNAL_PATH env var is not set.
+                          or None if the file is not found or JOURNAL_PATH is not set.
+        When spoken=True: List of shortened entity names for speech, or None if file not found
+                         or JOURNAL_PATH is not set.
     """
-    if journal_path is None:
-        load_dotenv()
-        journal_path = os.getenv("JOURNAL_PATH")
-        if not journal_path:
-            raise ValueError("JOURNAL_PATH not set and no journal_path provided")
+    load_dotenv()
+    journal_path_str = os.getenv("JOURNAL_PATH")
+    if not journal_path_str:
+        return None
 
-    journal_path = Path(journal_path)
+    journal_path = Path(journal_path_str)
 
     # Choose entities file based on domain parameter
     if domain:
@@ -661,10 +653,6 @@ def load_entity_names(
         entities_path = journal_path / "entities.md"
 
     if not entities_path.is_file():
-        if required:
-            raise FileNotFoundError(
-                f"Required entities file not found: {entities_path}"
-            )
         return None
 
     # Import here to avoid circular dependency
