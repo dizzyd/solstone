@@ -339,6 +339,7 @@ def touch_health(name: str) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch()
+        logging.getLogger(__name__).debug(f"Health touched: {name}")
     except Exception:
         pass
 

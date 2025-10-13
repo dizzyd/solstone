@@ -57,6 +57,7 @@ class Observer:
         self.screencast_running = False
         self.current_screencast_path = None
         self.pending_finalization = None  # Path to screencast awaiting finalization
+        self.last_screencast_size = 0  # Track file size for health checks
 
     async def setup(self):
         """Initialize audio devices and DBus connection."""
@@ -154,6 +155,7 @@ class Observer:
             previous_screencast_path = self.current_screencast_path
             self.screencast_running = False
             self.current_screencast_path = None
+            self.last_screencast_size = 0
             did_stop = True
 
         # Reset timing for new window
@@ -182,12 +184,11 @@ class Observer:
         live_path = str(day_dir / f"{time_part}_live.webm")
         screencast_path = str(day_dir / f"{time_part}_screen.webm")
 
-        ok, _ = await self.screencaster.start(
-            live_path, framerate=1, draw_cursor=True
-        )
+        ok, _ = await self.screencaster.start(live_path, framerate=1, draw_cursor=True)
         if ok:
             self.screencast_running = True
             self.current_screencast_path = screencast_path
+            self.last_screencast_size = 0
             logger.info(f"Started new screencast: {screencast_path}")
             return True
         else:
@@ -244,7 +245,6 @@ class Observer:
         try:
             os.replace(live_path, screencast_path)
             logger.info(f"Finalized screencast: {screencast_path}")
-            touch_health("see")
         except OSError as e:
             logger.error(f"Failed to rename {live_path} to {screencast_path}: {e}")
 
@@ -263,7 +263,9 @@ class Observer:
 
             # Process pending screencast finalization
             if self.pending_finalization:
-                live_path = self.pending_finalization.replace("_screen.webm", "_live.webm")
+                live_path = self.pending_finalization.replace(
+                    "_screen.webm", "_live.webm"
+                )
                 if os.path.exists(live_path):
                     await self.finalize_screencast(self.pending_finalization)
                     self.pending_finalization = None
@@ -313,10 +315,20 @@ class Observer:
             # Touch health for audio processing (always)
             touch_health("hear")
 
-            # Touch health for screencast when idle/locked (healthy not to record)
-            # When recording, health is touched only on successful finalization
+            # Touch health for screencast based on file existence and growth
             if not is_active:
+                # Healthy not to record when idle/locked
                 touch_health("see")
+            elif self.screencast_running and self.current_screencast_path:
+                # Check if recording file exists and is growing
+                live_path = self.current_screencast_path.replace(
+                    "_screen.webm", "_live.webm"
+                )
+                if os.path.exists(live_path):
+                    current_size = os.path.getsize(live_path)
+                    if current_size > self.last_screencast_size:
+                        touch_health("see")
+                        self.last_screencast_size = current_size
 
         # Cleanup on exit
         logger.info("Observer loop stopped, cleaning up...")
@@ -347,11 +359,15 @@ class Observer:
             if self.current_screencast_path:
                 # Wait 1s for GNOME Shell to create the file
                 await asyncio.sleep(1.0)
-                live_path = self.current_screencast_path.replace("_screen.webm", "_live.webm")
+                live_path = self.current_screencast_path.replace(
+                    "_screen.webm", "_live.webm"
+                )
                 if os.path.exists(live_path):
                     await self.finalize_screencast(self.current_screencast_path)
                 else:
-                    logger.warning(f"Screencast file not found after shutdown: {live_path}")
+                    logger.warning(
+                        f"Screencast file not found after shutdown: {live_path}"
+                    )
             self.screencast_running = False
 
         # Process any remaining pending finalization
@@ -361,7 +377,9 @@ class Observer:
             if os.path.exists(live_path):
                 await self.finalize_screencast(self.pending_finalization)
             else:
-                logger.warning(f"Pending screencast not found after shutdown: {live_path}")
+                logger.warning(
+                    f"Pending screencast not found after shutdown: {live_path}"
+                )
 
         # Stop audio recorder
         self.audio_recorder.stop_recording()
