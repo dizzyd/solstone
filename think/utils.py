@@ -573,15 +573,16 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
     day:
         Day folder in ``YYYYMMDD`` format.
     name:
-        Transcript filename such as ``HHMMSS_audio.json`` or
-        ``HHMMSS_monitor_1_diff.json``.
+        Transcript filename such as ``HHMMSS_audio.json``,
+        ``HHMMSS_monitor_1_diff.json``, or ``HHMMSS_screen.jsonl``.
 
     Returns
     -------
     tuple[str, str, Any]
         ``(path, mime_type, metadata)`` where ``path`` is relative to the day
-        directory, ``mime_type`` is either ``image/png`` or ``audio/flac`` and
-        ``metadata`` contains the parsed JSON data (empty on failure).
+        directory, ``mime_type`` is ``audio/flac``, ``image/png``, or
+        ``video/webm``, and ``metadata`` contains the parsed JSON data
+        (empty on failure).
     """
 
     day_dir = day_path(day)
@@ -596,13 +597,22 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
         raw_name = name[:-5] + ".png"
         rel = f"seen/{raw_name}"
         mime = "image/png"
+    elif name.endswith("_screen.jsonl"):
+        # Screencast files are stored as .webm in the seen directory
+        raw_name = name.replace("_screen.jsonl", "_screen.webm")
+        rel = f"seen/{raw_name}"
+        mime = "video/webm"
     else:
         raise ValueError(f"unsupported transcript name: {name}")
 
     meta: Any = {}
     try:
         with open(json_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
+            if name.endswith(".jsonl"):
+                # For JSONL files, read all lines as a list
+                meta = [json.loads(line) for line in f if line.strip()]
+            else:
+                meta = json.load(f)
     except Exception:  # pragma: no cover - optional metadata
         logging.debug("Failed to read %s", json_path)
 
