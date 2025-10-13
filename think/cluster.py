@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import re
 import sys
@@ -11,6 +12,7 @@ from .utils import day_path, setup_cli
 TIME_RE = r"(\d{6})"
 AUDIO_PATTERN = re.compile(rf"^{TIME_RE}.*_audio\.json$")
 SCREEN_SUMMARY_PATTERN = re.compile(rf"^{TIME_RE}_screen\.md$")
+SCREEN_JSONL_PATTERN = re.compile(rf"^{TIME_RE}_screen\.jsonl$")
 SCREEN_DIFF_PATTERN = re.compile(rf"^{TIME_RE}_([a-z]+)_(\d+)_diff\.json$")
 
 
@@ -41,7 +43,52 @@ def _load_entries(
         ):
             time_part = match.group(1)
             prefix = "screen"
+        elif screen_mode == "raw" and (match := SCREEN_JSONL_PATTERN.match(filename)):
+            # New JSONL format - parse and create entries per frame
+            time_part = match.group(1)
+            path = os.path.join(day_dir, filename)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    frames = []
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            frame = json.loads(line)
+                            # Skip frames with errors
+                            if "error" not in frame:
+                                frames.append(frame)
+                        except json.JSONDecodeError:
+                            continue
+
+                    # Sort frames by timestamp
+                    frames.sort(key=lambda f: f.get("timestamp", 0))
+
+                    # Create one entry with all frames as JSON content
+                    if frames:
+                        base_timestamp = datetime.strptime(
+                            date_str + time_part, "%Y%m%d%H%M%S"
+                        )
+                        entries.append(
+                            {
+                                "timestamp": base_timestamp,
+                                "prefix": "screen_jsonl",
+                                "content": json.dumps(frames, indent=2),
+                                "monitor": None,
+                                "source": None,
+                                "id": None,
+                                "name": filename,
+                            }
+                        )
+            except Exception as e:  # pragma: no cover - warning only
+                print(
+                    f"Warning: Could not read JSONL file {filename}: {e}",
+                    file=sys.stderr,
+                )
+            continue
         elif screen_mode == "raw" and (match := SCREEN_DIFF_PATTERN.match(filename)):
+            # Legacy diff.json format
             time_part = match.group(1)
             source = match.group(2)
             ident = match.group(3)
@@ -117,6 +164,12 @@ def _groups_to_markdown(groups: Dict[datetime, List[Dict[str, str]]]) -> str:
                 lines.append('"""')
                 lines.append(entry["content"].strip())
                 lines.append('"""')
+                lines.append("")
+            elif entry["prefix"] == "screen_jsonl":
+                lines.append("### Screen Activity (JSONL)")
+                lines.append("```json")
+                lines.append(entry["content"].strip())
+                lines.append("```")
                 lines.append("")
             else:
                 src = entry.get("source") or entry["prefix"]
@@ -197,6 +250,13 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
             )
             audio_slots.add(slot)
         elif match := SCREEN_SUMMARY_PATTERN.match(filename):
+            time_part = match.group(1)
+            dt = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
+            slot = dt.replace(
+                minute=dt.minute - (dt.minute % 15), second=0, microsecond=0
+            )
+            screen_slots.add(slot)
+        elif match := SCREEN_JSONL_PATTERN.match(filename):
             time_part = match.group(1)
             dt = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
             slot = dt.replace(
