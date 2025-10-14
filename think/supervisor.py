@@ -329,12 +329,12 @@ def check_scheduled_agents() -> None:
         state["start_time"] = time.time()
 
 
-def start_runners() -> list[ManagedProcess]:
-    """Launch hear and see runners with output logging."""
+def start_observers() -> list[ManagedProcess]:
+    """Launch observe-gnome and observe-sense with output logging."""
     procs: list[ManagedProcess] = []
     commands = {
-        "hear": ["hear-runner", "-v"],
-        "see": ["see-runner", "-v"],
+        "observer": ["observe-gnome", "-v"],
+        "sense": ["observe-sense", "-v"],
     }
     for name, cmd in commands.items():
         procs.append(_launch_process(name, cmd, restart=True))
@@ -551,9 +551,9 @@ def parse_args() -> argparse.ArgumentParser:
         help="Command used to send desktop notification",
     )
     parser.add_argument(
-        "--no-runners",
+        "--no-observers",
         action="store_true",
-        help="Do not automatically start hear and see runners",
+        help="Do not automatically start observe-gnome and observe-sense",
     )
     parser.add_argument(
         "--no-daily",
@@ -614,8 +614,8 @@ def main() -> None:
     logging.info("Supervisor starting...")
 
     procs: list[ManagedProcess] = []
-    if not args.no_runners:
-        procs.extend(start_runners())
+    if not args.no_observers:
+        procs.extend(start_observers())
     if not args.no_cortex:
         procs.append(start_cortex_server())
     if not args.no_convey:
