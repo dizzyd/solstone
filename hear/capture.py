@@ -6,6 +6,7 @@ import gc
 import io
 import logging
 import os
+import signal
 import sys
 import threading
 import time
@@ -58,16 +59,35 @@ class AudioRecorder:
                             mic_chunk = mic_rec.record(numframes=BLOCK_SIZE)
                             sys_chunk = sys_rec.record(numframes=BLOCK_SIZE)
 
-                            if mic_chunk is None or mic_chunk.size != BLOCK_SIZE:
-                                logging.warning("Bad microphone buffer")
+                            # Basic validation
+                            if mic_chunk is None or mic_chunk.size == 0:
+                                logging.warning("Empty microphone buffer")
                                 continue
-                            if sys_chunk is None or sys_chunk.size != BLOCK_SIZE:
-                                logging.warning("Bad system buffer")
+                            if sys_chunk is None or sys_chunk.size == 0:
+                                logging.warning("Empty system buffer")
                                 continue
 
-                            stereo_chunk = np.column_stack((mic_chunk, sys_chunk))
-                            self.audio_queue.put(stereo_chunk)
-                            block_count += 1
+                            try:
+                                # Try to create stereo chunk - this is where shape errors occur
+                                stereo_chunk = np.column_stack((mic_chunk, sys_chunk))
+                                self.audio_queue.put(stereo_chunk)
+                                block_count += 1
+                            except (TypeError, ValueError, AttributeError) as e:
+                                # Audio device returned unexpected format - trigger clean shutdown
+                                logging.error(
+                                    f"Fatal audio format error - triggering clean shutdown: {e}\n"
+                                    f"  mic_chunk type={type(mic_chunk)}, "
+                                    f"shape={getattr(mic_chunk, 'shape', 'N/A')}, "
+                                    f"dtype={getattr(mic_chunk, 'dtype', 'N/A')}\n"
+                                    f"  sys_chunk type={type(sys_chunk)}, "
+                                    f"shape={getattr(sys_chunk, 'shape', 'N/A')}, "
+                                    f"dtype={getattr(sys_chunk, 'dtype', 'N/A')}"
+                                )
+                                # Stop recording thread
+                                self._running = False
+                                # Send SIGTERM to trigger graceful shutdown (same as Ctrl-C)
+                                os.kill(os.getpid(), signal.SIGTERM)
+                                return
                         except Exception as e:
                             logging.error(f"Error recording audio: {e}")
                             if not self._running:
