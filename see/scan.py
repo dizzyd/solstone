@@ -12,7 +12,7 @@ from PIL.PngImagePlugin import PngInfo
 
 from see.screen_compare import compare_images
 from see.screen_dbus import check_screen_state, idle_time_ms, screen_snap
-from think.detect_border import detect_border
+from observe.see import detect_border
 from think.utils import day_path, setup_cli, touch_health
 
 BLUE_BORDER = (0, 0, 255)
