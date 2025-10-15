@@ -152,19 +152,8 @@ def _sanitize_entities(entities: list[str]) -> list[str]:
 
 def has_video_stream(path: str) -> bool:
     """Check if a media file contains video streams."""
-    cap = cv2.VideoCapture(path)
-    if not cap.isOpened():
-        return False
-
-    # Check if we can actually read a frame
-    has_video = False
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if frame_count > 0:
-        ret, frame = cap.read()
-        has_video = ret and frame is not None
-
-    cap.release()
-    return has_video
+    # TODO: Implement video stream detection
+    return False
 
 
 def process_video(
@@ -175,58 +164,8 @@ def process_video(
     Returns:
         List of created file paths.
     """
-    created_files = []
-    cap = cv2.VideoCapture(path)
-    if not cap.isOpened():
-        return created_files
-    fps = cap.get(cv2.CAP_PROP_FPS) or 0
-    if fps <= 0:
-        fps = 30
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if frame_count <= 0:
-        cap.release()
-        return created_files
-    interval = max(1, int(fps * sample_s))
-    prev_img = None
-    frame_idx = 0
-    while frame_idx < frame_count:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-        ret, frame = cap.read()
-        if not ret:
-            break
-        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        if prev_img is not None:
-            boxes = compare_images(prev_img, img)
-            if boxes:
-                # fmt: off
-                largest = max(
-                    boxes,
-                    key=lambda b: (b["box_2d"][3] - b["box_2d"][1]) * (b["box_2d"][2] - b["box_2d"][0]),
-                )
-                # fmt: on
-                width = largest["box_2d"][3] - largest["box_2d"][1]
-                height = largest["box_2d"][2] - largest["box_2d"][0]
-                if width > MIN_THRESHOLD and height > MIN_THRESHOLD:
-                    ts = start + timedelta(seconds=frame_idx / fps)
-                    time_part = ts.strftime("%H%M%S")
-                    img_path = os.path.join(out_dir, f"{time_part}_import_1_diff.png")
-
-                    # Add box_2d to PNG metadata
-                    pnginfo = PngInfo()
-                    pnginfo.add_text("box_2d", json.dumps(largest["box_2d"]))
-
-                    # Atomically save the image
-                    with tempfile.NamedTemporaryFile(
-                        dir=os.path.dirname(img_path), suffix=".pngtmp", delete=False
-                    ) as tf:
-                        img.save(tf, format="PNG", pnginfo=pnginfo)
-                    os.replace(tf.name, img_path)
-                    logger.info(f"Added video frame to journal: {img_path}")
-                    created_files.append(img_path)
-        prev_img = img
-        frame_idx += interval
-    cap.release()
-    return created_files
+    # TODO: Implement video frame processing and change detection
+    return []
 
 
 def _read_transcript(path: str) -> str:
