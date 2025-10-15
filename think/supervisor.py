@@ -272,14 +272,22 @@ def check_scheduled_agents() -> None:
         all_done = not any(f.exists() for f in state["active_files"])
         timed_out = (
             time.time() - state["start_time"]
-        ) > 300  # 5 minute timeout per group
+        ) > 600  # 10 minute timeout per group
 
         if all_done:
             logging.info("Priority group completed")
             state["active_files"] = []
         elif timed_out:
+            # List unfinished agents
+            unfinished = [
+                f.stem.replace("_active", "")
+                for f in state["active_files"]
+                if f.exists()
+            ]
+            unfinished_str = ", ".join(unfinished) if unfinished else "none"
             logging.warning(
-                "Priority group timed out after 300s, proceeding to next group"
+                f"Priority group timed out after 600s, proceeding to next group. "
+                f"Unfinished agents: {unfinished_str}"
             )
             state["active_files"] = []
         else:
