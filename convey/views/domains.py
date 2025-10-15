@@ -214,52 +214,34 @@ def get_domain_entities(domain_name: str) -> Any:
 
 @bp.route("/api/domains/<domain_name>/entities", methods=["POST"])
 def add_domain_entity(domain_name: str) -> Any:
-    """Add an entity to a domain's entities.md file."""
+    """Add/attach an entity to a domain."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-    domain_path = Path(journal) / "domains" / domain_name
-    entities_file = domain_path / "entities.md"
-
-    if not domain_path.exists():
-        return jsonify({"error": "Domain not found"}), 404
-
     etype = data.get("type", "").strip()
     name = data.get("name", "").strip()
-    desc = data.get("desc", "").strip()
+    # Support both "desc" and "description" for backwards compatibility
+    desc = data.get("desc", "") or data.get("description", "")
+    desc = desc.strip()
 
     if not etype or not name:
         return jsonify({"error": "Type and name are required"}), 400
 
     try:
-        # Read existing content
-        existing_lines = []
-        if entities_file.exists():
-            with open(entities_file, "r", encoding="utf-8") as f:
-                existing_lines = f.readlines()
+        # Load existing attached entities
+        entities = load_entities(domain_name)
 
-        # Check if entity already exists
-        new_line = f"* {etype}: {name}"
-        if desc:
-            new_line += f" - {desc}"
-        new_line += "\n"
-
-        for line in existing_lines:
-            if line.strip().startswith(f"* {etype}: {name}"):
+        # Check for duplicates
+        for existing_type, existing_name, _ in entities:
+            if existing_type == etype and existing_name == name:
                 return jsonify({"error": "Entity already exists in domain"}), 409
 
-        # Add the new entity
-        existing_lines.append(new_line)
+        # Add new entity
+        entities.append((etype, name, desc))
 
-        # Write back to file
-        with open(entities_file, "w", encoding="utf-8") as f:
-            f.writelines(existing_lines)
+        # Save back
+        save_entities(domain_name, entities)
 
         return jsonify({"success": True})
 
@@ -269,21 +251,10 @@ def add_domain_entity(domain_name: str) -> Any:
 
 @bp.route("/api/domains/<domain_name>/entities", methods=["DELETE"])
 def remove_domain_entity(domain_name: str) -> Any:
-    """Remove an entity from a domain's entities.md file."""
+    """Remove/detach an entity from a domain."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
-
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-    domain_path = Path(journal) / "domains" / domain_name
-    entities_file = domain_path / "entities.md"
-
-    if not entities_file.exists():
-        return jsonify({"error": "Entities file not found"}), 404
 
     etype = data.get("type", "").strip()
     name = data.get("name", "").strip()
@@ -292,25 +263,22 @@ def remove_domain_entity(domain_name: str) -> Any:
         return jsonify({"error": "Type and name are required"}), 400
 
     try:
-        # Read existing content
-        with open(entities_file, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        # Load existing attached entities
+        entities = load_entities(domain_name)
 
         # Filter out the entity to remove
-        new_lines = []
-        removed = False
-        for line in lines:
-            if line.strip().startswith(f"* {etype}: {name}"):
-                removed = True
-                continue
-            new_lines.append(line)
+        filtered = [
+            (et, n, d)
+            for et, n, d in entities
+            if not (et == etype and n == name)
+        ]
 
-        if not removed:
+        # Check if anything was removed
+        if len(filtered) == len(entities):
             return jsonify({"error": "Entity not found in domain"}), 404
 
-        # Write back to file
-        with open(entities_file, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)
+        # Save filtered list
+        save_entities(domain_name, filtered)
 
         return jsonify({"success": True})
 
@@ -402,7 +370,7 @@ Generate a clear, engaging 1-2 sentence description that captures the essence an
 
 @bp.route("/api/domains/<domain_name>/entities/description", methods=["PUT"])
 def update_entity_description(domain_name: str) -> Any:
-    """Update an entity's description in the domain's entities.md file."""
+    """Update an entity's description."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -414,42 +382,25 @@ def update_entity_description(domain_name: str) -> Any:
     if not entity_type or not entity_name:
         return jsonify({"error": "Type and name are required"}), 400
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-    domain_path = Path(journal) / "domains" / domain_name
-    entities_file = domain_path / "entities.md"
-
-    if not domain_path.exists():
-        return jsonify({"error": "Domain not found"}), 404
-
     try:
-        # Read existing content
-        lines = []
-        if entities_file.exists():
-            with open(entities_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+        # Load existing attached entities
+        entities = load_entities(domain_name)
 
-        # Find and update the entity line
+        # Find and update the entity
         updated = False
-        for i, line in enumerate(lines):
-            if line.strip().startswith(f"* {entity_type}: {entity_name}"):
-                # Update the line with new description
-                if new_description:
-                    lines[i] = f"* {entity_type}: {entity_name} - {new_description}\n"
-                else:
-                    lines[i] = f"* {entity_type}: {entity_name}\n"
+        new_entities = []
+        for etype, name, desc in entities:
+            if etype == entity_type and name == entity_name:
+                new_entities.append((etype, name, new_description))
                 updated = True
-                break
+            else:
+                new_entities.append((etype, name, desc))
 
         if not updated:
             return jsonify({"error": "Entity not found in domain"}), 404
 
-        # Write back to file
-        with open(entities_file, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+        # Save updated list
+        save_entities(domain_name, new_entities)
 
         return jsonify({"success": True})
 
