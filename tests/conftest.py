@@ -86,15 +86,19 @@ def add_module_stubs(request, monkeypatch):
         dotenv_mod.load_dotenv = load_dotenv
         dotenv_mod.dotenv_values = dotenv_values
         sys.modules["dotenv"] = dotenv_mod
-    if "input_detect" not in sys.modules:
-        input_detect_mod = types.ModuleType("input_detect")
+    if "observe.detect" not in sys.modules:
+        detect_mod = types.ModuleType("observe.detect")
 
         def input_detect():
             return None, None
 
-        input_detect_mod.input_detect = input_detect
-        sys.modules["input_detect"] = input_detect_mod
-        sys.modules["hear.input_detect"] = input_detect_mod
+        detect_mod.input_detect = input_detect
+        sys.modules["observe.detect"] = detect_mod
+        observe_pkg = sys.modules.get("observe")
+        if observe_pkg is None:
+            observe_pkg = types.ModuleType("observe")
+            sys.modules["observe"] = observe_pkg
+        setattr(observe_pkg, "detect", detect_mod)
     if "gi" not in sys.modules:
         gi_mod = types.ModuleType("gi")
         gi_mod.require_version = lambda *a, **k: None

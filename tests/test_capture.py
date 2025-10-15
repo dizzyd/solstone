@@ -1,9 +1,19 @@
 import importlib
+import sys
+import types
 
 import numpy as np
 
 
 def test_get_buffer_and_flac(tmp_path, monkeypatch):
+    stub = types.ModuleType("hear.input_detect")
+
+    def _input_detect(*args, **kwargs):
+        return None, None
+
+    stub.input_detect = _input_detect
+    sys.modules["hear.input_detect"] = stub
+
     cap = importlib.import_module("hear.capture")
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     rec = cap.AudioRecorder()
