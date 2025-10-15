@@ -36,13 +36,6 @@ def build_commands(day: str, force: bool, verbose: bool = False) -> list[list[st
         cmd.append("-v")
     commands.append(cmd)
 
-    reduce_cmd = ["see-reduce", day]
-    if verbose:
-        reduce_cmd.append("--verbose")
-    if force:
-        reduce_cmd.append("--force")
-    commands.append(reduce_cmd)
-
     topics = get_topics()
     for topic_name, topic_data in topics.items():
         # Skip disabled topics

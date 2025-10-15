@@ -12,7 +12,6 @@ def test_admin_day_page(tmp_path, monkeypatch):
     with review.app.test_request_context("/admin/20240101"):
         html = review.admin_day_page("20240101")
     assert "Sense Repair" in html
-    assert "Screen Reduce" in html
     assert "Process Day" in html
 
 
@@ -53,12 +52,6 @@ def test_admin_day_actions(monkeypatch, tmp_path):
         resp = review.admin_entity("20240101")
     assert resp.json["status"] == "ok"
     assert ["think-entity-roll", "--day", "20240101", "--force", "--verbose"] in called
-
-    called.clear()
-    with review.app.test_request_context("/admin/api/20240101/reduce", method="POST"):
-        resp = review.admin_reduce("20240101")
-    assert resp.json["status"] == "ok"
-    assert ["see-reduce", "20240101", "--verbose"] in called
 
     called.clear()
     with review.app.test_request_context("/admin/api/20240101/process", method="POST"):

@@ -610,7 +610,7 @@ def make_handler(differ: ScreencastDiffer):
                     # Get box statistics for this frame
                     _, _, _, box_stats = differ.top_frames[rank]
 
-                    # Check if this frame meets the threshold logic from see/scan.py
+                    # Check if this frame meets the threshold for significant changes
                     # (largest box width > 400 and height > 400)
                     threshold_indicator = ""
                     largest_w, largest_h = None, None

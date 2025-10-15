@@ -23,6 +23,6 @@ def test_main_runs(tmp_path, monkeypatch):
         "sys.argv", ["think-dream", "--day", "20240101", "--force", "--verbose"]
     )
     mod.main()
-    assert any(c[0] == "see-reduce" for c in called)
+    assert any(c[0] == "observe-sense" for c in called)
     assert any(c[0] == "think-summarize" for c in called)
     assert any(c[0] == "think-entity-roll" for c in called)

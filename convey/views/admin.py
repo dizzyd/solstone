@@ -21,7 +21,6 @@ bp = Blueprint("admin", __name__, template_folder="../templates")
 def admin_page() -> str:
     repair_by_cat: dict[str, list[dict[str, Any]]] = {
         "sense": [],
-        "reduce": [],
         "summaries": [],
         "entity": [],
     }
@@ -35,7 +34,6 @@ def admin_page() -> str:
                     d = data["days"].get(day, {})
                     day_info = {
                         "sense": d.get("repair_observe", 0),
-                        "reduce": d.get("repair_reduce", 0),
                         "summaries": d.get("repair_summaries", 0),
                         "entity": d.get("repair_entity", 0),
                     }
@@ -82,7 +80,6 @@ def admin_day_page(day: str) -> str:
     sense_rep = sense_proc = 0
     summaries_rep = summaries_proc = 0
     entity_rep = entity_proc = 0
-    reduce_rep = reduce_proc = 0
 
     # Read stats from stats.json instead of scanning on demand
     if state.journal_root:
@@ -95,15 +92,12 @@ def admin_day_page(day: str) -> str:
 
                 # Extract repair counts
                 sense_rep = day_stats.get("repair_observe", 0)
-                reduce_rep = day_stats.get("repair_reduce", 0)
                 summaries_rep = day_stats.get("repair_summaries", 0)
                 entity_rep = day_stats.get("repair_entity", 0)
 
                 # Extract processed counts
                 # For sense: audio_json + desc_json indicates processed transcripts + descriptions
                 sense_proc = day_stats.get("audio_json", 0) + day_stats.get("desc_json", 0)
-                # For reduce: screen_md indicates processed screen summaries
-                reduce_proc = day_stats.get("screen_md", 0)
                 # For summaries: summaries_processed is directly available
                 summaries_proc = day_stats.get("summaries_processed", 0)
                 # For entity: entities indicates days with entities.md (1 or 0)
@@ -123,8 +117,6 @@ def admin_day_page(day: str) -> str:
         summaries_proc=summaries_proc,
         entity_rep=entity_rep,
         entity_proc=entity_proc,
-        reduce_rep=reduce_rep,
-        reduce_proc=reduce_proc,
     )
 
 
@@ -152,15 +144,6 @@ def admin_entity(day: str) -> Any:
         return jsonify({"error": "invalid day"}), 404
 
     run_task("entity", day)
-    return jsonify({"status": "ok"})
-
-
-@bp.route("/admin/api/<day>/reduce", methods=["POST"])
-def admin_reduce(day: str) -> Any:
-    if not _valid_day(day):
-        return jsonify({"error": "invalid day"}), 404
-
-    run_task("reduce", day)
     return jsonify({"status": "ok"})
 
 

@@ -201,18 +201,6 @@ def run_task(
                     if use_stop
                     else _run_command(args, logger)
                 )
-            elif name == "reduce":
-                if not day:
-                    raise ValueError("day required")
-                cmd = ["see-reduce", day, "--verbose"]
-                if force:
-                    cmd.append("--force")
-                commands.append(" ".join(cmd))
-                code = (
-                    _run_command(cmd, logger, stop)
-                    if use_stop
-                    else _run_command(cmd, logger)
-                )
             elif name == "importer":
                 if not day:
                     raise ValueError("file and timestamp required")

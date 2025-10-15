@@ -99,8 +99,8 @@ def compare_frames(
     Compare two PyAV video frames and return bounding boxes of changed regions.
 
     Uses block-based SSIM on Y-plane (luma) for efficient detection of perceptual
-    changes without full RGB decoding. Adapts the algorithm from see/screen_compare.py
-    to work directly with PyAV frames for ~3-5x faster performance.
+    changes without full RGB decoding. Optimized to work directly with PyAV frames
+    for ~3-5x faster performance.
 
     Args:
         frame1: First video frame
