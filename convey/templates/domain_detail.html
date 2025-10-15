@@ -1157,8 +1157,20 @@ window.addEventListener('click', (e) => {
 
 function loadEntities() {
   fetch(`/api/domains/${encodeURIComponent(domainName)}/entities`)
-    .then(response => response.json())
-    .then(data => {
+    .then(response => {
+      return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
+    })
+    .then(({ ok, status, data }) => {
+      // Check if the API returned an error
+      if (!ok || data.error) {
+        const errorMsg = data.error || `Server error (${status})`;
+        document.getElementById('entities-loading').innerHTML =
+          `<div style="color: #c33; background: #fee; padding: 1em; border-radius: 6px; border: 1px solid #fcc;">
+            <strong>Error loading entities:</strong><br>${escapeHtml(errorMsg)}
+          </div>`;
+        return;
+      }
+
       // Transform new API format {attached, detected} to old format {all_entities}
       const all_entities = [];
 
@@ -1195,7 +1207,10 @@ function loadEntities() {
     })
     .catch(error => {
       console.error('Error loading entities:', error);
-      document.getElementById('entities-loading').innerHTML = 'Error loading entities';
+      document.getElementById('entities-loading').innerHTML =
+        `<div style="color: #c33; background: #fee; padding: 1em; border-radius: 6px; border: 1px solid #fcc;">
+          <strong>Error loading entities:</strong><br>${escapeHtml(error.message || 'Network error')}
+        </div>`;
     });
 }
 
