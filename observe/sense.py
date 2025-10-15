@@ -399,7 +399,15 @@ class FileSensor:
             logger.info(f"No unprocessed files found in {day_dir}")
             return
 
-        logger.info(f"Found {len(to_process)} unprocessed files to process")
+        # Count files by extension
+        ext_counts = {}
+        for file_path, handler_name, command in to_process:
+            ext = file_path.suffix.lower()  # e.g., ".webm", ".flac", ".jsonl"
+            ext_counts[ext] = ext_counts.get(ext, 0) + 1
+
+        # Format breakdown: "21 files (10 .webm, 8 .flac, 3 .jsonl)"
+        breakdown = ", ".join(f"{count} {ext}" for ext, count in sorted(ext_counts.items()))
+        logger.info(f"Found {len(to_process)} unprocessed files to process ({breakdown})")
 
         # Process with concurrency limit using semaphore
         semaphore = threading.Semaphore(max_jobs)
