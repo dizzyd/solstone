@@ -719,8 +719,13 @@ class VideoProcessor:
 
                 batch.add(req)
 
+        # Track success/failure for all frames
+        total_frames = 0
+        failed_frames = 0
+
         # Stream results as they complete, with retry logic
         async for req in batch.drain_batch():
+            total_frames += 1
             # Check for errors
             has_error = bool(req.error)
             error_msg = req.error
@@ -752,6 +757,10 @@ class VideoProcessor:
                     f"Retrying frame {req.frame_id} (attempt {req.retry_count + 1}/5): {error_msg}"
                 )
                 continue  # Don't output, wait for retry result
+
+            # Track failure after all retries exhausted
+            if has_error:
+                failed_frames += 1
 
             # Record this request's result (after retries are done)
             request_record = {
@@ -897,11 +906,38 @@ class VideoProcessor:
             req.meeting_analysis = None
             req.censor_coords = None
 
-        # Close output file, move media, and create crumb
+        # Close output file
         if output_file:
             output_file.close()
-            moved_path = self._move_to_seen(self.video_path)
-            self._create_crumb(output_path, moved_path, used_prompts, used_models)
+
+        # Check if all frames failed
+        all_failed = total_frames > 0 and failed_frames == total_frames
+
+        if all_failed:
+            # Don't move video to seen/ - leave for retry
+            error_detail = (
+                f"Error details in {output_path}" if output_path else "No output file"
+            )
+            logger.error(
+                f"All {total_frames} frame(s) failed processing. "
+                f"Video left in place for retry. {error_detail}"
+            )
+            # Clear qualified_frames to free memory before raising
+            for monitor_id in self.qualified_frames:
+                self.qualified_frames[monitor_id].clear()
+            raise RuntimeError(
+                f"All {total_frames} frame(s) failed vision analysis after retries"
+            )
+        else:
+            # At least some frames succeeded - move to seen/ and create crumb
+            if failed_frames > 0:
+                logger.warning(
+                    f"{failed_frames}/{total_frames} frame(s) failed processing. "
+                    f"Moving video to seen/ anyway."
+                )
+            if output_path:
+                moved_path = self._move_to_seen(self.video_path)
+                self._create_crumb(output_path, moved_path, used_prompts, used_models)
 
         # Clear qualified_frames to free memory
         for monitor_id in self.qualified_frames:
