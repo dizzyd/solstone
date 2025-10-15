@@ -487,8 +487,10 @@ class VideoProcessor:
                 "censor_coords"
             ]
             draw = ImageDraw.Draw(image)
+            # PIL's rectangle() treats second point as exclusive, so add 1 to include
+            # the full bordered area (border pixels + interior)
             draw.rectangle(
-                ((censor_x_min, censor_y_min), (censor_x_max, censor_y_max)),
+                ((censor_x_min, censor_y_min), (censor_x_max + 1, censor_y_max + 1)),
                 fill="black",
             )
 
