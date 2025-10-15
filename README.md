@@ -24,14 +24,13 @@ A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal
 - **Think** 🧠 - Data processing and insights
   - `think-summarize` - Generates AI-powered summaries and topics
   - `think-cluster` - Groups related content
-  - `think-entity-roll` - Extracts and tracks entities
   - `think-indexer` - Builds searchable database
   - `think-supervisor` - Orchestrates agent workflows
   - `think-dream` - Full daily data pipeline
 
 - **Convey** 🌐 - Web interface and review
   - `convey` - Launch web UI (with `--password` for auth)
-  - Review entities, meetings, tasks, and domains
+  - Review domain-scoped entities, meetings, tasks, and matters
   - Live transcription monitoring
   - Calendar view with daily summaries
 

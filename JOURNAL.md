@@ -4,8 +4,6 @@ This document describes the layout of a **journal** directory where all audio, s
 
 ## Top level files
 
-- `entities.md` – top list of entities gathered across days. Used by several tools.
-- `entity_review.log` – operations performed in the web UI are appended here.
 - `task_log.txt` – optional log of utility runs in `[epoch]\tmessage` format.
 - `config/journal.json` – user configuration for the journal (optional, see below).
 - `domains/` – domain-specific organization folders described below.
@@ -50,10 +48,6 @@ Fields:
 - `aliases` (array of strings) – Alternative names, nicknames, or usernames that may appear in transcripts
 - `email_addresses` (array of strings) – Email addresses associated with the user for participant detection
 - `timezone` (string) – IANA timezone identifier (e.g., "America/New_York", "Europe/London") for timestamp interpretation
-- `entity` (string) – Links to a Person entity from the top-level entities.md file for entity tracking and analysis. Auto-matches by name prefix if not set.
-
-**Entity Integration:**
-When an entity is selected in the configuration UI, the entity's description is automatically loaded into the "Short Bio" field for editing. Any changes to the short bio are saved both to the identity configuration and to the entity itself in entities.md. This ensures the journal owner's biographical information stays synchronized between the identity config and the entity system, allowing agents and analysis tools to access consistent contextual information about the user.
 
 This configuration helps meeting extraction identify the user as a participant, enables personalized agent interactions, and ensures timestamps are interpreted correctly across the journal.
 
@@ -116,7 +110,56 @@ Optional fields:
 
 ### Domain Entities
 
-The `entities.md` file follows the same format as the top-level entities file but contains only entities relevant to this specific domain. This allows for more targeted entity tracking within focused areas of work.
+Entities in Sunstone use a two-state system: **detected** (daily discoveries) and **attached** (promoted/persistent). This agent-driven architecture automatically identifies entities from journal content while allowing manual curation.
+
+#### Entity Storage Structure
+
+```
+domains/{domain}/
+  ├── entities.md              # Attached entities (persistent)
+  └── entities/YYYYMMDD.md     # Daily detected entities
+```
+
+#### Attached Entities
+
+The `entities.md` file contains manually promoted entities that are persistently associated with the domain. These entities are loaded into agent context and appear in the domain UI as starred items.
+
+Format example:
+```markdown
+- **Person**: Alice Johnson - Lead engineer on the API project
+- **Company**: TechCorp - Primary client for consulting work
+- **Project**: API Optimization - Performance improvement initiative
+- **Tool**: PostgreSQL - Database system used in production
+```
+
+Entity types: `Person`, `Company`, `Project`, `Tool`
+
+#### Detected Entities
+
+Daily entity detection files (`entities/YYYYMMDD.md`) contain entities automatically discovered by agents from:
+- Journal transcripts and screen captures
+- Knowledge graphs and summaries
+- News feeds and external content
+- Matter activity logs
+
+Detected entities accumulate historical context over time. Entities appearing in multiple daily detections can be promoted to attached status through the web UI or MCP tools.
+
+Format matches attached entities:
+```markdown
+- **Person**: Charlie Brown - Mentioned in standup meeting
+- **Tool**: React - Used in UI development work
+```
+
+#### Entity Lifecycle
+
+1. **Detection**: Daily agents scan journal content and record entities in `entities/YYYYMMDD.md`
+2. **Aggregation**: Review agent tracks detection frequency across recent days
+3. **Promotion**: Entities with 3+ detections are auto-promoted to attached, or users manually promote via UI
+4. **Persistence**: Attached entities in `entities.md` remain until manually removed
+
+#### Cross-Domain Behavior
+
+The same entity name can exist in multiple domains with independent descriptions. Agents receive entity context from all domains, with alphabetically-first domain winning for name conflicts during aggregation.
 
 ### Domain News
 
@@ -465,7 +508,6 @@ Post‑processing commands may generate additional analysis files, for example:
 - `topics/flow.md` – high level summary of the day.
 - `topics/knowledge_graph.md` – knowledge graph / network summary.
 - `topics/meetings.md` – meeting list used by the calendar web UI.
-- `entities.md` – daily entity rollup produced by `entity-roll`.
 - `task_log.txt` – log of tasks for that day in `[epoch]\tmessage` format.
 
 ### Crumbs
