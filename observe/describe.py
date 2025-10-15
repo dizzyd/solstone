@@ -354,6 +354,9 @@ class VideoProcessor:
                                 f"(box: {width}x{height})"
                             )
 
+                    # After all monitors processed, explicitly release frame to help GC
+                    frame = None
+
                 logger.info(
                     f"Processed {frame_count} frames from {self.video_path.name}"
                 )
