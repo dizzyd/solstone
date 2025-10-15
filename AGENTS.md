@@ -6,10 +6,10 @@ This document provides comprehensive guidelines for contributing to Sunstone, wh
 
 **Sunstone** is a Python-based AI-driven desktop journaling toolkit that provides:
 
-* **hear/** - System audio capture and AI-powered transcription
-* **see/** - Screenshot capture and visual analysis with AI vision models
+* **observe/** - Multimodal capture (audio + visual) and AI-powered analysis
 * **think/** - Data post-processing, summarization, and intelligent insights
 * **convey/** - Web application for navigating and interacting with captured content
+* **muse/** - AI agent system and MCP tooling
 
 The project uses a modular architecture where each package can operate independently while sharing common utilities and data formats through the journal system.
 
@@ -19,8 +19,7 @@ The project uses a modular architecture where each package can operate independe
 
 ```
 sunstone/
-├── hear/           # Audio capture & transcription
-├── see/            # Screenshot capture & image analysis
+├── observe/        # Multimodal capture & AI analysis
 ├── think/          # Data post-processing & AI analysis
 │   ├── agents/     # Agent system prompts and configs
 │   ├── indexer/    # Database indexing subsystem
@@ -54,7 +53,7 @@ sunstone/
 
 ## 🏛️ Architecture & Data Flow
 
-**Pipeline**: `hear/see` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `convey` (web UI)
+**Pipeline**: `observe` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `convey` (web UI)
 
 ---
 

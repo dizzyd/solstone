@@ -114,16 +114,6 @@ def add_module_stubs(request, monkeypatch):
         sys.modules["gi.repository"] = repo
         sys.modules["Gdk"] = repo.Gdk
         sys.modules["Gtk"] = repo.Gtk
-    if "see.screen_dbus" not in sys.modules:
-        screen_dbus = types.ModuleType("see.screen_dbus")
-        screen_dbus.screen_snap = lambda: []
-        screen_dbus.idle_time_ms = lambda: 0
-        screen_dbus.check_screen_state = lambda: {"locked": False, "power_save": False}
-        screen_dbus.get_monitor_geometries = lambda: [
-            {"id": "HDMI-1", "box": [0, 0, 1920, 1080], "position": "center"}
-        ]
-        sys.modules["see.screen_dbus"] = screen_dbus
-        sys.modules["screen_dbus"] = screen_dbus
     google_mod = sys.modules.get("google", types.ModuleType("google"))
     genai_mod = types.ModuleType("google.genai")
 
@@ -270,6 +260,3 @@ def add_module_stubs(request, monkeypatch):
                 return False
 
         sys.modules["watchdog.observers"].Observer = Observer
-    if "screen_compare" not in sys.modules:
-        mod = importlib.import_module("see.screen_compare")
-        sys.modules["screen_compare"] = mod

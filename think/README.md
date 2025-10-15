@@ -1,6 +1,6 @@
 # sunstone-think
 
-Post-processing utilities for clustering, summarising and repairing captured data. The tools leverage the Gemini API to analyse transcriptions and screenshots. All commands work with a **journal** directory that holds daily folders in `YYYYMMDD` format.
+Post-processing utilities for clustering and summarising captured data. The tools leverage the Gemini API to analyse transcriptions and screenshots. All commands work with a **journal** directory that holds daily folders in `YYYYMMDD` format.
 
 ## Installation
 
@@ -17,11 +17,9 @@ The package exposes several commands:
 - `think-summarize` builds a Markdown summary of a day's recordings using a Gemini prompt.
 - `think-cluster` groups audio and screen JSON files into report sections. Use `--start` and
   `--length` to limit the report to a specific time range.
-- `see-describe` and `hear-transcribe` include a `--repair` option to process
-  any missing screenshot or audio descriptions for a day.
 - `think-entity-roll` collects entities across days and writes a rollup file.
 - `think-dream` runs the above tools for a single day.
-- `think-supervisor` monitors hear and see heartbeats. Use `--no-runners` to skip starting them automatically.
+- `think-supervisor` monitors observation heartbeats. Use `--no-observers` to skip starting them automatically.
 - `muse-mcp-tools` starts an MCP server exposing search capabilities for both summary text and raw transcripts.
 - `muse-cortex` starts a WebSocket API server for managing AI agent instances.
 
@@ -29,8 +27,8 @@ The package exposes several commands:
 think-summarize YYYYMMDD [-f PROMPT] [-p] [-c] [--force] [-v]
 think-cluster YYYYMMDD [--start HHMMSS --length MINUTES]
 think-entity-roll
-think-dream [--day YYYYMMDD] [--force] [--repair] [--rebuild]
-think-supervisor [--no-runners]
+think-dream [--day YYYYMMDD] [--force] [--rebuild]
+think-supervisor [--no-observers]
 muse-mcp-tools [--transport http] [--port PORT] [--path PATH]
 muse-cortex [--host HOST] [--port PORT] [--path PATH]
 ```
@@ -61,7 +59,7 @@ Description=Process sunstone journal
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/think-dream --repair
+ExecStart=/usr/local/bin/think-dream
 
 [Install]
 WantedBy=multi-user.target

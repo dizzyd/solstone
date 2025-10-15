@@ -67,10 +67,10 @@ def test_start_runners(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.subprocess, "Popen", fake_popen)
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
 
-    procs = mod.start_runners()
+    procs = mod.start_observers()
     assert len(procs) == 2
-    assert any(cmd == ["hear-runner", "-v"] for cmd, _, _ in started)
-    assert any(cmd == ["see-runner", "-v"] for cmd, _, _ in started)
+    assert any(cmd == ["observe-gnome", "-v"] for cmd, _, _ in started)
+    assert any(cmd == ["observe-sense", "-v"] for cmd, _, _ in started)
     # Check that stdout and stderr capture pipes
     for cmd, stdout, stderr in started:
         assert stdout == subprocess.PIPE

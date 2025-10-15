@@ -9,16 +9,12 @@ A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal
 
 ### Core Modules
 
-- **Hear** 👂 - Audio capture and transcription
-  - `hear-capture` - Records system audio segments
-  - `hear-transcribe` - Transcribes audio via AI APIs
-  - `hear-runner` - Runs capture and transcription in a loop
-  
-- **See** 👁️ - Visual capture and analysis
-  - `see-scan` - Takes screenshots with diff detection
-  - `see-describe` - Analyzes visual changes with AI
-  - `see-runner` - Continuous screenshot monitoring
-  - `see-reduce` - Condenses descriptions to Markdown
+- **Observe** 👁️👂 - Multimodal capture and analysis
+  - `observe-gnome` - Screenshot monitoring on Linux/GNOME
+  - `observe-describe` - Analyzes visual changes with AI
+  - `observe-reduce` - Condenses descriptions to Markdown
+  - `observe-transcribe` - Transcribes audio with AI APIs
+  - `observe-sense` - Unified observation coordination
   - *Note: Requires Linux with GNOME desktop*
 
 - **Think** 🧠 - Data processing and insights
@@ -90,11 +86,8 @@ ANTHROPIC_API_KEY=your-api-key      # For Claude services
 
 2. **Start capturing**:
    ```bash
-   # Audio capture and transcription
-   hear-runner
-   
-   # Screenshot monitoring (Linux/GNOME only)
-   see-runner
+   # Use the supervisor to run all observation
+   think-supervisor
    ```
 
 3. **Process captured data**:
@@ -158,8 +151,7 @@ See the [Makefile](Makefile) for all available commands or run `make help`.
 - [CORTEX.md](CORTEX.md) - Agent system documentation
 
 ### Package Documentation
-- [hear/README.md](hear/README.md) - Audio capture and transcription details
-- [see/README.md](see/README.md) - Screenshot and visual analysis details
+- [observe/README.md](observe/README.md) - Multimodal capture and analysis details
 - [think/README.md](think/README.md) - Data processing and AI analysis details
 - [convey/README.md](convey/README.md) - Web interface usage and features
 

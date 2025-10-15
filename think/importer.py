@@ -16,7 +16,6 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 from observe.revai import convert_revai_to_sunstone, transcribe_file
-from see.screen_compare import compare_images
 from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
 from think.models import GEMINI_PRO, gemini_generate

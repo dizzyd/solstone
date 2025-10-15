@@ -82,13 +82,6 @@ dev = [
 [project.scripts]
 sunstone = "think.sunstone:main"
 convey = "convey:main"
-hear-capture = "hear.capture:main"
-hear-transcribe = "hear.transcribe:main"
-hear-runner = "hear.runner:main"
-see-scan = "see.scan:main"
-see-describe = "see.describe:main"
-see-runner = "see.runner:main"
-see-reduce = "see.reduce:main"
 think-summarize = "think.summarize:main"
 think-cluster = "think.cluster:main"
 think-entity-roll = "think.entity_roll:main"
@@ -120,11 +113,9 @@ Documentation = "https://github.com/yourusername/sunstone/blob/main/README.md"
 "Bug Tracker" = "https://github.com/yourusername/sunstone/issues"
 
 [tool.setuptools.packages.find]
-include = ["hear*", "see*", "think*", "convey*", "observe*", "muse*"]
+include = ["think*", "convey*", "observe*", "muse*"]
 
 [tool.setuptools.package-data]
-hear = ["*.txt"]
-see = ["*.txt"]
 think = ["*.txt", "topics/*.txt"]
 muse = ["agents/*.txt", "agents/*.json"]
 observe = ["*.txt", "*.json"]
