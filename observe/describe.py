@@ -685,7 +685,7 @@ class VideoProcessor:
         # Create vision requests for all qualified frames
         for monitor_id, frames in qualified_frames.items():
             for frame_data in frames:
-                # Load crop image from bytes
+                # Load crop image from bytes - keep it open until request completes
                 crop_img = Image.open(io.BytesIO(frame_data["crop_bytes"]))
 
                 req = batch.create(
@@ -701,9 +701,6 @@ class VideoProcessor:
                     thinking_budget=2048,
                 )
 
-                # Close the PIL Image immediately after creating request
-                crop_img.close()
-
                 # Attach metadata for tracking (store bytes, not PIL images)
                 req.frame_id = frame_data["frame_id"]
                 req.timestamp = frame_data["timestamp"]
@@ -718,6 +715,7 @@ class VideoProcessor:
                 req.json_analysis = None  # Will store the JSON analysis result
                 req.meeting_analysis = None  # Will store meeting analysis if applicable
                 req.requests = []  # Track all requests for this frame
+                req.initial_image = crop_img  # Keep reference to close after completion
 
                 batch.add(req)
 
@@ -796,8 +794,9 @@ class VideoProcessor:
                         max_output_tokens=10240,
                         thinking_budget=6144,
                     )
-                    # Close image immediately after batch.update
-                    full_image.close()
+                    # Don't close yet - batch needs it for encoding
+                    # Store reference for cleanup later
+                    req.meeting_image = full_image
 
                     req.request_type = RequestType.DESCRIBE_MEETING
                     req.retry_count = 0
@@ -827,8 +826,9 @@ class VideoProcessor:
                         max_output_tokens=8192,
                         thinking_budget=4096,
                     )
-                    # Close image immediately after batch.update
-                    crop_img.close()
+                    # Don't close yet - batch needs it for encoding
+                    # Store reference for cleanup later
+                    req.text_image = crop_img
 
                     req.request_type = RequestType.DESCRIBE_TEXT
                     req.retry_count = 0
@@ -878,6 +878,17 @@ class VideoProcessor:
                 output_file.flush()
             if logger.isEnabledFor(logging.DEBUG):
                 print(result_line, flush=True)
+
+            # Close all PIL Images associated with this request
+            if hasattr(req, "initial_image") and req.initial_image:
+                req.initial_image.close()
+                req.initial_image = None
+            if hasattr(req, "meeting_image") and req.meeting_image:
+                req.meeting_image.close()
+                req.meeting_image = None
+            if hasattr(req, "text_image") and req.text_image:
+                req.text_image.close()
+                req.text_image = None
 
             # Aggressively clear heavy fields now that request is finalized
             req.crop_bytes = None
