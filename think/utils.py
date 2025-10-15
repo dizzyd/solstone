@@ -451,14 +451,30 @@ def get_agent(persona: str = "default") -> dict:
     # Add runtime context (entities and domains)
     extra_parts = []
 
-    # Add entities context
+    # Add entities context grouped by domain
     journal = os.getenv("JOURNAL_PATH")
     if journal:
-        ent_path = Path(journal) / "entities.md"
-        if ent_path.is_file():
-            entities = ent_path.read_text(encoding="utf-8").strip()
-            if entities:
-                extra_parts.append("## Well-Known Entities\n" + entities)
+        try:
+            from think.domains import get_domains
+            from think.entities import load_entities
+
+            domains = get_domains()
+            if domains:
+                entity_sections = []
+                for domain_name in sorted(domains.keys()):
+                    entities = load_entities(domain_name)
+                    if entities:
+                        lines = [f"### Domain: {domain_name}"]
+                        for etype, name, desc in entities:
+                            lines.append(f"- **{etype}**: {name} - {desc}")
+                        entity_sections.append("\n".join(lines))
+
+                if entity_sections:
+                    extra_parts.append(
+                        "## Well-Known Entities\n\n" + "\n\n".join(entity_sections)
+                    )
+        except Exception:
+            pass  # Ignore if entities can't be loaded
 
         # Add domains to agent instructions
         try:
