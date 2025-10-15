@@ -150,15 +150,15 @@ class VideoProcessor:
         }
 
     def _check_border_and_qualify(
-        self, frame: av.VideoFrame, box_2d: list, monitor_bounds: tuple
+        self, border_coords: Optional[tuple], box_2d: list, monitor_bounds: tuple
     ) -> tuple[Optional[tuple], bool]:
         """
-        Detect blue border and check if change box still qualifies after border subtraction.
+        Check if change box still qualifies after border subtraction.
 
         Parameters
         ----------
-        frame : av.VideoFrame
-            Video frame to check for border
+        border_coords : Optional[tuple]
+            Pre-detected border coordinates (y_min, x_min, y_max, x_max) or None
         box_2d : list
             Change box coordinates [y_min, x_min, y_max, x_max] relative to monitor
         monitor_bounds : tuple
@@ -170,23 +170,13 @@ class VideoProcessor:
             (censor_coords, qualifies) where censor_coords is (y_min, x_min, y_max, x_max)
             or None if no border detected, and qualifies is True if frame meets threshold
         """
-        # Convert to PIL for border detection
-        arr = frame.to_ndarray(format="rgb24")
-        img = Image.fromarray(arr)
 
-        # Detect blue border
-        try:
-            from observe.see import detect_border
-
-            border_y_min, border_x_min, border_y_max, border_x_max = detect_border(
-                img, (0, 0, 255)
-            )
-            censor_coords = (border_y_min, border_x_min, border_y_max, border_x_max)
-        except (ValueError, Exception) as e:
-            # No border detected or detection failed
-            if not isinstance(e, ValueError):
-                logger.debug(f"Border detection failed: {e}")
+        # No border detected
+        if border_coords is None:
             return None, True
+
+        censor_coords = border_coords
+        border_y_min, border_x_min, border_y_max, border_x_max = border_coords
 
         # Convert box_2d (relative to monitor) to absolute coordinates
         x1, y1, x2, y2 = monitor_bounds
@@ -221,6 +211,40 @@ class VideoProcessor:
         logger.debug(f"Blue border detected at {censor_coords}, applying censoring")
         return censor_coords, True
 
+    def _detect_frame_border(self, img: Image.Image) -> Optional[tuple]:
+        """
+        Detect blue border in frame with fast pre-check.
+
+        Parameters
+        ----------
+        img : Image.Image
+            Full frame PIL image
+
+        Returns
+        -------
+        Optional[tuple]
+            Border coordinates (y_min, x_min, y_max, x_max) or None if no border
+        """
+        # Fast check: does image contain pure blue (0,0,255) pixels?
+        arr = np.asarray(img)
+        blue_mask = (arr[..., 0] == 0) & (arr[..., 1] == 0) & (arr[..., 2] == 255)
+        if not np.any(blue_mask):
+            return None
+
+        # Blue pixels found, run full border detection
+        try:
+            from observe.see import detect_border
+
+            border_y_min, border_x_min, border_y_max, border_x_max = detect_border(
+                img, (0, 0, 255)
+            )
+            return (border_y_min, border_x_min, border_y_max, border_x_max)
+        except (ValueError, Exception) as e:
+            # No border detected or detection failed
+            if not isinstance(e, ValueError):
+                logger.debug(f"Border detection failed: {e}")
+            return None
+
     def process(self) -> Dict[str, List[dict]]:
         """
         Process video and return qualified frames per monitor.
@@ -249,13 +273,16 @@ class VideoProcessor:
                     timestamp = frame.time if frame.time is not None else 0.0
                     frame_count += 1
 
+                    # Frame-level caches for PIL image and border detection
+                    # These are shared across all monitors in this frame
+                    frame_pil = None
+                    frame_border_coords = None
+                    frame_border_checked = False
+
                     # Process each monitor independently
                     for monitor_id, monitor_info in self.monitors.items():
                         x1, y1 = monitor_info["x1"], monitor_info["y1"]
                         x2, y2 = monitor_info["x2"], monitor_info["y2"]
-
-                        # Slice frame to monitor region (will be done in compare_frames via to_ndarray)
-                        # For now, we need to work with the full frame and slice during comparison
 
                         # First frame: always qualify with full monitor bounds
                         if last_qualified[monitor_id] is None:
@@ -264,10 +291,18 @@ class VideoProcessor:
                             monitor_height = y2 - y1
                             box_2d = [0, 0, monitor_height, monitor_width]
 
+                            # Convert to PIL for bytes conversion
+                            arr_rgb = frame.to_ndarray(format="rgb24")
+                            pil_img = Image.fromarray(arr_rgb)
+
                             # Convert frame to bytes immediately
                             crop_bytes, full_bytes = self._frame_to_bytes(
-                                frame, (x1, y1, x2, y2), box_2d, None
+                                pil_img, (x1, y1, x2, y2), box_2d, None
                             )
+
+                            # Clean up PIL image and RGB array
+                            pil_img.close()
+                            del arr_rgb
 
                             self.qualified_frames[monitor_id].append(
                                 {
@@ -316,9 +351,20 @@ class VideoProcessor:
 
                         # Qualify if largest box meets threshold
                         if width >= 400 and height >= 400:
-                            # Check for blue border and verify frame still qualifies
+                            # Create PIL image once per frame (shared across monitors)
+                            if frame_pil is None:
+                                arr = frame.to_ndarray(format="rgb24")
+                                frame_pil = Image.fromarray(arr)
+                                del arr
+
+                            # Detect border once per frame (shared across monitors)
+                            if not frame_border_checked:
+                                frame_border_coords = self._detect_frame_border(frame_pil)
+                                frame_border_checked = True
+
+                            # Check if this monitor's change box still qualifies
                             censor_coords, qualifies = self._check_border_and_qualify(
-                                frame, largest_box["box_2d"], (x1, y1, x2, y2)
+                                frame_border_coords, largest_box["box_2d"], (x1, y1, x2, y2)
                             )
 
                             if not qualifies:
@@ -326,7 +372,7 @@ class VideoProcessor:
 
                             # Convert frame to bytes immediately
                             crop_bytes, full_bytes = self._frame_to_bytes(
-                                frame,
+                                frame_pil,
                                 (x1, y1, x2, y2),
                                 largest_box["box_2d"],
                                 censor_coords,
@@ -349,12 +395,16 @@ class VideoProcessor:
 
                             # Store grayscale numpy array for comparison
                             last_qualified[monitor_id] = current_gray
+
                             logger.debug(
                                 f"Monitor {monitor_id}: Qualified frame at {timestamp:.2f}s "
                                 f"(box: {width}x{height})"
                             )
 
-                    # After all monitors processed, explicitly release frame to help GC
+                    # After all monitors processed, clean up frame-level resources
+                    if frame_pil is not None:
+                        frame_pil.close()
+                        frame_pil = None
                     frame = None
 
                 logger.info(
@@ -375,7 +425,7 @@ class VideoProcessor:
 
     def _frame_to_bytes(
         self,
-        frame: av.VideoFrame,
+        img: Image.Image,
         monitor_bounds: tuple,
         box_2d: list,
         censor_coords: Optional[tuple],
@@ -385,8 +435,8 @@ class VideoProcessor:
 
         Parameters
         ----------
-        frame : av.VideoFrame
-            Video frame to convert
+        img : Image.Image
+            PIL Image to convert
         monitor_bounds : tuple
             Monitor bounds (x1, y1, x2, y2) in absolute coordinates
         box_2d : list
@@ -401,14 +451,10 @@ class VideoProcessor:
         """
         x1, y1, x2, y2 = monitor_bounds
 
-        # Convert to PIL Image once
-        arr = frame.to_ndarray(format="rgb24")
-        full_image = Image.fromarray(arr)
-
-        # Apply border censoring if present
+        # Apply border censoring if present (modifying img directly is fine)
         if censor_coords:
             censor_y_min, censor_x_min, censor_y_max, censor_x_max = censor_coords
-            draw = ImageDraw.Draw(full_image)
+            draw = ImageDraw.Draw(img)
             draw.rectangle(
                 ((censor_x_min, censor_y_min), (censor_x_max + 1, censor_y_max + 1)),
                 fill="black",
@@ -421,34 +467,30 @@ class VideoProcessor:
         abs_x_max = x1 + box_2d[3]
 
         # Expand bounds by 50px in all directions where possible
-        img_width, img_height = full_image.size
+        img_width, img_height = img.size
         expanded_x_min = max(0, abs_x_min - 50)
         expanded_y_min = max(0, abs_y_min - 50)
         expanded_x_max = min(img_width, abs_x_max + 50)
         expanded_y_max = min(img_height, abs_y_max + 50)
 
         # Crop to expanded region
-        cropped = full_image.crop(
+        cropped = img.crop(
             (expanded_x_min, expanded_y_min, expanded_x_max, expanded_y_max)
         )
 
-        # Convert both to PNG bytes
+        # Convert both to PNG bytes (compress_level=1 for speed)
         crop_io = io.BytesIO()
-        cropped.save(crop_io, format="PNG", optimize=True)
+        cropped.save(crop_io, format="PNG", compress_level=1)
         crop_bytes = crop_io.getvalue()
         crop_io.close()
 
         full_io = io.BytesIO()
-        full_image.save(full_io, format="PNG", optimize=True)
+        img.save(full_io, format="PNG", compress_level=1)
         full_bytes = full_io.getvalue()
         full_io.close()
 
-        # Close PIL images immediately
+        # Close cropped image (img is closed by caller)
         cropped.close()
-        full_image.close()
-
-        # Free numpy array
-        del arr
 
         return crop_bytes, full_bytes
 
@@ -488,7 +530,7 @@ class VideoProcessor:
         self,
         slice1: np.ndarray,
         slice2: np.ndarray,
-        block_size: int = 64,
+        block_size: int = 128,
         ssim_threshold: float = 0.90,
         margin: int = 5,
     ) -> List[dict]:
