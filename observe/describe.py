@@ -895,8 +895,8 @@ async def async_main():
         "-j",
         "--jobs",
         type=int,
-        default=5,
-        help="Max concurrent vision API requests (default: 5)",
+        default=10,
+        help="Max concurrent vision API requests (default: 10)",
     )
     parser.add_argument(
         "--frames-only",
