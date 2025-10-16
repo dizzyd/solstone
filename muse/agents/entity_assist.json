@@ -2,5 +2,6 @@
   "title": "Entity Assistant",
   "description": "Quick entity addition with intelligent type detection and automatic description generation",
   "tools": "journal, entities",
-  "model": "claude-haiku-4-5"
+  "model": "claude-haiku-4-5",
+  "backend": "anthropic"
 }
