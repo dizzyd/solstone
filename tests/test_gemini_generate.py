@@ -119,13 +119,15 @@ def test_gemini_generate_token_logging(mock_client_class):
         tokens_dir = Path(tmpdir) / "tokens"
         assert tokens_dir.exists()
 
-        # Find the log file
-        log_files = list(tokens_dir.glob("*.json"))
+        # Find the log file (new format is YYYYMMDD.jsonl)
+        log_files = list(tokens_dir.glob("*.jsonl"))
         assert len(log_files) == 1
 
-        # Read and verify log content
+        # Read and verify log content (JSONL format - one JSON per line)
         with open(log_files[0]) as f:
-            log_data = json.load(f)
+            lines = [line.strip() for line in f if line.strip()]
+            assert len(lines) == 1
+            log_data = json.loads(lines[0])
 
         assert log_data["model"] == GEMINI_FLASH
         assert log_data["context"] is not None  # Should auto-detect
@@ -393,13 +395,15 @@ async def test_gemini_agenerate_token_logging(mock_client_class):
         tokens_dir = Path(tmpdir) / "tokens"
         assert tokens_dir.exists()
 
-        # Find the log file
-        log_files = list(tokens_dir.glob("*.json"))
+        # Find the log file (new format is YYYYMMDD.jsonl)
+        log_files = list(tokens_dir.glob("*.jsonl"))
         assert len(log_files) == 1
 
-        # Read and verify log content
+        # Read and verify log content (JSONL format - one JSON per line)
         with open(log_files[0]) as f:
-            log_data = json.load(f)
+            lines = [line.strip() for line in f if line.strip()]
+            assert len(lines) == 1
+            log_data = json.loads(lines[0])
 
         assert log_data["model"] == GEMINI_FLASH
         assert log_data["context"] is not None

@@ -74,17 +74,17 @@ def test_token_usage(tmp_path, monkeypatch):
     tokens_dir = journal / "tokens"
     tokens_dir.mkdir()
 
-    # Create token files for different models on the same day
+    # Create token files for different models on the same day (using new normalized format)
     token1 = {
         "timestamp": 1704067200.0,
         "timestamp_str": "20240101_120000",
         "model": "gemini-2.5-flash",
         "context": "test_context",
         "usage": {
-            "prompt_tokens": 100,
-            "candidates_tokens": 50,
+            "input_tokens": 100,
+            "output_tokens": 50,
             "cached_tokens": 10,
-            "thoughts_tokens": 5,
+            "reasoning_tokens": 5,
             "total_tokens": 165,
         },
     }
@@ -95,10 +95,10 @@ def test_token_usage(tmp_path, monkeypatch):
         "model": "gemini-2.5-flash",
         "context": "test_context2",
         "usage": {
-            "prompt_tokens": 200,
-            "candidates_tokens": 100,
+            "input_tokens": 200,
+            "output_tokens": 100,
             "cached_tokens": 20,
-            "thoughts_tokens": 10,
+            "reasoning_tokens": 10,
             "total_tokens": 330,
         },
     }
@@ -108,18 +108,18 @@ def test_token_usage(tmp_path, monkeypatch):
         "timestamp_str": "20240101_140000",
         "model": "claude-3-opus",
         "context": "test_context3",
-        "usage": {"prompt_tokens": 500, "candidates_tokens": 250, "total_tokens": 750},
+        "usage": {"input_tokens": 500, "output_tokens": 250, "total_tokens": 750},
     }
 
-    # Token from different day (old format, will be normalized)
+    # Token from different day (new normalized format)
     token4 = {
         "timestamp": 1704153600.0,
         "timestamp_str": "20240102_120000",
         "model": "gemini-2.5-flash",
         "context": "test_context4",
         "usage": {
-            "prompt_tokens": 1000,  # Will be normalized to input_tokens
-            "candidates_tokens": 500,  # Will be normalized to output_tokens
+            "input_tokens": 1000,
+            "output_tokens": 500,
             "total_tokens": 1500,
         },
     }
@@ -139,24 +139,17 @@ def test_token_usage(tmp_path, monkeypatch):
     assert "claude-3-opus" in js.token_usage["20240101"]
 
     # Check gemini totals for the day (sum of token1 and token2)
-    # Old format fields are normalized to new format during scan
     gemini_usage = js.token_usage["20240101"]["gemini-2.5-flash"]
-    assert (
-        gemini_usage["input_tokens"] == 300
-    )  # 100 + 200 (prompt_tokens → input_tokens)
-    assert (
-        gemini_usage["output_tokens"] == 150
-    )  # 50 + 100 (candidates_tokens → output_tokens)
+    assert gemini_usage["input_tokens"] == 300  # 100 + 200
+    assert gemini_usage["output_tokens"] == 150  # 50 + 100
     assert gemini_usage["cached_tokens"] == 30  # 10 + 20
-    assert (
-        gemini_usage["reasoning_tokens"] == 15
-    )  # 5 + 10 (thoughts_tokens → reasoning_tokens)
+    assert gemini_usage["reasoning_tokens"] == 15  # 5 + 10
     assert gemini_usage["total_tokens"] == 495  # 165 + 330
 
     # Check claude totals for the day
     claude_usage = js.token_usage["20240101"]["claude-3-opus"]
-    assert claude_usage["input_tokens"] == 500  # prompt_tokens → input_tokens
-    assert claude_usage["output_tokens"] == 250  # candidates_tokens → output_tokens
+    assert claude_usage["input_tokens"] == 500
+    assert claude_usage["output_tokens"] == 250
     assert claude_usage["total_tokens"] == 750
 
     # Check overall model totals
@@ -239,71 +232,3 @@ def test_token_usage_new_format(tmp_path, monkeypatch):
     assert "Reasoning: 4,688" in md
 
 
-def test_token_usage_mixed_formats(tmp_path, monkeypatch):
-    """Test that old and new token formats can coexist."""
-    stats_mod = importlib.import_module("think.journal_stats")
-    journal = tmp_path
-    day1 = journal / "20240101"
-    day1.mkdir()
-
-    # Create tokens directory with both formats
-    tokens_dir = journal / "tokens"
-    tokens_dir.mkdir()
-
-    # Old format
-    token_old = {
-        "timestamp": 1704067200.0,
-        "timestamp_str": "20240101_120000",
-        "model": "gemini-2.5-flash",
-        "context": "gemini_look.gemini_describe_region:74",
-        "usage": {
-            "prompt_tokens": 1756,
-            "candidates_tokens": 400,
-            "cached_tokens": None,
-            "thoughts_tokens": 304,
-            "total_tokens": 2460,
-        },
-    }
-
-    # New format
-    token_new = {
-        "timestamp": 1704070800.0,
-        "timestamp_str": "20240101_130000",
-        "model": "gemini-2.5-flash",
-        "context": "models._log_token_usage:241",
-        "usage": {
-            "input_tokens": 1716,
-            "output_tokens": 3710,
-            "total_tokens": 10114,
-            "reasoning_tokens": 4688,
-        },
-    }
-
-    (tokens_dir / "1704067200000.json").write_text(json.dumps(token_old))
-    (tokens_dir / "1704070800000.json").write_text(json.dumps(token_new))
-
-    monkeypatch.setenv("JOURNAL_PATH", str(journal))
-    js = stats_mod.JournalStats()
-    js.scan(str(journal))
-
-    # Check both formats are normalized and aggregated correctly
-    gemini_usage = js.token_usage["20240101"]["gemini-2.5-flash"]
-
-    # Old format fields (prompt_tokens, candidates_tokens, thoughts_tokens)
-    # should be converted to new format fields and summed together
-    assert gemini_usage["input_tokens"] == 3472  # 1756 + 1716 (old + new)
-    assert gemini_usage["output_tokens"] == 4110  # 400 + 3710 (old + new)
-    assert gemini_usage["reasoning_tokens"] == 4992  # 304 + 4688 (old + new)
-    assert gemini_usage["total_tokens"] == 12574  # 2460 + 10114
-
-    # Old format field names should NOT exist (they're normalized)
-    assert "prompt_tokens" not in gemini_usage
-    assert "candidates_tokens" not in gemini_usage
-    assert "thoughts_tokens" not in gemini_usage
-
-    # Check overall model totals match daily totals
-    totals = js.token_totals["gemini-2.5-flash"]
-    assert totals["input_tokens"] == 3472
-    assert totals["output_tokens"] == 4110
-    assert totals["reasoning_tokens"] == 4992
-    assert totals["total_tokens"] == 12574

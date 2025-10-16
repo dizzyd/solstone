@@ -171,14 +171,15 @@ class JournalStats:
 
     def _process_token_entry(self, data: dict) -> None:
         """Process a single token usage entry (expects normalized format)."""
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Extract date from timestamp
         timestamp = data.get("timestamp")
         if not timestamp:
             return
 
-        file_date = datetime.fromtimestamp(timestamp).strftime("%Y%m%d")
+        # Use UTC for consistent date extraction (timestamps are in UTC from time.time())
+        file_date = datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y%m%d")
         model = data.get("model", "unknown")
         usage = data.get("usage", {})
 
