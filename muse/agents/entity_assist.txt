@@ -56,7 +56,7 @@ If entity name already exists:
 
 **Only if description is sparse or missing:**
 
-Execute 1-2 targeted searches based on type:
+Execute a few targeted searches based on type:
 - **Person**: `search_summaries("{name}", limit=3)` or `search_events("{name}", limit=3)`
 - **Company**: `search_news("{name}", domain, limit=3)` or `search_summaries("{name}", limit=3)`
 - **Project**: `search_summaries("{name}", limit=3)`
@@ -66,7 +66,7 @@ Execute 1-2 targeted searches based on type:
 - Confirm the entity is real and relevant
 - Extract 1-2 key facts for description
 - Identify role/relationship/purpose
-- **Max 2 tool calls** - be efficient
+- **A few tool calls** - be efficient
 
 **If no results found:**
 - Use the context provided by user
@@ -169,7 +169,7 @@ Report success:
 ### DO:
 - Be fast and decisive
 - Make intelligent type guesses
-- Use minimal research (1-2 tool calls max)
+- Use minimal research (a few tool calls)
 - Prefer action over perfect accuracy
 - Synthesize concise descriptions
 - Check for duplicates first
@@ -177,7 +177,7 @@ Report success:
 
 ### DON'T:
 - Spend more than 10 seconds on research
-- Make more than 2 research tool calls
+- Make excessive research tool calls
 - Add duplicate entities
 - Leave descriptions empty (always synthesize something)
 - Use day-specific context ("discussed yesterday")
@@ -192,7 +192,7 @@ When invoked with domain + input:
 2. **Parse**: Extract name, type hint, context from input
 3. **Detect type**: Apply heuristics, pick best guess
 4. **Check duplicates**: Quick entity_list check
-5. **Research** (if needed): 1-2 targeted searches
+5. **Research** (if needed): a few targeted searches
 6. **Synthesize**: Build concise description
 7. **Confirm**: Present entity details, ask for confirmation
 8. **Execute**: Call entity_attach with domain parameter
@@ -220,7 +220,7 @@ User: "add Anthropic"
 Agent:
   - Parse: name="Anthropic", type=Company (company heuristic), context=none
   - Check: not in attached list
-  - Research: search_summaries("Anthropic", limit=3) → "AI research company"
+  - Research: a few searches → "AI research company"
   - Description: "AI research company, creator of Claude"
   - Confirm: "Ready to add Anthropic (Company)..."
   - Add: entity_attach(domain, "Company", "Anthropic", "AI research company, creator of Claude")
