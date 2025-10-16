@@ -173,7 +173,7 @@ def search_transcripts_api() -> Any:
 @bp.route("/search/api/entities")
 def search_entities_api() -> Any:
     query = request.args.get("q", "").strip()
-    # Allow empty query to return all entities (useful for merge tab)
+    # Allow empty query to return all entities
 
     try:
         limit = int(request.args.get("limit", 20))
@@ -185,55 +185,45 @@ def search_entities_api() -> Any:
         offset = 0
 
     # Extract parameters specific to entities search
+    domain = request.args.get("domain")
     day = request.args.get("day")
     etype = request.args.get("type")
     name = request.args.get("name")
-    top_param = request.args.get("top")
-    top = None if top_param is None else (top_param.lower() in ["true", "1", "yes"])
+    attached_param = request.args.get("attached")
+    attached = (
+        None
+        if attached_param is None
+        else (attached_param.lower() in ["true", "1", "yes"])
+    )
     order = request.args.get("order", "rank")
 
     total, rows = search_entities(
-        query, limit, offset, day=day, etype=etype, name=name, top=top, order=order
+        query,
+        limit,
+        offset,
+        domain=domain,
+        day=day,
+        etype=etype,
+        name=name,
+        attached=attached,
+        order=order,
     )
     results = []
     for r in rows:
         meta = r.get("metadata", {})
         text = r.get("text", "")
 
-        # Determine if this is an entity or entity appearance
-        is_appearance = "path" in meta and meta["path"] != meta.get("name", "")
-
         result = {
             "id": r.get("id", ""),
             "text": text,
             "name": meta.get("name", ""),
             "type": meta.get("type", ""),
+            "domain": meta.get("domain", ""),
+            "day": meta.get("day"),
+            "date": format_date(meta.get("day", "")) if meta.get("day") else "",
+            "attached": meta.get("attached", False),
             "score": r.get("score", 0.0),
         }
-
-        if is_appearance:
-            # This is an entity appearance
-            result.update(
-                {
-                    "day": meta.get("day", ""),
-                    "date": format_date(meta.get("day", "")),
-                    "path": meta.get("path", ""),
-                    "appearance": True,
-                }
-            )
-        else:
-            # This is an aggregated entity
-            result.update(
-                {
-                    "first_seen": meta.get("first_seen", ""),
-                    "last_seen": meta.get("last_seen", ""),
-                    "first_date": format_date(meta.get("first_seen", "")),
-                    "last_date": format_date(meta.get("last_seen", "")),
-                    "days": meta.get("days", 0),
-                    "top": meta.get("top", False),
-                    "appearance": False,
-                }
-            )
 
         results.append(result)
 

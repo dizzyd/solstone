@@ -67,7 +67,8 @@ function parseQuery(q){
   let index = 'summaries';
   let type = '';
   let name = '';
-  let top = '';
+  let domain = '';
+  let attached = '';
   let order = '';
   let start = '';
   let end = '';
@@ -83,8 +84,10 @@ function parseQuery(q){
       type = part.slice(5);
     } else if(part.startsWith('name:')){
       name = part.slice(5);
-    } else if(part.startsWith('top:')){
-      top = part.slice(4);
+    } else if(part.startsWith('domain:')){
+      domain = part.slice(7);
+    } else if(part.startsWith('attached:')){
+      attached = part.slice(9);
     } else if(part.startsWith('order:')){
       order = part.slice(6);
     } else if(part.startsWith('start:')){
@@ -95,7 +98,7 @@ function parseQuery(q){
       terms.push(part);
     }
   });
-  return {text: terms.join(' '), day, topic, index, type, name, top, order, start, end};
+  return {text: terms.join(' '), day, topic, index, type, name, domain, attached, order, start, end};
 }
   function getColor(topic){
     if(!topicColors[topic]){ topicColors[topic] = COLORS[colorIndex % COLORS.length]; colorIndex++; }
@@ -218,7 +221,7 @@ function parseQuery(q){
     const tbody = document.querySelector('#resultsTable tbody');
     list.forEach(item => {
       const tr = document.createElement('tr');
-      
+
       const tdName = document.createElement('td');
       const nameLink = document.createElement('a');
       nameLink.className = 'slug-link';
@@ -242,13 +245,20 @@ function parseQuery(q){
       };
       tdType.appendChild(typeLink);
 
-      const tdText = document.createElement('td');
-      tdText.textContent = item.text;
+      const tdDomain = document.createElement('td');
+      const domainLink = document.createElement('a');
+      domainLink.textContent = item.domain;
+      domainLink.onclick = e => {
+        if(!(e.ctrlKey||e.metaKey||e.shiftKey)){
+          e.preventDefault();
+          addFilter('domain', item.domain);
+        }
+      };
+      tdDomain.appendChild(domainLink);
 
-      if(item.appearance){
-        // Entity appearance row
-        const tdDate = document.createElement('td');
-        tdDate.className = 'date-cell';
+      const tdDay = document.createElement('td');
+      if(item.day){
+        tdDay.className = 'date-cell';
         const dlink = document.createElement('a');
         dlink.href = dayBase + item.day;
         dlink.textContent = item.date;
@@ -258,45 +268,20 @@ function parseQuery(q){
             addFilter('day', item.day);
           }
         };
-        tdDate.appendChild(dlink);
-        
-        const tdDays = document.createElement('td');
-        tdDays.textContent = '1';
-        
-        const tdTop = document.createElement('td');
-        tdTop.textContent = '';
-        
-        tr.appendChild(tdName);
-        tr.appendChild(tdType);
-        tr.appendChild(tdDate);
-        tr.appendChild(tdDays);
-        tr.appendChild(tdTop);
-        tr.appendChild(tdText);
+        tdDay.appendChild(dlink);
       } else {
-        // Aggregated entity row
-        const tdDateRange = document.createElement('td');
-        if(item.first_date && item.last_date){
-          if(item.first_date === item.last_date){
-            tdDateRange.textContent = item.first_date;
-          } else {
-            tdDateRange.textContent = `${item.first_date} - ${item.last_date}`;
-          }
-        }
-        
-        const tdDays = document.createElement('td');
-        tdDays.textContent = item.days;
-        
-        const tdTop = document.createElement('td');
-        tdTop.textContent = item.top ? '✓' : '';
-        
-        tr.appendChild(tdName);
-        tr.appendChild(tdType);
-        tr.appendChild(tdDateRange);
-        tr.appendChild(tdDays);
-        tr.appendChild(tdTop);
-        tr.appendChild(tdText);
+        tdDay.textContent = item.attached ? 'attached' : '';
       }
-      
+
+      const tdText = document.createElement('td');
+      tdText.textContent = item.text;
+
+      tr.appendChild(tdName);
+      tr.appendChild(tdType);
+      tr.appendChild(tdDomain);
+      tr.appendChild(tdDay);
+      tr.appendChild(tdText);
+
       tbody.appendChild(tr);
     });
   }
@@ -306,7 +291,7 @@ function parseQuery(q){
     if(index==='events'){
       thead.innerHTML='<tr><th>Date</th><th>Topic</th><th>Start</th><th>Length</th><th>Summary</th></tr>';
     } else if(index==='entities'){
-      thead.innerHTML='<tr><th>Name</th><th>Type</th><th>Date</th><th>Days</th><th>Top</th><th>Description</th></tr>';
+      thead.innerHTML='<tr><th>Name</th><th>Type</th><th>Domain</th><th>Day</th><th>Description</th></tr>';
     } else if(index==='transcripts'){
       thead.innerHTML='<tr><th>Date</th><th>Time</th><th>Type</th><th class="preview-col">Preview</th></tr>';
     } else {
@@ -346,7 +331,8 @@ function doSearch(reset=true){
   if(parsed.index==='entities'){
     if(parsed.type) url.searchParams.set('type', parsed.type);
     if(parsed.name) url.searchParams.set('name', parsed.name);
-    if(parsed.top) url.searchParams.set('top', parsed.top);
+    if(parsed.domain) url.searchParams.set('domain', parsed.domain);
+    if(parsed.attached) url.searchParams.set('attached', parsed.attached);
     if(parsed.order) url.searchParams.set('order', parsed.order);
   }
   
