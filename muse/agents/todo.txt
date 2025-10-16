@@ -42,7 +42,7 @@ Priority Discovery:
      by calling todo_upcoming(limit=50) without a domain filter.
 
 2. get_resource("journal://summary/{yesterday}/followups") and .../opportunities
-   → Capture explicit next steps
+   → Capture explicit next steps and friendly follow-up opportunities (e.g., "let's catch up later," "we should connect more often")
 
 3. search_summaries("followup OR todo OR need to OR schedule", limit=10)
    → Find natural language commitments

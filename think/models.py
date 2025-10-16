@@ -18,7 +18,8 @@ GPT_5_MINI = "gpt-5-mini"
 GPT_5_NANO = "gpt-5-nano"
 
 CLAUDE_OPUS_4 = "claude-opus-4-1"
-CLAUDE_SONNET_4 = "claude-sonnet-4-5-20250929"
+CLAUDE_SONNET_4 = "claude-sonnet-4-5"
+CLAUDE_HAIKU_4 = "claude-haiku-4-5"
 
 
 def _get_or_create_client(client: Optional[genai.Client]) -> genai.Client:

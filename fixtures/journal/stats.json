@@ -1,0 +1,788 @@
+{
+  "days": {
+    "20240101": {
+      "audio_json": 1,
+      "repair_observe": 1,
+      "entities": 1,
+      "repair_entity": 0,
+      "summaries_processed": 2,
+      "repair_summaries": 12,
+      "audio_seconds": 0.0,
+      "audio_bytes": 0,
+      "image_bytes": 0,
+      "activity": 17
+    },
+    "20240102": {
+      "audio_json": 1,
+      "repair_observe": 0,
+      "entities": 1,
+      "repair_entity": 0,
+      "summaries_processed": 1,
+      "repair_summaries": 13,
+      "audio_seconds": 0.0,
+      "audio_bytes": 0,
+      "image_bytes": 0,
+      "activity": 16
+    },
+    "20250124": {
+      "repair_observe": 0,
+      "entities": 0,
+      "repair_entity": 0,
+      "summaries_processed": 0,
+      "repair_summaries": 14,
+      "audio_seconds": 0.0,
+      "audio_bytes": 0,
+      "image_bytes": 0,
+      "activity": 14
+    }
+  },
+  "totals": {
+    "audio_json": 2,
+    "repair_observe": 1,
+    "entities": 2,
+    "repair_entity": 0,
+    "summaries_processed": 3,
+    "repair_summaries": 39
+  },
+  "total_audio_seconds": 0.0,
+  "total_audio_bytes": 0,
+  "total_image_bytes": 0,
+  "topic_counts": {
+    "meetings": 4
+  },
+  "topic_minutes": {
+    "meetings": 180.0
+  },
+  "heatmap": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      30.0,
+      30.0,
+      30.0,
+      0.0,
+      0.0,
+      60.0,
+      0.0,
+      30.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "token_usage_by_day": {
+    "20250823": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 2704,
+        "candidates_tokens": 1235,
+        "cached_tokens": 0,
+        "thoughts_tokens": 767,
+        "total_tokens": 9412,
+        "input_tokens": 2704,
+        "output_tokens": 1235,
+        "reasoning_tokens": 767
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 24,
+        "candidates_tokens": 2,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 52,
+        "input_tokens": 24,
+        "output_tokens": 2,
+        "reasoning_tokens": 0
+      },
+      "models/gemini-2.5-flash": {
+        "prompt_tokens": 1143,
+        "candidates_tokens": 373,
+        "thoughts_tokens": 3267,
+        "total_tokens": 9566,
+        "cached_tokens": 0,
+        "input_tokens": 1143,
+        "output_tokens": 373,
+        "reasoning_tokens": 3267
+      },
+      "models/gemini-2.5-flash-lite": {
+        "prompt_tokens": 60,
+        "candidates_tokens": 5,
+        "total_tokens": 130,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "input_tokens": 60,
+        "output_tokens": 5,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250824": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 100,
+        "candidates_tokens": 50,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 300,
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250825": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 700,
+        "candidates_tokens": 350,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 2100,
+        "input_tokens": 700,
+        "output_tokens": 350,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250826": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 956,
+        "candidates_tokens": 336,
+        "cached_tokens": 0,
+        "thoughts_tokens": 2505,
+        "total_tokens": 7594,
+        "input_tokens": 956,
+        "output_tokens": 336,
+        "reasoning_tokens": 2505
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 48,
+        "candidates_tokens": 4,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 104,
+        "input_tokens": 48,
+        "output_tokens": 4,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250827": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 174,
+        "candidates_tokens": 79,
+        "thoughts_tokens": 741,
+        "total_tokens": 1988,
+        "input_tokens": 174,
+        "output_tokens": 79,
+        "reasoning_tokens": 741
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 12,
+        "candidates_tokens": 1,
+        "total_tokens": 26,
+        "input_tokens": 12,
+        "output_tokens": 1
+      }
+    },
+    "20250828": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 200,
+        "candidates_tokens": 100,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 600,
+        "input_tokens": 200,
+        "output_tokens": 100,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250905": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 1944,
+        "candidates_tokens": 919,
+        "cached_tokens": 0,
+        "thoughts_tokens": 4064,
+        "total_tokens": 13854,
+        "input_tokens": 1944,
+        "output_tokens": 919,
+        "reasoning_tokens": 4064
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 72,
+        "candidates_tokens": 6,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 156,
+        "input_tokens": 72,
+        "output_tokens": 6,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250908": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 1518,
+        "candidates_tokens": 642,
+        "cached_tokens": 0,
+        "thoughts_tokens": 5004,
+        "total_tokens": 14328,
+        "input_tokens": 1518,
+        "output_tokens": 642,
+        "reasoning_tokens": 5004
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 84,
+        "candidates_tokens": 7,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 182,
+        "input_tokens": 84,
+        "output_tokens": 7,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250909": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 300,
+        "candidates_tokens": 150,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 900,
+        "input_tokens": 300,
+        "output_tokens": 150,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250914": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 1648,
+        "candidates_tokens": 804,
+        "cached_tokens": 0,
+        "thoughts_tokens": 1365,
+        "total_tokens": 7634,
+        "input_tokens": 1648,
+        "output_tokens": 804,
+        "reasoning_tokens": 1365
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 24,
+        "candidates_tokens": 2,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 52,
+        "input_tokens": 24,
+        "output_tokens": 2,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250915": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 174,
+        "candidates_tokens": 68,
+        "thoughts_tokens": 662,
+        "total_tokens": 1808,
+        "input_tokens": 174,
+        "output_tokens": 68,
+        "reasoning_tokens": 662
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 12,
+        "candidates_tokens": 1,
+        "total_tokens": 26,
+        "input_tokens": 12,
+        "output_tokens": 1
+      }
+    },
+    "20250916": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 522,
+        "candidates_tokens": 233,
+        "thoughts_tokens": 1964,
+        "total_tokens": 5438,
+        "input_tokens": 522,
+        "output_tokens": 233,
+        "reasoning_tokens": 1964
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 36,
+        "candidates_tokens": 3,
+        "total_tokens": 78,
+        "input_tokens": 36,
+        "output_tokens": 3
+      }
+    },
+    "20250919": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 200,
+        "candidates_tokens": 100,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 600,
+        "input_tokens": 200,
+        "output_tokens": 100,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250920": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 900,
+        "candidates_tokens": 450,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 2700,
+        "input_tokens": 900,
+        "output_tokens": 450,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20250926": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 174,
+        "candidates_tokens": 79,
+        "thoughts_tokens": 648,
+        "total_tokens": 1802,
+        "input_tokens": 174,
+        "output_tokens": 79,
+        "reasoning_tokens": 648
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 12,
+        "candidates_tokens": 1,
+        "total_tokens": 26,
+        "input_tokens": 12,
+        "output_tokens": 1
+      }
+    },
+    "20250927": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 200,
+        "candidates_tokens": 100,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 600,
+        "input_tokens": 200,
+        "output_tokens": 100,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20251003": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 200,
+        "candidates_tokens": 100,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 600,
+        "input_tokens": 200,
+        "output_tokens": 100,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20251004": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 1874,
+        "candidates_tokens": 936,
+        "cached_tokens": 0,
+        "thoughts_tokens": 559,
+        "total_tokens": 6738,
+        "input_tokens": 1874,
+        "output_tokens": 936,
+        "reasoning_tokens": 559
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 12,
+        "candidates_tokens": 1,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 26,
+        "input_tokens": 12,
+        "output_tokens": 1,
+        "reasoning_tokens": 0
+      }
+    },
+    "20251005": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 200,
+        "candidates_tokens": 100,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 600,
+        "input_tokens": 200,
+        "output_tokens": 100,
+        "reasoning_tokens": 0
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 0,
+        "candidates_tokens": 0,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "20251006": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 174,
+        "candidates_tokens": 79,
+        "thoughts_tokens": 636,
+        "total_tokens": 1778,
+        "input_tokens": 174,
+        "output_tokens": 79,
+        "reasoning_tokens": 636
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 12,
+        "candidates_tokens": 1,
+        "total_tokens": 26,
+        "input_tokens": 12,
+        "output_tokens": 1
+      }
+    },
+    "20251011": {
+      "gemini-2.5-flash": {
+        "prompt_tokens": 2685,
+        "candidates_tokens": 1137,
+        "cached_tokens": 600,
+        "thoughts_tokens": 4666,
+        "total_tokens": 22576,
+        "input_tokens": 6685,
+        "output_tokens": 2737,
+        "reasoning_tokens": 4966
+      },
+      "gemini-2.5-flash-lite": {
+        "prompt_tokens": 70,
+        "candidates_tokens": 7,
+        "cached_tokens": 0,
+        "thoughts_tokens": 0,
+        "total_tokens": 154,
+        "input_tokens": 70,
+        "output_tokens": 7,
+        "reasoning_tokens": 0
+      },
+      "gpt-5": {
+        "input_tokens": 2000,
+        "output_tokens": 1000,
+        "total_tokens": 3000,
+        "cached_tokens": 400,
+        "reasoning_tokens": 200,
+        "requests": 2
+      }
+    },
+    "20251012": {
+      "gemini-2.5-flash": {
+        "input_tokens": 880,
+        "output_tokens": 250,
+        "total_tokens": 3832,
+        "reasoning_tokens": 2702
+      },
+      "gemini-2.5-flash-lite": {
+        "input_tokens": 20,
+        "output_tokens": 4,
+        "total_tokens": 24
+      }
+    },
+    "20251015": {
+      "gemini-2.5-flash": {
+        "input_tokens": 1660,
+        "output_tokens": 520,
+        "total_tokens": 7562,
+        "reasoning_tokens": 5382
+      },
+      "gemini-2.5-flash-lite": {
+        "input_tokens": 68,
+        "output_tokens": 8,
+        "total_tokens": 76
+      }
+    }
+  },
+  "token_totals_by_model": {
+    "gemini-2.5-flash": {
+      "prompt_tokens": 17547,
+      "candidates_tokens": 8047,
+      "cached_tokens": 600,
+      "thoughts_tokens": 23581,
+      "total_tokens": 115344,
+      "input_tokens": 24087,
+      "output_tokens": 10417,
+      "reasoning_tokens": 31965
+    },
+    "gemini-2.5-flash-lite": {
+      "prompt_tokens": 418,
+      "candidates_tokens": 36,
+      "cached_tokens": 0,
+      "thoughts_tokens": 0,
+      "total_tokens": 1008,
+      "input_tokens": 506,
+      "output_tokens": 48,
+      "reasoning_tokens": 0
+    },
+    "models/gemini-2.5-flash": {
+      "prompt_tokens": 1143,
+      "candidates_tokens": 373,
+      "thoughts_tokens": 3267,
+      "total_tokens": 9566,
+      "cached_tokens": 0,
+      "input_tokens": 1143,
+      "output_tokens": 373,
+      "reasoning_tokens": 3267
+    },
+    "models/gemini-2.5-flash-lite": {
+      "prompt_tokens": 60,
+      "candidates_tokens": 5,
+      "total_tokens": 130,
+      "cached_tokens": 0,
+      "thoughts_tokens": 0,
+      "input_tokens": 60,
+      "output_tokens": 5,
+      "reasoning_tokens": 0
+    },
+    "gpt-5": {
+      "input_tokens": 2000,
+      "output_tokens": 1000,
+      "total_tokens": 3000,
+      "cached_tokens": 400,
+      "reasoning_tokens": 200,
+      "requests": 2
+    }
+  }
+}

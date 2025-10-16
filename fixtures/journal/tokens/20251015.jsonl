@@ -1,0 +1,59 @@
+{"timestamp": 1760556192.0222843, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 1, "total_tokens": 53, "reasoning_tokens": 38}}
+{"timestamp": 1760556192.1489546, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 1, "total_tokens": 50, "reasoning_tokens": 35}}
+{"timestamp": 1760556192.9103467, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 42, "reasoning_tokens": 29}}
+{"timestamp": 1760556193.7107472, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 51, "reasoning_tokens": 38}}
+{"timestamp": 1760556194.8142908, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 51, "reasoning_tokens": 38}}
+{"timestamp": 1760556195.6928136, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 48, "reasoning_tokens": 35}}
+{"timestamp": 1760556196.0168169, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 42, "reasoning_tokens": 29}}
+{"timestamp": 1760556196.3664458, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 46, "reasoning_tokens": 33}}
+{"timestamp": 1760556197.2773027, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 11, "total_tokens": 57, "reasoning_tokens": 34}}
+{"timestamp": 1760556197.7942116, "model": "gemini-2.5-flash-lite", "context": "models._log_token_usage:241", "usage": {"input_tokens": 5, "output_tokens": 1, "total_tokens": 6}}
+{"timestamp": 1760556198.029588, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 5, "output_tokens": 1, "total_tokens": 26, "reasoning_tokens": 20}}
+{"timestamp": 1760556198.7472298, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 2, "total_tokens": 56, "reasoning_tokens": 42}}
+{"timestamp": 1760556199.8717039, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 15, "output_tokens": 2, "total_tokens": 51, "reasoning_tokens": 34}}
+{"timestamp": 1760556238.7760043, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 1, "total_tokens": 43, "reasoning_tokens": 28}}
+{"timestamp": 1760556240.627867, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 20, "output_tokens": 50, "total_tokens": 218, "reasoning_tokens": 148}}
+{"timestamp": 1760556241.5963383, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 27, "output_tokens": 19, "total_tokens": 83, "reasoning_tokens": 37}}
+{"timestamp": 1760556242.5887125, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 39, "output_tokens": 3, "total_tokens": 124, "reasoning_tokens": 82}}
+{"timestamp": 1760556243.3170886, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 36, "output_tokens": 2, "total_tokens": 85, "reasoning_tokens": 47}}
+{"timestamp": 1760556244.6855204, "model": "gemini-2.5-flash-lite", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 13}}
+{"timestamp": 1760556246.575493, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 16, "output_tokens": 2, "total_tokens": 237, "reasoning_tokens": 219}}
+{"timestamp": 1760556248.1921003, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 60, "reasoning_tokens": 48}}
+{"timestamp": 1760556249.0782735, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 48, "reasoning_tokens": 36}}
+{"timestamp": 1760556249.8030348, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 2, "total_tokens": 44, "reasoning_tokens": 28}}
+{"timestamp": 1760556250.9185803, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 28, "output_tokens": 20, "total_tokens": 100, "reasoning_tokens": 52}}
+{"timestamp": 1760556251.865723, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 52, "reasoning_tokens": 40}}
+{"timestamp": 1760556252.5092099, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 2, "total_tokens": 55, "reasoning_tokens": 42}}
+{"timestamp": 1760556254.3810034, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 52, "reasoning_tokens": 40}}
+{"timestamp": 1760556254.433782, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 47, "reasoning_tokens": 35}}
+{"timestamp": 1760556254.6585338, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 60, "reasoning_tokens": 48}}
+{"timestamp": 1760556300.9159842, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 1, "total_tokens": 50, "reasoning_tokens": 35}}
+{"timestamp": 1760556300.9732544, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 1, "total_tokens": 59, "reasoning_tokens": 44}}
+{"timestamp": 1760556301.709291, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 42, "reasoning_tokens": 29}}
+{"timestamp": 1760556303.0484834, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 48, "reasoning_tokens": 35}}
+{"timestamp": 1760556304.0625474, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 50, "reasoning_tokens": 37}}
+{"timestamp": 1760556304.67228, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 42, "reasoning_tokens": 29}}
+{"timestamp": 1760556304.8240097, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 48, "reasoning_tokens": 35}}
+{"timestamp": 1760556304.9402316, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 51, "reasoning_tokens": 38}}
+{"timestamp": 1760556306.084188, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 11, "total_tokens": 56, "reasoning_tokens": 33}}
+{"timestamp": 1760556306.591427, "model": "gemini-2.5-flash-lite", "context": "models._log_token_usage:241", "usage": {"input_tokens": 5, "output_tokens": 1, "total_tokens": 6}}
+{"timestamp": 1760556306.7119546, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 5, "output_tokens": 1, "total_tokens": 26, "reasoning_tokens": 20}}
+{"timestamp": 1760556307.6832564, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 2, "total_tokens": 49, "reasoning_tokens": 35}}
+{"timestamp": 1760556308.5427172, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 15, "output_tokens": 2, "total_tokens": 51, "reasoning_tokens": 34}}
+{"timestamp": 1760556346.6651664, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 1, "total_tokens": 43, "reasoning_tokens": 28}}
+{"timestamp": 1760556348.5929418, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 20, "output_tokens": 48, "total_tokens": 218, "reasoning_tokens": 150}}
+{"timestamp": 1760556349.6704807, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 27, "output_tokens": 19, "total_tokens": 83, "reasoning_tokens": 37}}
+{"timestamp": 1760556350.6123416, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 39, "output_tokens": 3, "total_tokens": 118, "reasoning_tokens": 76}}
+{"timestamp": 1760556351.7473748, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 36, "output_tokens": 2, "total_tokens": 88, "reasoning_tokens": 50}}
+{"timestamp": 1760556353.387462, "model": "gemini-2.5-flash-lite", "context": "models._log_token_usage:241", "usage": {"input_tokens": 12, "output_tokens": 1, "total_tokens": 13}}
+{"timestamp": 1760556356.0060942, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 16, "output_tokens": 2, "total_tokens": 250, "reasoning_tokens": 232}}
+{"timestamp": 1760556357.764166, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 60, "reasoning_tokens": 48}}
+{"timestamp": 1760556358.4387608, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 47, "reasoning_tokens": 35}}
+{"timestamp": 1760556359.8432689, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 14, "output_tokens": 2, "total_tokens": 62, "reasoning_tokens": 46}}
+{"timestamp": 1760556360.8277576, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 28, "output_tokens": 20, "total_tokens": 100, "reasoning_tokens": 52}}
+{"timestamp": 1760556361.7831185, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 57, "reasoning_tokens": 45}}
+{"timestamp": 1760556362.8394754, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 2, "total_tokens": 46, "reasoning_tokens": 33}}
+{"timestamp": 1760556364.3566954, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 49, "reasoning_tokens": 37}}
+{"timestamp": 1760556364.452989, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 47, "reasoning_tokens": 35}}
+{"timestamp": 1760556364.84792, "model": "gemini-2.5-flash", "context": "models._log_token_usage:241", "usage": {"input_tokens": 11, "output_tokens": 1, "total_tokens": 60, "reasoning_tokens": 48}}
+{"timestamp": 1760584670.789025, "model": "clean-format-test", "context": "test.clean_format:1", "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}}
