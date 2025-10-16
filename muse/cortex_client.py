@@ -327,6 +327,44 @@ def cortex_run(
         raise RuntimeError("Agent did not complete properly")
 
 
+def read_agent_events(agent_id: str) -> list[Dict[str, Any]]:
+    """Read all events from an agent's JSONL log file.
+
+    Args:
+        agent_id: The agent ID (timestamp)
+
+    Returns:
+        List of event dictionaries in chronological order
+
+    Raises:
+        FileNotFoundError: If agent log doesn't exist
+    """
+    journal_path = os.environ.get("JOURNAL_PATH")
+    if not journal_path:
+        raise ValueError("JOURNAL_PATH environment variable not set")
+
+    agents_dir = Path(journal_path) / "agents"
+    agent_file = agents_dir / f"{agent_id}.jsonl"
+
+    if not agent_file.exists():
+        raise FileNotFoundError(f"Agent log not found: {agent_file}")
+
+    events = []
+    with open(agent_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+                events.append(event)
+            except json.JSONDecodeError:
+                logger.debug(f"Skipping malformed JSON in {agent_file}")
+                continue
+
+    return events
+
+
 def cortex_agents(
     limit: int = 10,
     offset: int = 0,
