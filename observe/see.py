@@ -2,6 +2,20 @@ import numpy as np
 from PIL import Image
 
 
+# Historical note: This border detection function was previously used in describe.py
+# to detect and handle blue borders in screencast frames. The implementation would:
+# 1. Fast pre-check for pure blue (0,0,255) pixels in each frame
+# 2. If found, call detect_border() to get border bounding box
+# 3. Check if change box still met 400x400px threshold after subtracting border area
+# 4. Censor (black out) the border region in frames sent to vision analysis
+# 5. Store censor_coords in output for reference
+# This feature was removed in favor of simpler processing - the complexity of tracking
+# border coordinates through the processing pipeline and qualification logic outweighed
+# the benefits. If re-implementing, consider: frame-level caching of border detection,
+# intersection calculation between change boxes and border boxes, and threading
+# censor_coords through _frame_to_bytes(), process_with_vision(), and output.
+
+
 def detect_border(
     im: Image.Image,
     color: tuple[int, int, int],

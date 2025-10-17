@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 
 import av
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from think.utils import setup_cli
 
@@ -149,102 +149,6 @@ class VideoProcessor:
             }
         }
 
-    def _check_border_and_qualify(
-        self, border_coords: Optional[tuple], box_2d: list, monitor_bounds: tuple
-    ) -> tuple[Optional[tuple], bool]:
-        """
-        Check if change box still qualifies after border subtraction.
-
-        Parameters
-        ----------
-        border_coords : Optional[tuple]
-            Pre-detected border coordinates (y_min, x_min, y_max, x_max) or None
-        box_2d : list
-            Change box coordinates [y_min, x_min, y_max, x_max] relative to monitor
-        monitor_bounds : tuple
-            Monitor bounds (x1, y1, x2, y2) in absolute coordinates
-
-        Returns
-        -------
-        tuple[Optional[tuple], bool]
-            (censor_coords, qualifies) where censor_coords is (y_min, x_min, y_max, x_max)
-            or None if no border detected, and qualifies is True if frame meets threshold
-        """
-
-        # No border detected
-        if border_coords is None:
-            return None, True
-
-        censor_coords = border_coords
-        border_y_min, border_x_min, border_y_max, border_x_max = border_coords
-
-        # Convert box_2d (relative to monitor) to absolute coordinates
-        x1, y1, x2, y2 = monitor_bounds
-        abs_y_min = y1 + box_2d[0]
-        abs_x_min = x1 + box_2d[1]
-        abs_y_max = y1 + box_2d[2]
-        abs_x_max = x1 + box_2d[3]
-
-        # Calculate intersection between change box and border box
-        intersect_x_min = max(abs_x_min, border_x_min)
-        intersect_y_min = max(abs_y_min, border_y_min)
-        intersect_x_max = min(abs_x_max, border_x_max)
-        intersect_y_max = min(abs_y_max, border_y_max)
-
-        # Check if there's actual intersection
-        if intersect_x_min < intersect_x_max and intersect_y_min < intersect_y_max:
-            # Calculate areas
-            change_area = (abs_x_max - abs_x_min) * (abs_y_max - abs_y_min)
-            intersect_area = (intersect_x_max - intersect_x_min) * (
-                intersect_y_max - intersect_y_min
-            )
-            remaining_area = change_area - intersect_area
-
-            # Check if remaining area still meets threshold (400x400 = 160000 pixels)
-            if remaining_area < 160000:
-                logger.debug(
-                    f"Change box too small after border subtraction "
-                    f"({remaining_area} < 160000 pixels), disqualifying frame"
-                )
-                return censor_coords, False
-
-        logger.debug(f"Blue border detected at {censor_coords}, applying censoring")
-        return censor_coords, True
-
-    def _detect_frame_border(self, img: Image.Image) -> Optional[tuple]:
-        """
-        Detect blue border in frame with fast pre-check.
-
-        Parameters
-        ----------
-        img : Image.Image
-            Full frame PIL image
-
-        Returns
-        -------
-        Optional[tuple]
-            Border coordinates (y_min, x_min, y_max, x_max) or None if no border
-        """
-        # Fast check: does image contain pure blue (0,0,255) pixels?
-        arr = np.asarray(img)
-        blue_mask = (arr[..., 0] == 0) & (arr[..., 1] == 0) & (arr[..., 2] == 255)
-        if not np.any(blue_mask):
-            return None
-
-        # Blue pixels found, run full border detection
-        try:
-            from observe.see import detect_border
-
-            border_y_min, border_x_min, border_y_max, border_x_max = detect_border(
-                img, (0, 0, 255)
-            )
-            return (border_y_min, border_x_min, border_y_max, border_x_max)
-        except (ValueError, Exception) as e:
-            # No border detected or detection failed
-            if not isinstance(e, ValueError):
-                logger.debug(f"Border detection failed: {e}")
-            return None
-
     def process(self) -> Dict[str, List[dict]]:
         """
         Process video and return qualified frames per monitor.
@@ -273,11 +177,8 @@ class VideoProcessor:
                     timestamp = frame.time if frame.time is not None else 0.0
                     frame_count += 1
 
-                    # Frame-level caches for PIL image and border detection
-                    # These are shared across all monitors in this frame
+                    # Frame-level cache for PIL image (shared across monitors)
                     frame_pil = None
-                    frame_border_coords = None
-                    frame_border_checked = False
 
                     # Process each monitor independently
                     for monitor_id, monitor_info in self.monitors.items():
@@ -297,7 +198,7 @@ class VideoProcessor:
 
                             # Convert frame to bytes immediately
                             crop_bytes, full_bytes = self._frame_to_bytes(
-                                pil_img, (x1, y1, x2, y2), box_2d, None
+                                pil_img, (x1, y1, x2, y2), box_2d
                             )
 
                             # Clean up PIL image and RGB array
@@ -357,25 +258,11 @@ class VideoProcessor:
                                 frame_pil = Image.fromarray(arr)
                                 del arr
 
-                            # Detect border once per frame (shared across monitors)
-                            if not frame_border_checked:
-                                frame_border_coords = self._detect_frame_border(frame_pil)
-                                frame_border_checked = True
-
-                            # Check if this monitor's change box still qualifies
-                            censor_coords, qualifies = self._check_border_and_qualify(
-                                frame_border_coords, largest_box["box_2d"], (x1, y1, x2, y2)
-                            )
-
-                            if not qualifies:
-                                continue
-
                             # Convert frame to bytes immediately
                             crop_bytes, full_bytes = self._frame_to_bytes(
                                 frame_pil,
                                 (x1, y1, x2, y2),
                                 largest_box["box_2d"],
-                                censor_coords,
                             )
 
                             frame_data = {
@@ -386,10 +273,6 @@ class VideoProcessor:
                                 "crop_bytes": crop_bytes,
                                 "full_bytes": full_bytes,
                             }
-
-                            # Add censor_coords if border was detected
-                            if censor_coords:
-                                frame_data["censor_coords"] = censor_coords
 
                             self.qualified_frames[monitor_id].append(frame_data)
 
@@ -428,7 +311,6 @@ class VideoProcessor:
         img: Image.Image,
         monitor_bounds: tuple,
         box_2d: list,
-        censor_coords: Optional[tuple],
     ) -> tuple[bytes, bytes]:
         """
         Convert frame to bytes immediately - both crop and full frame.
@@ -441,8 +323,6 @@ class VideoProcessor:
             Monitor bounds (x1, y1, x2, y2) in absolute coordinates
         box_2d : list
             Change box [y_min, x_min, y_max, x_max] relative to monitor
-        censor_coords : Optional[tuple]
-            Censor coordinates (y_min, x_min, y_max, x_max) or None
 
         Returns
         -------
@@ -450,15 +330,6 @@ class VideoProcessor:
             (crop_bytes, full_frame_bytes) as PNG bytes
         """
         x1, y1, x2, y2 = monitor_bounds
-
-        # Apply border censoring if present (modifying img directly is fine)
-        if censor_coords:
-            censor_y_min, censor_x_min, censor_y_max, censor_x_max = censor_coords
-            draw = ImageDraw.Draw(img)
-            draw.rectangle(
-                ((censor_x_min, censor_y_min), (censor_x_max + 1, censor_y_max + 1)),
-                fill="black",
-            )
 
         # Convert box_2d (relative to monitor) to absolute coordinates
         abs_y_min = y1 + box_2d[0]
@@ -752,7 +623,6 @@ class VideoProcessor:
                 req.retry_count = 0
                 req.crop_bytes = frame_data["crop_bytes"]  # Store bytes for reuse
                 req.full_bytes = frame_data["full_bytes"]  # Store for meeting analysis
-                req.censor_coords = frame_data.get("censor_coords")  # Store if present
                 req.request_type = RequestType.DESCRIBE_JSON
                 req.json_analysis = None  # Will store the JSON analysis result
                 req.meeting_analysis = None  # Will store meeting analysis if applicable
@@ -894,10 +764,6 @@ class VideoProcessor:
                 "requests": req.requests,
             }
 
-            # Add censor_coords if border was detected
-            if req.censor_coords:
-                result["censor_coords"] = list(req.censor_coords)
-
             # Add monitor position if available and not "unknown"
             if req.monitor_position and req.monitor_position != "unknown":
                 result["monitor_position"] = req.monitor_position
@@ -946,7 +812,6 @@ class VideoProcessor:
             req.full_bytes = None
             req.json_analysis = None
             req.meeting_analysis = None
-            req.censor_coords = None
 
         # Close output file
         if output_file:
