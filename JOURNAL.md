@@ -439,7 +439,7 @@ Audio capture tools write FLAC files and transcripts:
 
 - `HHMMSS_raw.flac` – mixed audio file, moved to `heard/` after transcription.
 - `heard/HHMMSS_raw.flac` – audio files moved here after processing.
-- `HHMMSS_audio.json` – transcript JSON produced by transcription.
+- `HHMMSS_audio.jsonl` – transcript JSON produced by transcription.
 
 Screen capture produces screencast videos with multi-monitor metadata:
 
