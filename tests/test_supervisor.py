@@ -26,12 +26,52 @@ def test_send_notification(monkeypatch):
     mod = importlib.import_module("think.supervisor")
     called = []
 
-    def fake_run(cmd, check=False):
-        called.append(cmd)
+    class FakeNotifier:
+        async def send(self, title, message, urgency):
+            called.append({"title": title, "message": message, "urgency": urgency})
+            return "test-notification-id"
 
-    monkeypatch.setattr(mod.subprocess, "run", fake_run)
-    mod.send_notification("msg", command="notify-send")
-    assert called
+    def fake_get_notifier():
+        return FakeNotifier()
+
+    monkeypatch.setattr(mod, "_get_notifier", fake_get_notifier)
+    mod.send_notification("test message", alert_key=("test", "key"))
+    assert len(called) == 1
+    assert called[0]["message"] == "test message"
+    assert called[0]["title"] == "Sunstone Supervisor"
+    assert ("test", "key") in mod._notification_ids
+    assert mod._notification_ids[("test", "key")] == "test-notification-id"
+
+
+def test_clear_notification(monkeypatch):
+    mod = importlib.import_module("think.supervisor")
+    cleared = []
+
+    class FakeNotifier:
+        async def send(self, title, message, urgency):
+            return "test-notification-id"
+
+        async def clear(self, notification_id):
+            cleared.append(notification_id)
+
+    def fake_get_notifier():
+        return FakeNotifier()
+
+    monkeypatch.setattr(mod, "_get_notifier", fake_get_notifier)
+
+    # First send a notification to track
+    mod.send_notification("test message", alert_key=("test", "key"))
+    assert ("test", "key") in mod._notification_ids
+
+    # Now clear it
+    mod.clear_notification(("test", "key"))
+    assert len(cleared) == 1
+    assert cleared[0] == "test-notification-id"
+    assert ("test", "key") not in mod._notification_ids
+
+    # Clearing a non-existent notification should be a no-op
+    mod.clear_notification(("nonexistent", "key"))
+    assert len(cleared) == 1  # Still just one clear call
 
 
 def test_start_runners(tmp_path, monkeypatch):
@@ -150,6 +190,7 @@ def test_supervise_logs_recovery(monkeypatch, caplog):
     monkeypatch.setattr(mod, "check_runner_exits", lambda procs: [])
     monkeypatch.setattr(mod, "check_health", fake_check_health)
     monkeypatch.setattr(mod, "send_notification", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mod, "clear_notification", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         mod, "check_scheduled_agents", lambda: None
     )  # Mock scheduled agents

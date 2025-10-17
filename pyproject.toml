@@ -43,6 +43,7 @@ dependencies = [
     "Pillow",
     "numpy",
     "dbus-next",
+    "desktop-notifier",
     "av",
     "imagehash",
 

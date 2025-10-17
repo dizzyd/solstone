@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import logging
 import os
 import signal
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TextIO
 
+from desktop_notifier import DesktopNotifier, Urgency
 from muse.cortex_client import cortex_request
 from think.domains import get_domains
 from think.utils import get_agents, setup_cli
@@ -19,6 +21,10 @@ CHECK_INTERVAL = 30
 
 # Global shutdown flag
 shutdown_requested = False
+
+# Desktop notification system
+_notifier: DesktopNotifier | None = None
+_notification_ids: dict[tuple, str] = {}  # Maps alert_key -> notification_id
 
 # State for scheduled agent execution
 _scheduled_state = {
@@ -193,12 +199,69 @@ def check_health(threshold: int = DEFAULT_THRESHOLD) -> list[str]:
     return stale
 
 
-def send_notification(message: str, command: str = "notify-send") -> None:
-    """Send a desktop notification with ``message`` using ``command``."""
+def _get_notifier() -> DesktopNotifier:
+    """Get or create the global desktop notifier instance."""
+    global _notifier
+    if _notifier is None:
+        _notifier = DesktopNotifier(app_name="Sunstone Supervisor")
+    return _notifier
+
+
+def send_notification(
+    message: str, command: str = "notify-send", alert_key: tuple | None = None
+) -> None:
+    """Send a desktop notification with ``message``.
+
+    Args:
+        message: The notification message to display
+        command: Legacy parameter for backwards compatibility (ignored)
+        alert_key: Optional key to track this notification for later clearing
+    """
     try:
-        subprocess.run([command, message], check=False)
+        notifier = _get_notifier()
+
+        # Run the async send in a sync context
+        async def _send():
+            return await notifier.send(
+                title="Sunstone Supervisor",
+                message=message,
+                urgency=Urgency.Critical,
+            )
+
+        notification_id = asyncio.run(_send())
+
+        # Store notification ID if we have an alert key
+        if alert_key and notification_id:
+            _notification_ids[alert_key] = notification_id
+            logging.debug(f"Stored notification {notification_id} for key {alert_key}")
+
     except Exception as exc:  # pragma: no cover - system issues
         logging.error("Failed to send notification: %s", exc)
+
+
+def clear_notification(alert_key: tuple) -> None:
+    """Clear a notification by its alert key.
+
+    Args:
+        alert_key: The key used when the notification was sent
+    """
+    if alert_key not in _notification_ids:
+        return
+
+    try:
+        notifier = _get_notifier()
+        notification_id = _notification_ids[alert_key]
+
+        # Run the async clear in a sync context
+        async def _clear():
+            await notifier.clear(notification_id)
+
+        asyncio.run(_clear())
+        del _notification_ids[alert_key]
+        logging.debug(f"Cleared notification for key {alert_key}")
+
+    except Exception as exc:  # pragma: no cover - system issues
+        logging.error("Failed to clear notification: %s", exc)
 
 
 def run_dream() -> bool:
@@ -443,7 +506,7 @@ def supervise(
                 if exit_key in alert_state:
                     last_time, backoff = alert_state[exit_key]
                     if now - last_time >= backoff:
-                        send_notification(msg, command)
+                        send_notification(msg, command, alert_key=exit_key)
                         alert_state[exit_key] = (now, min(backoff * 2, max_backoff))
                         logging.info(
                             f"Alert sent, next backoff: {min(backoff * 2, max_backoff)}s"
@@ -452,7 +515,7 @@ def supervise(
                         remaining = int(backoff - (now - last_time))
                         logging.info(f"Suppressing alert, next in {remaining}s")
                 else:
-                    send_notification(msg, command)
+                    send_notification(msg, command, alert_key=exit_key)
                     alert_state[exit_key] = (now, initial_backoff)
 
                 for managed in exited:
@@ -510,6 +573,8 @@ def supervise(
                         logging.info(
                             "Restarted %s after exit code %s", managed.name, returncode
                         )
+                        # Clear the notification now that process has restarted
+                        clear_notification(exit_key)
                     else:
                         logging.info("Not restarting %s", managed.name)
 
@@ -522,6 +587,9 @@ def supervise(
             recovered = sorted(prev_stale - stale_set)
             for name in recovered:
                 logging.info("%s heartbeat recovered", name)
+                # Clear notifications for recovered heartbeats
+                stale_key = ("stale", tuple(sorted(prev_stale)))
+                clear_notification(stale_key)
 
             if stale_set:
                 msg = f"Journaling offline: {', '.join(sorted(stale_set))}"
@@ -533,7 +601,7 @@ def supervise(
                 if stale_key in alert_state:
                     last_time, backoff = alert_state[stale_key]
                     if now - last_time >= backoff:
-                        send_notification(msg, command)
+                        send_notification(msg, command, alert_key=stale_key)
                         # Double the backoff for next time, up to max
                         alert_state[stale_key] = (now, min(backoff * 2, max_backoff))
                         logging.info(
@@ -543,7 +611,7 @@ def supervise(
                         remaining = int(backoff - (now - last_time))
                         logging.info(f"Suppressing alert, next in {remaining}s")
                 else:
-                    send_notification(msg, command)
+                    send_notification(msg, command, alert_key=stale_key)
                     alert_state[stale_key] = (now, initial_backoff)
                 # Retain only alert state entries still relevant
                 alert_state = {
