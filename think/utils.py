@@ -590,7 +590,7 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
     day:
         Day folder in ``YYYYMMDD`` format.
     name:
-        Transcript filename such as ``HHMMSS_audio.json``,
+        Transcript filename such as ``HHMMSS_audio.jsonl``,
         ``HHMMSS_monitor_1_diff.json``, or ``HHMMSS_screen.jsonl``.
 
     Returns
@@ -605,9 +605,9 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
     day_dir = day_path(day)
     json_path = day_dir / name
 
-    if name.endswith("_audio.json"):
+    if name.endswith("_audio.jsonl"):
         # Audio files are stored as _raw.flac in the heard directory
-        raw_name = name.replace("_audio.json", "_raw.flac")
+        raw_name = name.replace("_audio.jsonl", "_raw.flac")
         rel = f"heard/{raw_name}"
         mime = "audio/flac"
     elif name.endswith("_diff.json"):

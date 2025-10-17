@@ -66,7 +66,7 @@ class JournalStats:
 
         # Count processed outputs
         for file_name in observe_info["processed"]:
-            if file_name.endswith("_audio.json"):
+            if file_name.endswith("_audio.jsonl"):
                 stats["audio_json"] += 1
             elif file_name.endswith("_screen.jsonl"):
                 stats["desc_json"] += 1

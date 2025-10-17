@@ -277,7 +277,7 @@ def import_list() -> Any:
                         files = imported_meta["all_created_files"]
                         timestamps = []
                         for file in files:
-                            # Extract timestamp from filename like "120000_imported_audio.json"
+                            # Extract timestamp from filename like "120000_imported_audio.jsonl"
                             basename = Path(file).name
                             if basename[:6].isdigit():
                                 timestamps.append(basename[:6])

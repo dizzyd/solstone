@@ -279,7 +279,7 @@ def main() -> None:
             crumb_builder = (
                 CrumbBuilder()
                 .add_file(str(topic_prompt.path))
-                .add_glob(os.path.join(day_dir, "*_audio.json"))
+                .add_glob(os.path.join(day_dir, "*_audio.jsonl"))
                 .add_glob(os.path.join(day_dir, "*_screen.md"))
                 .add_model(model)
             )

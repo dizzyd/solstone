@@ -373,7 +373,7 @@ def download_audio(day: str) -> Any:
     for e in entries:
         if e.get("prefix") == "audio" and start_dt <= e["timestamp"] < end_dt:
             # Get the raw FLAC file path
-            raw_name = e["name"].replace("_audio.json", "_raw.flac")
+            raw_name = e["name"].replace("_audio.jsonl", "_raw.flac")
             flac_path = os.path.join(day_dir, "heard", raw_name)
             if os.path.isfile(flac_path):
                 audio_files.append(flac_path)
@@ -581,9 +581,9 @@ def calendar_stats() -> Any:
             "occurrence_count": 0,
         }
 
-        # Check for transcripts (audio json files)
+        # Check for transcripts (audio jsonl files)
         for fname in os.listdir(path):
-            if fname.endswith("_audio.json"):
+            if fname.endswith("_audio.jsonl"):
                 day_stats["has_transcripts"] = True
                 break
 

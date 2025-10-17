@@ -490,7 +490,7 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
     Returns:
         Dictionary with:
         - "raw": List of processed files in heard/ and seen/ subdirs
-        - "processed": List of output JSON files (*_audio.json, *.jsonl)
+        - "processed": List of output JSONL files (*_audio.jsonl, *_screen.jsonl)
         - "repairable": List of unprocessed source media files
     """
     # Find raw (processed) files in heard/ and seen/ subdirectories
@@ -506,7 +506,7 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
         raw.extend(f"seen/{p.name}" for p in sorted(seen_dir.glob("*.mp4")))
 
     # Find processed output files
-    processed = sorted(p.name for p in day_dir.glob("*_audio.json"))
+    processed = sorted(p.name for p in day_dir.glob("*_audio.jsonl"))
     processed.extend(sorted(p.name for p in day_dir.glob("*_screen.jsonl")))
 
     # Find repairable (unprocessed) files - source media still in day directory

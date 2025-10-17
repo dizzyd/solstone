@@ -45,13 +45,13 @@ from think.utils import day_path, setup_cli
 
 
 def recent_audio_activity(window: int = 120) -> bool:
-    """Return True if an *_audio.json file was modified in the last ``window`` seconds."""
+    """Return True if an *_audio.jsonl file was modified in the last ``window`` seconds."""
     day_dir = day_path()  # Uses today by default, creates if needed, returns Path
     if not day_dir.exists():
         return False
     cutoff = time.time() - window
     for name in os.listdir(day_dir):
-        if not name.endswith("_audio.json"):
+        if not name.endswith("_audio.jsonl"):
             continue
         path = day_dir / name
         try:
