@@ -51,6 +51,32 @@ def _build_import_payload(
     return {"imported": imported_meta, "entries": entries}
 
 
+def _write_import_jsonl(
+    file_path: str,
+    entries: list[dict],
+    *,
+    import_id: str,
+    domain: str | None = None,
+    setting: str | None = None,
+) -> None:
+    """Write imported transcript entries in JSONL format.
+
+    First line contains imported metadata, subsequent lines contain entries.
+    """
+    imported_meta: dict[str, str] = {"id": import_id}
+    if domain:
+        imported_meta["domain"] = domain
+    if setting:
+        imported_meta["setting"] = setting
+
+    # Write JSONL: metadata first, then entries
+    jsonl_lines = [json.dumps({"imported": imported_meta})]
+    jsonl_lines.extend(json.dumps(entry) for entry in entries)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(jsonl_lines) + "\n")
+
+
 def str2bool(value: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -194,7 +220,7 @@ def process_transcript(
     domain: str | None = None,
     setting: str | None = None,
 ) -> list[str]:
-    """Process a transcript file and write imported JSON segments.
+    """Process a transcript file and write imported JSONL segments.
 
     Returns:
         List of created file paths.
@@ -208,16 +234,15 @@ def process_transcript(
             continue
         ts = base_dt + timedelta(minutes=idx * 5)
         json_path = os.path.join(
-            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.json"
+            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.jsonl"
         )
-        payload = _build_import_payload(
+        _write_import_jsonl(
+            json_path,
             json_data,
             import_id=import_id,
             domain=domain,
             setting=setting,
         )
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
         logger.info(f"Added transcript segment to journal: {json_path}")
         created_files.append(json_path)
 
@@ -233,7 +258,7 @@ def audio_transcribe(
     domain: str | None = None,
     setting: str | None = None,
 ) -> tuple[list[str], dict]:
-    """Transcribe audio using Rev AI and save 5-minute chunks as imported JSON.
+    """Transcribe audio using Rev AI and save 5-minute chunks as imported JSONL.
 
     Args:
         path: Path to audio file
@@ -321,23 +346,22 @@ def audio_transcribe(
     if current_chunk:
         chunks.append((chunk_start_time, current_chunk))
 
-    # Save each chunk as a separate JSON file
+    # Save each chunk as a separate JSONL file
     for chunk_index, chunk_entries in chunks:
         # Calculate timestamp for this chunk
         ts = base_dt + timedelta(minutes=chunk_index * 5)
         json_path = os.path.join(
-            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.json"
+            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.jsonl"
         )
 
         # Save the chunk
-        payload = _build_import_payload(
+        _write_import_jsonl(
+            json_path,
             chunk_entries,
             import_id=import_id,
             domain=domain,
             setting=setting,
         )
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
         logger.info(f"Added transcript chunk to journal: {json_path}")
         created_files.append(json_path)
 
