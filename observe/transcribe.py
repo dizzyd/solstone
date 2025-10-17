@@ -228,17 +228,17 @@ class Transcriber:
             return None
 
     def _get_json_path(self, audio_path: Path) -> Path:
-        """Generate the corresponding JSON path for an audio file."""
+        """Generate the corresponding JSONL path for an audio file."""
         if audio_path.name.endswith("_raw.flac"):
-            json_name = audio_path.name.replace("_raw.flac", "_audio.json")
+            json_name = audio_path.name.replace("_raw.flac", "_audio.jsonl")
         elif audio_path.name.endswith("_audio.flac"):
-            json_name = audio_path.name.replace("_audio.flac", "_audio.json")
+            json_name = audio_path.name.replace("_audio.flac", "_audio.jsonl")
         else:
-            json_name = audio_path.stem + "_audio.json"
+            json_name = audio_path.stem + "_audio.jsonl"
         return audio_path.with_name(json_name)
 
     def _transcribe(self, raw_path: Path, segments: List[Dict[str, object]]) -> bool:
-        """Transcribe segments using Gemini and save JSON."""
+        """Transcribe segments using Gemini and save JSONL."""
         json_path = self._get_json_path(raw_path)
 
         try:
@@ -268,7 +268,21 @@ class Transcriber:
                     logging.info(f"Validation failed on retry: {error_msg}")
                     return False
 
-            json_path.write_text(json.dumps({"text": result}, indent=2))
+            # Extract metadata and transcript items
+            metadata = {}
+            transcript_items = result
+            if result and isinstance(result[-1], dict):
+                last_item = result[-1]
+                if "start" not in last_item and (
+                    "topics" in last_item or "setting" in last_item
+                ):
+                    metadata = last_item
+                    transcript_items = result[:-1]
+
+            # Write JSONL format: metadata first, then transcript items
+            jsonl_lines = [json.dumps(metadata)]
+            jsonl_lines.extend(json.dumps(item) for item in transcript_items)
+            json_path.write_text("\n".join(jsonl_lines) + "\n")
             logging.info(f"Transcribed {raw_path} -> {json_path}")
 
             crumb_builder = (
