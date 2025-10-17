@@ -597,41 +597,48 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
     -------
     tuple[str, str, Any]
         ``(path, mime_type, metadata)`` where ``path`` is relative to the day
-        directory, ``mime_type`` is ``audio/flac``, ``image/png``, or
-        ``video/webm``, and ``metadata`` contains the parsed JSON data
-        (empty on failure).
+        directory (read from metadata header), ``mime_type`` is determined
+        from the raw file extension, and ``metadata`` contains the parsed
+        JSON data (empty on failure).
     """
 
     day_dir = day_path(day)
-    json_path = day_dir / name
+    transcript_path = day_dir / name
 
-    if name.endswith("_audio.jsonl"):
-        # Audio files are stored as _raw.flac in the heard directory
-        raw_name = name.replace("_audio.jsonl", "_raw.flac")
-        rel = f"heard/{raw_name}"
-        mime = "audio/flac"
-    elif name.endswith("_diff.json"):
-        raw_name = name[:-5] + ".png"
-        rel = f"seen/{raw_name}"
-        mime = "image/png"
-    elif name.endswith("_screen.jsonl"):
-        # Screencast files are stored as .webm in the seen directory
-        raw_name = name.replace("_screen.jsonl", "_screen.webm")
-        rel = f"seen/{raw_name}"
-        mime = "video/webm"
-    else:
-        raise ValueError(f"unsupported transcript name: {name}")
-
+    rel = None
     meta: Any = {}
+
     try:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(transcript_path, "r", encoding="utf-8") as f:
             if name.endswith(".jsonl"):
-                # For JSONL files, read all lines as a list
+                # First line is metadata header with "raw" field
+                first_line = f.readline().strip()
+                if first_line:
+                    header = json.loads(first_line)
+                    rel = header.get("raw")
+
+                # Read remaining lines as metadata
                 meta = [json.loads(line) for line in f if line.strip()]
             else:
+                # Non-JSONL format (e.g., _diff.json)
                 meta = json.load(f)
+                rel = meta.get("raw")
     except Exception:  # pragma: no cover - optional metadata
-        logging.debug("Failed to read %s", json_path)
+        logging.debug("Failed to read %s", transcript_path)
+
+    if not rel:
+        raise ValueError(f"No 'raw' field found in metadata for {name}")
+
+    # Determine MIME type from raw file extension
+    if rel.endswith(".flac"):
+        mime = "audio/flac"
+    elif rel.endswith(".png"):
+        mime = "image/png"
+    elif rel.endswith(".webm"):
+        mime = "video/webm"
+    else:
+        # Default fallback for unknown types
+        mime = "application/octet-stream"
 
     return rel, mime, meta
 

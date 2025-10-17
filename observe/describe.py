@@ -595,6 +595,12 @@ class VideoProcessor:
         # Open output file if specified
         output_file = open(output_path, "w") if output_path else None
 
+        # Write metadata header to JSONL file
+        if output_file:
+            metadata = {"raw": f"seen/{self.video_path.name}"}
+            output_file.write(json.dumps(metadata) + "\n")
+            output_file.flush()
+
         # Create vision requests for all qualified frames
         for monitor_id, frames in qualified_frames.items():
             for frame_data in frames:
