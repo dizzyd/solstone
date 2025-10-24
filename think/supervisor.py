@@ -16,7 +16,7 @@ from muse.cortex_client import cortex_request
 from think.domains import get_domains
 from think.utils import get_agents, setup_cli
 
-DEFAULT_THRESHOLD = 30
+DEFAULT_THRESHOLD = 60
 CHECK_INTERVAL = 30
 
 # Global shutdown flag
