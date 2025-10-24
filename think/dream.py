@@ -1,5 +1,4 @@
 import argparse
-import glob
 import logging
 import os
 import subprocess
@@ -49,13 +48,6 @@ def build_commands(day: str, force: bool, verbose: bool = False) -> list[list[st
             cmd.append("--force")
         commands.append(cmd)
 
-    entity_cmd = ["think-entity-roll", "--day", day]
-    if verbose:
-        entity_cmd.append("--verbose")
-    if force:
-        entity_cmd.append("--force")
-    commands.append(entity_cmd)
-
     # Run journal stats at the end to update overall statistics
     stats_cmd = ["think-journal-stats"]
     if verbose:
@@ -80,11 +72,6 @@ def parse_args() -> argparse.ArgumentParser:
         help="Day folder in YYYYMMDD format (defaults to yesterday)",
     )
     parser.add_argument("--force", action="store_true", help="Overwrite existing files")
-    parser.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="Remove existing outputs before running",
-    )
     return parser
 
 
@@ -102,17 +89,6 @@ def main() -> None:
 
     if not day_dir.is_dir():
         parser.error(f"Day folder not found: {day_dir}")
-
-    if args.rebuild:
-        for pattern in ("*_audio.jsonl", "*_[a-z]*_*_diff.json"):
-            for path in glob.glob(os.path.join(day_dir, pattern)):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
-                crumb = path + ".crumb"
-                if os.path.exists(crumb):
-                    os.remove(crumb)
 
     commands = build_commands(day, args.force, verbose=args.verbose)
     success_count = 0
