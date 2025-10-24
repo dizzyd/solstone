@@ -185,22 +185,6 @@ def run_task(
                     )
                     if code != 0:
                         break
-            elif name == "entity":
-                if not day:
-                    raise ValueError("day required")
-                args = [
-                    "think-entity-roll",
-                    "--day",
-                    day,
-                    "--force",
-                    "--verbose",
-                ]
-                commands.append(" ".join(args))
-                code = (
-                    _run_command(args, logger, stop)
-                    if use_stop
-                    else _run_command(args, logger)
-                )
             elif name == "importer":
                 if not day:
                     raise ValueError("file and timestamp required")

@@ -79,7 +79,6 @@ def admin_day_page(day: str) -> str:
     prev_day, next_day = adjacent_days(state.journal_root, day)
     sense_rep = sense_proc = 0
     summaries_rep = summaries_proc = 0
-    entity_rep = entity_proc = 0
 
     # Read stats from stats.json instead of scanning on demand
     if state.journal_root:
@@ -93,15 +92,12 @@ def admin_day_page(day: str) -> str:
                 # Extract repair counts
                 sense_rep = day_stats.get("repair_observe", 0)
                 summaries_rep = day_stats.get("repair_summaries", 0)
-                entity_rep = day_stats.get("repair_entity", 0)
 
                 # Extract processed counts
                 # For sense: audio_json + desc_json indicates processed transcripts + descriptions
                 sense_proc = day_stats.get("audio_json", 0) + day_stats.get("desc_json", 0)
                 # For summaries: summaries_processed is directly available
                 summaries_proc = day_stats.get("summaries_processed", 0)
-                # For entity: entities indicates days with entities.md (1 or 0)
-                entity_proc = day_stats.get("entities", 0)
             except Exception:
                 pass
     return render_template(
@@ -115,8 +111,6 @@ def admin_day_page(day: str) -> str:
         sense_proc=sense_proc,
         summaries_rep=summaries_rep,
         summaries_proc=summaries_proc,
-        entity_rep=entity_rep,
-        entity_proc=entity_proc,
     )
 
 
@@ -135,15 +129,6 @@ def admin_summarize(day: str) -> Any:
         return jsonify({"error": "invalid day"}), 404
 
     run_task("summarize", day)
-    return jsonify({"status": "ok"})
-
-
-@bp.route("/admin/api/<day>/entity", methods=["POST"])
-def admin_entity(day: str) -> Any:
-    if not _valid_day(day):
-        return jsonify({"error": "invalid day"}), 404
-
-    run_task("entity", day)
     return jsonify({"status": "ok"})
 
 

@@ -21,7 +21,6 @@ pre { background:#f5f5f5; padding:0.5em; }
         next_day and url_for('admin.admin_day_page', day=next_day)) }}
   <button id="senseRepairBtn">Sense Repair ({{ sense_rep }}/{{ sense_proc }})</button>
   <button id="summarizeBtn">Run Summarization ({{ summaries_rep }}/{{ summaries_proc }})</button>
-  <button id="entityBtn">Entity Roll ({{ entity_rep }}/{{ entity_proc }})</button>
   <button id="processBtn">Process Day</button>
   <pre id="status"></pre>
   <h2>Task Log</h2>
@@ -63,7 +62,6 @@ function runTask(data){
 }
 document.getElementById('senseRepairBtn').onclick=()=>runTask({task:'sense_repair',day:'{{ day }}',src:'admin/{{ day }}'});
 document.getElementById('summarizeBtn').onclick=e=>runTask({task:'summarize',day:'{{ day }}',force:e.shiftKey,src:'admin/{{ day }}'});
-document.getElementById('entityBtn').onclick=e=>runTask({task:'entity',day:'{{ day }}',src:'admin/{{ day }}'});
 document.getElementById('processBtn').onclick=e=>runTask({task:'dream',day:'{{ day }}',force:e.shiftKey,src:'admin/{{ day }}'});
 function hideModal(){
   document.getElementById('taskModal').style.display='none';

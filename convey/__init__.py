@@ -177,7 +177,6 @@ admin_page = admin_view.admin_page
 admin_day_page = admin_view.admin_day_page
 admin_sense_repair = admin_view.admin_sense_repair
 admin_summarize = admin_view.admin_summarize
-admin_entity = admin_view.admin_entity
 admin_process = admin_view.admin_process
 task_log = admin_view.task_log
 reindex = admin_view.reindex

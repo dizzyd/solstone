@@ -48,12 +48,6 @@ def test_admin_day_actions(monkeypatch, tmp_path):
     assert any(cmd[0] == "think-summarize" for cmd in called)
 
     called.clear()
-    with review.app.test_request_context("/admin/api/20240101/entity", method="POST"):
-        resp = review.admin_entity("20240101")
-    assert resp.json["status"] == "ok"
-    assert ["think-entity-roll", "--day", "20240101", "--force", "--verbose"] in called
-
-    called.clear()
     with review.app.test_request_context("/admin/api/20240101/process", method="POST"):
         resp = review.admin_process("20240101")
     assert resp.json["status"] == "ok"

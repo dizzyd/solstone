@@ -11,7 +11,6 @@ from typing import Dict
 import soundfile as sf
 
 from observe.sense import scan_day as observe_scan_day
-from think.entity_roll import scan_day as entity_scan_day
 from think.summarize import scan_day as summarize_scan_day
 from think.utils import day_dirs, setup_cli
 
@@ -75,10 +74,6 @@ class JournalStats:
         stats["repair_observe"] = len(observe_info["repairable"])
 
         # --- think ---
-        entity_info = entity_scan_day(day)
-        stats["entities"] = len(entity_info["processed"])
-        stats["repair_entity"] = len(entity_info["repairable"])
-
         summary_info = summarize_scan_day(day)
         stats["summaries_processed"] = len(summary_info["processed"])
         stats["repair_summaries"] = len(summary_info["repairable"])
@@ -247,7 +242,6 @@ class JournalStats:
         missing_desc = self.totals.get("diff_png", 0) - self.totals.get("desc_json", 0)
         if missing_desc > 0:
             print(f"  Missing descriptions: {missing_desc}")
-        print(f"Days with entities.md: {self.totals.get('entities', 0)}")
         print(
             f"Ponder processed: {self.totals.get('ponder_processed', 0)} | Repairable: {self.totals.get('repair_ponder', 0)}"
         )
@@ -330,7 +324,6 @@ class JournalStats:
         missing_desc = self.totals.get("diff_png", 0) - self.totals.get("desc_json", 0)
         if missing_desc > 0:
             lines.append(f"  - Missing descriptions: {missing_desc}")
-        lines.append(f"- Days with entities.md: {self.totals.get('entities', 0)}")
         lines.append(
             f"- Ponder processed: {self.totals.get('ponder_processed', 0)}"
             f" | Repairable: {self.totals.get('repair_ponder', 0)}"
