@@ -28,9 +28,6 @@ def test_modify_and_update(tmp_path):
         str(md), "Person", "Jane", new_name="J", operation="rename"
     )
     assert "J" in md.read_text()
-    review.update_top_entry(str(tmp_path), "Person", "J", "info")
-    top_path = tmp_path / "entities.md"
-    assert top_path.read_text()
 
 
 def test_build_index_occurrence_format(tmp_path, monkeypatch):

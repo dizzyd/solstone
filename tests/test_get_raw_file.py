@@ -14,12 +14,12 @@ def test_get_raw_file(tmp_path, monkeypatch):
 
     (seen / "123000_monitor_1_diff.png").write_bytes(b"data")
     (day_dir / "123000_monitor_1_diff.json").write_text(
-        '{"visual_description": "screen"}'
+        '{"visual_description": "screen", "raw": "seen/123000_monitor_1_diff.png"}'
     )
 
     (heard / "090000_raw.flac").write_bytes(b"data")
     # Write JSONL format: metadata first, then entry
-    (day_dir / "090000_audio.jsonl").write_text('{}\n{"text": "hello"}\n')
+    (day_dir / "090000_audio.jsonl").write_text('{"raw": "heard/090000_raw.flac"}\n{"text": "hello"}\n')
 
     path, mime, meta = utils.get_raw_file("20240101", "123000_monitor_1_diff.json")
     assert path == "seen/123000_monitor_1_diff.png"
@@ -29,6 +29,6 @@ def test_get_raw_file(tmp_path, monkeypatch):
     path, mime, meta = utils.get_raw_file("20240101", "090000_audio.jsonl")
     assert path == "heard/090000_raw.flac"
     assert mime == "audio/flac"
-    # JSONL format returns a list: [metadata_dict, entry1_dict, ...]
-    assert isinstance(meta, list) and len(meta) == 2
-    assert meta[1]["text"] == "hello"
+    # JSONL format returns a list: [entry1_dict, ...]
+    assert isinstance(meta, list) and len(meta) == 1
+    assert meta[0]["text"] == "hello"

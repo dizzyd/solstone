@@ -1,5 +1,6 @@
 """Test supervisor scheduling functionality."""
 
+import asyncio
 import os
 from unittest.mock import Mock, patch
 
@@ -55,10 +56,11 @@ def test_spawn_scheduled_agents(mock_get_agents, mock_cortex_request):
     assert "Running daily scheduled task for another_daily" in second_call[1]["prompt"]
 
 
+@patch("think.supervisor.check_scheduled_agents")
 @patch("think.supervisor.spawn_scheduled_agents")
 @patch("think.supervisor.run_dream")
 def test_supervisor_runs_scheduled_after_dream(
-    mock_run_dream, mock_spawn_scheduled
+    mock_run_dream, mock_spawn_scheduled, mock_check_scheduled, tmp_path
 ):
     """Test that scheduled agents run only after successful dream."""
     from think.supervisor import supervise
@@ -67,7 +69,7 @@ def test_supervisor_runs_scheduled_after_dream(
     mock_run_dream.return_value = True
 
     with patch("think.supervisor.datetime") as mock_datetime:
-        with patch("think.supervisor.time.sleep") as mock_sleep:
+        with patch("think.supervisor.asyncio.sleep") as mock_sleep:
             with patch("think.supervisor.check_health") as mock_check_health:
                 # Mock dates to trigger daily processing
                 mock_now = Mock()
@@ -83,10 +85,10 @@ def test_supervisor_runs_scheduled_after_dream(
                 mock_sleep.side_effect = KeyboardInterrupt
 
                 with patch.dict(
-                    os.environ, {"JOURNAL_PATH": "/test/journal"}, clear=True
+                    os.environ, {"JOURNAL_PATH": str(tmp_path)}, clear=True
                 ):
                     try:
-                        supervise(daily=True)
+                        asyncio.run(supervise(daily=True))
                     except KeyboardInterrupt:
                         pass
 
@@ -94,10 +96,11 @@ def test_supervisor_runs_scheduled_after_dream(
                 mock_spawn_scheduled.assert_called_once_with()
 
 
+@patch("think.supervisor.check_scheduled_agents")
 @patch("think.supervisor.spawn_scheduled_agents")
 @patch("think.supervisor.run_dream")
 def test_supervisor_skips_scheduled_on_dream_failure(
-    mock_run_dream, mock_spawn_scheduled
+    mock_run_dream, mock_spawn_scheduled, mock_check_scheduled, tmp_path
 ):
     """Test that scheduled agents don't run if dream fails."""
     from think.supervisor import supervise
@@ -106,7 +109,7 @@ def test_supervisor_skips_scheduled_on_dream_failure(
     mock_run_dream.return_value = False
 
     with patch("think.supervisor.datetime") as mock_datetime:
-        with patch("think.supervisor.time.sleep") as mock_sleep:
+        with patch("think.supervisor.asyncio.sleep") as mock_sleep:
             with patch("think.supervisor.check_health") as mock_check_health:
                 # Mock dates to trigger daily processing
                 mock_now = Mock()
@@ -122,10 +125,10 @@ def test_supervisor_skips_scheduled_on_dream_failure(
                 mock_sleep.side_effect = KeyboardInterrupt
 
                 with patch.dict(
-                    os.environ, {"JOURNAL_PATH": "/test/journal"}, clear=True
+                    os.environ, {"JOURNAL_PATH": str(tmp_path)}, clear=True
                 ):
                     try:
-                        supervise(daily=True)
+                        asyncio.run(supervise(daily=True))
                     except KeyboardInterrupt:
                         pass
 
