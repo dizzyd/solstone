@@ -148,7 +148,7 @@ def test_load_entity_names_missing_env_var(monkeypatch):
 
 
 def test_load_entity_names_spoken_mode(monkeypatch):
-    """Test spoken mode returns shortened forms optimized for speech recognition."""
+    """Test spoken mode returns shortened forms with uniform processing for all types."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
         entities_path.write_text(
@@ -181,10 +181,9 @@ def test_load_entity_names_spoken_mode(monkeypatch):
         assert "Elizabeth" not in result
         assert "Doe" not in result
 
-        # Company: "Acme Corporation (ACME)" -> ["ACME"]
-        assert "ACME" in result
-        # Should not include full company name
-        assert "Acme Corporation" not in result
+        # Company: "Acme Corporation (ACME)" -> ["Acme", "ACME"] (uniform processing)
+        assert "Acme" in result  # First word
+        assert "ACME" in result  # From parens
 
         # Company: "Widget Inc" (multi-word) -> ["Widget"]
         assert "Widget" in result
@@ -192,19 +191,20 @@ def test_load_entity_names_spoken_mode(monkeypatch):
         # Company: "Google" (single word) -> ["Google"]
         assert "Google" in result
 
-        # Project: "Sunstone Project (SUN)" -> ["SUN"]
-        assert "SUN" in result
+        # Project: "Sunstone Project (SUN)" -> ["Sunstone", "SUN"] (uniform processing)
+        assert "Sunstone" in result  # First word
+        assert "SUN" in result  # From parens
 
-        # Project: "Project X" (no parens) -> ["Project X"]
-        assert "Project X" in result
+        # Project: "Project X" (no parens) -> ["Project"] (first word only)
+        assert "Project" in result
 
-        # Tools should be excluded entirely
-        assert "Hammer" not in result
-        assert "Docker" not in result
+        # Tools are now included (uniform processing for all types)
+        assert "Hammer" in result
+        assert "Docker" in result
 
 
-def test_load_entity_names_spoken_mode_empty(monkeypatch):
-    """Test spoken mode with only tools returns None."""
+def test_load_entity_names_spoken_mode_with_tools(monkeypatch):
+    """Test spoken mode includes tools with uniform processing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entities_path = Path(tmpdir) / "entities.md"
         entities_path.write_text(
@@ -216,8 +216,10 @@ def test_load_entity_names_spoken_mode_empty(monkeypatch):
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
         result = load_entity_names(spoken=True)
-        # All entities are tools, so result should be None
-        assert result is None
+        # Tools are now included (uniform processing)
+        assert isinstance(result, list)
+        assert "Hammer" in result
+        assert "Docker" in result
 
 
 def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
@@ -239,3 +241,47 @@ def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
         # Should have only one "John" and one "Acme" even though there are two of each
         assert result.count("John") == 1
         assert result.count("Acme") == 1
+
+
+def test_load_entity_names_uniform_processing(monkeypatch):
+    """Test that uniform processing works correctly for all entity types."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        entities_path = Path(tmpdir) / "entities.md"
+        entities_path.write_text(
+            """
+* Person: Ryan Reed (R2) - Software developer
+* Company: Federal Aviation Administration (FAA) - Government agency
+* Project: Backend API (API) - Core service
+* Tool: pytest - Testing framework
+* Location: New York City (NYC) - Metropolitan area
+"""
+        )
+
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
+
+        assert isinstance(result, list)
+
+        # "Ryan Reed (R2)" -> ["Ryan", "R2"]
+        assert "Ryan" in result
+        assert "R2" in result
+        assert "Reed" not in result
+
+        # "Federal Aviation Administration (FAA)" -> ["Federal", "FAA"]
+        assert "Federal" in result
+        assert "FAA" in result
+        assert "Aviation" not in result
+        assert "Administration" not in result
+
+        # "Backend API (API)" -> ["Backend", "API"]
+        assert "Backend" in result
+        assert "API" in result
+
+        # "pytest" -> ["pytest"]
+        assert "pytest" in result
+
+        # "New York City (NYC)" -> ["New", "NYC"]
+        assert "New" in result
+        assert "NYC" in result
+        assert "York" not in result
+        assert "City" not in result

@@ -655,11 +655,14 @@ def load_entity_names(
     comma-delimited string. When spoken=True, returns a list of shortened forms
     optimized for audio transcription.
 
-    When spoken=True:
-    - People: First name + nicknames in parens (e.g., "Jeremie Miller (Jer)" → ["Jeremie", "Jer"])
-    - Companies: Name in parens if present, otherwise first word
-    - Projects: Name in parens if present, otherwise full project name
-    - Tools: Excluded entirely
+    When spoken=True, uses uniform processing for all entity types:
+    - Extracts first word from base name (without parentheses)
+    - Extracts all items from within parentheses (comma-separated)
+    - Examples:
+      - "Ryan Reed (R2)" → ["Ryan", "R2"]
+      - "Federal Aviation Administration (FAA)" → ["Federal", "FAA"]
+      - "Acme Corp" → ["Acme"]
+      - "pytest" → ["pytest"]
 
     Args:
         domain: Optional domain name. If provided, loads from domains/{domain}/entities.md
@@ -702,67 +705,29 @@ def load_entity_names(
             if parsed:
                 entity_type, name, _ = parsed
 
-                # Skip tools when in spoken mode
-                if spoken and entity_type == "Tool":
-                    continue
-
                 # For non-spoken mode, collect full names
                 if not spoken:
                     if name and name not in entity_names:
                         entity_names.append(name)
                 else:
-                    # For spoken mode, extract shortened forms
-                    if entity_type == "Person":
-                        # Extract first name and nicknames
-                        # "Jeremie Miller (Jer)" -> ["Jeremie", "Jer"]
+                    # For spoken mode, extract shortened forms (uniform for all types)
+                    # Get base name (without parens) and extract first word
+                    base_name = re.sub(r"\s*\([^)]+\)", "", name).strip()
+                    first_word = base_name.split()[0] if base_name else None
 
-                        # Get base name (without parens)
-                        base_name = re.sub(r"\s*\([^)]+\)", "", name).strip()
-                        first_name = base_name.split()[0] if base_name else None
+                    # Add first word
+                    if first_word and first_word not in spoken_names:
+                        spoken_names.append(first_word)
 
-                        # Add first name
-                        if first_name and first_name not in spoken_names:
-                            spoken_names.append(first_name)
-
-                        # Extract and add nicknames from parens
-                        paren_match = re.search(r"\(([^)]+)\)", name)
-                        if paren_match:
-                            nicknames = [
-                                n.strip() for n in paren_match.group(1).split(",")
-                            ]
-                            for nick in nicknames:
-                                if nick and nick not in spoken_names:
-                                    spoken_names.append(nick)
-
-                    elif entity_type == "Company":
-                        # If there's a name in parens, use that
-                        # Otherwise use first word (or full name if single word)
-                        paren_match = re.search(r"\(([^)]+)\)", name)
-                        if paren_match:
-                            short_name = paren_match.group(1).strip()
-                            if short_name and short_name not in spoken_names:
-                                spoken_names.append(short_name)
-                        else:
-                            # Remove parens and get first word (or full if single word)
-                            base_name = re.sub(r"\s*\([^)]+\)", "", name).strip()
-                            words = base_name.split()
-                            if len(words) > 1:
-                                short_name = words[0]
-                            else:
-                                short_name = base_name
-                            if short_name and short_name not in spoken_names:
-                                spoken_names.append(short_name)
-
-                    elif entity_type == "Project":
-                        # If there's a name in parens, use just that
-                        # Otherwise use full project name
-                        paren_match = re.search(r"\(([^)]+)\)", name)
-                        if paren_match:
-                            short_name = paren_match.group(1).strip()
-                        else:
-                            short_name = re.sub(r"\s*\([^)]+\)", "", name).strip()
-                        if short_name and short_name not in spoken_names:
-                            spoken_names.append(short_name)
+                    # Extract and add all items from parens (comma-separated)
+                    paren_match = re.search(r"\(([^)]+)\)", name)
+                    if paren_match:
+                        paren_items = [
+                            item.strip() for item in paren_match.group(1).split(",")
+                        ]
+                        for item in paren_items:
+                            if item and item not in spoken_names:
+                                spoken_names.append(item)
 
     if spoken:
         return spoken_names if spoken_names else None

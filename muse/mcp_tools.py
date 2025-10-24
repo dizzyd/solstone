@@ -3,6 +3,7 @@
 
 import base64
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, TypeVar
@@ -28,6 +29,16 @@ mcp = FastMCP("sunstone")
 HINTS = {"readOnlyHint": True, "openWorldHint": False}
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+def is_valid_entity_type(etype: str) -> bool:
+    """Validate entity type: alphanumeric and spaces only, at least 3 characters."""
+    if not etype or len(etype.strip()) < 3:
+        return False
+    # Must contain only alphanumeric and spaces, and at least one alphanumeric character
+    return bool(
+        re.match(r"^[A-Za-z0-9 ]+$", etype) and re.search(r"[A-Za-z0-9]", etype)
+    )
 
 
 def register_tool(*tool_args: Any, **tool_kwargs: Any) -> Callable[[F], F]:
@@ -737,11 +748,10 @@ def entity_detect(
     """
     try:
         # Validate entity type
-        valid_types = {"Person", "Company", "Project", "Tool"}
-        if type not in valid_types:
+        if not is_valid_entity_type(type):
             return {
                 "error": f"Invalid entity type '{type}'",
-                "suggestion": f"must be one of: {', '.join(sorted(valid_types))}",
+                "suggestion": "must be alphanumeric with spaces only, at least 3 characters long",
             }
 
         # Load existing entities for the day
@@ -805,11 +815,10 @@ def entity_attach(
     """
     try:
         # Validate entity type
-        valid_types = {"Person", "Company", "Project", "Tool"}
-        if type not in valid_types:
+        if not is_valid_entity_type(type):
             return {
                 "error": f"Invalid entity type '{type}'",
-                "suggestion": f"must be one of: {', '.join(sorted(valid_types))}",
+                "suggestion": "must be alphanumeric with spaces only, at least 3 characters long",
             }
 
         # Load existing attached entities
@@ -884,11 +893,10 @@ def entity_update(
     """
     try:
         # Validate entity type
-        valid_types = {"Person", "Company", "Project", "Tool"}
-        if type not in valid_types:
+        if not is_valid_entity_type(type):
             return {
                 "error": f"Invalid entity type '{type}'",
-                "suggestion": f"must be one of: {', '.join(sorted(valid_types))}",
+                "suggestion": "must be alphanumeric with spaces only, at least 3 characters long",
             }
 
         update_entity(domain, type, name, old_description, new_description, day)

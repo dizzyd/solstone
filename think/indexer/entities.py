@@ -14,6 +14,16 @@ from .core import _scan_files, get_index
 ENTITY_ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
 
 
+def is_valid_entity_type(etype: str) -> bool:
+    """Validate entity type: alphanumeric and spaces only, at least 3 characters."""
+    if not etype or len(etype.strip()) < 3:
+        return False
+    # Must contain only alphanumeric and spaces, and at least one alphanumeric character
+    return bool(
+        re.match(r"^[A-Za-z0-9 ]+$", etype) and re.search(r"[A-Za-z0-9]", etype)
+    )
+
+
 def parse_entity_line(line: str) -> Tuple[str, str, str] | None:
     """Parse a single line from an ``entities.md`` file."""
     cleaned = line.replace("**", "")
@@ -38,7 +48,6 @@ def parse_entity_line(line: str) -> Tuple[str, str, str] | None:
 def parse_entities(path: str) -> List[Tuple[str, str, str]]:
     """Return parsed entity tuples from ``entities.md`` inside ``path``."""
     items: List[Tuple[str, str, str]] = []
-    valid_types = {"Person", "Company", "Project", "Tool"}
 
     file_path = os.path.join(path, "entities.md")
     if not os.path.isfile(file_path):
@@ -52,7 +61,7 @@ def parse_entities(path: str) -> List[Tuple[str, str, str]]:
             if not parsed:
                 continue
             etype, name, desc = parsed
-            if etype not in valid_types:
+            if not is_valid_entity_type(etype):
                 continue
             items.append((etype, name, desc))
 
@@ -117,7 +126,6 @@ def _index_entities(
     else:
         # For detected entities, parse the specific file directly
         entries = []
-        valid_types = {"Person", "Company", "Project", "Tool"}
 
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
@@ -127,7 +135,7 @@ def _index_entities(
                 if not parsed:
                     continue
                 etype, name, desc = parsed
-                if etype not in valid_types:
+                if not is_valid_entity_type(etype):
                     continue
                 entries.append((etype, name, desc))
 

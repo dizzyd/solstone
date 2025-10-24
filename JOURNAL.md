@@ -132,7 +132,7 @@ Format example:
 - **Tool**: PostgreSQL - Database system used in production
 ```
 
-Entity types: `Person`, `Company`, `Project`, `Tool`
+Entity types are flexible and user-defined. Common examples: `Person`, `Company`, `Project`, `Tool`, `Location`, `Event`. Type names must be alphanumeric with spaces, minimum 3 characters.
 
 #### Detected Entities
 
