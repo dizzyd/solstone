@@ -1,0 +1,10 @@
+{"type": "Company", "name": "Acme Corp", "description": "Main client", "status": "active", "revenue": "high"}
+{"type": "Company", "name": "Tech Solutions Inc", "description": "Partner company", "status": "active"}
+{"type": "Person", "name": "Bob Wilson", "description": "QA engineer", "role": "engineer", "team": "qa"}
+{"type": "Person", "name": "Jane Doe", "description": "Project manager", "role": "manager", "team": "product"}
+{"type": "Person", "name": "John Smith", "description": "Lead developer on the project", "role": "lead", "team": "engineering", "skills": ["python", "javascript"]}
+{"type": "Project", "name": "API Optimization", "description": "Performance improvement initiative", "status": "in-progress", "priority": "high"}
+{"type": "Project", "name": "Dashboard Redesign", "description": "UI/UX overhaul project", "status": "planning", "priority": "medium"}
+{"type": "Tool", "name": "Docker", "description": "Container platform", "version": "24.0", "url": "https://docker.com"}
+{"type": "Tool", "name": "PostgreSQL", "description": "Database system", "version": "16.0"}
+{"type": "Tool", "name": "Visual Studio Code", "description": "Primary IDE", "version": "1.85"}

@@ -1,3 +1,0 @@
-- **Entity 1**: First test entity
-- **Entity 2**: Second test entity
-- **Entity 3**: Third test entity with description

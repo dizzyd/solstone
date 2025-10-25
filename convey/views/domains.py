@@ -79,9 +79,9 @@ def create_domain() -> Any:
         with open(domain_json, "w", encoding="utf-8") as f:
             json.dump(domain_data, f, indent=2, ensure_ascii=False)
 
-        # Create empty entities.md
-        entities_md = domain_path / "entities.md"
-        entities_md.write_text("", encoding="utf-8")
+        # Create empty entities.jsonl
+        entities_jsonl = domain_path / "entities.jsonl"
+        entities_jsonl.write_text("", encoding="utf-8")
 
         # No need to create matters directory - matters will be created as timestamp directories
 
@@ -164,12 +164,8 @@ def get_domain_entities_data(domain_name: str) -> dict:
             - attached: list of {"type": str, "name": str, "description": str}
             - detected: list of {"type": str, "name": str, "description": str, "count": int, "last_seen": str}
     """
-    # Load attached entities
-    attached_tuples = load_entities(domain_name)
-    attached = [
-        {"type": etype, "name": name, "description": desc}
-        for etype, name, desc in attached_tuples
-    ]
+    # Load attached entities (already returns list of dicts)
+    attached = load_entities(domain_name)
 
     # Query detected entities from indexer
     _, detected_results = search_entities(
@@ -233,12 +229,12 @@ def add_domain_entity(domain_name: str) -> Any:
         entities = load_entities(domain_name)
 
         # Check for duplicates
-        for existing_type, existing_name, _ in entities:
-            if existing_type == etype and existing_name == name:
+        for entity in entities:
+            if entity.get("type") == etype and entity.get("name") == name:
                 return jsonify({"error": "Entity already exists in domain"}), 409
 
         # Add new entity
-        entities.append((etype, name, desc))
+        entities.append({"type": etype, "name": name, "description": desc})
 
         # Save back
         save_entities(domain_name, entities)
@@ -268,7 +264,8 @@ def remove_domain_entity(domain_name: str) -> Any:
 
         # Filter out the entity to remove
         filtered = [
-            (et, n, d) for et, n, d in entities if not (et == etype and n == name)
+            e for e in entities
+            if not (e.get("type") == etype and e.get("name") == name)
         ]
 
         # Check if anything was removed
@@ -385,19 +382,17 @@ def update_entity_description(domain_name: str) -> Any:
 
         # Find and update the entity
         updated = False
-        new_entities = []
-        for etype, name, desc in entities:
-            if etype == entity_type and name == entity_name:
-                new_entities.append((etype, name, new_description))
+        for entity in entities:
+            if entity.get("type") == entity_type and entity.get("name") == entity_name:
+                entity["description"] = new_description
                 updated = True
-            else:
-                new_entities.append((etype, name, desc))
+                break
 
         if not updated:
             return jsonify({"error": "Entity not found in domain"}), 404
 
         # Save updated list
-        save_entities(domain_name, new_entities)
+        save_entities(domain_name, entities)
 
         return jsonify({"success": True})
 

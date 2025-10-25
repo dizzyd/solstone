@@ -1,0 +1,4 @@
+{"type": "Number", "name": "123", "description": "Test numeric entity"}
+{"type": "Organization", "name": "Test Initiative (TI)", "description": "Test organization"}
+{"type": "Person", "name": "Test Person (TP)", "description": "Test engineer"}
+{"type": "Person", "name": "Test Person (TP)", "description": "Duplicate entry for testing"}

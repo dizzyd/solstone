@@ -87,7 +87,7 @@ The `domains/` directory provides a way to organize journal content by scope or 
 Each domain is organized as `domains/<domain>/` where `<domain>` is a descriptive short unique name. When referencing domains in the system, use hashtags (e.g., `#personal` for the "Personal Life" domain, `#ml_research` for "Machine Learning Research"). Each domain folder contains:
 
 - `domain.json` – metadata file with domain title and description.
-- `entities.md` – entities specific to this domain.
+- `entities.jsonl` – entities specific to this domain in JSONL format.
 - `news/` – daily news and updates relevant to the domain (optional).
 - `<timestamp>/` – individual matter directories for domain-specific sub-projects and focused topics.
 
@@ -116,27 +116,29 @@ Entities in Sunstone use a two-state system: **detected** (daily discoveries) an
 
 ```
 domains/{domain}/
-  ├── entities.md              # Attached entities (persistent)
-  └── entities/YYYYMMDD.md     # Daily detected entities
+  ├── entities.jsonl              # Attached entities (persistent)
+  └── entities/YYYYMMDD.jsonl     # Daily detected entities
 ```
 
 #### Attached Entities
 
-The `entities.md` file contains manually promoted entities that are persistently associated with the domain. These entities are loaded into agent context and appear in the domain UI as starred items.
+The `entities.jsonl` file contains manually promoted entities that are persistently associated with the domain. These entities are loaded into agent context and appear in the domain UI as starred items.
 
-Format example:
-```markdown
-- **Person**: Alice Johnson - Lead engineer on the API project
-- **Company**: TechCorp - Primary client for consulting work
-- **Project**: API Optimization - Performance improvement initiative
-- **Tool**: PostgreSQL - Database system used in production
+Format example (JSONL - one JSON object per line):
+```jsonl
+{"type": "Person", "name": "Alice Johnson", "description": "Lead engineer on the API project"}
+{"type": "Company", "name": "TechCorp", "description": "Primary client for consulting work", "tier": "enterprise"}
+{"type": "Project", "name": "API Optimization", "description": "Performance improvement initiative", "status": "active", "priority": "high"}
+{"type": "Tool", "name": "PostgreSQL", "description": "Database system used in production", "version": "16.0"}
 ```
 
 Entity types are flexible and user-defined. Common examples: `Person`, `Company`, `Project`, `Tool`, `Location`, `Event`. Type names must be alphanumeric with spaces, minimum 3 characters.
 
+Each entity is a JSON object with required fields (`type`, `name`, `description`) and optional custom fields for extensibility (e.g., `status`, `priority`, `tags`, `contact`, etc.). Custom fields are preserved throughout the system.
+
 #### Detected Entities
 
-Daily entity detection files (`entities/YYYYMMDD.md`) contain entities automatically discovered by agents from:
+Daily entity detection files (`entities/YYYYMMDD.jsonl`) contain entities automatically discovered by agents from:
 - Journal transcripts and screen captures
 - Knowledge graphs and summaries
 - News feeds and external content
@@ -144,18 +146,18 @@ Daily entity detection files (`entities/YYYYMMDD.md`) contain entities automatic
 
 Detected entities accumulate historical context over time. Entities appearing in multiple daily detections can be promoted to attached status through the web UI or MCP tools.
 
-Format matches attached entities:
-```markdown
-- **Person**: Charlie Brown - Mentioned in standup meeting
-- **Tool**: React - Used in UI development work
+Format matches attached entities (JSONL):
+```jsonl
+{"type": "Person", "name": "Charlie Brown", "description": "Mentioned in standup meeting"}
+{"type": "Tool", "name": "React", "description": "Used in UI development work"}
 ```
 
 #### Entity Lifecycle
 
-1. **Detection**: Daily agents scan journal content and record entities in `entities/YYYYMMDD.md`
+1. **Detection**: Daily agents scan journal content and record entities in `entities/YYYYMMDD.jsonl`
 2. **Aggregation**: Review agent tracks detection frequency across recent days
 3. **Promotion**: Entities with 3+ detections are auto-promoted to attached, or users manually promote via UI
-4. **Persistence**: Attached entities in `entities.md` remain until manually removed
+4. **Persistence**: Attached entities in `entities.jsonl` remain until manually removed
 
 #### Cross-Domain Behavior
 

@@ -165,7 +165,10 @@ def domain_summary(domain: str) -> str:
     if entities:
         lines.append("## Entities")
         lines.append("")
-        for entity_type, name, desc in entities:
+        for entity in entities:
+            entity_type = entity.get("type", "")
+            name = entity.get("name", "")
+            desc = entity.get("description", "")
             if desc:
                 lines.append(f"- **{entity_type}**: {name} - {desc}")
             else:

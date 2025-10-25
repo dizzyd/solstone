@@ -1,5 +1,6 @@
 """Tests for think.utils module."""
 
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -9,19 +10,28 @@ import pytest
 from think.entities import load_entity_names
 
 
+def write_entities_jsonl(path: Path, entities: list[tuple[str, str, str]]):
+    """Helper to write entities in JSONL format for tests."""
+    with open(path, "w", encoding="utf-8") as f:
+        for etype, name, desc in entities:
+            entity = {"type": etype, "name": name, "description": desc}
+            f.write(json.dumps(entity, ensure_ascii=False) + "\n")
+
+
 def test_load_entity_names_with_valid_file(monkeypatch):
-    """Test loading entity names from a valid entities.md file."""
+    """Test loading entity names from a valid entities.jsonl file."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: John Smith - A software engineer at Google
-* Company: Acme Corp - Technology company based in SF
-* Project: Project X - Secret internal project
-* Tool: Hammer - For hitting things
-* Person: Jane Doe - Product manager at Meta
-* Company: Widget Inc - Manufacturing company
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Person", "John Smith", "A software engineer at Google"),
+                ("Company", "Acme Corp", "Technology company based in SF"),
+                ("Project", "Project X", "Secret internal project"),
+                ("Tool", "Hammer", "For hitting things"),
+                ("Person", "Jane Doe", "Product manager at Meta"),
+                ("Company", "Widget Inc", "Manufacturing company"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -52,7 +62,7 @@ def test_load_entity_names_missing_file(monkeypatch):
 def test_load_entity_names_empty_file(monkeypatch):
     """Test that empty file returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
+        entities_path = Path(tmpdir) / "entities.jsonl"
         entities_path.write_text("")
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -63,12 +73,13 @@ def test_load_entity_names_empty_file(monkeypatch):
 def test_load_entity_names_no_valid_entries(monkeypatch):
     """Test file with no parseable entity lines returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        # Write malformed JSON
         entities_path.write_text(
             """
 # Header comment
 Some random text
-Not a valid entity line
+Not valid JSON
 """
         )
 
@@ -80,14 +91,15 @@ Not a valid entity line
 def test_load_entity_names_with_duplicates(monkeypatch):
     """Test that duplicate names are filtered out."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: John Smith - Engineer
-* Company: Acme Corp - Tech company
-* Person: John Smith - Also an engineer
-* Company: Acme Corp - Still a tech company
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Person", "John Smith", "Engineer"),
+                ("Company", "Acme Corp", "Tech company"),
+                ("Person", "John Smith", "Also an engineer"),
+                ("Company", "Acme Corp", "Still a tech company"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -101,14 +113,15 @@ def test_load_entity_names_with_duplicates(monkeypatch):
 def test_load_entity_names_handles_special_characters(monkeypatch):
     """Test that names with special characters are handled correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: Jean-Pierre O'Malley - Engineer
-* Company: AT&T - Telecom company
-* Project: C++ Compiler - Development tool
-* Tool: Node.js - JavaScript runtime
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Person", "Jean-Pierre O'Malley", "Engineer"),
+                ("Company", "AT&T", "Telecom company"),
+                ("Project", "C++ Compiler", "Development tool"),
+                ("Tool", "Node.js", "JavaScript runtime"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -122,11 +135,10 @@ def test_load_entity_names_handles_special_characters(monkeypatch):
 def test_load_entity_names_with_env_var(monkeypatch):
     """Test loading using JOURNAL_PATH environment variable."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: Test User - A test person
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [("Person", "Test User", "A test person")],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -150,19 +162,20 @@ def test_load_entity_names_missing_env_var(monkeypatch):
 def test_load_entity_names_spoken_mode(monkeypatch):
     """Test spoken mode returns shortened forms with uniform processing for all types."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: Jeremie Miller (Jer) - Software engineer
-* Person: Jane Elizabeth Doe - Product manager
-* Company: Acme Corporation (ACME) - Tech company
-* Company: Widget Inc - Manufacturing company
-* Company: Google - Search engine
-* Project: Sunstone Project (SUN) - AI journaling
-* Project: Project X - Secret project
-* Tool: Hammer - For hitting things
-* Tool: Docker - Container runtime
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Person", "Jeremie Miller (Jer)", "Software engineer"),
+                ("Person", "Jane Elizabeth Doe", "Product manager"),
+                ("Company", "Acme Corporation (ACME)", "Tech company"),
+                ("Company", "Widget Inc", "Manufacturing company"),
+                ("Company", "Google", "Search engine"),
+                ("Project", "Sunstone Project (SUN)", "AI journaling"),
+                ("Project", "Project X", "Secret project"),
+                ("Tool", "Hammer", "For hitting things"),
+                ("Tool", "Docker", "Container runtime"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -206,12 +219,13 @@ def test_load_entity_names_spoken_mode(monkeypatch):
 def test_load_entity_names_spoken_mode_with_tools(monkeypatch):
     """Test spoken mode includes tools with uniform processing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Tool: Hammer - For hitting things
-* Tool: Docker - Container runtime
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Tool", "Hammer", "For hitting things"),
+                ("Tool", "Docker", "Container runtime"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -225,14 +239,15 @@ def test_load_entity_names_spoken_mode_with_tools(monkeypatch):
 def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
     """Test spoken mode filters out duplicate shortened forms."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: John Smith - Engineer
-* Person: John Doe - Manager
-* Company: Acme Corp - Tech
-* Company: Acme Industries - Manufacturing
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Person", "John Smith", "Engineer"),
+                ("Person", "John Doe", "Manager"),
+                ("Company", "Acme Corp", "Tech"),
+                ("Company", "Acme Industries", "Manufacturing"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -246,15 +261,16 @@ def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
 def test_load_entity_names_uniform_processing(monkeypatch):
     """Test that uniform processing works correctly for all entity types."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.md"
-        entities_path.write_text(
-            """
-* Person: Ryan Reed (R2) - Software developer
-* Company: Federal Aviation Administration (FAA) - Government agency
-* Project: Backend API (API) - Core service
-* Tool: pytest - Testing framework
-* Location: New York City (NYC) - Metropolitan area
-"""
+        entities_path = Path(tmpdir) / "entities.jsonl"
+        write_entities_jsonl(
+            entities_path,
+            [
+                ("Person", "Ryan Reed (R2)", "Software developer"),
+                ("Company", "Federal Aviation Administration (FAA)", "Government agency"),
+                ("Project", "Backend API (API)", "Core service"),
+                ("Tool", "pytest", "Testing framework"),
+                ("Location", "New York City (NYC)", "Metropolitan area"),
+            ],
         )
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)

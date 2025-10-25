@@ -2,54 +2,19 @@
 
 import logging
 import os
-import re
 import sqlite3
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import sqlite_utils
 
 from .core import _scan_files, get_index
 
-# Entity parsing helpers
-ENTITY_ITEM_RE = re.compile(r"^\s*[-*]\s*(.*)")
 
-
-def is_valid_entity_type(etype: str) -> bool:
-    """Validate entity type: alphanumeric and spaces only, at least 3 characters."""
-    if not etype or len(etype.strip()) < 3:
-        return False
-    # Must contain only alphanumeric and spaces, and at least one alphanumeric character
-    return bool(
-        re.match(r"^[A-Za-z0-9 ]+$", etype) and re.search(r"[A-Za-z0-9]", etype)
-    )
-
-
-def parse_entity_line(line: str) -> Tuple[str, str, str] | None:
-    """Parse a single line from an ``entities.md`` file."""
-    cleaned = line.replace("**", "")
-    match = ENTITY_ITEM_RE.match(cleaned)
-    if not match:
-        return None
-
-    text = match.group(1).strip()
-    if ":" not in text:
-        return None
-
-    etype, rest = text.split(":", 1)
-    rest = rest.strip()
-    if " - " in rest:
-        name, desc = rest.split(" - ", 1)
-    else:
-        name, desc = rest, ""
-
-    return etype.strip(), name.strip(), desc.strip()
-
-
-def parse_entities(path: str) -> List[Tuple[str, str, str]]:
-    """Return parsed entity tuples from ``entities.md`` inside ``path``."""
+def parse_entities(path: str) -> list[dict[str, Any]]:
+    """Return parsed entity dicts from ``entities.jsonl`` inside ``path``."""
     from think.entities import parse_entity_file
 
-    file_path = os.path.join(path, "entities.md")
+    file_path = os.path.join(path, "entities.jsonl")
     return parse_entity_file(file_path)
 
 
@@ -67,18 +32,18 @@ def find_entity_files(journal: str) -> Dict[str, str]:
         if not os.path.isdir(domain_path):
             continue
 
-        # Check for attached entities: domains/{domain}/entities.md
-        attached_path = os.path.join(domain_path, "entities.md")
+        # Check for attached entities: domains/{domain}/entities.jsonl
+        attached_path = os.path.join(domain_path, "entities.jsonl")
         if os.path.isfile(attached_path):
-            rel = os.path.join(domain_name, "entities.md")
+            rel = os.path.join(domain_name, "entities.jsonl")
             files[rel] = attached_path
 
-        # Check for detected entities: domains/{domain}/entities/*.md
+        # Check for detected entities: domains/{domain}/entities/*.jsonl
         detected_dir = os.path.join(domain_path, "entities")
         if os.path.isdir(detected_dir):
             for filename in os.listdir(detected_dir):
-                if filename.endswith(".md") and len(filename) == 11:  # YYYYMMDD.md
-                    day = filename[:-3]
+                if filename.endswith(".jsonl") and len(filename) == 14:  # YYYYMMDD.jsonl
+                    day = filename[:-6]  # Remove .jsonl
                     if day.isdigit() and len(day) == 8:
                         rel = os.path.join(domain_name, "entities", filename)
                         files[rel] = os.path.join(detected_dir, filename)
@@ -89,23 +54,23 @@ def find_entity_files(journal: str) -> Dict[str, str]:
 def _index_entities(
     conn: sqlite3.Connection, rel: str, path: str, verbose: bool
 ) -> None:
-    """Index parsed entities from domain-scoped ``entities.md`` file."""
+    """Index parsed entities from domain-scoped ``entities.jsonl`` file."""
     logger = logging.getLogger(__name__)
 
     # Extract domain and day from relative path
-    # Format: {domain}/entities.md or {domain}/entities/YYYYMMDD.md
+    # Format: {domain}/entities.jsonl or {domain}/entities/YYYYMMDD.jsonl
     parts = rel.split(os.sep)
     domain = parts[0]
     day = None
     attached = 1
 
-    if len(parts) == 3:  # {domain}/entities/YYYYMMDD.md
-        day = os.path.splitext(parts[2])[0]  # Remove .md extension
+    if len(parts) == 3:  # {domain}/entities/YYYYMMDD.jsonl
+        day = os.path.splitext(parts[2])[0]  # Remove .jsonl extension
         attached = 0
 
     # Parse entities from the file
-    # For attached entities: path ends with entities.md, parse from parent dir
-    # For detected entities: path ends with YYYYMMDD.md in entities/ subdir, parse directly
+    # For attached entities: path ends with entities.jsonl, parse from parent dir
+    # For detected entities: path ends with YYYYMMDD.jsonl in entities/ subdir, parse directly
     from think.entities import parse_entity_file
 
     if attached:
@@ -114,7 +79,10 @@ def _index_entities(
         # For detected entities, parse the specific file directly
         entries = parse_entity_file(path)
 
-    for etype, name, desc in entries:
+    for entity in entries:
+        etype = entity.get("type", "")
+        name = entity.get("name", "")
+        desc = entity.get("description", "")
         conn.execute(
             "INSERT INTO entities(name, description, domain, day, type, attached) VALUES (?, ?, ?, ?, ?, ?)",
             (name, desc, domain, day, etype, attached),
@@ -130,7 +98,7 @@ def _index_entities(
 
 
 def scan_entities(journal: str, verbose: bool = False) -> bool:
-    """Index entities from domain-scoped ``entities.md`` files."""
+    """Index entities from domain-scoped ``entities.jsonl`` files."""
     logger = logging.getLogger(__name__)
     conn, _ = get_index(index="entities", journal=journal)
     files = find_entity_files(journal)

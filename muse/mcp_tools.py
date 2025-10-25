@@ -14,7 +14,12 @@ from fastmcp.resources import FileResource, TextResource
 from think import todo
 from think.cluster import cluster_range
 from think.domains import domain_summary
-from think.entities import load_entities, save_entities, update_entity
+from think.entities import (
+    is_valid_entity_type,
+    load_entities,
+    save_entities,
+    update_entity,
+)
 from think.indexer import search_events as search_events_impl
 from think.indexer import search_news as search_news_impl
 from think.indexer import search_summaries as search_summaries_impl
@@ -29,16 +34,6 @@ mcp = FastMCP("sunstone")
 HINTS = {"readOnlyHint": True, "openWorldHint": False}
 
 F = TypeVar("F", bound=Callable[..., Any])
-
-
-def is_valid_entity_type(etype: str) -> bool:
-    """Validate entity type: alphanumeric and spaces only, at least 3 characters."""
-    if not etype or len(etype.strip()) < 3:
-        return False
-    # Must contain only alphanumeric and spaces, and at least one alphanumeric character
-    return bool(
-        re.match(r"^[A-Za-z0-9 ]+$", etype) and re.search(r"[A-Za-z0-9]", etype)
-    )
 
 
 def register_tool(*tool_args: Any, **tool_kwargs: Any) -> Callable[[F], F]:
@@ -695,15 +690,11 @@ def entity_list(domain: str, day: str | None = None) -> dict[str, Any]:
     try:
         entities = load_entities(domain, day)
 
-        entity_list_data = []
-        for etype, name, desc in entities:
-            entity_list_data.append({"type": etype, "name": name, "description": desc})
-
         return {
             "domain": domain,
             "day": day,
-            "count": len(entity_list_data),
-            "entities": entity_list_data,
+            "count": len(entities),
+            "entities": entities,
         }
     except RuntimeError as exc:
         return {
@@ -758,15 +749,15 @@ def entity_detect(
         existing = load_entities(domain, day)
 
         # Check for duplicate
-        for existing_type, existing_name, _ in existing:
-            if existing_type == type and existing_name == name:
+        for entity in existing:
+            if entity.get("type") == type and entity.get("name") == name:
                 return {
                     "error": f"Entity '{name}' of type '{type}' already detected for {day}",
                     "suggestion": "entity already exists in detected list for this day",
                 }
 
         # Add new entity
-        existing.append((type, name, description))
+        existing.append({"type": type, "name": name, "description": description})
         save_entities(domain, existing, day)
 
         return {
@@ -825,15 +816,15 @@ def entity_attach(
         existing = load_entities(domain, day=None)
 
         # Check for duplicate
-        for existing_type, existing_name, _ in existing:
-            if existing_type == type and existing_name == name:
+        for entity in existing:
+            if entity.get("type") == type and entity.get("name") == name:
                 return {
                     "error": f"Entity '{name}' of type '{type}' already attached",
                     "suggestion": "entity already exists in attached list for this domain",
                 }
 
         # Add new entity
-        existing.append((type, name, description))
+        existing.append({"type": type, "name": name, "description": description})
         save_entities(domain, existing, day=None)
 
         return {

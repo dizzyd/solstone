@@ -1,36 +1,41 @@
 """Domain-scoped entity utilities for detected and attached entities."""
 
+import json
 import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
-from think.indexer.entities import (
-    ENTITY_ITEM_RE,
-    is_valid_entity_type,
-    parse_entity_line,
-)
+
+def is_valid_entity_type(etype: str) -> bool:
+    """Validate entity type: alphanumeric and spaces only, at least 3 characters."""
+    if not etype or len(etype.strip()) < 3:
+        return False
+    # Must contain only alphanumeric and spaces, and at least one alphanumeric character
+    return bool(
+        re.match(r"^[A-Za-z0-9 ]+$", etype) and re.search(r"[A-Za-z0-9]", etype)
+    )
 
 
-def parse_entity_file(file_path: str, *, validate_types: bool = True) -> list[tuple[str, str, str]]:
-    """Parse entities from a file path.
+def parse_entity_file(file_path: str, *, validate_types: bool = True) -> list[dict[str, Any]]:
+    """Parse entities from a JSONL file.
 
     This is the low-level file parsing function used by all entity loading code.
-    Consolidates duplicate parsing logic across the codebase.
+    Each line in the file should be a JSON object with type, name, and description fields.
 
     Args:
-        file_path: Absolute path to entities.md file
+        file_path: Absolute path to entities.jsonl file
         validate_types: If True, filters out invalid entity types (default: True)
 
     Returns:
-        List of (type, name, description) tuples
+        List of entity dictionaries with type, name, and description keys
 
     Example:
-        >>> parse_entity_file("/path/to/entities.md")
-        [("Person", "John Smith", "Friend from college")]
+        >>> parse_entity_file("/path/to/entities.jsonl")
+        [{"type": "Person", "name": "John Smith", "description": "Friend from college"}]
     """
     if not os.path.isfile(file_path):
         return []
@@ -38,15 +43,29 @@ def parse_entity_file(file_path: str, *, validate_types: bool = True) -> list[tu
     entities = []
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
-            if not ENTITY_ITEM_RE.match(line.replace("**", "")):
+            line = line.strip()
+            if not line:
                 continue
-            parsed = parse_entity_line(line)
-            if not parsed:
-                continue
-            etype, name, desc = parsed
-            if validate_types and not is_valid_entity_type(etype):
-                continue
-            entities.append((etype, name, desc))
+            try:
+                data = json.loads(line)
+                etype = data.get("type", "")
+                name = data.get("name", "")
+                desc = data.get("description", "")
+
+                # Validate if requested
+                if validate_types and not is_valid_entity_type(etype):
+                    continue
+
+                # Preserve all fields from JSON, ensuring core fields exist
+                entity = {"type": etype, "name": name, "description": desc}
+                # Add any additional fields from the JSON
+                for key, value in data.items():
+                    if key not in entity:
+                        entity[key] = value
+
+                entities.append(entity)
+            except (json.JSONDecodeError, AttributeError):
+                continue  # Skip malformed lines
 
     return entities
 
@@ -59,7 +78,7 @@ def entity_file_path(domain: str, day: Optional[str] = None) -> Path:
         day: Optional day in YYYYMMDD format for detected entities
 
     Returns:
-        Path to entities.md (attached) or entities/YYYYMMDD.md (detected)
+        Path to entities.jsonl (attached) or entities/YYYYMMDD.jsonl (detected)
 
     Raises:
         RuntimeError: If JOURNAL_PATH is not set
@@ -73,13 +92,13 @@ def entity_file_path(domain: str, day: Optional[str] = None) -> Path:
 
     if day is None:
         # Attached entities
-        return domain_path / "entities.md"
+        return domain_path / "entities.jsonl"
     else:
         # Detected entities for specific day
-        return domain_path / "entities" / f"{day}.md"
+        return domain_path / "entities" / f"{day}.jsonl"
 
 
-def load_entities(domain: str, day: Optional[str] = None) -> list[tuple[str, str, str]]:
+def load_entities(domain: str, day: Optional[str] = None) -> list[dict[str, Any]]:
     """Load entities from domain entity file.
 
     Args:
@@ -87,24 +106,24 @@ def load_entities(domain: str, day: Optional[str] = None) -> list[tuple[str, str
         day: Optional day in YYYYMMDD format for detected entities
 
     Returns:
-        List of (type, name, description) tuples
+        List of entity dictionaries with type, name, and description keys
 
     Example:
         >>> load_entities("personal")
-        [("Person", "John Smith", "Friend from college")]
+        [{"type": "Person", "name": "John Smith", "description": "Friend from college"}]
     """
     path = entity_file_path(domain, day)
     return parse_entity_file(str(path))
 
 
 def save_entities(
-    domain: str, entities: list[tuple[str, str, str]], day: Optional[str] = None
+    domain: str, entities: list[dict[str, Any]], day: Optional[str] = None
 ) -> None:
     """Save entities to domain entity file using atomic write.
 
     Args:
         domain: Domain name
-        entities: List of (type, name, description) tuples
+        entities: List of entity dictionaries (must have type, name, description keys)
         day: Optional day in YYYYMMDD format for detected entities
 
     Raises:
@@ -116,15 +135,12 @@ def save_entities(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Sort entities by type, then name for consistency
-    sorted_entities = sorted(entities, key=lambda e: (e[0], e[1]))
+    sorted_entities = sorted(entities, key=lambda e: (e.get("type", ""), e.get("name", "")))
 
-    # Format entities as markdown
+    # Format entities as JSONL
     lines = []
-    for etype, name, desc in sorted_entities:
-        if desc:
-            lines.append(f"- **{etype}**: {name} - {desc}\n")
-        else:
-            lines.append(f"- **{etype}**: {name}\n")
+    for entity in sorted_entities:
+        lines.append(json.dumps(entity, ensure_ascii=False) + "\n")
 
     # Atomic write using temp file + rename
     fd, temp_path = tempfile.mkstemp(
@@ -167,32 +183,33 @@ def update_entity(
     """
     entities = load_entities(domain, day)
 
-    for i, (etype, ename, desc) in enumerate(entities):
-        if etype == type and ename == name:
-            if desc != old_description:
+    for entity in entities:
+        if entity.get("type") == type and entity.get("name") == name:
+            current_desc = entity.get("description", "")
+            if current_desc != old_description:
                 raise ValueError(
                     f"Description mismatch for '{name}': expected '{old_description}', "
-                    f"found '{desc}'"
+                    f"found '{current_desc}'"
                 )
-            entities[i] = (type, name, new_description)
+            entity["description"] = new_description
             save_entities(domain, entities, day)
             return
 
     raise ValueError(f"Entity '{name}' of type '{type}' not found in domain '{domain}'")
 
 
-def load_all_attached_entities() -> list[tuple[str, str, str]]:
+def load_all_attached_entities() -> list[dict[str, Any]]:
     """Load all attached entities from all domains with deduplication.
 
     Iterates domains in sorted (alphabetical) order. When the same entity
     name appears in multiple domains, keeps the first occurrence.
 
     Returns:
-        List of (type, name, description) tuples, deduplicated by name
+        List of entity dictionaries, deduplicated by name
 
     Example:
         >>> load_all_attached_entities()
-        [("Person", "John Smith", "Friend from college"), ...]
+        [{"type": "Person", "name": "John Smith", "description": "Friend from college"}, ...]
 
     Note:
         Used for agent context loading. Provides deterministic behavior
@@ -216,19 +233,17 @@ def load_all_attached_entities() -> list[tuple[str, str, str]]:
         if not domain_path.is_dir():
             continue
 
-        entities_file = domain_path / "entities.md"
+        entities_file = domain_path / "entities.jsonl"
         if not entities_file.exists():
             continue
 
-        with open(entities_file, "r", encoding="utf-8") as f:
-            for line in f:
-                parsed = parse_entity_line(line)
-                if parsed:
-                    etype, name, desc = parsed
-                    # Keep first occurrence only
-                    if name not in seen_names:
-                        seen_names.add(name)
-                        all_entities.append((etype, name, desc))
+        # Use parse_entity_file for consistency
+        for entity in parse_entity_file(str(entities_file)):
+            name = entity.get("name", "")
+            # Keep first occurrence only
+            if name and name not in seen_names:
+                seen_names.add(name)
+                all_entities.append(entity)
 
     return all_entities
 
@@ -276,7 +291,7 @@ def load_entity_names(
             # Load from ALL domains with deduplication
             entities = load_all_attached_entities()
 
-            # Fallback to top-level entities.md if no domain entities found
+            # Fallback to top-level entities.jsonl if no domain entities found
             if not entities:
                 from dotenv import load_dotenv
 
@@ -284,13 +299,9 @@ def load_entity_names(
                 journal = os.getenv("JOURNAL_PATH")
                 if journal:
                     from pathlib import Path
-                    entities_path = Path(journal) / "entities.md"
+                    entities_path = Path(journal) / "entities.jsonl"
                     if entities_path.is_file():
-                        with open(entities_path, "r", encoding="utf-8") as f:
-                            for line in f:
-                                parsed = parse_entity_line(line)
-                                if parsed:
-                                    entities.append(parsed)
+                        entities = parse_entity_file(str(entities_path))
         else:
             # Load from specific domain
             entities = load_entities(domain)
@@ -301,18 +312,23 @@ def load_entity_names(
     if not entities:
         return None
 
-    # Transform (type, name, desc) tuples into desired format
+    # Transform entity dicts into desired format
     if not spoken:
         # Non-spoken mode: comma-delimited string of full names
         entity_names = []
-        for _, name, _ in entities:
+        for entity in entities:
+            name = entity.get("name", "")
             if name and name not in entity_names:
                 entity_names.append(name)
         return ", ".join(entity_names) if entity_names else None
     else:
         # Spoken mode: list of shortened forms
         spoken_names = []
-        for _, name, _ in entities:
+        for entity in entities:
+            name = entity.get("name", "")
+            if not name:
+                continue
+
             # Get base name (without parens) and extract first word
             base_name = re.sub(r"\s*\([^)]+\)", "", name).strip()
             first_word = base_name.split()[0] if base_name else None

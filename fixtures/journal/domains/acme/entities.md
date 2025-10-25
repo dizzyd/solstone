@@ -1,4 +1,0 @@
-- **Person**: Test Person (TP) - Test engineer
-- **Number**: 123 - Test numeric entity
-- **Organization**: Test Initiative (TI) - Test organization
-- **Person**: Test Person (TP) - Duplicate entry for testing

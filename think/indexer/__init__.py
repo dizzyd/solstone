@@ -19,10 +19,8 @@ from .core import (
 
 # Import from entities
 from .entities import (
-    ENTITY_ITEM_RE,
     find_entity_files,
     parse_entities,
-    parse_entity_line,
     scan_entities,
     search_entities,
 )
@@ -85,10 +83,8 @@ __all__ = [
     "scan_transcripts",
     "search_transcripts",
     # Entities
-    "ENTITY_ITEM_RE",
     "find_entity_files",
     "parse_entities",
-    "parse_entity_line",
     "scan_entities",
     "search_entities",
     # News

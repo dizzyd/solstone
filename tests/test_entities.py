@@ -23,32 +23,51 @@ def fixture_journal():
 def test_entity_file_path_attached(fixture_journal):
     """Test path generation for attached entities."""
     path = entity_file_path("personal")
-    assert str(path).endswith("fixtures/journal/domains/personal/entities.md")
-    assert path.name == "entities.md"
+    assert str(path).endswith("fixtures/journal/domains/personal/entities.jsonl")
+    assert path.name == "entities.jsonl"
 
 
 def test_entity_file_path_detected(fixture_journal):
     """Test path generation for detected entities."""
     path = entity_file_path("personal", "20250101")
-    assert str(path).endswith("fixtures/journal/domains/personal/entities/20250101.md")
-    assert path.name == "20250101.md"
+    assert str(path).endswith("fixtures/journal/domains/personal/entities/20250101.jsonl")
+    assert path.name == "20250101.jsonl"
 
 
 def test_load_entities_attached(fixture_journal):
     """Test loading attached entities from fixtures."""
     entities = load_entities("personal")
     assert len(entities) == 3
-    assert ("Person", "Alice Johnson", "Close friend from college") in entities
-    assert ("Person", "Bob Smith", "Neighbor") in entities
-    assert ("Company", "Acme Corp", "Local tech startup") in entities
+
+    # Check entities are dicts with expected fields
+    alice = next(e for e in entities if e.get("name") == "Alice Johnson")
+    assert alice["type"] == "Person"
+    assert alice["description"] == "Close friend from college"
+    # Check extended fields are preserved
+    assert alice.get("tags") == ["friend"]
+    assert alice.get("contact") == "alice@example.com"
+
+    bob = next(e for e in entities if e.get("name") == "Bob Smith")
+    assert bob["type"] == "Person"
+    assert bob["description"] == "Neighbor"
+
+    acme = next(e for e in entities if e.get("name") == "Acme Corp")
+    assert acme["type"] == "Company"
+    assert acme["description"] == "Local tech startup"
 
 
 def test_load_entities_detected(fixture_journal):
     """Test loading detected entities from fixtures."""
     entities = load_entities("personal", "20250101")
     assert len(entities) == 2
-    assert ("Person", "Charlie Brown", "Met at coffee shop") in entities
-    assert ("Project", "Home Renovation", "Kitchen remodel project") in entities
+
+    charlie = next(e for e in entities if e.get("name") == "Charlie Brown")
+    assert charlie["type"] == "Person"
+    assert charlie["description"] == "Met at coffee shop"
+
+    project = next(e for e in entities if e.get("name") == "Home Renovation")
+    assert project["type"] == "Project"
+    assert project["description"] == "Kitchen remodel project"
 
 
 def test_load_entities_missing_file(fixture_journal):
@@ -73,25 +92,36 @@ def test_save_and_load_entities(fixture_journal, tmp_path):
     # Update JOURNAL_PATH to temp directory
     os.environ["JOURNAL_PATH"] = str(tmp_path)
 
-    # Save some entities
+    # Save some entities (dicts with extended fields)
     test_entities = [
-        ("Person", "Test Person", "Test description"),
-        ("Company", "Test Co", "Test company"),
+        {"type": "Person", "name": "Test Person", "description": "Test description", "role": "tester"},
+        {"type": "Company", "name": "Test Co", "description": "Test company"},
     ]
     save_entities("test_domain", test_entities, "20250101")
 
     # Load them back
     loaded = load_entities("test_domain", "20250101")
     assert len(loaded) == 2
-    assert ("Person", "Test Person", "Test description") in loaded
-    assert ("Company", "Test Co", "Test company") in loaded
 
-    # Verify file exists and has correct format
-    entity_file = entities_dir / "20250101.md"
+    person = next(e for e in loaded if e.get("name") == "Test Person")
+    assert person["type"] == "Person"
+    assert person["description"] == "Test description"
+    assert person.get("role") == "tester"  # Extended field preserved
+
+    company = next(e for e in loaded if e.get("name") == "Test Co")
+    assert company["type"] == "Company"
+    assert company["description"] == "Test company"
+
+    # Verify file exists and has correct JSONL format
+    entity_file = entities_dir / "20250101.jsonl"
     assert entity_file.exists()
     content = entity_file.read_text()
-    assert "- **Company**: Test Co - Test company" in content
-    assert "- **Person**: Test Person - Test description" in content
+    # Should be valid JSONL
+    lines = [line for line in content.strip().split("\n") if line]
+    assert len(lines) == 2
+    import json
+    for line in lines:
+        assert json.loads(line)  # Should not raise
 
 
 def test_save_entities_sorting(fixture_journal, tmp_path):
@@ -101,21 +131,24 @@ def test_save_entities_sorting(fixture_journal, tmp_path):
     os.environ["JOURNAL_PATH"] = str(tmp_path)
 
     # Save unsorted entities
+    import json
     unsorted = [
-        ("Project", "Zebra Project", "Last alphabetically"),
-        ("Company", "Acme", "Company name"),
-        ("Person", "Alice", "Person name"),
-        ("Company", "Beta Corp", "Another company"),
+        {"type": "Project", "name": "Zebra Project", "description": "Last alphabetically"},
+        {"type": "Company", "name": "Acme", "description": "Company name"},
+        {"type": "Person", "name": "Alice", "description": "Person name"},
+        {"type": "Company", "name": "Beta Corp", "description": "Another company"},
     ]
     save_entities("test_domain", unsorted)
 
-    # Verify sorting in file
-    entity_file = domain_path / "entities.md"
+    # Verify sorting in file (JSONL format)
+    entity_file = domain_path / "entities.jsonl"
     lines = entity_file.read_text().strip().split("\n")
-    assert lines[0].startswith("- **Company**: Acme")
-    assert lines[1].startswith("- **Company**: Beta Corp")
-    assert lines[2].startswith("- **Person**: Alice")
-    assert lines[3].startswith("- **Project**: Zebra Project")
+    entities = [json.loads(line) for line in lines if line]
+
+    assert entities[0]["type"] == "Company" and entities[0]["name"] == "Acme"
+    assert entities[1]["type"] == "Company" and entities[1]["name"] == "Beta Corp"
+    assert entities[2]["type"] == "Person" and entities[2]["name"] == "Alice"
+    assert entities[3]["type"] == "Project" and entities[3]["name"] == "Zebra Project"
 
 
 def test_load_all_attached_entities(fixture_journal):
@@ -126,7 +159,7 @@ def test_load_all_attached_entities(fixture_journal):
     assert len(all_entities) >= 3  # At least the personal domain entities
 
     # Check personal domain entities are present
-    entity_names = [name for _, name, _ in all_entities]
+    entity_names = [e.get("name") for e in all_entities]
     assert "Alice Johnson" in entity_names
     assert "Bob Smith" in entity_names
     assert "Acme Corp" in entity_names
@@ -143,8 +176,8 @@ def test_load_all_attached_entities_deduplication(fixture_journal, tmp_path):
     os.environ["JOURNAL_PATH"] = str(tmp_path)
 
     # Save same entity name in both domains with different descriptions
-    entities1 = [("Person", "John Smith", "Description from domain1")]
-    entities2 = [("Person", "John Smith", "Description from domain2")]
+    entities1 = [{"type": "Person", "name": "John Smith", "description": "Description from domain1"}]
+    entities2 = [{"type": "Person", "name": "John Smith", "description": "Description from domain2"}]
 
     save_entities("domain1", entities1)
     save_entities("domain2", entities2)
@@ -153,7 +186,7 @@ def test_load_all_attached_entities_deduplication(fixture_journal, tmp_path):
     all_entities = load_all_attached_entities()
 
     # Should only have one "John Smith" (from first domain alphabetically)
-    john_smiths = [e for e in all_entities if e[1] == "John Smith"]
+    john_smiths = [e for e in all_entities if e.get("name") == "John Smith"]
     assert len(john_smiths) == 1
     # Should be from domain1 (alphabetically first)
-    assert john_smiths[0][2] == "Description from domain1"
+    assert john_smiths[0]["description"] == "Description from domain1"

@@ -1,3 +1,0 @@
-- **Person**: Alice Johnson - Close friend from college
-- **Person**: Bob Smith - Neighbor
-- **Company**: Acme Corp - Local tech startup
