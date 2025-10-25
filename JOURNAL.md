@@ -534,6 +534,7 @@ stored as `occurrences.json` inside each day folder.
       "end": "09:30:00",
       "title": "Team stand-up",
       "summary": "Status update with the engineering team",
+      "domain": "work",
       "work": true,
       "participants": ["Jeremie Miller", "Alice", "Bob"],
       "details": {...}
@@ -548,6 +549,7 @@ stored as `occurrences.json` inside each day folder.
 - **source** - the file the occurence was extracted from.
 - **start** and **end** – HH:MM:SS timestamps containing the occurence.
 - **title** and **summary** – short text for display and search.
+- **domain** – domain name the occurrence is associated with (e.g., "work", "personal", "ml_research").
 - **work** – boolean, work vs. personal classification when known.
 - **participants** – optional list of people or entities involved.
 - **details** – free-form string of other occurrence specific information.
