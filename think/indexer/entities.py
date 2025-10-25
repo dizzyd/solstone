@@ -47,25 +47,10 @@ def parse_entity_line(line: str) -> Tuple[str, str, str] | None:
 
 def parse_entities(path: str) -> List[Tuple[str, str, str]]:
     """Return parsed entity tuples from ``entities.md`` inside ``path``."""
-    items: List[Tuple[str, str, str]] = []
+    from think.entities import parse_entity_file
 
     file_path = os.path.join(path, "entities.md")
-    if not os.path.isfile(file_path):
-        return items
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if not ENTITY_ITEM_RE.match(line.replace("**", "")):
-                continue
-            parsed = parse_entity_line(line)
-            if not parsed:
-                continue
-            etype, name, desc = parsed
-            if not is_valid_entity_type(etype):
-                continue
-            items.append((etype, name, desc))
-
-    return items
+    return parse_entity_file(file_path)
 
 
 def find_entity_files(journal: str) -> Dict[str, str]:
@@ -121,23 +106,13 @@ def _index_entities(
     # Parse entities from the file
     # For attached entities: path ends with entities.md, parse from parent dir
     # For detected entities: path ends with YYYYMMDD.md in entities/ subdir, parse directly
+    from think.entities import parse_entity_file
+
     if attached:
         entries = parse_entities(os.path.dirname(path))
     else:
         # For detected entities, parse the specific file directly
-        entries = []
-
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                if not ENTITY_ITEM_RE.match(line.replace("**", "")):
-                    continue
-                parsed = parse_entity_line(line)
-                if not parsed:
-                    continue
-                etype, name, desc = parsed
-                if not is_valid_entity_type(etype):
-                    continue
-                entries.append((etype, name, desc))
+        entries = parse_entity_file(path)
 
     for etype, name, desc in entries:
         conn.execute(

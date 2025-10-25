@@ -8,7 +8,47 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from think.indexer.entities import parse_entity_line
+from think.indexer.entities import (
+    ENTITY_ITEM_RE,
+    is_valid_entity_type,
+    parse_entity_line,
+)
+
+
+def parse_entity_file(file_path: str, *, validate_types: bool = True) -> list[tuple[str, str, str]]:
+    """Parse entities from a file path.
+
+    This is the low-level file parsing function used by all entity loading code.
+    Consolidates duplicate parsing logic across the codebase.
+
+    Args:
+        file_path: Absolute path to entities.md file
+        validate_types: If True, filters out invalid entity types (default: True)
+
+    Returns:
+        List of (type, name, description) tuples
+
+    Example:
+        >>> parse_entity_file("/path/to/entities.md")
+        [("Person", "John Smith", "Friend from college")]
+    """
+    if not os.path.isfile(file_path):
+        return []
+
+    entities = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not ENTITY_ITEM_RE.match(line.replace("**", "")):
+                continue
+            parsed = parse_entity_line(line)
+            if not parsed:
+                continue
+            etype, name, desc = parsed
+            if validate_types and not is_valid_entity_type(etype):
+                continue
+            entities.append((etype, name, desc))
+
+    return entities
 
 
 def entity_file_path(domain: str, day: Optional[str] = None) -> Path:
@@ -54,18 +94,7 @@ def load_entities(domain: str, day: Optional[str] = None) -> list[tuple[str, str
         [("Person", "John Smith", "Friend from college")]
     """
     path = entity_file_path(domain, day)
-
-    if not path.exists():
-        return []
-
-    entities = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            parsed = parse_entity_line(line)
-            if parsed:
-                entities.append(parsed)
-
-    return entities
+    return parse_entity_file(str(path))
 
 
 def save_entities(
