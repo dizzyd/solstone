@@ -317,7 +317,7 @@ def main() -> None:
             # Load domain summaries and combine with topic-specific occurrence instructions
             from think.domains import domain_summaries
 
-            domains_context = domain_summaries()
+            domains_context = domain_summaries(detailed_entities=True)
 
             # Combine domain summaries with topic-specific instructions
             if extra_occ:
