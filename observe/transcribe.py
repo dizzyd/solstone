@@ -5,16 +5,17 @@ from __future__ import annotations
 import argparse
 import datetime
 import faulthandler
-import io
 import json
 import logging
 import os
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
 import soundfile as sf
 from google import genai
+from pydub import AudioSegment
 from silero_vad import load_silero_vad
 
 from observe.hear import (
@@ -170,7 +171,17 @@ class Transcriber:
     def _process_audio(self, raw_path: Path) -> List[Dict[str, object]] | None:
         """Process audio file and return segments for transcription."""
         try:
-            data, sr = sf.read(raw_path, dtype="float32")
+            # Handle different audio formats
+            if raw_path.suffix.lower() == ".m4a":
+                logging.info(f"Converting m4a to FLAC for processing: {raw_path}")
+                audio = AudioSegment.from_file(raw_path, format="m4a")
+                flac_buffer = BytesIO()
+                audio.export(flac_buffer, format="flac")
+                flac_buffer.seek(0)
+                data, sr = sf.read(flac_buffer, dtype="float32")
+            else:
+                # Direct read for FLAC and other formats supported by soundfile
+                data, sr = sf.read(raw_path, dtype="float32")
 
             mic_ranges: List[tuple[float, float]] = []
             if data.ndim == 1:
@@ -229,10 +240,15 @@ class Transcriber:
 
     def _get_json_path(self, audio_path: Path) -> Path:
         """Generate the corresponding JSONL path for an audio file."""
+        # Support both .flac and .m4a extensions
         if audio_path.name.endswith("_raw.flac"):
             json_name = audio_path.name.replace("_raw.flac", "_audio.jsonl")
         elif audio_path.name.endswith("_audio.flac"):
             json_name = audio_path.name.replace("_audio.flac", "_audio.jsonl")
+        elif audio_path.name.endswith("_raw.m4a"):
+            json_name = audio_path.name.replace("_raw.m4a", "_audio.jsonl")
+        elif audio_path.name.endswith("_audio.m4a"):
+            json_name = audio_path.name.replace("_audio.m4a", "_audio.jsonl")
         else:
             json_name = audio_path.stem + "_audio.jsonl"
         return audio_path.with_name(json_name)
@@ -323,11 +339,11 @@ class Transcriber:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Transcribe FLAC files using Gemini")
+    parser = argparse.ArgumentParser(description="Transcribe audio files using Gemini")
     parser.add_argument(
         "audio_path",
         type=str,
-        help="Path to audio file to process",
+        help="Path to audio file to process (.flac or .m4a)",
     )
     args = setup_cli(parser)
 
@@ -344,6 +360,14 @@ def main():
     audio_path = Path(args.audio_path)
     if not audio_path.exists():
         parser.error(f"Audio file not found: {audio_path}")
+
+    # Validate supported formats
+    supported_formats = {".flac", ".m4a"}
+    if audio_path.suffix.lower() not in supported_formats:
+        parser.error(
+            f"Unsupported audio format: {audio_path.suffix}. "
+            f"Supported formats: {', '.join(supported_formats)}"
+        )
 
     logging.info(f"Processing audio: {audio_path}")
 
