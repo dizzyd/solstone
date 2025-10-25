@@ -330,7 +330,14 @@ class Transcriber:
         # Process audio
         segments = self._process_audio(raw_path)
         if segments is None:
-            return
+            raise SystemExit(1)
+
+        # Skip if no speech detected
+        if len(segments) == 0:
+            logging.warning(
+                f"No speech segments detected in {raw_path}, skipping transcription"
+            )
+            raise SystemExit(1)
 
         # Transcribe
         success = self._transcribe(raw_path, segments)
