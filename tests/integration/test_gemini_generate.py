@@ -324,8 +324,8 @@ def test_gemini_generate_max_tokens_error():
 
     # Check that the error message is clear and helpful
     error_msg = str(exc_info.value)
-    assert "max_output_tokens limit" in error_msg
-    assert "10" in error_msg  # Should mention the limit
+    assert "token limit" in error_msg
+    assert "10 total" in error_msg  # Should mention the total limit
     assert "Try increasing max_output_tokens" in error_msg
 
 

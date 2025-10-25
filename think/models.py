@@ -50,10 +50,17 @@ def _build_generate_config(
     thinking_budget: Optional[int],
     cached_content: Optional[str],
 ) -> types.GenerateContentConfig:
-    """Build the GenerateContentConfig."""
+    """Build the GenerateContentConfig.
+
+    Note: Gemini's max_output_tokens is actually the total budget (thinking + output).
+    We compute this internally: total = max_output_tokens + thinking_budget.
+    """
+    # Compute total tokens: output + thinking budget
+    total_tokens = max_output_tokens + (thinking_budget or 0)
+
     config_args = {
         "temperature": temperature,
-        "max_output_tokens": max_output_tokens,
+        "max_output_tokens": total_tokens,
     }
 
     if system_instruction:
@@ -73,7 +80,9 @@ def _build_generate_config(
     return types.GenerateContentConfig(**config_args)
 
 
-def _validate_response(response, max_output_tokens: int) -> str:
+def _validate_response(
+    response, max_output_tokens: int, thinking_budget: Optional[int] = None
+) -> str:
     """Validate response and extract text."""
     if response is None or response.text is None:
         # Try to extract text from candidates if available
@@ -84,9 +93,11 @@ def _validate_response(response, max_output_tokens: int) -> str:
             if hasattr(candidate, "finish_reason"):
                 finish_reason = str(candidate.finish_reason)
                 if "MAX_TOKENS" in finish_reason:
+                    total_tokens = max_output_tokens + (thinking_budget or 0)
                     raise ValueError(
-                        f"Model hit max_output_tokens limit ({max_output_tokens}) before producing output. "
-                        f"Try increasing max_output_tokens."
+                        f"Model hit token limit ({total_tokens} total = {max_output_tokens} output + "
+                        f"{thinking_budget or 0} thinking) before producing output. "
+                        f"Try increasing max_output_tokens or reducing thinking_budget."
                     )
                 elif "SAFETY" in finish_reason:
                     raise ValueError(
@@ -272,13 +283,16 @@ def gemini_generate(
     temperature : float
         Temperature for generation (default: 0.3)
     max_output_tokens : int
-        Maximum output tokens (default: 8192 * 2)
+        Maximum tokens for the model's response output (default: 8192 * 2).
+        Note: This is the output budget only. The total token budget sent to
+        Gemini's API is computed as max_output_tokens + thinking_budget.
     system_instruction : str, optional
         System instruction for the model
     json_output : bool
         Whether to request JSON response format (default: False)
     thinking_budget : int, optional
-        Token budget for model thinking
+        Token budget for model thinking. When set, the total token budget
+        becomes max_output_tokens + thinking_budget.
     cached_content : str, optional
         Name of cached content to use
     client : genai.Client, optional
@@ -306,7 +320,7 @@ def gemini_generate(
         config=config,
     )
 
-    text = _validate_response(response, max_output_tokens)
+    text = _validate_response(response, max_output_tokens, thinking_budget)
     _log_token_usage(response, model)
     return text
 
@@ -337,13 +351,16 @@ async def gemini_agenerate(
     temperature : float
         Temperature for generation (default: 0.3)
     max_output_tokens : int
-        Maximum output tokens (default: 8192 * 2)
+        Maximum tokens for the model's response output (default: 8192 * 2).
+        Note: This is the output budget only. The total token budget sent to
+        Gemini's API is computed as max_output_tokens + thinking_budget.
     system_instruction : str, optional
         System instruction for the model
     json_output : bool
         Whether to request JSON response format (default: False)
     thinking_budget : int, optional
-        Token budget for model thinking
+        Token budget for model thinking. When set, the total token budget
+        becomes max_output_tokens + thinking_budget.
     cached_content : str, optional
         Name of cached content to use
     client : genai.Client, optional
@@ -371,7 +388,7 @@ async def gemini_agenerate(
         config=config,
     )
 
-    text = _validate_response(response, max_output_tokens)
+    text = _validate_response(response, max_output_tokens, thinking_budget)
     _log_token_usage(response, model)
     return text
 

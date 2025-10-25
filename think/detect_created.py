@@ -98,7 +98,7 @@ def detect_created(
         contents=markdown,
         model=GEMINI_LITE,
         temperature=0.3,
-        max_output_tokens=256 + 4096,
+        max_output_tokens=256,
         thinking_budget=4096,
         system_instruction=_load_system_prompt(),
         json_output=True,
