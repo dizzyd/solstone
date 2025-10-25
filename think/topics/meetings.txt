@@ -33,7 +33,7 @@
         * See if the names overlap allowing for transcription errors, try to consolidate them when possible.
 
     * **Topics Discussed:**
-        * Synthesize the conversation from the audio transcript to create a concise summary of the key subjects and topics being discussed, any entities being named, technologies being used, companies, etc.
+        * Synthesize the conversation from the audio transcript to create a concise summary of the key subjects and topics being discussed, any entities being named, technologies being used, companies, organizations, etc.
 
     * **Meeting Brief:**
         * Create a short one-liner brief or title describing the meeting that can be shown for helpful context in a list of meetings.

@@ -1,36 +1,36 @@
 ## Core Mission
 
-Review detected entities from recent days and promote frequently-occurring, unambiguous entities to permanent attached status. Identify entities that have demonstrated consistent relevance and synthesize timeless descriptions from multiple day-specific contexts.
+Review detected entities from recent days within a specific domain and promote frequently-occurring, unambiguous entities to permanent attached status for that domain. Identify entities that have demonstrated consistent relevance to this domain and synthesize timeless descriptions from multiple day-specific contexts.
 
 ## Input Context
 
 You receive:
-1. **Domain context** - the domain (e.g., "personal", "work") for entity review
+1. **Domain context** - the specific domain (e.g., "personal", "work") you are reviewing entities for
 2. **Current date/time** - to compute the review window (last 7 days)
-3. **Attached entities** - via `entity_list(domain)` to avoid re-promoting
-4. **Detection history** - via `entity_list(domain, day)` for each recent day
+3. **Attached entities for THIS domain** - via `entity_list(domain)` to avoid re-promoting to this domain
+4. **Detection history for THIS domain** - via `entity_list(domain, day)` for each recent day within this domain
 
 ## Tooling
 
 Always operate on the MCP entity tools with the **required domain parameter**:
-- `entity_list(domain)` - list currently attached entities
-- `entity_list(domain, day)` - list detected entities for a specific day
-- `entity_attach(domain, type, name, description)` - promote entity to attached status
+- `entity_list(domain)` - list entities currently attached to THIS domain
+- `entity_list(domain, day)` - list entities detected for THIS domain on a specific day
+- `entity_attach(domain, type, name, description)` - promote entity to attached status FOR THIS DOMAIN
 
 ## Review Process
 
 ### Phase 1: Aggregate Recent Detections
 
 1. Compute the last 7 days in YYYYMMDD format (e.g., if today is 20250115, review 20250108-20250114)
-2. Load attached entities: `entity_list(domain)` - skip entities already attached
-3. Load detected entities for each of the last 7 days:
-   - `entity_list(domain, day="20250114")`
-   - `entity_list(domain, day="20250113")`
+2. Load attached entities for THIS domain: `entity_list(domain)` - skip entities already attached to this domain
+3. Load detected entities for THIS domain for each of the last 7 days:
+   - `entity_list(domain, day="20250114")` - detections for this domain on this day
+   - `entity_list(domain, day="20250113")` - detections for this domain on this day
    - ... continue for all 7 days
 
-4. Aggregate detections by entity name:
-   - Count how many days each entity appeared
-   - Collect all descriptions for each entity
+4. Aggregate detections by entity name (only detections from THIS domain):
+   - Count how many days each entity appeared in this domain
+   - Collect all descriptions for each entity from this domain's detections
    - Note the entity type from each detection
 
 **Example aggregation:**
@@ -46,37 +46,36 @@ Always operate on the MCP entity tools with the **required domain parameter**:
 
 Auto-promote entities based on **type-specific thresholds**:
 
-**Type-Based Frequency Requirements:**
+**Priority-Based Frequency Requirements:**
 
-1. **Person** (LOWEST THRESHOLD - promote readily):
+1. **High Priority - People and Contacts** (promote readily):
    - Require: 2+ detections in last 7 days
    - Rationale: People are highest priority, capture all important relationships
    - Even 2 appearances indicates ongoing relevance
+   - Type: Person
 
-2. **Company** (MEDIUM THRESHOLD - selective):
-   - Require: 3+ detections in last 7 days
-   - Rationale: Only important business relationships should be promoted
-   - Multiple mentions indicates significant relationship
+2. **Medium Priority - Organizations and Projects** (selective):
+   - Organizations: Require 3+ detections in last 7 days
+   - Projects: Require 3-4+ detections in last 7 days
+   - Rationale: Only important business relationships and central projects warrant promotion
+   - Types: Organization, Project, Location, Event, or other appropriate descriptors
 
-3. **Project** (HIGH THRESHOLD - conservative):
-   - Require: 4+ detections in last 7 days
-   - Rationale: Only clearly central projects warrant permanent status
-   - Frequent mentions indicate core project work
-
-4. **Tool** (HIGHEST THRESHOLD - very rare):
+3. **Low Priority - Tools and Resources** (very rare):
    - Require: 5+ detections in last 7 days
-   - Rationale: Tools should only be promoted if extensively discussed
-   - High bar prevents clutter from incidental tool mentions
+   - Rationale: Resources should only be promoted if extensively discussed
+   - High bar prevents clutter from incidental mentions
+   - Type: Tool, or other appropriate resource descriptor
 
 **Universal Requirements (all types):**
 
 **Type Consistency**: Same entity type across all detections
-- All detections agree on Person/Company/Project/Tool
-- No ambiguity (e.g., "Apple" as both Company and Project)
+- All detections agree on the entity type (e.g., Person, Organization, Project, Tool)
+- No ambiguity (e.g., "Apple" as both Organization and Project)
 
-**Not Already Attached**: Entity name not in `entity_list(domain)` results
-- Avoid duplicates
+**Not Already Attached to THIS Domain**: Entity name not in `entity_list(domain)` results
+- Avoid duplicates within this domain
 - Name matching should be exact (case-sensitive)
+- Note: An entity may be attached to OTHER domains, but not to this one - that's OK to promote
 
 **Quality**: Descriptions are meaningful and consistent
 - Multiple contexts provide clear picture
@@ -127,9 +126,9 @@ entity_attach(
 ## Smart Duplicate Handling
 
 **Substring Matches:**
-If detected name is substring of attached entity:
-- "Sarah" detected, "Sarah Chen" already attached → skip "Sarah"
-- Prevents fragmentary duplicates
+If detected name is substring of entity already attached to THIS domain:
+- "Sarah" detected, "Sarah Chen" already attached to this domain → skip "Sarah"
+- Prevents fragmentary duplicates within this domain
 
 **Nickname Variations:**
 If multiple variations of same person detected:
@@ -137,7 +136,7 @@ If multiple variations of same person detected:
 - Promote "Sarah Chen" (full name preferred)
 - Consider adding nickname notation: "Sarah Chen (Sarah)"
 
-**Company Abbreviations:**
+**Organization Abbreviations:**
 If both full name and abbreviation detected:
 - "Anthropic PBC" and "Anthropic" both detected
 - Use most common form, note variation in description
@@ -147,19 +146,19 @@ If both full name and abbreviation detected:
 
 ### DO:
 - Review full 7-day window systematically
-- Apply type-specific thresholds (Person: 2+, Company: 3+, Project: 4+, Tool: 5+)
+- Apply priority-based thresholds (People: 2+, Organizations/Projects: 3-4+, Tools: 5+)
 - Prioritize person promotions (lowest threshold)
-- Be selective with companies and conservative with projects
-- Be very strict with tool promotions
+- Be selective with organizations and conservative with projects
+- Be very strict with tool/resource promotions
 - Synthesize descriptions from multiple contexts
 - Remove day-specific temporal references
 - Check for exact name matches with attached entities
 
 ### DON'T:
 - Promote people with only 1 detection (but 2+ is ok)
-- Promote companies/projects/tools below their thresholds
+- Promote organizations/projects/tools below their thresholds
 - Promote if entity type is inconsistent across detections
-- Promote if already attached (check first)
+- Promote if already attached to THIS domain (check first)
 - Use day-specific descriptions in attached entities
 - Batch-promote without individual evaluation
 - Promote tools that were just used (require 5+ active discussions)
@@ -167,26 +166,26 @@ If both full name and abbreviation detected:
 ## Interaction Protocol
 
 When invoked:
-1. Announce the working domain and review window
-2. Load attached entities for comparison
-3. Load detected entities from last 7 days
-4. Aggregate by entity name, count occurrences
-5. Filter by type-specific promotion criteria:
-   - Person: 2+, Company: 3+, Project: 4+, Tool: 5+
-   - Type consistent, not already attached
+1. Announce the SPECIFIC DOMAIN you are reviewing and the review window (last 7 days)
+2. Load entities attached to THIS domain for comparison
+3. Load detected entities for THIS domain from last 7 days
+4. Aggregate by entity name (within this domain), count occurrences
+5. Filter by priority-based promotion criteria:
+   - People: 2+, Organizations/Projects: 3-4+, Tools: 5+
+   - Type consistent, not already attached to THIS domain
 6. Synthesize timeless descriptions for qualifying entities
-7. Execute `entity_attach()` for each promotion
-8. Summarize: "Promoted X entities: [names with detection counts and types]"
+7. Execute `entity_attach()` for each promotion to THIS domain
+8. Summarize: "Promoted X entities for [domain]: [names with detection counts and types]"
 
 ## Edge Cases
 
-**No Detections**: If no entities meet their type-specific thresholds, report "No entities qualify for promotion this cycle"
+**No Detections**: If no entities meet their priority-based thresholds for THIS domain, report "No entities qualify for promotion this cycle for [domain]"
 
-**All Already Attached**: If all qualifying entities are already attached, report "All recurring entities already attached"
+**All Already Attached**: If all qualifying entities are already attached to THIS domain, report "All recurring entities already attached to [domain]"
 
-**Type Conflicts**: If entity name appears with different types (e.g., "Mercury" as Company and Project), skip and report the ambiguity for manual review
+**Type Conflicts**: If entity name appears with different types within THIS domain's detections (e.g., "Mercury" as Organization and Project), skip and report the ambiguity for manual review
 
 **Below Threshold**: Report entities close to promotion separately:
-- "3 entities near promotion: Alice (Person, 1 detection - needs 1 more), Acme Corp (Company, 2 detections - needs 1 more)"
+- "3 entities near promotion for [domain]: Alice (Person, 1 detection - needs 1 more), Acme Corp (Organization, 2 detections - needs 1 more)"
 
-Remember: Promotion is a one-way operation. Only promote entities with clear evidence of consistent relevance and unambiguous identity. Apply strict type-specific thresholds to maintain quality.
+Remember: Promotion is a domain-specific one-way operation. Only promote entities with clear evidence of consistent relevance to THIS domain and unambiguous identity. Apply strict priority-based thresholds to maintain quality within this domain.

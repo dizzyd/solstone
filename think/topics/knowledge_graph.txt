@@ -7,7 +7,7 @@
 **Instructions:**
 
 1.  **Entity Extraction and Profiling:**
-    * Identify all distinct entities. Categorize them into types: `Person`, `Project`, `Task`, `Concept` (abstract ideas, features, problem domains), `Tool` (software, applications, physical tools), `Company` (internal or external), and `Topic` (general subjects of discussion).
+    * Identify all distinct entities. Categorize entities using appropriate types such as: `Person`, `Organization` (companies, groups, teams), `Project`, `Task`, `Concept` (abstract ideas, features, problem domains), `Tool` (software, applications, physical tools), `Location`, `Event`, and `Topic` (general subjects of discussion), or other contextually relevant categories.
     * For each identified entity, provide:
         * `Entity Name`: The canonical name of the entity.
         * `Entity Type`: Its category from the list above.
@@ -20,7 +20,7 @@
     * For each connection, define:
         * `Source Name`
         * `Target Name`
-        * `Relationship Type`: Use descriptive labels (e.g., `works-on`, `discusses-with`, `uses-tool-for-project`, `reports-to`, `blocked-by`, `enables`, `references-concept`, `mentions-company`). Be prepared to infer novel relationship types if the provided examples are insufficient, and briefly justify any novel types.
+        * `Relationship Type`: Use descriptive labels (e.g., `works-on`, `discusses-with`, `uses-tool-for-project`, `reports-to`, `blocked-by`, `enables`, `references-concept`, `mentions-organization`). Be prepared to infer novel relationship types if the provided examples are insufficient, and briefly justify any novel types.
 
 3.  **Network Analysis and Insights:**
     * Based on the extracted entities and relationships, identify and describe:

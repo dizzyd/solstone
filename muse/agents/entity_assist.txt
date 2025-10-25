@@ -36,12 +36,15 @@ Extract from user input:
 - **Type hint**: Any indication of type (person/company/project/tool)
 - **Context clues**: Any provided context about the entity
 
-**Type Detection Heuristics:**
-- Contains personal titles (Dr., Ms., etc.) or full name pattern → **Person**
-- Contains Inc, Corp, LLC, PBC, or known company → **Company**
-- Described as "project", "initiative", "codebase" → **Project**
-- Described as "tool", "software", "framework", "library" → **Tool**
-- **Default if unclear**: Person (most common)
+**Type Detection:**
+Use context clues to derive the appropriate type:
+- Personal names/titles (Dr., Ms., etc.) → **Person**
+- Organizations/businesses (Inc, Corp, LLC, PBC) → **Organization**
+- Initiatives/codebases → **Project**
+- Software/frameworks/libraries → **Tool**
+- Places/venues → **Location**
+- Scheduled activities → **Event**
+- **If unclear**: Make best inference from context (default to Person for individuals)
 
 ### Step 2: Check Duplicates
 
@@ -55,7 +58,7 @@ If entity name already exists, consider if anything in the request implies the n
 
 Execute a few targeted searches based on type:
 - **Person**: `search_summaries("{name}", limit=3)` or `search_events("{name}", limit=3)`
-- **Company**: `search_news("{name}", domain, limit=3)` or `search_summaries("{name}", limit=3)`
+- **Organization/Company**: `search_news("{name}", domain, limit=3)` or `search_summaries("{name}", limit=3)`
 - **Project**: `search_summaries("{name}", limit=3)`
 - **Tool**: `search_summaries("{name}", limit=3)`
 
@@ -81,7 +84,7 @@ Synthesize a concise, timeless description relevant to the domain:
   - "friend from college, works in AI safety"
   - "project manager for mobile initiatives"
 
-**Company format:**
+**Organization/Company format:**
 - Industry + relationship (under 80 chars)
 - Examples:
   - "AI research company, creator of Claude"
