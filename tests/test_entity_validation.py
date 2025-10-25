@@ -2,7 +2,7 @@
 
 import pytest
 
-from think.indexer.entities import is_valid_entity_type
+from think.entities import is_valid_entity_type
 
 
 def test_valid_original_types():

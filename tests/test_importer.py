@@ -187,10 +187,11 @@ def test_audio_transcribe_sanitizes_entities(tmp_path, monkeypatch):
     )
 
     assert captured
+    # Entities are sorted by type then name, so Organization comes before Person
     assert captured[0] == [
-        "Test",  # First name from "Test Person (TP)"
-        "TP",    # Nickname from "Test Person (TP)"
+        "Test",  # First name from "Test Initiative (TI)" (Organization comes first)
         "TI",    # Nickname from "Test Initiative (TI)"
+        "TP",    # Nickname from "Test Person (TP)"
     ]
 
 

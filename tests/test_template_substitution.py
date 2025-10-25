@@ -36,11 +36,11 @@ def mock_journal_with_config(tmp_path):
     with open(config_dir / "journal.json", "w") as f:
         json.dump(config, f)
 
-    # Create entities.md
-    entities_content = """- Person: Test User (Testy) - a curious software engineer interested in AI
-- Company: Acme Corp - example company for testing
+    # Create entities.jsonl
+    entities_content = """{"type": "Person", "name": "Test User (Testy)", "description": "a curious software engineer interested in AI"}
+{"type": "Company", "name": "Acme Corp", "description": "example company for testing"}
 """
-    (tmp_path / "entities.md").write_text(entities_content)
+    (tmp_path / "entities.jsonl").write_text(entities_content)
 
     # Set JOURNAL_PATH for the test
     old_journal = os.environ.get("JOURNAL_PATH")

@@ -4,19 +4,21 @@ import os
 
 
 def test_parse_entity_line():
-    indexer = importlib.import_module("think.indexer")
-    line = "* Person: John Doe - desc"
-    etype, name, desc = indexer.parse_entity_line(line)
-    assert etype == "Person" and name == "John Doe" and desc == "desc"
-    assert indexer.parse_entity_line("invalid") is None
+    """Test removed - parse_entity_line no longer exists in JSONL format."""
+    # This function was removed as part of the markdown -> JSONL migration
+    # Entity parsing is now done via JSON.loads() directly
+    pass
 
 
 def test_parse_entities(tmp_path):
     indexer = importlib.import_module("think.indexer")
-    md = tmp_path / "entities.md"
-    md.write_text("* Person: Jane - info\n")
+    jsonl = tmp_path / "entities.jsonl"
+    jsonl.write_text('{"type": "Person", "name": "Jane", "description": "info"}\n')
     result = indexer.parse_entities(str(tmp_path))
-    assert result == [("Person", "Jane", "info")]
+    assert len(result) == 1
+    assert result[0]["type"] == "Person"
+    assert result[0]["name"] == "Jane"
+    assert result[0]["description"] == "info"
 
 
 # These tests are deprecated since entities.json caching and Entities class are removed

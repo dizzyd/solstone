@@ -82,22 +82,19 @@ def _flatten_identity_to_template_vars(identity: dict[str, Any]) -> dict[str, st
 
             entities = load_all_attached_entities()
 
-            # Fallback to top-level entities.md for backward compatibility
+            # Fallback to top-level entities.jsonl for backward compatibility
             if not entities:
                 load_dotenv()
                 journal = os.getenv("JOURNAL_PATH")
                 if journal:
-                    entities_path = Path(journal) / "entities.md"
+                    entities_path = Path(journal) / "entities.jsonl"
                     if entities_path.is_file():
-                        from think.indexer import parse_entity_line
-                        entities = []
-                        with open(entities_path, "r", encoding="utf-8") as f:
-                            for line in f:
-                                parsed = parse_entity_line(line)
-                                if parsed:
-                                    entities.append(parsed)
+                        from think.entities import parse_entity_file
+                        entities = parse_entity_file(str(entities_path))
 
-            for _, name, desc in entities:
+            for entity in entities:
+                name = entity.get("name", "")
+                desc = entity.get("description", "")
                 if name == entity_ref:
                     template_vars["entity_value"] = desc
                     template_vars["Entity_value"] = desc.capitalize()
