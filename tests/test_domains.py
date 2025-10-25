@@ -31,18 +31,6 @@ def test_domain_summary_full(monkeypatch):
     assert "**Entity 2**: Second test entity" in summary
     assert "**Entity 3**: Third test entity with description" in summary
 
-    # Check matters section
-    assert "## Matters" in summary
-    assert "**Total:** 2 matter(s)" in summary
-
-    # Check active matters
-    assert "### Active (1)" in summary
-    assert "🔴 **matter_1**: High Priority Task" in summary
-
-    # Check completed matters
-    assert "### Completed (1)" in summary
-    assert "**matter_2**: Completed Task" in summary
-
 
 def test_domain_summary_minimal(monkeypatch):
     """Test domain_summary with minimal metadata."""
@@ -53,11 +41,10 @@ def test_domain_summary_minimal(monkeypatch):
     # Check title without emoji
     assert "# Minimal Domain" in summary
 
-    # Should not have description, color, entities, or matters
+    # Should not have description, color, or entities
     assert "**Description:**" not in summary
     assert "![Color]" not in summary
     assert "## Entities" not in summary
-    assert "## Matters" not in summary
 
 
 def test_domain_summary_test_domain(monkeypatch):
@@ -71,15 +58,11 @@ def test_domain_summary_test_domain(monkeypatch):
 
     # Check description
     assert (
-        "**Description:** A test domain for validating matter functionality" in summary
+        "**Description:** A test domain for validating functionality" in summary
     )
 
     # Check color badge
     assert "![Color](#007bff)" in summary
-
-    # Check matters section
-    assert "## Matters" in summary
-    assert "**matter_1**: Test Matter" in summary
 
 
 def test_domain_summary_nonexistent(monkeypatch):
@@ -115,21 +98,6 @@ def test_domain_summary_empty_entities(monkeypatch):
 
     # Should not include entities section if file is empty
     assert "## Entities" not in summary
-
-
-def test_domain_summary_matter_priorities(monkeypatch):
-    """Test domain_summary with different matter priorities."""
-    monkeypatch.setenv("JOURNAL_PATH", str(FIXTURES_PATH))
-
-    summary = domain_summary("priority-test")
-
-    # Check priority markers
-    assert "🔴 **matter_1**: High Priority" in summary
-    assert "🟡 **matter_2**: Medium Priority" in summary
-    # Normal priority has no marker
-    assert "**matter_3**: Normal Priority" in summary
-    assert "🔴 **matter_3**" not in summary
-    assert "🟡 **matter_3**" not in summary
 
 
 def test_get_domains_with_entities(monkeypatch):
@@ -198,7 +166,7 @@ def test_domain_summaries(monkeypatch):
 
     # Check test-domain is included with backtick format
     assert "**Test Domain** (`test-domain`)" in summary
-    assert "A test domain for validating matter functionality" in summary
+    assert "A test domain for validating functionality" in summary
 
     # Check entities are included with title prefix
     assert "  - **Test Domain Entities**:" in summary

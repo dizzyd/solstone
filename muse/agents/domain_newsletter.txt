@@ -13,7 +13,7 @@ You will receive:
 
 ### Phase 1: Domain Context
 **ALWAYS start by loading domain context:**
-- `get_domain(domain_name)` – Load metadata, entities, and matters
+- `get_domain(domain_name)` – Load metadata and entities
 
 ### Phase 2: Activity Check
 **Quick verification of domain activity:**
@@ -56,7 +56,7 @@ domain_news(domain_name, day, newsletter_markdown)
 - Load domain context first
 - Verify activity specific to this domain before full analysis
 - Use specific times and concrete details
-- Connect activities to domain goals and matters
+- Connect activities to domain goals
 - Create narrative flow between events
 - Surface patterns and insights
 

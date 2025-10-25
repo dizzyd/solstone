@@ -109,7 +109,7 @@ os.environ["JOURNAL_PATH"] = "fixtures/journal"
   - Integration tests in `tests/integration/` subdirectory
 * **Naming**: Test files prefixed with `test_`, functions with `test_`
 * **Fixtures**: Shared fixtures in `tests/conftest.py`
-* **Test Data**: The `fixtures/journal/` directory contains a comprehensive mock journal structure that mimics real journal data for testing, including sample domains, matters, agents, inbox messages, and indexed data
+* **Test Data**: The `fixtures/journal/` directory contains a comprehensive mock journal structure that mimics real journal data for testing, including sample domains, agents, inbox messages, and indexed data
 
 ### Running Tests
 ```bash

@@ -541,13 +541,11 @@ def search_news(
 
 @register_tool(annotations=HINTS)
 def get_domain(domain: str) -> dict[str, Any]:
-    """Get a comprehensive summary of a domain including its metadata, entities, and matters.
+    """Get a comprehensive summary of a domain including its metadata and entities.
 
     This tool generates a formatted markdown summary for a specified domain in the journal.
-    The summary includes the domain's title, description, tracked entities,
-    and all matters organized by their status (active, archived).
-    Use this when you need an overview of a domain's current state, its associated entities,
-    and the matters being tracked within it.
+    The summary includes the domain's title, description, and tracked entities.
+    Use this when you need an overview of a domain's current state and its associated entities.
 
     Args:
         domain: The domain name to retrieve the summary for
@@ -559,7 +557,6 @@ def get_domain(domain: str) -> dict[str, Any]:
             - Domain title
             - Domain description
             - List of tracked entities
-            - Matters grouped by status with priority indicators
 
     Examples:
         - get_domain("personal")

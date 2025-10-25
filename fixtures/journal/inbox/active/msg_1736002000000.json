@@ -5,6 +5,6 @@
     "type": "agent",
     "id": "task_monitor"
   },
-  "body": "Reminder: You have 3 pending objectives that are approaching their target completion dates.\n\nPlease review your active matters for updates.",
+  "body": "Reminder: You have 3 pending objectives that are approaching their target completion dates.\n\nPlease review your active tasks for updates.",
   "status": "unread"
 }
