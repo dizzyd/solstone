@@ -2207,8 +2207,15 @@ function previewEntityDelete(entityName) {
 }
 
 function closeDeleteModal() {
-  document.getElementById('deleteModal').style.display = 'none';
+  const modal = document.getElementById('deleteModal');
+  const confirmBtn = document.getElementById('confirmDeleteBtn');
+
+  modal.style.display = 'none';
   entityToDelete = null;
+
+  // Reset button state
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Delete';
 }
 
 function confirmEntityDelete() {
@@ -2237,14 +2244,22 @@ function confirmEntityDelete() {
       throw new Error(data.error);
     }
 
-    const daysModified = data.days_modified || [];
-
     // Close modal
     closeDeleteModal();
 
-    // Reload entities to reflect changes
-    entitiesData = null;
-    loadEntities();
+    // Remove entity from local data and re-render
+    if (entitiesData && entitiesData.all_entities) {
+      entitiesData.all_entities = entitiesData.all_entities.filter(
+        e => e.name !== entityToDelete
+      );
+
+      // Get current search term to maintain filter
+      const searchInput = document.getElementById('entity-search');
+      const currentSearchTerm = searchInput ? searchInput.value.trim() : '';
+
+      // Re-render with current search filter
+      renderEntities(currentSearchTerm);
+    }
   })
   .catch(error => {
     console.error('Error deleting entity:', error);
