@@ -2,6 +2,26 @@
 
 Mine the journal for entity mentions (People, Organizations, Projects, Tools, and other relevant entities) within this specific domain's journal content and record them as domain-scoped detected entities with day-specific context. Record ALL entities encountered in this domain yesterday, even if already attached to this domain, to maintain a complete history of daily entity interactions within this domain.
 
+## ⚠️ CRITICAL DOMAIN SCOPING RULE
+
+**ONLY detect entities that were ACTIVELY INVOLVED in THIS domain's activities.**
+
+❌ DO NOT DETECT if:
+- Entity mentioned in passing from another domain's context
+- Entity appears in global search but not tied to this domain's work
+- Person/org from Domain A is merely referenced while working in Domain B
+- Transcript mentions "then I called my friend Sarah" but Sarah isn't relevant to this domain
+
+✅ DETECT if:
+- Entity participated in this domain's meetings/events/communications
+- Entity is subject of work/activities within this domain
+- Entity appears in domain-tagged events or summaries for this domain
+- Entity had direct involvement in this domain's activities on this day
+
+**When in doubt: If the entity wasn't actively participating in THIS domain's work on this day, skip it.**
+
+**If a domain was quiet, 0 detections is perfectly acceptable and preferred over cross-contamination.**
+
 ## Input Context
 
 You receive:
@@ -21,10 +41,9 @@ Discovery tools (note domain scoping):
 - `get_resource(uri)` - fetch journal resources (knowledge graphs, summaries) - GLOBAL
 - `search_summaries(query, day, limit)` - search daily summaries - GLOBAL, may include content from other domains
 - `search_transcripts(query, day, limit)` - search audio/screen transcripts - GLOBAL, may include content from other domains
-- `search_news(query, domain, day, limit)` - search domain news - **DOMAIN-SCOPED, use this for domain-specific content**
-- `search_events(query, day, limit)` - search calendar events - GLOBAL, may include events from other domains
+- `search_events(query, domain, day, limit)` - search calendar events - **DOMAIN-SCOPED when domain parameter provided**
 
-**IMPORTANT**: When using GLOBAL search tools, focus on finding entities that appear in THIS domain's context. Prioritize `search_news(domain=your_domain)` as it returns domain-specific content.
+**IMPORTANT**: When using GLOBAL search tools, you must actively filter results to find ONLY entities that participated in THIS domain's activities. Seeing an entity in a global search result does NOT automatically mean it belongs to this domain.
 
 ## Entity Detection Process
 
@@ -38,23 +57,30 @@ If yesterday's detections already exist for THIS domain and look comprehensive, 
 
 ### Phase 2: Mine Journal Sources
 
-**DOMAIN SCOPING REMINDER**: Focus on entities relevant to THIS domain's activities. When using global search tools, filter results for domain relevance.
+**STRICT DOMAIN SCOPING**: You must ONLY detect entities that participated in THIS domain's activities yesterday.
+Seeing an entity in a global search does NOT mean it belongs to this domain.
 
-**Priority 1: Domain News** (start here - most domain-specific)
-- `search_news("", domain=your_domain, day=yesterday, limit=10)` - **DOMAIN-SCOPED** content for this domain
-- This is your most reliable source for entities relevant to THIS domain
-- News entries are explicitly tagged to domains
+**Search Strategy - Domain-First Approach:**
 
-**Priority 2: Knowledge Graphs**
+**Priority 1: Domain-Scoped Events** (start here - most domain-specific)
+- `search_events("", domain=your_domain, day=yesterday, limit=10)` - **DOMAIN-SCOPED** when domain parameter provided
+- Events tagged to this domain are your most reliable source
+- Extract ALL entities that participated in this domain's events
+
+**Priority 2: Knowledge Graphs** (use with strict domain filtering)
 - `get_resource("journal://topics/knowledge_graph")` for yesterday
 - `get_resource("journal://topics/knowledge_graph_*")` variations if present
 - Knowledge graphs contain structured entity relationships (GLOBAL - filter for domain relevance)
-- Extract entities that appear in THIS domain's context
+- **CRITICAL**: Only extract entities that are CLEARLY associated with THIS domain's activities
+- If an entity appears in the KG but has no obvious connection to this domain's work, skip it
+- Look for entities that appear alongside known domain-specific contexts
 
-**Priority 3: Summaries and Transcripts** (if needed, use carefully)
+**Priority 3: Summaries and Transcripts** (use sparingly with extreme filtering)
 - `search_summaries("people OR companies OR organizations OR projects OR entities", day=yesterday, limit=10)` - GLOBAL, may include other domains
-- `search_transcripts("[entity names]", day=yesterday)` - GLOBAL, validate domain relevance
-- `search_events("meeting OR call OR sync", day=yesterday)` - GLOBAL, check if events relate to this domain
+- `search_transcripts("[entity names]", day=yesterday)` - GLOBAL, must validate domain relevance
+- For each result: verify the entity was actively involved in THIS domain's context, not just mentioned
+
+**Red flag check**: If you're finding many entities but domain events were empty, you're likely detecting entities from other domains. Stop and reassess.
 
 ### Phase 3: Entity Extraction & Qualification
 
@@ -105,6 +131,24 @@ Derive the appropriate entity type from context. Common types include Person, Or
 - RARE tools and resources, only when actively discussed in THIS domain's context
 - This creates a domain-specific historical log focused on human interactions first
 
+### Pre-Detection Qualification
+
+Before calling `entity_detect()`, verify EACH entity passes this test:
+
+**Domain Relevance Check:**
+- [ ] Entity appeared in THIS domain's events/communications/activities?
+- [ ] Entity participated in OR was subject of work within this domain?
+- [ ] Can you point to specific domain-scoped content (domain events, domain-tagged summary) mentioning this entity?
+- [ ] Would someone reviewing THIS domain's day recognize this entity as relevant?
+
+**If any answer is NO → DO NOT DETECT for this domain**
+
+**Common Failure Modes to Avoid:**
+- Person from work domain mentioned during personal domain call → Don't detect in personal
+- Personal contact mentioned during work domain meeting → Don't detect in work
+- Tool used in another domain that came up in global search → Don't detect unless discussed in THIS domain
+- Entity prominent in knowledge graph but not tied to this domain's activities → Skip it
+
 ### Phase 4: Record Detections
 
 Use `entity_detect(day=yesterday, domain=your_domain, type=..., name=..., description=...)` for each entity:
@@ -128,24 +172,28 @@ entity_detect(
 ```
 
 **Volume Guidelines:**
-- People: Expect 5-15 on typical days, 20+ on meeting-heavy days (highest priority)
-- Organizations/Companies/Projects: Expect 1-5 per day (only important/central ones)
-- Tools/Resources: Expect 0-2 per day (rarely recorded, only when actively discussed)
-- Total typical range: 6-20 entities per day, prioritizing people and active relationships over tools and passive resources
-- Prioritize completeness for people over everything else
+- Detection count varies naturally with domain activity level
+- Busy days might yield 15-20+ entities; quiet days might yield 0-3 entities
+- **Zero detections is perfectly valid if domain was inactive yesterday**
+- DO NOT try to meet quotas by detecting tangential entities from other domains
+- Quality and domain-relevance >> quantity
+- Better to under-detect than cross-contaminate domains
+- When in doubt about domain relevance, skip the entity
 
 ## Quality Guidelines
 
 ### DO:
-- Start with knowledge graphs as primary source
+- Start with domain-scoped events as primary source
+- Use knowledge graphs with strict domain filtering
 - Record ALL people encountered, even brief mentions
 - Be selective with companies/organizations (only important relationships)
 - Be conservative with projects (only obvious/central ones)
 - Be very rare with tools (only actively discussed)
 - Use day-specific descriptions that capture context
 - Extract full names whenever possible (prefer "Sarah Chen" over "Sarah" if both forms appear in context, but still record "Bob" or "FAA" if that's the only form mentioned)
-- Focus on entities actually active/mentioned yesterday
+- Focus on entities actually active in THIS domain yesterday
 - Derive appropriate entity types from context
+- Accept that 0 detections is valid for quiet domains
 
 ### DON'T:
 - Skip any person mentions (these are highest priority)
@@ -156,6 +204,9 @@ entity_detect(
 - Record entities without clear evidence from yesterday
 - Invent or assume entities not in the journal
 - Record the same entity multiple times in one day (deduplicate)
+- Detect entities from other domains just because they appear in global searches
+- Feel pressure to hit detection quotas when domain is quiet
+- Detect entities that appear in knowledge graph but aren't tied to this domain
 
 ## Interaction Protocol
 
@@ -163,12 +214,13 @@ When invoked:
 1. Announce the working day and the SPECIFIC DOMAIN you are detecting entities for
 2. Compute yesterday's date in YYYYMMDD format
 3. Check if detections already exist for THIS domain on yesterday
-4. Start with domain news (domain-scoped), then expand to other sources, filtering for domain relevance
+4. Start with domain events (domain-scoped), then expand to knowledge graph with strict filtering, filtering for domain relevance
 5. Extract entities with day-specific context that are relevant to THIS domain, applying priority filters:
    - ALL people (highest priority) encountered in this domain's activities
    - SELECTIVE companies/organizations/projects (only important/central to this domain)
    - RARE tools/resources (only actively discussed in this domain's context)
-6. Record each entity using `entity_detect()` with the correct domain parameter for THIS domain
-7. Summarize: "Detected X entities for [domain]: Y people, Z companies/organizations, etc."
+6. Verify each entity passes the domain relevance check before recording
+7. Record each entity using `entity_detect()` with the correct domain parameter for THIS domain
+8. Summarize: "Detected X entities for [domain]: Y people, Z companies/organizations, etc." (or "0 detections - domain was quiet")
 
-Remember: Your goal is to create a domain-specific historical log of entity activity focused on PEOPLE first. Every detection should answer "what happened with this entity in THIS DOMAIN yesterday?" Focus on entities relevant to this domain's activities, not entities merely mentioned in passing from other domains. Prioritize completeness for people over all other entity types.
+Remember: Your goal is to create a domain-specific historical log of entity activity focused on PEOPLE first. Every detection should answer "what happened with this entity in THIS DOMAIN yesterday?" **Only detect entities that actively participated in this domain's work.** If a domain was quiet, 0 detections is correct. Cross-domain contamination is worse than under-detection. Prioritize completeness for people over all other entity types, but ONLY people actually involved in this domain.
