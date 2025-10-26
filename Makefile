@@ -190,3 +190,13 @@ pre-commit:
 # Quick check before committing
 pre-push: format lint-flake8 test
 	@echo "Ready to push!"
+
+# Capture screenshot of a Convey view
+screenshot:
+	@if [ -z "$(VIEW)" ]; then \
+		echo "Usage: make screenshot VIEW=<route> [OUTPUT=path]"; \
+		echo "Example: make screenshot VIEW=/"; \
+		echo "Example: make screenshot VIEW=/domains OUTPUT=logs/domains.png"; \
+		exit 1; \
+	fi
+	convey-screenshot $(VIEW) $(if $(OUTPUT),-o $(OUTPUT))

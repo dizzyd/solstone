@@ -47,6 +47,23 @@ def require_login() -> Any:
         "review.favicon",
     }:
         return None
+
+    # Auto-bypass for localhost requests WITHOUT proxy headers
+    remote_addr = request.remote_addr
+    is_localhost = remote_addr in ("127.0.0.1", "::1", "localhost")
+
+    # Detect proxy headers that might indicate forwarded external request
+    proxy_headers = (
+        request.headers.get("X-Forwarded-For")
+        or request.headers.get("X-Real-IP")
+        or request.headers.get("X-Forwarded-Host")
+    )
+
+    if is_localhost and not proxy_headers:
+        # Genuine localhost request - auto-bypass
+        return None
+
+    # Otherwise require session authentication
     if not session.get("logged_in"):
         return redirect(url_for("review.login"))
 

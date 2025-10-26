@@ -79,11 +79,13 @@ dev = [
     "mypy",
     "pytest",
     "pytest-cov",
+    "playwright>=1.40.0",
 ]
 
 [project.scripts]
 sunstone = "think.sunstone:main"
 convey = "convey:main"
+convey-screenshot = "convey.screenshot:main"
 think-summarize = "think.summarize:main"
 think-cluster = "think.cluster:main"
 think-planner = "think.planner:main"
