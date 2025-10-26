@@ -30,7 +30,9 @@ def test_entity_file_path_attached(fixture_journal):
 def test_entity_file_path_detected(fixture_journal):
     """Test path generation for detected entities."""
     path = entity_file_path("personal", "20250101")
-    assert str(path).endswith("fixtures/journal/domains/personal/entities/20250101.jsonl")
+    assert str(path).endswith(
+        "fixtures/journal/domains/personal/entities/20250101.jsonl"
+    )
     assert path.name == "20250101.jsonl"
 
 
@@ -94,7 +96,12 @@ def test_save_and_load_entities(fixture_journal, tmp_path):
 
     # Save some entities (dicts with extended fields)
     test_entities = [
-        {"type": "Person", "name": "Test Person", "description": "Test description", "role": "tester"},
+        {
+            "type": "Person",
+            "name": "Test Person",
+            "description": "Test description",
+            "role": "tester",
+        },
         {"type": "Company", "name": "Test Co", "description": "Test company"},
     ]
     save_entities("test_domain", test_entities, "20250101")
@@ -120,6 +127,7 @@ def test_save_and_load_entities(fixture_journal, tmp_path):
     lines = [line for line in content.strip().split("\n") if line]
     assert len(lines) == 2
     import json
+
     for line in lines:
         assert json.loads(line)  # Should not raise
 
@@ -132,8 +140,13 @@ def test_save_entities_sorting(fixture_journal, tmp_path):
 
     # Save unsorted entities
     import json
+
     unsorted = [
-        {"type": "Project", "name": "Zebra Project", "description": "Last alphabetically"},
+        {
+            "type": "Project",
+            "name": "Zebra Project",
+            "description": "Last alphabetically",
+        },
         {"type": "Company", "name": "Acme", "description": "Company name"},
         {"type": "Person", "name": "Alice", "description": "Person name"},
         {"type": "Company", "name": "Beta Corp", "description": "Another company"},
@@ -176,8 +189,20 @@ def test_load_all_attached_entities_deduplication(fixture_journal, tmp_path):
     os.environ["JOURNAL_PATH"] = str(tmp_path)
 
     # Save same entity name in both domains with different descriptions
-    entities1 = [{"type": "Person", "name": "John Smith", "description": "Description from domain1"}]
-    entities2 = [{"type": "Person", "name": "John Smith", "description": "Description from domain2"}]
+    entities1 = [
+        {
+            "type": "Person",
+            "name": "John Smith",
+            "description": "Description from domain1",
+        }
+    ]
+    entities2 = [
+        {
+            "type": "Person",
+            "name": "John Smith",
+            "description": "Description from domain2",
+        }
+    ]
 
     save_entities("domain1", entities1)
     save_entities("domain2", entities2)
@@ -190,3 +215,37 @@ def test_load_all_attached_entities_deduplication(fixture_journal, tmp_path):
     assert len(john_smiths) == 1
     # Should be from domain1 (alphabetically first)
     assert john_smiths[0]["description"] == "Description from domain1"
+
+
+def test_aka_field_preservation(fixture_journal, tmp_path):
+    """Test that aka field is preserved during save/load operations."""
+    domain_path = tmp_path / "domains" / "test_domain"
+    domain_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Save entities with aka fields
+    test_entities = [
+        {
+            "type": "Person",
+            "name": "Alice Johnson",
+            "description": "Lead engineer",
+            "aka": ["Ali", "AJ"],
+        },
+        {
+            "type": "Company",
+            "name": "PostgreSQL",
+            "description": "Database system",
+            "aka": ["Postgres", "PG"],
+        },
+    ]
+    save_entities("test_domain", test_entities)
+
+    # Load them back
+    loaded = load_entities("test_domain")
+    assert len(loaded) == 2
+
+    alice = next(e for e in loaded if e.get("name") == "Alice Johnson")
+    assert alice.get("aka") == ["Ali", "AJ"]
+
+    postgres = next(e for e in loaded if e.get("name") == "PostgreSQL")
+    assert postgres.get("aka") == ["Postgres", "PG"]

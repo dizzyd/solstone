@@ -20,7 +20,9 @@ def is_valid_entity_type(etype: str) -> bool:
     )
 
 
-def parse_entity_file(file_path: str, *, validate_types: bool = True) -> list[dict[str, Any]]:
+def parse_entity_file(
+    file_path: str, *, validate_types: bool = True
+) -> list[dict[str, Any]]:
     """Parse entities from a JSONL file.
 
     This is the low-level file parsing function used by all entity loading code.
@@ -135,7 +137,9 @@ def save_entities(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Sort entities by type, then name for consistency
-    sorted_entities = sorted(entities, key=lambda e: (e.get("type", ""), e.get("name", "")))
+    sorted_entities = sorted(
+        entities, key=lambda e: (e.get("type", ""), e.get("name", ""))
+    )
 
     # Format entities as JSONL
     lines = []
@@ -299,6 +303,7 @@ def load_entity_names(
                 journal = os.getenv("JOURNAL_PATH")
                 if journal:
                     from pathlib import Path
+
                     entities_path = Path(journal) / "entities.jsonl"
                     if entities_path.is_file():
                         entities = parse_entity_file(str(entities_path))
@@ -324,10 +329,11 @@ def load_entity_names(
     else:
         # Spoken mode: list of shortened forms
         spoken_names = []
-        for entity in entities:
-            name = entity.get("name", "")
+
+        def add_name_variants(name: str) -> None:
+            """Extract and add first word + parenthetical items from a name."""
             if not name:
-                continue
+                return
 
             # Get base name (without parens) and extract first word
             base_name = re.sub(r"\s*\([^)]+\)", "", name).strip()
@@ -340,11 +346,20 @@ def load_entity_names(
             # Extract and add all items from parens (comma-separated)
             paren_match = re.search(r"\(([^)]+)\)", name)
             if paren_match:
-                paren_items = [
-                    item.strip() for item in paren_match.group(1).split(",")
-                ]
+                paren_items = [item.strip() for item in paren_match.group(1).split(",")]
                 for item in paren_items:
                     if item and item not in spoken_names:
                         spoken_names.append(item)
+
+        for entity in entities:
+            name = entity.get("name", "")
+            if name:
+                add_name_variants(name)
+
+            # Process aka list with same logic
+            aka_list = entity.get("aka", [])
+            if isinstance(aka_list, list):
+                for aka_name in aka_list:
+                    add_name_variants(aka_name)
 
         return spoken_names if spoken_names else None

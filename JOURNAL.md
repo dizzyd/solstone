@@ -125,15 +125,18 @@ The `entities.jsonl` file contains manually promoted entities that are persisten
 
 Format example (JSONL - one JSON object per line):
 ```jsonl
-{"type": "Person", "name": "Alice Johnson", "description": "Lead engineer on the API project"}
-{"type": "Company", "name": "TechCorp", "description": "Primary client for consulting work", "tier": "enterprise"}
+{"type": "Person", "name": "Alice Johnson", "description": "Lead engineer on the API project", "aka": ["Ali", "AJ"]}
+{"type": "Company", "name": "TechCorp", "description": "Primary client for consulting work", "tier": "enterprise", "aka": ["TC", "TechCo"]}
 {"type": "Project", "name": "API Optimization", "description": "Performance improvement initiative", "status": "active", "priority": "high"}
-{"type": "Tool", "name": "PostgreSQL", "description": "Database system used in production", "version": "16.0"}
+{"type": "Tool", "name": "PostgreSQL", "description": "Database system used in production", "version": "16.0", "aka": ["Postgres", "PG"]}
 ```
 
 Entity types are flexible and user-defined. Common examples: `Person`, `Company`, `Project`, `Tool`, `Location`, `Event`. Type names must be alphanumeric with spaces, minimum 3 characters.
 
 Each entity is a JSON object with required fields (`type`, `name`, `description`) and optional custom fields for extensibility (e.g., `status`, `priority`, `tags`, `contact`, etc.). Custom fields are preserved throughout the system.
+
+**Standard optional field:**
+- `aka` (array of strings) – Alternative names, nicknames, or acronyms for the entity. Used in audio transcription to improve entity recognition.
 
 #### Detected Entities
 

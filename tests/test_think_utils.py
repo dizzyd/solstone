@@ -266,7 +266,11 @@ def test_load_entity_names_uniform_processing(monkeypatch):
             entities_path,
             [
                 ("Person", "Ryan Reed (R2)", "Software developer"),
-                ("Company", "Federal Aviation Administration (FAA)", "Government agency"),
+                (
+                    "Company",
+                    "Federal Aviation Administration (FAA)",
+                    "Government agency",
+                ),
                 ("Project", "Backend API (API)", "Core service"),
                 ("Tool", "pytest", "Testing framework"),
                 ("Location", "New York City (NYC)", "Metropolitan area"),
@@ -301,3 +305,137 @@ def test_load_entity_names_uniform_processing(monkeypatch):
         assert "NYC" in result
         assert "York" not in result
         assert "City" not in result
+
+
+def test_load_entity_names_with_aka_field(monkeypatch):
+    """Test that aka field values are included in spoken mode."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        entities_path = Path(tmpdir) / "entities.jsonl"
+
+        # Write entities with aka fields using manual JSON
+        with open(entities_path, "w", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "Person",
+                        "name": "Alice Johnson",
+                        "description": "Lead engineer",
+                        "aka": ["Ali", "AJ"],
+                    }
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "type": "Company",
+                        "name": "PostgreSQL",
+                        "description": "Database system",
+                        "aka": ["Postgres", "PG"],
+                    }
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "type": "Tool",
+                        "name": "Docker Container (Docker)",
+                        "description": "Container runtime",
+                        "aka": ["Dock"],
+                    }
+                )
+                + "\n"
+            )
+
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
+
+        assert isinstance(result, list)
+
+        # Main name: "Alice Johnson" -> ["Alice"]
+        assert "Alice" in result
+        # aka entries: ["Ali", "AJ"]
+        assert "Ali" in result
+        assert "AJ" in result
+
+        # Main name: "PostgreSQL" -> ["PostgreSQL"]
+        assert "PostgreSQL" in result
+        # aka entries: ["Postgres", "PG"]
+        assert "Postgres" in result
+        assert "PG" in result
+
+        # Main name: "Docker Container (Docker)" -> ["Docker", "Docker"]
+        # aka entries: ["Dock"]
+        assert "Docker" in result
+        assert "Dock" in result
+        # Should be deduplicated - only one "Docker"
+        assert result.count("Docker") == 1
+
+
+def test_load_entity_names_aka_with_parens(monkeypatch):
+    """Test that aka entries with parentheses are processed correctly."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        entities_path = Path(tmpdir) / "entities.jsonl"
+
+        with open(entities_path, "w", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "Person",
+                        "name": "Robert Smith",
+                        "description": "Manager",
+                        "aka": ["Bob Smith (Bobby)", "Rob"],
+                    }
+                )
+                + "\n"
+            )
+
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
+
+        assert isinstance(result, list)
+
+        # Main name: "Robert Smith" -> ["Robert"]
+        assert "Robert" in result
+
+        # aka entry: "Bob Smith (Bobby)" -> ["Bob", "Bobby"]
+        assert "Bob" in result
+        assert "Bobby" in result
+
+        # aka entry: "Rob" -> ["Rob"]
+        assert "Rob" in result
+
+
+def test_load_entity_names_aka_deduplication(monkeypatch):
+    """Test that aka values are deduplicated with main names."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        entities_path = Path(tmpdir) / "entities.jsonl"
+
+        with open(entities_path, "w", encoding="utf-8") as f:
+            # First entity has "John" in aka
+            f.write(
+                json.dumps(
+                    {
+                        "type": "Person",
+                        "name": "Alice",
+                        "description": "Person 1",
+                        "aka": ["John"],
+                    }
+                )
+                + "\n"
+            )
+            # Second entity has "John" as main name
+            f.write(
+                json.dumps(
+                    {"type": "Person", "name": "John Smith", "description": "Person 2"}
+                )
+                + "\n"
+            )
+
+        monkeypatch.setenv("JOURNAL_PATH", tmpdir)
+        result = load_entity_names(spoken=True)
+
+        # Should have only one "John" even though it appears in aka and as main name
+        assert result.count("John") == 1
+        assert "Alice" in result
