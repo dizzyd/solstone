@@ -714,15 +714,14 @@ function processEvent(event) {
       }
       break;
     case 'error':
-      // Handle error events during live streaming
-      // Since the backend already sends formatted HTML for errors,
-      // we just need to display the message
+      // Display the error message to the user
+      if(event.html){
+        addMessage(event.html, 'from-bot', true, event.rawMarkdown);
+      }
       responseInProgress = false;
       forceHideActivityIndicator();
       activeRunAgentId = null;
       nextContinueAgentId = null;
-      // Note: The actual error message will be sent from backend
-      // via the finish/error handling in _handle_cortex_event
       break;
   }
 }
