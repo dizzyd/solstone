@@ -168,7 +168,7 @@ def calendar_transcript_range(day: str) -> Any:
     try:
         import markdown  # type: ignore
 
-        html_output = markdown.markdown(markdown_text, extensions=["extra"])
+        html_output = markdown.markdown(markdown_text, extensions=["extra", "nl2br"])
     except Exception:  # pragma: no cover - fallback
         import html as html_mod
 
@@ -657,3 +657,227 @@ def calendar_stats() -> Any:
         # Today and future days get no activity_level
 
     return jsonify(stats)
+
+
+# ============================================================================
+# DEVELOPER DEBUG VIEWS - Screen JSONL Viewer
+# These routes are for debugging screen.jsonl files and can be removed when
+# no longer needed. Look for _dev_ prefix to identify all related code.
+# ============================================================================
+
+
+@bp.route("/calendar/<day>/screens")
+def _dev_calendar_screens_list(day: str) -> str:
+    """Render list of screen.jsonl files for a specific day."""
+    if not re.fullmatch(DATE_RE.pattern, day):
+        return "", 404
+
+    day_dir = str(day_path(day))
+    if not os.path.isdir(day_dir):
+        return "", 404
+
+    title = format_date(day)
+    prev_day, next_day = adjacent_days(state.journal_root, day)
+
+    return render_template(
+        "_dev_calendar_screens_list.html",
+        active="calendar",
+        title=title,
+        day=day,
+        prev_day=prev_day,
+        next_day=next_day,
+    )
+
+
+@bp.route("/calendar/<day>/screens/<timestamp>")
+def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
+    """Render detail view for a specific screen.jsonl file."""
+    if not re.fullmatch(DATE_RE.pattern, day):
+        return "", 404
+    if not re.fullmatch(r"\d{6}", timestamp):
+        return "", 404
+
+    day_dir = str(day_path(day))
+    if not os.path.isdir(day_dir):
+        return "", 404
+
+    # Check if the screen.jsonl file exists
+    jsonl_path = os.path.join(day_dir, f"{timestamp}_screen.jsonl")
+    if not os.path.isfile(jsonl_path):
+        return "", 404
+
+    title = format_date(day)
+    prev_day, next_day = adjacent_days(state.journal_root, day)
+
+    return render_template(
+        "_dev_calendar_screens_detail.html",
+        active="calendar",
+        title=title,
+        day=day,
+        timestamp=timestamp,
+        prev_day=prev_day,
+        next_day=next_day,
+    )
+
+
+@bp.route("/calendar/api/screen_files/<day>")
+def _dev_screen_files(day: str) -> Any:
+    """Return list of screen.jsonl files for a day."""
+    if not re.fullmatch(DATE_RE.pattern, day):
+        return "", 404
+
+    day_dir = str(day_path(day))
+    if not os.path.isdir(day_dir):
+        return jsonify({"files": []})
+
+    files = []
+    for fname in sorted(os.listdir(day_dir)):
+        if fname.endswith("_screen.jsonl"):
+            jsonl_path = os.path.join(day_dir, fname)
+            timestamp = fname.replace("_screen.jsonl", "")
+
+            # Count frames (excluding header line)
+            frame_count = 0
+            file_size = 0
+            try:
+                file_size = os.path.getsize(jsonl_path)
+                with open(jsonl_path, "r", encoding="utf-8") as f:
+                    for line_num, line in enumerate(f, 1):
+                        if line_num > 1:  # Skip header
+                            frame_count += 1
+            except Exception:
+                continue
+
+            # Format timestamp as human-readable time
+            from datetime import datetime
+
+            try:
+                time_obj = datetime.strptime(timestamp, "%H%M%S")
+                human_time = time_obj.strftime("%I:%M:%S %p").lstrip("0")
+            except Exception:
+                human_time = timestamp
+
+            files.append(
+                {
+                    "timestamp": timestamp,
+                    "human_time": human_time,
+                    "frame_count": frame_count,
+                    "file_size": file_size,
+                }
+            )
+
+    return jsonify({"files": files})
+
+
+@bp.route("/calendar/api/screen_frames/<day>/<timestamp>")
+def _dev_screen_frames(day: str, timestamp: str) -> Any:
+    """Return all frame records from a specific screen.jsonl file."""
+    if not re.fullmatch(DATE_RE.pattern, day):
+        return "", 404
+    if not re.fullmatch(r"\d{6}", timestamp):
+        return "", 404
+
+    day_dir = str(day_path(day))
+    jsonl_path = os.path.join(day_dir, f"{timestamp}_screen.jsonl")
+
+    if not os.path.isfile(jsonl_path):
+        return "", 404
+
+    try:
+        from observe.utils import load_analysis_frames
+
+        frames = load_analysis_frames(jsonl_path)
+
+        # Read the header line separately to get raw video path
+        raw_video_path = None
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            first_line = f.readline().strip()
+            if first_line:
+                header = json.loads(first_line)
+                raw_video_path = header.get("raw")
+
+        return jsonify({"frames": frames, "raw_video_path": raw_video_path})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/calendar/api/screen_frame_image/<day>/<timestamp>/<int:frame_id>")
+def _dev_screen_frame_image(day: str, timestamp: str, frame_id: int) -> Any:
+    """Extract and serve a specific frame as JPEG from the video."""
+    if not re.fullmatch(DATE_RE.pattern, day):
+        return "", 404
+    if not re.fullmatch(r"\d{6}", timestamp):
+        return "", 404
+
+    day_dir = str(day_path(day))
+    jsonl_path = os.path.join(day_dir, f"{timestamp}_screen.jsonl")
+
+    if not os.path.isfile(jsonl_path):
+        return "", 404
+
+    try:
+        import io
+
+        import av
+        from flask import send_file
+        from observe.utils import load_analysis_frames
+        from PIL import Image
+
+        # Load frames to find the one we want
+        frames = load_analysis_frames(jsonl_path)
+        target_frame = None
+        for frame in frames:
+            if frame.get("frame_id") == frame_id:
+                target_frame = frame
+                break
+
+        if not target_frame:
+            return "", 404
+
+        # Get video path
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            first_line = f.readline().strip()
+            header = json.loads(first_line)
+            raw_video_path = header.get("raw")
+
+        if not raw_video_path:
+            return "", 404
+
+        video_path = os.path.join(day_dir, raw_video_path)
+        if not os.path.isfile(video_path):
+            return "", 404
+
+        # Extract frame at timestamp
+        frame_timestamp = target_frame.get("timestamp")
+        box_2d = target_frame.get("box_2d")  # [y_min, x_min, y_max, x_max]
+
+        with av.open(str(video_path)) as container:
+            stream = container.streams.video[0]
+            # Seek to approximately the right position
+            seek_ts = int(frame_timestamp * stream.time_base.denominator)
+            container.seek(seek_ts, stream=stream)
+
+            # Find the exact frame
+            for av_frame in container.decode(stream):
+                if av_frame.time >= frame_timestamp:
+                    # Convert to PIL Image
+                    arr = av_frame.to_ndarray(format="rgb24")
+                    img = Image.fromarray(arr)
+
+                    # Crop to box_2d if provided
+                    if box_2d:
+                        y_min, x_min, y_max, x_max = box_2d
+                        img = img.crop((x_min, y_min, x_max, y_max))
+
+                    # Convert to JPEG bytes
+                    buffer = io.BytesIO()
+                    img.save(buffer, format="JPEG", quality=85)
+                    buffer.seek(0)
+
+                    return send_file(buffer, mimetype="image/jpeg")
+
+        return "", 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -46,7 +46,7 @@ def _load_entries(
             # Load JSONL format using shared utility
             from observe.hear import load_transcript
 
-            metadata, transcript_entries, _ = load_transcript(path)
+            metadata, transcript_entries, formatted_text = load_transcript(path)
             if transcript_entries is None:
                 print(
                     f"Warning: Could not load transcript {filename}: {metadata.get('error')}",
@@ -54,13 +54,13 @@ def _load_entries(
                 )
                 continue
 
-            # Convert entries to JSON string for markdown embedding
+            # Use formatted text for human-readable display
             timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
             entries.append(
                 {
                     "timestamp": timestamp,
                     "prefix": prefix,
-                    "content": json.dumps(transcript_entries, indent=2),
+                    "content": formatted_text,
                     "monitor": None,
                     "source": None,
                     "id": None,
@@ -174,9 +174,7 @@ def _groups_to_markdown(groups: Dict[datetime, List[Dict[str, str]]]) -> str:
         for entry in groups[interval_start]:
             if entry["prefix"] == "audio":
                 lines.append("### Audio Transcript")
-                lines.append("```json")
                 lines.append(entry["content"].strip())
-                lines.append("```")
                 lines.append("")
             elif entry["prefix"] == "screen":
                 lines.append("### Screen Activity Summary")
