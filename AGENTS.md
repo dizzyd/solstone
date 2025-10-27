@@ -147,6 +147,10 @@ make clean      # Remove build artifacts
 * Fix linting issues before merging
 * Update tests when adding features
 
+### UI Screenshots
+
+Use `make screenshot VIEW=<route>` to capture full-page screenshots of Convey views for visual verification or debugging UI issues. Screenshots are saved to `logs/screenshot.png` after capture.
+
 ---
 
 ## 📝 Important Development Notes
@@ -220,6 +224,9 @@ make dev            # Install with dev dependencies
 make test          # Run tests
 make format        # Format code
 make lint          # Check code quality
+
+# Testing & Debugging
+make screenshot VIEW=<route>  # Capture Convey view screenshot
 
 # Before pushing
 make check-all     # Format, lint, and test
