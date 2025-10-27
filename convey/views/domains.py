@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
+from datetime import date
 from dotenv import load_dotenv
 from flask import Blueprint, jsonify, render_template, request
 
+from .. import state
+from ..utils import DATE_RE, adjacent_days, format_date
 from think.domains import get_domain_news, get_domains
 from think.entities import (
     load_detected_entities_recent,
     load_entities,
     save_entities,
 )
-from think.indexer import search_entities
+from think.indexer import search_entities, search_events
+from think.utils import get_topics
 
 bp = Blueprint("domains", __name__, template_folder="../templates")
 
@@ -100,10 +105,12 @@ def domain_detail(domain_name: str) -> str:
         return render_template("404.html"), 404
 
     domain_data = domains[domain_name]
+    today = date.today().strftime("%Y%m%d")
     return render_template(
         "domain_detail.html",
         domain_name=domain_name,
         domain_data=domain_data,
+        today=today,
         active="domains",
     )
 
@@ -535,6 +542,71 @@ def entity_manager(domain_name: str) -> str:
         )
     except Exception as e:
         return render_template("error.html", error=str(e)), 500
+
+
+@bp.route("/domains/<domain_name>/calendar/<day>")
+def domain_day(domain_name: str, day: str) -> str:
+    """Display calendar day view for a specific domain."""
+    # Validate date format
+    if not re.fullmatch(DATE_RE.pattern, day):
+        return "", 404
+
+    # Validate domain exists
+    domains = get_domains()
+    if domain_name not in domains:
+        return render_template("404.html"), 404
+
+    domain_data = domains[domain_name]
+
+    # Get navigation dates
+    prev_day, next_day = adjacent_days(state.journal_root, day)
+    today_day = date.today().strftime("%Y%m%d")
+    title = format_date(day)
+
+    # Load domain-filtered occurrences for this day
+    topics = get_topics()
+    _, results = search_events(query="", domain=domain_name, day=day, limit=1000)
+
+    # Transform search results into timeline format
+    occurrences = []
+    for result in results:
+        event = result.get("event", {})
+        metadata = result.get("metadata", {})
+        topic = metadata.get("topic", "other")
+
+        # Add topic color
+        topic_color = topics.get(topic, {}).get("color", "#6c757d")
+
+        occurrence = {
+            "title": event.get("title", ""),
+            "summary": event.get("summary", ""),
+            "subject": event.get("subject", ""),
+            "details": event.get("details", event.get("description", "")),
+            "participants": event.get("participants", []),
+            "topic": topic,
+            "color": topic_color,
+        }
+
+        # Convert time strings to ISO timestamps
+        if event.get("start"):
+            occurrence["startTime"] = f"{day[:4]}-{day[4:6]}-{day[6:]}T{event['start']}"
+        if event.get("end"):
+            occurrence["endTime"] = f"{day[:4]}-{day[4:6]}-{day[6:]}T{event['end']}"
+
+        occurrences.append(occurrence)
+
+    return render_template(
+        "domain_day.html",
+        domain_name=domain_name,
+        domain_data=domain_data,
+        day=day,
+        title=title,
+        prev_day=prev_day,
+        next_day=next_day,
+        today_day=today_day,
+        occurrences=occurrences,
+        active="domains",
+    )
 
 
 @bp.route("/api/domains/<domain_name>/entities/manage/add-aka", methods=["POST"])

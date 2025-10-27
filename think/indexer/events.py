@@ -84,15 +84,22 @@ def search_events(
     conn, _ = get_index(index="events")
 
     # Build WHERE clause and parameters
-    # For FTS5, we need to properly escape the query
-    # If query contains special FTS5 characters, wrap in double quotes
-    # Special chars include: : . ( ) " * @
-    if any(c in query for c in ':.()"*@'):
-        fts_query = f'"{query}"'
+    params: List[str] = []
+
+    # Only use FTS MATCH if query is non-empty
+    if query:
+        # For FTS5, we need to properly escape the query
+        # If query contains special FTS5 characters, wrap in double quotes
+        # Special chars include: : . ( ) " * @
+        if any(c in query for c in ':.()"*@'):
+            fts_query = f'"{query}"'
+        else:
+            fts_query = query
+        where_clause = "events_text MATCH ?"
+        params.append(fts_query)
     else:
-        fts_query = query
-    where_clause = "events_text MATCH ?"
-    params: List[str] = [fts_query]
+        # No search query, just filter by metadata
+        where_clause = "1=1"
 
     if day:
         where_clause += " AND m.day=?"
