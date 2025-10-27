@@ -346,7 +346,35 @@ Audio capture tools write FLAC files and transcripts:
 
 - `HHMMSS_raw.flac` – mixed audio file, moved to `heard/` after transcription.
 - `heard/HHMMSS_raw.flac` – audio files moved here after processing.
-- `HHMMSS_audio.jsonl` – transcript JSON produced by transcription.
+- `HHMMSS_audio.jsonl` – transcript JSONL produced by transcription.
+
+### Audio transcript output
+
+The transcript file (`*_audio.jsonl`) contains a metadata line followed by one JSON object per transcript segment.
+
+Example transcript file:
+
+```jsonl
+{"raw": "heard/123456_audio.flac", "topics": ["authentication", "testing", "planning"], "setting": "workplace"}
+{"start": "00:00:01", "source": "mic", "speaker": 1, "text": "So we need to finalize the authentication module today.", "description": "professional tone"}
+{"start": "00:00:15", "source": "sys", "speaker": "Alice", "text": "I agree. [clears throat] Let's make sure we have proper unit tests.", "description": "thoughtful, slightly hesitant"}
+```
+
+**Metadata line (first line):**
+- `raw` – path to processed audio file (required)
+- `topics` – array of conversation topics extracted by the model (optional)
+- `setting` – environment or context description, e.g., "workplace", "personal", "educational" (optional)
+- `imported` – object with import metadata for external files (optional):
+  - `id` – unique import identifier
+  - `domain` – domain name for entity extraction
+  - `setting` – contextual setting description
+
+**Transcript segments (subsequent lines):**
+- `start` – timestamp in HH:MM:SS format (required)
+- `text` – transcribed text with inline vocalizations in brackets like "[laughs]", "[sigh]" (required)
+- `source` – audio source: "mic" or "sys" (optional)
+- `speaker` – speaker identifier, numeric or string (optional)
+- `description` – audio-impaired style description of tone, emotion, vocal quality (optional)
 
 Screen capture produces screencast videos with multi-monitor metadata:
 
