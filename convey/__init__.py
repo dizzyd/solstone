@@ -298,7 +298,7 @@ def main() -> None:
             "No password configured - add to config/journal.json to enable authentication"
         )
 
-    run_service(app, host="0.0.0.0", port=args.port, debug=args.verbose)
+    run_service(app, host="0.0.0.0", port=args.port, debug=args.debug)
 
 
 if __name__ == "__main__":
