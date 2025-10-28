@@ -1,5 +1,9 @@
 [run]
-source = .
+source =
+    observe
+    think
+    convey
+    muse
 omit =
     .venv/*
     */tests/*
