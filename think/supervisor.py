@@ -473,21 +473,26 @@ def check_runner_exits(procs: list[ManagedProcess]) -> list[ManagedProcess]:
 
 async def watch_source_changes(procs: list[ManagedProcess]) -> None:
     """Watch for Python file changes and update debounce timers."""
-    watch_paths = list(WATCH_DIRS.keys())
-    logging.info(f"Auto-reload enabled, watching: {', '.join(watch_paths)}")
+    # Convert watch paths to absolute for proper matching
+    cwd = Path.cwd()
+    watch_paths_abs = {
+        dir_name: (cwd / dir_name).resolve() for dir_name in WATCH_DIRS.keys()
+    }
 
-    async for changes in awatch(*watch_paths, watch_filter=PythonFilter()):
+    logging.info(f"Auto-reload enabled, watching: {', '.join(WATCH_DIRS.keys())}")
+
+    async for changes in awatch(*watch_paths_abs.values(), watch_filter=PythonFilter()):
         if shutdown_requested:
             break
 
         # Determine which process(es) were affected by these changes
         affected_procs = {}  # proc_name -> set of dir_names
         for change_type, path in changes:
-            path_obj = Path(path)
-            for dir_name, proc_names in WATCH_DIRS.items():
+            path_obj = Path(path).resolve()
+            for dir_name, watch_path in watch_paths_abs.items():
                 try:
-                    path_obj.relative_to(dir_name)
-                    for proc_name in proc_names:
+                    path_obj.relative_to(watch_path)
+                    for proc_name in WATCH_DIRS[dir_name]:
                         affected_procs.setdefault(proc_name, set()).add(dir_name)
                     break
                 except ValueError:
@@ -499,8 +504,8 @@ async def watch_source_changes(procs: list[ManagedProcess]) -> None:
             for proc_name, dirs in affected_procs.items():
                 _reload_timers[proc_name] = now
                 dirs_str = ", ".join(sorted(dirs))
-                logging.debug(
-                    f"Source change detected in {dirs_str} for {proc_name}, debounce timer reset"
+                logging.info(
+                    f"Source change in {dirs_str}/ → {proc_name} will reload in {RELOAD_DEBOUNCE}s"
                 )
 
 
@@ -516,7 +521,7 @@ async def check_reload_timers(procs: list[ManagedProcess]) -> None:
                 for managed in procs:
                     if managed.name == proc_name and managed.process.poll() is None:
                         logging.info(
-                            f"Reloading {proc_name} after {RELOAD_DEBOUNCE}s debounce"
+                            f"Sending SIGINT to {proc_name} (PID {managed.process.pid})"
                         )
                         try:
                             managed.process.send_signal(signal.SIGINT)
