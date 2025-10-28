@@ -6,12 +6,95 @@ import re
 from datetime import datetime
 from math import ceil
 from pathlib import Path
+from typing import Dict
 
 import av
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
 logger = logging.getLogger(__name__)
+
+
+def parse_monitor_metadata(
+    title: str, video_width: int, video_height: int
+) -> Dict[str, dict]:
+    """
+    Parse monitor metadata from video title string.
+
+    Parameters
+    ----------
+    title : str
+        Video title metadata (e.g., "DP-3:center,1920,0,5360,1440 HDMI-4:right,5360,219,7280,1299")
+    video_width : int
+        Video frame width in pixels
+    video_height : int
+        Video frame height in pixels
+
+    Returns
+    -------
+    Dict[str, dict]
+        Mapping of monitor_id to monitor info with keys:
+        - name: Monitor identifier
+        - position: Position label (e.g., "center", "right", "unknown")
+        - x1, y1: Top-left coordinates
+        - x2, y2: Bottom-right coordinates
+
+        If title is empty or unparseable, returns single monitor covering full frame.
+
+    Examples
+    --------
+    >>> parse_monitor_metadata("DP-3:center,0,0,1920,1080", 1920, 1080)
+    {'DP-3': {'name': 'DP-3', 'position': 'center', 'x1': 0, 'y1': 0, 'x2': 1920, 'y2': 1080}}
+
+    >>> parse_monitor_metadata("", 1920, 1080)
+    {'0': {'name': '0', 'position': 'unknown', 'x1': 0, 'y1': 0, 'x2': 1920, 'y2': 1080}}
+    """
+    if not title:
+        # No metadata - return single monitor covering full frame
+        return {
+            "0": {
+                "name": "0",
+                "position": "unknown",
+                "x1": 0,
+                "y1": 0,
+                "x2": video_width,
+                "y2": video_height,
+            }
+        }
+
+    monitors = {}
+    # Parse space-separated monitor entries
+    for entry in title.split():
+        # Format: "DP-3:center,1920,0,5360,1440"
+        # Monitor name can be any character except ':' or whitespace
+        match = re.match(r"([^:\s]+):([^,]+),(\d+),(\d+),(\d+),(\d+)", entry.strip())
+        if match:
+            monitor_name, position, x1, y1, x2, y2 = match.groups()
+            monitors[monitor_name] = {
+                "name": monitor_name,
+                "position": position,
+                "x1": int(x1),
+                "y1": int(y1),
+                "x2": int(x2),
+                "y2": int(y2),
+            }
+
+    if not monitors:
+        logger.warning(f"Could not parse monitor metadata from title: {title}")
+        # Return single monitor covering full frame
+        return {
+            "0": {
+                "name": "0",
+                "position": "unknown",
+                "x1": 0,
+                "y1": 0,
+                "x2": video_width,
+                "y2": video_height,
+            }
+        }
+
+    logger.info(f"Parsed {len(monitors)} monitors from metadata")
+    return monitors
 
 
 def load_analysis_frames(jsonl_path: Path) -> list[dict]:

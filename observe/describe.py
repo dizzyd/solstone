@@ -94,60 +94,20 @@ class VideoProcessor:
         Expected format: "DP-3:center,1920,0,5360,1440 HDMI-4:right,5360,219,7280,1299"
         Returns: {monitor_name: {position, x1, y1, x2, y2}}
         """
+        from observe.utils import parse_monitor_metadata
+
         try:
             with av.open(str(self.video_path)) as container:
                 title = container.metadata.get("title", "")
+                stream = container.streams.video[0]
+                width = stream.width
+                height = stream.height
 
-            if not title:
-                logger.warning(f"No metadata in {self.video_path}, using full frame")
-                return self._get_default_monitor(container)
-
-            monitors = {}
-            # Parse space-separated monitor entries
-            for entry in title.split():
-                # Format: "DP-3:center,1920,0,5360,1440"
-                # Monitor name can be any character except ':' or whitespace
-                match = re.match(
-                    r"([^:\s]+):([^,]+),(\d+),(\d+),(\d+),(\d+)", entry.strip()
-                )
-                if match:
-                    monitor_name, position, x1, y1, x2, y2 = match.groups()
-                    monitors[monitor_name] = {
-                        "name": monitor_name,
-                        "position": position,
-                        "x1": int(x1),
-                        "y1": int(y1),
-                        "x2": int(x2),
-                        "y2": int(y2),
-                    }
-
-            if not monitors:
-                logger.warning(f"Could not parse monitor metadata from title: {title}")
-                with av.open(str(self.video_path)) as container:
-                    return self._get_default_monitor(container)
-
-            logger.info(f"Parsed {len(monitors)} monitors from metadata")
-            return monitors
+            return parse_monitor_metadata(title, width, height)
 
         except Exception as e:
-            logger.warning(f"Error parsing monitor metadata: {e}")
-            with av.open(str(self.video_path)) as container:
-                return self._get_default_monitor(container)
-
-    def _get_default_monitor(self, container) -> Dict[str, dict]:
-        """Create default single monitor covering full frame."""
-        stream = container.streams.video[0]
-        width = stream.width
-        height = stream.height
-        return {
-            "0": {
-                "position": "unknown",
-                "x1": 0,
-                "y1": 0,
-                "x2": width,
-                "y2": height,
-            }
-        }
+            logger.error(f"Error reading video metadata: {e}")
+            raise
 
     def process(self) -> Dict[str, List[dict]]:
         """
@@ -313,12 +273,12 @@ class VideoProcessor:
         box_2d: list,
     ) -> tuple[bytes, bytes]:
         """
-        Convert frame to bytes immediately - both crop and full frame.
+        Convert frame to bytes immediately - both crop and full monitor.
 
         Parameters
         ----------
         img : Image.Image
-            PIL Image to convert
+            PIL Image to convert (full multi-monitor frame)
         monitor_bounds : tuple
             Monitor bounds (x1, y1, x2, y2) in absolute coordinates
         box_2d : list
@@ -327,7 +287,7 @@ class VideoProcessor:
         Returns
         -------
         tuple[bytes, bytes]
-            (crop_bytes, full_frame_bytes) as PNG bytes
+            (crop_bytes, full_monitor_bytes) as PNG bytes
         """
         x1, y1, x2, y2 = monitor_bounds
 
@@ -349,19 +309,23 @@ class VideoProcessor:
             (expanded_x_min, expanded_y_min, expanded_x_max, expanded_y_max)
         )
 
-        # Convert both to PNG bytes (compress_level=1 for speed)
+        # Convert to PNG bytes (compress_level=1 for speed)
         crop_io = io.BytesIO()
         cropped.save(crop_io, format="PNG", compress_level=1)
         crop_bytes = crop_io.getvalue()
         crop_io.close()
+        cropped.close()
+
+        # Crop to monitor bounds for full monitor bytes
+        monitor_img = img.crop((x1, y1, x2, y2))
 
         full_io = io.BytesIO()
-        img.save(full_io, format="PNG", compress_level=1)
+        monitor_img.save(full_io, format="PNG", compress_level=1)
         full_bytes = full_io.getvalue()
         full_io.close()
+        monitor_img.close()
 
-        # Close cropped image (img is closed by caller)
-        cropped.close()
+        # img is closed by caller
 
         return crop_bytes, full_bytes
 
