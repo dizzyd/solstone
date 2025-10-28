@@ -112,6 +112,7 @@ class CortexService:
         self.agent_handoffs: Dict[str, Dict[str, Any]] = {}
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
+        self.shutdown_requested = threading.Event()
         self.observer = None
         self.mcp_thread: Optional[threading.Thread] = None
         self.mcp_server_url: Optional[str] = None
@@ -208,11 +209,20 @@ class CortexService:
 
         self.logger.info(f"Monitoring {self.agents_dir} for agent requests")
 
-        try:
-            while not self.stop_event.is_set():
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.stop()
+        while True:
+            try:
+                while not self.stop_event.is_set():
+                    time.sleep(1)
+                    # Exit when idle during shutdown
+                    if self.shutdown_requested.is_set():
+                        with self.lock:
+                            if len(self.running_agents) == 0:
+                                self.logger.info("No agents running, exiting gracefully")
+                                return
+                break
+            except KeyboardInterrupt:
+                self.logger.info("Shutdown requested, will exit when idle")
+                self.shutdown_requested.set()
 
     def _process_existing_active_files(self) -> None:
         """Clean up any stale active files that exist on startup."""
