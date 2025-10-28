@@ -16,7 +16,6 @@ from typing import Any, Callable, Dict, Optional
 
 from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam, ToolParam, ToolUseBlock
-from mcp.types import RequestParams
 
 from think.models import CLAUDE_SONNET_4
 from think.utils import create_mcp_client
@@ -77,14 +76,14 @@ class ToolExecutor:
                 result = await self.mcp.session.call_tool(
                     name=tool_use.name,
                     arguments=tool_use.input,
-                    params=RequestParams(_meta=meta) if meta else None,
+                    meta=meta,
                 )
             except RuntimeError:
                 await self.mcp.__aenter__()
                 result = await self.mcp.session.call_tool(
                     name=tool_use.name,
                     arguments=tool_use.input,
-                    params=RequestParams(_meta=meta) if meta else None,
+                    meta=meta,
                 )
             # Extract content from CallToolResult if needed
             if hasattr(result, "content"):

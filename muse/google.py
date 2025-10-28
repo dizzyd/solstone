@@ -15,7 +15,6 @@ from typing import Any, Callable, Dict, Optional
 
 from google import genai
 from google.genai import types
-from mcp.types import RequestParams
 
 from think.models import GEMINI_FLASH
 from think.utils import create_mcp_client
@@ -79,7 +78,7 @@ class ToolLoggingHooks:
             result = await original(
                 name=name,
                 arguments=arguments,
-                params=RequestParams(_meta=meta) if meta else None,
+                meta=meta,
                 **kwargs,
             )
 
