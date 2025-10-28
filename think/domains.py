@@ -14,9 +14,9 @@ from fastmcp.server.dependencies import get_http_headers
 
 
 def _get_actor_info(context: Context | None = None) -> tuple[str, str | None]:
-    """Extract actor (persona) and agent_id from _meta or HTTP headers.
+    """Extract actor (persona) and agent_id from meta or HTTP headers.
 
-    Priority: _meta (stdio/anthropic/google) > HTTP headers (openai)
+    Priority: meta (stdio/anthropic/google) > HTTP headers (openai)
 
     Args:
         context: Optional FastMCP context with request metadata
@@ -25,13 +25,15 @@ def _get_actor_info(context: Context | None = None) -> tuple[str, str | None]:
         Tuple of (actor, agent_id) where actor defaults to "mcp"
         and agent_id may be None.
     """
-    # First try _meta from context (stdio transport)
+    # First try meta from context (stdio transport)
     if context is not None:
         try:
-            meta = context.request.params._meta
+            meta = context.request_context.meta
             if meta:
-                persona = meta.get("persona")
-                agent_id = meta.get("agent_id")
+                # Convert Pydantic model to dict and filter out None values
+                meta_dict = {k: v for k, v in meta.model_dump().items() if v is not None}
+                persona = meta_dict.get("persona")
+                agent_id = meta_dict.get("agent_id")
                 if persona or agent_id:
                     actor = persona if persona else "mcp"
                     return actor, agent_id
@@ -65,14 +67,14 @@ def log_action(
 
     Creates a JSONL log entry in domains/{domain}/logs/{day}.jsonl for tracking
     successful todo and entity modifications made via MCP tools. Automatically
-    extracts actor identity from _meta (stdio) or HTTP headers (HTTP transport).
+    extracts actor identity from meta (stdio) or HTTP headers (HTTP transport).
 
     Args:
         domain: Domain name where the action occurred
         day: Day in YYYYMMDD format when the action occurred
         action: Action type (e.g., "todo_add", "entity_attach")
         params: Dictionary of action-specific parameters
-        context: Optional FastMCP context for extracting _meta
+        context: Optional FastMCP context for extracting meta
 
     Raises:
         RuntimeError: If JOURNAL_PATH is not set
@@ -88,7 +90,7 @@ def log_action(
     # Ensure parent directory exists
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Get actor info from _meta or HTTP headers
+    # Get actor info from meta or HTTP headers
     actor, agent_id = _get_actor_info(context)
 
     # Create log entry
