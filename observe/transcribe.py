@@ -183,7 +183,9 @@ class Transcriber:
                     logging.error(f"No audio streams found in {raw_path}")
                     return None
 
-                logging.info(f"Found {len(audio_streams)} audio stream(s) in {raw_path}")
+                logging.info(
+                    f"Found {len(audio_streams)} audio stream(s) in {raw_path}"
+                )
                 for s in audio_streams:
                     logging.info(
                         f"  Stream {s.index}: {s.codec_context.name}, "
@@ -407,7 +409,7 @@ class Transcriber:
             crumb_builder = (
                 CrumbBuilder()
                 .add_file(str(self.prompt_path))
-                .add_file(self.journal_dir / "entities.md")
+                .add_file(self.journal_dir / "entities.jsonl")
             )
             crumb_builder = crumb_builder.add_file(raw_path).add_model(MODEL)
             crumb_path = crumb_builder.commit(str(json_path))

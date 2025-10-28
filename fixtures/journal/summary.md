@@ -8,7 +8,7 @@ Days scanned: 3
 - Total audio duration: 0:00:00
 - Total audio size: 0.00 MB | Image size: 0.00 MB
 - Screenshot diffs: 0 | Descriptions: 0
-- Days with entities.md: 2
+- Days with entities.jsonl: 2
 - Ponder processed: 0 | Repairable: 0
 
 ## Token Usage by Model

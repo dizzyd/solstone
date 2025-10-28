@@ -57,9 +57,7 @@ def test_domain_summary_test_domain(monkeypatch):
     assert "# Test Domain" in summary
 
     # Check description
-    assert (
-        "**Description:** A test domain for validating functionality" in summary
-    )
+    assert "**Description:** A test domain for validating functionality" in summary
 
     # Check color badge
     assert "![Color](#007bff)" in summary
@@ -148,7 +146,7 @@ def test_get_domains_empty_entities(monkeypatch):
         # Entities are no longer included in get_domains()
         assert "entities" not in minimal_domain
 
-        # Verify load_entity_names returns None for domains without entities.md
+        # Verify load_entity_names returns None for domains without entities.jsonl
         from think.entities import load_entity_names
 
         entity_names = load_entity_names(domain="minimal-domain")

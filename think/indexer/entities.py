@@ -42,7 +42,9 @@ def find_entity_files(journal: str) -> Dict[str, str]:
         detected_dir = os.path.join(domain_path, "entities")
         if os.path.isdir(detected_dir):
             for filename in os.listdir(detected_dir):
-                if filename.endswith(".jsonl") and len(filename) == 14:  # YYYYMMDD.jsonl
+                if (
+                    filename.endswith(".jsonl") and len(filename) == 14
+                ):  # YYYYMMDD.jsonl
                     day = filename[:-6]  # Remove .jsonl
                     if day.isdigit() and len(day) == 8:
                         rel = os.path.join(domain_name, "entities", filename)
@@ -110,9 +112,9 @@ def scan_entities(journal: str, verbose: bool = False) -> bool:
     def get_delete_sql(rel: str) -> str:
         parts = rel.split(os.sep)
         domain = parts[0]
-        if len(parts) == 2:  # attached: {domain}/entities.md
+        if len(parts) == 2:  # attached: {domain}/entities.jsonl
             return f"DELETE FROM entities WHERE domain='{domain}' AND day IS NULL"
-        else:  # detected: {domain}/entities/YYYYMMDD.md
+        else:  # detected: {domain}/entities/YYYYMMDD.jsonl
             day = os.path.splitext(parts[2])[0]
             return f"DELETE FROM entities WHERE domain='{domain}' AND day='{day}'"
 
@@ -269,9 +271,9 @@ def search_entities(
     ) in cursor.fetchall():
         # Build unique ID
         if day_val:
-            result_id = f"{domain_val}/entities/{day_val}.md:{name_val}"
+            result_id = f"{domain_val}/entities/{day_val}.jsonl:{name_val}"
         else:
-            result_id = f"{domain_val}/entities.md:{name_val}"
+            result_id = f"{domain_val}/entities.jsonl:{name_val}"
 
         results.append(
             {

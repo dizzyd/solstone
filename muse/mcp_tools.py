@@ -703,8 +703,8 @@ def entity_list(domain: str, day: str | None = None) -> dict[str, Any]:
     Args:
         domain: Domain name (e.g., "personal", "work")
         day: Optional day in YYYYMMDD format. If None, returns attached entities
-             from entities.md. If provided, returns detected entities from
-             entities/YYYYMMDD.md
+             from entities.jsonl. If provided, returns detected entities from
+             entities/YYYYMMDD.jsonl
 
     Returns:
         Dictionary containing:
@@ -827,7 +827,7 @@ def entity_attach(
     """Attach an entity permanently to a domain.
 
     This tool adds an entity to the persistent attached entities file at
-    domains/{domain}/entities.md. Attached entities are long-term tracked
+    domains/{domain}/entities.jsonl. Attached entities are long-term tracked
     entities that appear in domain summaries and agent context.
 
     Args:
@@ -920,8 +920,8 @@ def entity_update(
         old_description: Current description (must match for safety)
         new_description: New description to replace it with
         day: Optional day in YYYYMMDD format for detected entities.
-             If None, updates attached entities in entities.md.
-             If provided, updates detected entities in entities/YYYYMMDD.md.
+             If None, updates attached entities in entities.jsonl.
+             If provided, updates detected entities in entities/YYYYMMDD.jsonl.
 
     Returns:
         Dictionary containing:

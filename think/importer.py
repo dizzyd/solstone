@@ -291,7 +291,7 @@ def audio_transcribe(
         try:
             from think.entities import load_entity_names
 
-            # Load entity names from domain-specific entities.md (spoken mode for short forms)
+            # Load entity names from domain-specific entities.jsonl (spoken mode for short forms)
             entity_names = load_entity_names(domain=domain, spoken=True)
             if entity_names:
                 # entity_names is already a list in spoken mode
@@ -307,7 +307,7 @@ def audio_transcribe(
             else:
                 logger.info(f"No entities found for domain '{domain}'")
         except FileNotFoundError:
-            logger.info(f"Domain '{domain}' has no entities.md file")
+            logger.info(f"Domain '{domain}' has no entities.jsonl file")
         except Exception as e:
             logger.warning(f"Failed to load domain entities: {e}")
 
@@ -421,7 +421,7 @@ def create_transcript_summary(
                 {
                     "file": os.path.basename(json_path),
                     "text": formatted_text,
-                    "entry_count": len(entries)
+                    "entry_count": len(entries),
                 }
             )
         except Exception as e:
@@ -459,7 +459,7 @@ def create_transcript_summary(
         user_message_parts.append(
             f"\n## Transcript Segment: {transcript_info['file']}\n"
         )
-        user_message_parts.append(transcript_info['text'])
+        user_message_parts.append(transcript_info["text"])
 
     user_message = "\n".join(user_message_parts)
 

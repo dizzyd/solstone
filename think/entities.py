@@ -257,7 +257,7 @@ def load_entity_names(
     domain: str | None = None,
     spoken: bool = False,
 ) -> str | list[str] | None:
-    """Load entity names from entities.md for AI transcription context.
+    """Load entity names from entities.jsonl for AI transcription context.
 
     This function extracts just the entity names (no types or descriptions) from
     entity files. When spoken=False (default), returns them as a
@@ -266,7 +266,7 @@ def load_entity_names(
 
     When domain is None, loads and merges entities from ALL domains with
     deduplication (first occurrence wins when same name appears in multiple domains).
-    Falls back to top-level entities.md if no domains exist.
+    Falls back to top-level entities.jsonl if no domains exist.
 
     When spoken=True, uses uniform processing for all entity types:
     - Extracts first word from base name (without parentheses)
@@ -278,9 +278,9 @@ def load_entity_names(
       - "pytest" → ["pytest"]
 
     Args:
-        domain: Optional domain name. If provided, loads from domains/{domain}/entities.md
+        domain: Optional domain name. If provided, loads from domains/{domain}/entities.jsonl
                 If None, loads from ALL domains using load_all_attached_entities(),
-                with fallback to top-level entities.md for backward compatibility.
+                with fallback to top-level entities.jsonl for backward compatibility.
         spoken: If True, returns list of shortened forms for speech recognition.
                 If False, returns semicolon-delimited string of full names.
 

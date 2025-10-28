@@ -64,7 +64,7 @@ def test_env():
 
 @pytest.mark.integration
 def test_scan_finds_attached_entities(test_env):
-    """Test that scanning finds attached entities from domains/*/entities.md."""
+    """Test that scanning finds attached entities from domains/*/entities.jsonl."""
     # Search for Alice Johnson (attached entity in personal domain)
     total, results = search_entities("Alice Johnson")
     assert total >= 1, "Should find at least one result for Alice Johnson"
@@ -240,7 +240,7 @@ def test_result_format(test_env):
     assert "attached" in metadata
 
     # Check ID format
-    # Format: {domain}/entities.md:{name} or {domain}/entities/{day}.md:{name}
+    # Format: {domain}/entities.jsonl:{name} or {domain}/entities/{day}.jsonl:{name}
     assert "/" in result["id"]
     assert ":" in result["id"]
 
