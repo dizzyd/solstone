@@ -29,6 +29,49 @@ shutdown_requested = False
 _notifier: DesktopNotifier | None = None
 _notification_ids: dict[tuple, str] = {}  # Maps alert_key -> notification_id
 
+
+class AlertManager:
+    """Manages alerts with exponential backoff and notification clearing."""
+
+    def __init__(self, initial_backoff: int = 60, max_backoff: int = 3600):
+        self._state: dict[tuple, tuple[float, int]] = {}  # {key: (last_time, backoff)}
+        self._initial_backoff = initial_backoff
+        self._max_backoff = max_backoff
+
+    async def alert_if_ready(
+        self, key: tuple, message: str, command: str = "notify-send"
+    ) -> bool:
+        """Send alert with exponential backoff. Returns True if sent."""
+        now = time.time()
+
+        if key in self._state:
+            last_time, backoff = self._state[key]
+            if now - last_time >= backoff:
+                await send_notification(message, command, alert_key=key)
+                new_backoff = min(backoff * 2, self._max_backoff)
+                self._state[key] = (now, new_backoff)
+                logging.info(f"Alert sent, next backoff: {new_backoff}s")
+                return True
+            else:
+                remaining = int(backoff - (now - last_time))
+                logging.info(f"Suppressing alert, next in {remaining}s")
+                return False
+        else:
+            await send_notification(message, command, alert_key=key)
+            self._state[key] = (now, self._initial_backoff)
+            return True
+
+    async def clear(self, key: tuple) -> None:
+        """Clear alert state and notification."""
+        if key in self._state:
+            del self._state[key]
+        await clear_notification(key)
+
+    def clear_matching(self, predicate) -> None:
+        """Clear alert states matching predicate."""
+        self._state = {k: v for k, v in self._state.items() if not predicate(k, v)}
+
+
 # State for scheduled agent execution
 _scheduled_state = {
     "pending_groups": [],  # List of (priority, [(persona_id, config, yesterday)])
@@ -267,42 +310,39 @@ async def clear_notification(alert_key: tuple) -> None:
         logging.error("Failed to clear notification: %s", exc)
 
 
-def run_dream() -> bool:
-    """Run ``think.dream`` while mirroring output to a dedicated log.
+def run_subprocess_task(name: str, cmd: list[str], log_name: str | None = None) -> bool:
+    """Run a subprocess task while mirroring output to a dedicated log.
 
-    Returns ``True`` when the subprocess exits successfully.
+    Args:
+        name: Display name for the task
+        cmd: Command and arguments to execute
+        log_name: Optional log filename (defaults to name)
+
+    Returns:
+        True when the subprocess exits successfully.
     """
-
     start = time.time()
-    managed = _launch_process("dream", ["think-dream", "-v"])
+    managed = _launch_process(name, cmd, log_name=log_name)
     try:
         return_code = managed.process.wait()
     finally:
         managed.cleanup()
 
     duration = int(time.time() - start)
-    logging.info("think.dream finished in %s seconds", duration)
+    logging.info(f"{name} finished in {duration} seconds")
     return return_code == 0
+
+
+def run_dream() -> bool:
+    """Run ``think.dream`` while mirroring output to a dedicated log."""
+    return run_subprocess_task("dream", ["think-dream", "-v"])
 
 
 def run_domain_rescan() -> bool:
-    """Run ``think-indexer --rescan-domains`` while mirroring output to a dedicated log.
-
-    Returns ``True`` when the subprocess exits successfully.
-    """
-
-    start = time.time()
-    managed = _launch_process(
+    """Run ``think-indexer --rescan-domains`` while mirroring output to a dedicated log."""
+    return run_subprocess_task(
         "domain_rescan", ["think-indexer", "--rescan-domains"], log_name="domain_rescan"
     )
-    try:
-        return_code = managed.process.wait()
-    finally:
-        managed.cleanup()
-
-    duration = int(time.time() - start)
-    logging.info("think-indexer --rescan-domains finished in %s seconds", duration)
-    return return_code == 0
 
 
 def spawn_scheduled_agents() -> None:
@@ -535,6 +575,132 @@ async def check_reload_timers(procs: list[ManagedProcess]) -> None:
         await asyncio.sleep(1)
 
 
+async def handle_runner_exits(
+    procs: list[ManagedProcess],
+    alert_mgr: AlertManager,
+    command: str,
+) -> None:
+    """Check for and handle exited processes with restart policy."""
+    exited = check_runner_exits(procs)
+    if not exited:
+        return
+
+    exited_names = [managed.name for managed in exited]
+    msg = f"Runner process exited: {', '.join(sorted(exited_names))}"
+    logging.error(msg)
+    exit_key = ("runner_exit", tuple(sorted(exited_names)))
+
+    await alert_mgr.alert_if_ready(exit_key, msg, command)
+
+    for managed in exited:
+        returncode = managed.process.returncode
+        logging.info("%s exited with code %s", managed.name, returncode)
+
+        # Remove from procs list
+        try:
+            index = procs.index(managed)
+        except ValueError:
+            index = None
+
+        if index is not None:
+            procs.pop(index)
+        else:
+            try:
+                procs.remove(managed)
+            except ValueError:
+                pass
+
+        managed.cleanup()
+
+        # Handle restart if needed
+        if managed.restart and not shutdown_requested:
+            policy = _get_restart_policy(managed.name)
+            uptime = time.time() - policy.last_start if policy.last_start else 0
+            if uptime >= 60:
+                policy.reset_attempts()
+            delay = policy.next_delay()
+            if delay:
+                logging.info("Waiting %ss before restarting %s", delay, managed.name)
+                for _ in range(delay):
+                    if shutdown_requested:
+                        break
+                    time.sleep(1)
+            if shutdown_requested:
+                continue
+            logging.info("Restarting %s...", managed.name)
+            try:
+                new_proc = _launch_process(
+                    managed.name,
+                    managed.cmd,
+                    restart=True,
+                    log_name=managed.logger.path.stem,
+                )
+            except Exception as exc:
+                logging.exception("Failed to restart %s: %s", managed.name, exc)
+                continue
+
+            insert_at = index if index is not None else len(procs)
+            procs.insert(insert_at, new_proc)
+            logging.info("Restarted %s after exit code %s", managed.name, returncode)
+            # Clear the notification now that process has restarted
+            await alert_mgr.clear(exit_key)
+        else:
+            logging.info("Not restarting %s", managed.name)
+
+
+async def handle_health_checks(
+    last_check: float,
+    interval: int,
+    threshold: int,
+    alert_mgr: AlertManager,
+    command: str,
+    prev_stale: set[str],
+) -> tuple[float, set[str]]:
+    """Perform periodic health checks. Returns (new_last_check, new_prev_stale)."""
+    now = time.time()
+    if now - last_check < interval:
+        return last_check, prev_stale
+
+    stale = check_health(threshold)
+    stale_set = set(stale)
+
+    recovered = sorted(prev_stale - stale_set)
+    for name in recovered:
+        logging.info("%s heartbeat recovered", name)
+        # Clear notifications for recovered heartbeats
+        stale_key = ("stale", tuple(sorted(prev_stale)))
+        await alert_mgr.clear(stale_key)
+
+    if stale_set:
+        msg = f"Journaling offline: {', '.join(sorted(stale_set))}"
+        logging.warning(msg)
+
+        stale_key = ("stale", tuple(sorted(stale_set)))
+        await alert_mgr.alert_if_ready(stale_key, msg, command)
+
+        # Retain only alert state entries still relevant
+        alert_mgr.clear_matching(
+            lambda k, v: k[0] == "stale" and not set(k[1]).issubset(stale_set)
+        )
+    else:
+        if prev_stale:
+            logging.info("Heartbeat OK")
+        # Clear alert state for stale services when they recover
+        alert_mgr.clear_matching(lambda k, v: k[0] == "stale")
+
+    return now, stale_set
+
+
+async def handle_daily_tasks(last_day: datetime.date) -> datetime.date:
+    """Run daily processing (dream + scheduled agents). Returns new last_day."""
+    today = datetime.now().date()
+    if today != last_day:
+        if run_dream():
+            spawn_scheduled_agents()
+        return today
+    return last_day
+
+
 async def supervise(
     *,
     threshold: int = DEFAULT_THRESHOLD,
@@ -550,156 +716,26 @@ async def supervise(
     scheduled agents check continuously but only advance when ready).
     """
     global shutdown_requested
+    alert_mgr = AlertManager()
     last_day = datetime.now().date()
-    last_health_check = 0.0  # Track last health check time
-    alert_state = {}  # Track {issue_key: (last_alert_time, backoff_seconds)}
+    last_health_check = 0.0
     prev_stale: set[str] = set()
-    initial_backoff = 60  # Start with 1 minute
-    max_backoff = 3600  # Max 1 hour between alerts
 
     while (
         not shutdown_requested
     ):  # pragma: no cover - loop checked via unit tests by patching
         # Check for runner exits first (immediate alert)
         if procs:
-            exited = check_runner_exits(procs)
-            if exited:
-                exited_names = [managed.name for managed in exited]
-                msg = f"Runner process exited: {', '.join(sorted(exited_names))}"
-                logging.error(msg)
-                exit_key = ("runner_exit", tuple(sorted(exited_names)))
-                now = time.time()
-
-                if exit_key in alert_state:
-                    last_time, backoff = alert_state[exit_key]
-                    if now - last_time >= backoff:
-                        await send_notification(msg, command, alert_key=exit_key)
-                        alert_state[exit_key] = (now, min(backoff * 2, max_backoff))
-                        logging.info(
-                            f"Alert sent, next backoff: {min(backoff * 2, max_backoff)}s"
-                        )
-                    else:
-                        remaining = int(backoff - (now - last_time))
-                        logging.info(f"Suppressing alert, next in {remaining}s")
-                else:
-                    await send_notification(msg, command, alert_key=exit_key)
-                    alert_state[exit_key] = (now, initial_backoff)
-
-                for managed in exited:
-                    returncode = managed.process.returncode
-                    logging.info("%s exited with code %s", managed.name, returncode)
-                    try:
-                        index = procs.index(managed)
-                    except ValueError:
-                        index = None
-
-                    if index is not None:
-                        procs.pop(index)
-                    else:
-                        try:
-                            procs.remove(managed)
-                        except ValueError:
-                            pass
-
-                    managed.cleanup()
-
-                    if managed.restart and not shutdown_requested:
-                        policy = _get_restart_policy(managed.name)
-                        uptime = (
-                            time.time() - policy.last_start if policy.last_start else 0
-                        )
-                        if uptime >= 60:
-                            policy.reset_attempts()
-                        delay = policy.next_delay()
-                        if delay:
-                            logging.info(
-                                "Waiting %ss before restarting %s", delay, managed.name
-                            )
-                            for _ in range(delay):
-                                if shutdown_requested:
-                                    break
-                                time.sleep(1)
-                        if shutdown_requested:
-                            continue
-                        logging.info("Restarting %s...", managed.name)
-                        try:
-                            new_proc = _launch_process(
-                                managed.name,
-                                managed.cmd,
-                                restart=True,
-                                log_name=managed.logger.path.stem,
-                            )
-                        except Exception as exc:  # pragma: no cover - defensive
-                            logging.exception(
-                                "Failed to restart %s: %s", managed.name, exc
-                            )
-                            continue
-
-                        insert_at = index if index is not None else len(procs)
-                        procs.insert(insert_at, new_proc)
-                        logging.info(
-                            "Restarted %s after exit code %s", managed.name, returncode
-                        )
-                        # Clear the notification now that process has restarted
-                        await clear_notification(exit_key)
-                    else:
-                        logging.info("Not restarting %s", managed.name)
+            await handle_runner_exits(procs, alert_mgr, command)
 
         # Check health periodically (interval-based timing)
-        now = time.time()
-        if now - last_health_check >= interval:
-            stale = check_health(threshold)
-            stale_set = set(stale)
+        last_health_check, prev_stale = await handle_health_checks(
+            last_health_check, interval, threshold, alert_mgr, command, prev_stale
+        )
 
-            recovered = sorted(prev_stale - stale_set)
-            for name in recovered:
-                logging.info("%s heartbeat recovered", name)
-                # Clear notifications for recovered heartbeats
-                stale_key = ("stale", tuple(sorted(prev_stale)))
-                await clear_notification(stale_key)
-
-            if stale_set:
-                msg = f"Journaling offline: {', '.join(sorted(stale_set))}"
-                logging.warning(msg)
-
-                # Apply exponential backoff
-                stale_key = ("stale", tuple(sorted(stale_set)))
-
-                if stale_key in alert_state:
-                    last_time, backoff = alert_state[stale_key]
-                    if now - last_time >= backoff:
-                        await send_notification(msg, command, alert_key=stale_key)
-                        # Double the backoff for next time, up to max
-                        alert_state[stale_key] = (now, min(backoff * 2, max_backoff))
-                        logging.info(
-                            f"Alert sent, next backoff: {min(backoff * 2, max_backoff)}s"
-                        )
-                    else:
-                        remaining = int(backoff - (now - last_time))
-                        logging.info(f"Suppressing alert, next in {remaining}s")
-                else:
-                    await send_notification(msg, command, alert_key=stale_key)
-                    alert_state[stale_key] = (now, initial_backoff)
-                # Retain only alert state entries still relevant
-                alert_state = {
-                    k: v
-                    for k, v in alert_state.items()
-                    if k[0] != "stale" or set(k[1]).issubset(stale_set)
-                }
-            else:
-                if prev_stale:
-                    logging.info("Heartbeat OK")
-                # Clear alert state for stale services when they recover
-                alert_state = {k: v for k, v in alert_state.items() if k[0] != "stale"}
-
-            prev_stale = stale_set
-            last_health_check = now
-
-        # Check for daily processing (fast date comparison)
-        if daily and datetime.now().date() != last_day:
-            if run_dream():
-                spawn_scheduled_agents()
-            last_day = datetime.now().date()
+        # Check for daily processing
+        if daily:
+            last_day = await handle_daily_tasks(last_day)
 
         # Advance scheduled agent execution (non-blocking)
         check_scheduled_agents()
