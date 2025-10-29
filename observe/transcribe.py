@@ -127,8 +127,9 @@ def transcribe_segments(
     response_text = gemini_generate(
         contents=contents,
         model=model,
-        temperature=0.1,
-        max_output_tokens=8192 * 2,
+        temperature=0.3,
+        max_output_tokens=8192 * 3,
+        thinking_budget=8192,
         system_instruction=prompt_text,
         json_output=True,
         client=client,
@@ -504,7 +505,6 @@ class Transcriber:
             crumb_builder = (
                 CrumbBuilder()
                 .add_file(str(self.prompt_path))
-                .add_file(self.journal_dir / "entities.jsonl")
             )
             crumb_builder = crumb_builder.add_file(raw_path).add_model(MODEL)
             crumb_path = crumb_builder.commit(str(json_path))
