@@ -315,14 +315,12 @@ class Transcriber:
                     self.vad_model, "sys", sys_data, no_stash=True
                 )
 
-                # Extract timestamp from filename
+                # Extract timestamp from filename (represents START of recording window)
                 time_part = raw_path.stem.split("_")[0]
                 today = datetime.date.today().strftime("%Y%m%d")
-                end_dt = datetime.datetime.strptime(
+                base_dt = datetime.datetime.strptime(
                     f"{today}_{time_part}", "%Y%m%d_%H%M%S"
                 )
-                file_duration = len(data) / sr
-                base_dt = end_dt - datetime.timedelta(seconds=file_duration)
 
                 # Convert segments to format for Gemini
                 result = {}
@@ -378,12 +376,10 @@ class Transcriber:
                 self.vad_model, "mix", merged, mic_ranges, no_stash=True
             )
 
-            # Extract timestamp from filename
+            # Extract timestamp from filename (represents START of recording window)
             time_part = raw_path.stem.split("_")[0]
             today = datetime.date.today().strftime("%Y%m%d")
-            end_dt = datetime.datetime.strptime(f"{today}_{time_part}", "%Y%m%d_%H%M%S")
-            file_duration = len(data) / sr
-            base_dt = end_dt - datetime.timedelta(seconds=file_duration)
+            base_dt = datetime.datetime.strptime(f"{today}_{time_part}", "%Y%m%d_%H%M%S")
 
             # Convert segments to format for Gemini
             processed: List[Dict[str, object]] = []

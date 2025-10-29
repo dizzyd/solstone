@@ -246,9 +246,28 @@ def process_transcript(
         json_path = os.path.join(
             day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.jsonl"
         )
+
+        # Ensure timestamps are absolute
+        # Text transcripts might have relative timestamps (00:00:00, 00:01:23)
+        # Convert them to absolute times based on the segment's base time
+        absolute_entries = []
+        for entry in json_data:
+            entry_copy = entry.copy()
+            if "start" in entry_copy:
+                # Parse timestamp
+                start_str = entry_copy["start"]
+                h, m, s = map(int, start_str.split(":"))
+                relative_seconds = h * 3600 + m * 60 + s
+
+                # Convert to absolute timestamp based on this segment's time
+                absolute_dt = ts + timedelta(seconds=relative_seconds)
+                entry_copy["start"] = absolute_dt.strftime("%H:%M:%S")
+
+            absolute_entries.append(entry_copy)
+
         _write_import_jsonl(
             json_path,
-            json_data,
+            absolute_entries,
             import_id=import_id,
             raw_filename=os.path.basename(path),
             domain=domain,
@@ -365,10 +384,27 @@ def audio_transcribe(
             day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.jsonl"
         )
 
-        # Save the chunk
+        # Convert relative timestamps to absolute timestamps
+        # Rev AI returns timestamps relative to start of file (00:00:00, 00:00:06, etc.)
+        # We need to convert them to absolute times based on base_dt
+        absolute_entries = []
+        for entry in chunk_entries:
+            entry_copy = entry.copy()
+            if "start" in entry_copy:
+                # Parse relative timestamp from Rev AI
+                h, m, s = map(int, entry_copy["start"].split(":"))
+                relative_seconds = h * 3600 + m * 60 + s
+
+                # Convert to absolute timestamp
+                absolute_dt = base_dt + timedelta(seconds=relative_seconds)
+                entry_copy["start"] = absolute_dt.strftime("%H:%M:%S")
+
+            absolute_entries.append(entry_copy)
+
+        # Save the chunk with absolute timestamps
         _write_import_jsonl(
             json_path,
-            chunk_entries,
+            absolute_entries,
             import_id=import_id,
             raw_filename=os.path.basename(path),
             domain=domain,
