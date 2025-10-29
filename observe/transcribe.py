@@ -168,8 +168,20 @@ class Transcriber:
         except Exception as exc:
             logging.error("Failed to move %s to heard: %s", audio_path, exc)
 
-    def _process_audio(self, raw_path: Path) -> List[Dict[str, object]] | None:
-        """Process audio file and return segments for transcription."""
+    def _process_audio(
+        self, raw_path: Path, split: bool = False
+    ) -> List[Dict[str, object]] | Dict[str, List[Dict[str, object]]] | None:
+        """Process audio file and return segments for transcription.
+
+        Args:
+            raw_path: Path to the raw audio file
+            split: If True, return dict with 'mic' and 'sys' keys for split processing
+
+        Returns:
+            If split=False: List of segments for merged processing
+            If split=True: Dict with 'mic' and 'sys' keys containing their segments
+            None on error
+        """
         try:
             # Handle different audio formats
             if raw_path.suffix.lower() == ".m4a":
@@ -285,6 +297,68 @@ class Transcriber:
                 data, sr = sf.read(raw_path, dtype="float32")
 
             mic_ranges: List[tuple[float, float]] = []
+
+            # Handle split processing for dual-channel audio
+            if split and data.ndim == 2:
+                logging.info(
+                    f"Split mode: processing mic and system channels independently for {raw_path}"
+                )
+                mic_data = data[:, 0]
+                sys_data = data[:, 1]
+
+                # Run VAD on each stream separately
+                mic_segments, _ = detect_speech(
+                    self.vad_model, "mic", mic_data, no_stash=True
+                )
+                sys_segments, _ = detect_speech(
+                    self.vad_model, "sys", sys_data, no_stash=True
+                )
+
+                # Extract timestamp from filename
+                time_part = raw_path.stem.split("_")[0]
+                today = datetime.date.today().strftime("%Y%m%d")
+                end_dt = datetime.datetime.strptime(
+                    f"{today}_{time_part}", "%Y%m%d_%H%M%S"
+                )
+                file_duration = len(data) / sr
+                base_dt = end_dt - datetime.timedelta(seconds=file_duration)
+
+                # Convert segments to format for Gemini
+                result = {}
+                for source, segments_list in [
+                    ("mic", mic_segments),
+                    ("sys", sys_segments),
+                ]:
+                    processed: List[Dict[str, object]] = []
+                    for seg in segments_list:
+                        start_dt = base_dt + datetime.timedelta(seconds=seg["offset"])
+                        start_str = start_dt.strftime("%H:%M:%S")
+                        audio_int16 = (np.clip(seg["data"], -1.0, 1.0) * 32767).astype(
+                            np.int16
+                        )
+                        buf = io.BytesIO()
+                        sf.write(buf, audio_int16, SAMPLE_RATE, format="FLAC")
+                        processed.append(
+                            {
+                                "start": start_str,
+                                "source": source,
+                                "bytes": buf.getvalue(),
+                            }
+                        )
+                    result[source] = processed
+
+                    # Output segment map in verbose mode
+                    segment_map = " ".join(
+                        f"{seg['start']}:{seg['source']}" for seg in processed
+                    )
+                    logging.info(
+                        f"Processed {raw_path} ({source}): {len(processed)} segments"
+                    )
+                    logging.info(f"Segment map ({source}): {segment_map}")
+
+                return result
+
+            # Standard merged processing
             if data.ndim == 1:
                 merged = data
                 logging.info(
@@ -339,8 +413,13 @@ class Transcriber:
             logging.error(f"Error processing {raw_path}: {e}", exc_info=True)
             return None
 
-    def _get_json_path(self, audio_path: Path) -> Path:
-        """Generate the corresponding JSONL path for an audio file."""
+    def _get_json_path(self, audio_path: Path, stream: str | None = None) -> Path:
+        """Generate the corresponding JSONL path for an audio file.
+
+        Args:
+            audio_path: Path to the audio file
+            stream: Optional stream identifier ('mic' or 'sys') for split processing
+        """
         # Support both .flac and .m4a extensions
         if audio_path.name.endswith("_raw.flac"):
             json_name = audio_path.name.replace("_raw.flac", "_audio.jsonl")
@@ -352,11 +431,27 @@ class Transcriber:
             json_name = audio_path.name.replace("_audio.m4a", "_audio.jsonl")
         else:
             json_name = audio_path.stem + "_audio.jsonl"
+
+        # Add stream prefix if provided (e.g., "123456_audio.jsonl" -> "123456_mic_audio.jsonl")
+        if stream:
+            json_name = json_name.replace("_audio.jsonl", f"_{stream}_audio.jsonl")
+
         return audio_path.with_name(json_name)
 
-    def _transcribe(self, raw_path: Path, segments: List[Dict[str, object]]) -> bool:
-        """Transcribe segments using Gemini and save JSONL."""
-        json_path = self._get_json_path(raw_path)
+    def _transcribe(
+        self,
+        raw_path: Path,
+        segments: List[Dict[str, object]],
+        stream: str | None = None,
+    ) -> bool:
+        """Transcribe segments using Gemini and save JSONL.
+
+        Args:
+            raw_path: Path to the raw audio file
+            segments: List of audio segments to transcribe
+            stream: Optional stream identifier ('mic' or 'sys') for split processing
+        """
+        json_path = self._get_json_path(raw_path, stream=stream)
 
         try:
             entity_names = load_entity_names(spoken=True)
@@ -419,31 +514,68 @@ class Transcriber:
             logging.error(f"Failed to transcribe {raw_path}: {e}", exc_info=True)
             return False
 
-    def _handle_raw(self, raw_path: Path) -> None:
-        """Process a raw audio file."""
-        # Skip if already processed
-        json_path = self._get_json_path(raw_path)
-        if json_path.exists():
-            logging.info(f"Already processed, moving to heard: {raw_path}")
-            self._move_to_heard(raw_path)
-            return
+    def _handle_raw(self, raw_path: Path, split: bool = False) -> None:
+        """Process a raw audio file.
 
-        # Process audio
-        segments = self._process_audio(raw_path)
-        if segments is None:
-            raise SystemExit(1)
+        Args:
+            raw_path: Path to the raw audio file
+            split: If True, process mic and system channels independently
+        """
+        if split:
+            # Split processing mode
+            mic_json_path = self._get_json_path(raw_path, stream="mic")
+            sys_json_path = self._get_json_path(raw_path, stream="sys")
 
-        # Skip if no speech detected
-        if len(segments) == 0:
-            logging.warning(
-                f"No speech segments detected in {raw_path}, skipping transcription"
-            )
-            raise SystemExit(1)
+            # Check if already processed
+            if mic_json_path.exists() and sys_json_path.exists():
+                logging.info(f"Already processed (split), moving to heard: {raw_path}")
+                self._move_to_heard(raw_path)
+                return
 
-        # Transcribe
-        success = self._transcribe(raw_path, segments)
-        if success:
-            self._move_to_heard(raw_path)
+            # Process audio in split mode
+            segments_dict = self._process_audio(raw_path, split=True)
+            if segments_dict is None:
+                raise SystemExit(1)
+
+            # Process each stream
+            success = True
+            for stream, segments in segments_dict.items():
+                if len(segments) == 0:
+                    logging.warning(
+                        f"No speech segments detected in {stream} for {raw_path}, skipping"
+                    )
+                    continue
+
+                if not self._transcribe(raw_path, segments, stream=stream):
+                    success = False
+
+            if success:
+                self._move_to_heard(raw_path)
+        else:
+            # Standard merged processing
+            # Skip if already processed
+            json_path = self._get_json_path(raw_path)
+            if json_path.exists():
+                logging.info(f"Already processed, moving to heard: {raw_path}")
+                self._move_to_heard(raw_path)
+                return
+
+            # Process audio
+            segments = self._process_audio(raw_path, split=False)
+            if segments is None:
+                raise SystemExit(1)
+
+            # Skip if no speech detected
+            if len(segments) == 0:
+                logging.warning(
+                    f"No speech segments detected in {raw_path}, skipping transcription"
+                )
+                raise SystemExit(1)
+
+            # Transcribe
+            success = self._transcribe(raw_path, segments)
+            if success:
+                self._move_to_heard(raw_path)
 
 
 def main():
@@ -452,6 +584,11 @@ def main():
         "audio_path",
         type=str,
         help="Path to audio file to process (.flac or .m4a)",
+    )
+    parser.add_argument(
+        "--split",
+        action="store_true",
+        help="Process mic and system channels independently into separate JSONL files",
     )
     args = setup_cli(parser)
 
@@ -478,9 +615,13 @@ def main():
         )
 
     logging.info(f"Processing audio: {audio_path}")
+    if args.split:
+        logging.info(
+            "Split mode enabled: processing mic and system channels independently"
+        )
 
     transcriber = Transcriber(journal, api_key)
-    transcriber._handle_raw(audio_path)
+    transcriber._handle_raw(audio_path, split=args.split)
 
 
 if __name__ == "__main__":

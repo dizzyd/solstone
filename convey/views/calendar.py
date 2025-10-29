@@ -372,11 +372,17 @@ def download_audio(day: str) -> Any:
     audio_files = []
     for e in entries:
         if e.get("prefix") == "audio" and start_dt <= e["timestamp"] < end_dt:
-            # Get the raw FLAC file path
-            raw_name = e["name"].replace("_audio.jsonl", "_raw.flac")
-            flac_path = os.path.join(day_dir, "heard", raw_name)
-            if os.path.isfile(flac_path):
-                audio_files.append(flac_path)
+            # Get the raw FLAC file path from metadata
+            try:
+                from think.utils import get_raw_file
+
+                rel_path, mime_type, metadata = get_raw_file(day, e["name"])
+                flac_path = os.path.join(day_dir, rel_path)
+                if os.path.isfile(flac_path):
+                    audio_files.append(flac_path)
+            except (ValueError, Exception):
+                # Skip files without valid raw field
+                continue
 
     if not audio_files:
         return jsonify({"error": "No audio files found in the selected range"}), 404
