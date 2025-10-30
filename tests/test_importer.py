@@ -143,7 +143,7 @@ def test_importer_audio_transcribe(tmp_path, monkeypatch):
     assert entries1[0]["text"] == "Hello world."
     assert entries1[0]["speaker"] == 1  # Rev uses 0-based, we use 1-based
     assert entries1[0]["source"] == "import"
-    assert entries1[0]["start"] == "00:00:00"
+    assert entries1[0]["start"] == "12:00:00"  # Absolute timestamp
     assert entries1[1]["text"] == "This is a test."
 
     # Check second chunk (5-10 minutes) - JSONL format
@@ -155,7 +155,7 @@ def test_importer_audio_transcribe(tmp_path, monkeypatch):
     assert len(entries2) == 1
     assert entries2[0]["text"] == "Second chunk."
     assert entries2[0]["speaker"] == 2
-    assert entries2[0]["start"] == "00:05:10"
+    assert entries2[0]["start"] == "12:05:10"  # Absolute timestamp (5:10 after base)
 
 
 def test_audio_transcribe_sanitizes_entities(tmp_path, monkeypatch):
