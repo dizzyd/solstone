@@ -24,7 +24,91 @@
 .domain-header-content {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5em;
+}
+
+.domain-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.domain-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+/* Toggle switch for agents */
+.agents-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 1em;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.agents-toggle-label {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: white;
+  opacity: 0.9;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.3);
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: rgba(76, 175, 80, 0.8);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.toggle-slider:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+input:checked + .toggle-slider:hover {
+  background-color: rgba(76, 175, 80, 0.9);
 }
 
 .domain-header .domain-emoji {
@@ -930,12 +1014,23 @@ tr:hover .entity-delete-btn {
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <div class="domain-header{% if domain_data.color %} has-color{% endif %}"{% if domain_data.color %} style="--domain-color: {{ domain_data.color }}"{% endif %}>
   <a href="{{ url_for('domains.domains_page') }}" class="back-button">← Back to Domains</a>
-  
+
   <div class="domain-header-content">
-    {% if domain_data.emoji %}
-    <div class="domain-emoji">{{ domain_data.emoji }}</div>
-    {% endif %}
-    <h1>{{ domain_data.title or domain_name }}</h1>
+    <div class="domain-header-left">
+      {% if domain_data.emoji %}
+      <div class="domain-emoji">{{ domain_data.emoji }}</div>
+      {% endif %}
+      <h1>{{ domain_data.title or domain_name }}</h1>
+    </div>
+    <div class="domain-header-right">
+      <div class="agents-toggle">
+        <span class="agents-toggle-label">Agents</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="agents-toggle-checkbox" {% if not domain_data.disabled %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2341,6 +2436,50 @@ function formatDayKey(dayKey) {
     day: 'numeric'
   });
 }
+
+// Agents toggle functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const agentsToggle = document.getElementById('agents-toggle-checkbox');
+
+  if (agentsToggle) {
+    agentsToggle.addEventListener('change', function() {
+      const isEnabled = this.checked;
+
+      // Disable toggle during request
+      this.disabled = true;
+
+      fetch(`/api/domains/${encodeURIComponent(domainName)}/toggle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Toggle successful
+          console.log(`Domain agents ${isEnabled ? 'enabled' : 'disabled'}`);
+        } else {
+          // Revert toggle on error
+          this.checked = !isEnabled;
+          alert('Error toggling agents: ' + (data.error || 'Unknown error'));
+        }
+
+        // Re-enable toggle
+        this.disabled = false;
+      })
+      .catch(error => {
+        console.error('Error toggling agents:', error);
+        // Revert toggle on error
+        this.checked = !isEnabled;
+        alert('Network error: ' + error.message);
+
+        // Re-enable toggle
+        this.disabled = false;
+      });
+    });
+  }
+});
 
 // Close delete modal when clicking outside
 window.addEventListener('click', function(event) {

@@ -125,6 +125,11 @@ h1 {
   box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 }
 
+.domain-card.disabled {
+  opacity: 0.5;
+  filter: grayscale(50%);
+}
+
 .domain-card h3 {
   font-size: 1.2em;
   margin: 0 0 0.5em 0;
@@ -412,20 +417,25 @@ async function loadDomains() {
       Object.entries(domains).forEach(([domainName, domainData]) => {
         const card = document.createElement('div');
         card.className = 'domain-card';
-        
+
         // Apply background color if provided
         if (domainData.color) {
           card.style.background = domainData.color;
-          
+
           // Add dark background class if color is dark
           if (isColorDark(domainData.color)) {
             card.classList.add('dark-background');
           }
         }
-        
+
         // Add emoji if provided
         if (domainData.emoji) {
           card.classList.add('has-emoji');
+        }
+
+        // Add disabled class if domain is disabled
+        if (domainData.disabled) {
+          card.classList.add('disabled');
         }
         
         card.innerHTML = `

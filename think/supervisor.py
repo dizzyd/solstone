@@ -447,7 +447,20 @@ def check_scheduled_agents() -> None:
                 # Check if this is a multi-domain agent
                 if config.get("multi_domain"):
                     domains = get_domains()
-                    for domain_name in domains.keys():
+                    # Filter out disabled domains for automated runs
+                    enabled_domains = {
+                        k: v for k, v in domains.items() if not v.get("disabled", False)
+                    }
+                    disabled_count = len(domains) - len(enabled_domains)
+                    if disabled_count > 0:
+                        disabled_names = [
+                            k for k, v in domains.items() if v.get("disabled", False)
+                        ]
+                        logging.info(
+                            f"Skipping {disabled_count} disabled domain(s) for {persona_id}: "
+                            f"{', '.join(disabled_names)}"
+                        )
+                    for domain_name in enabled_domains.keys():
                         logging.info(f"Spawning {persona_id} for domain: {domain_name}")
                         request_file = cortex_request(
                             prompt=f"You are processing domain '{domain_name}' for yesterday ({yesterday}), use get_domain('{domain_name}') to load the correct context before starting.",

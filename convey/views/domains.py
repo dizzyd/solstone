@@ -10,7 +10,7 @@ from typing import Any
 from dotenv import load_dotenv
 from flask import Blueprint, jsonify, render_template, request
 
-from think.domains import get_domain_news, get_domains
+from think.domains import get_domain_news, get_domains, set_domain_disabled
 from think.entities import (
     load_detected_entities_recent,
     load_entities,
@@ -163,6 +163,34 @@ def update_domain(domain_name: str) -> Any:
 
     except Exception as e:
         return jsonify({"error": f"Failed to update domain: {str(e)}"}), 500
+
+
+@bp.route("/api/domains/<domain_name>/toggle", methods=["POST"])
+def toggle_domain_state(domain_name: str) -> Any:
+    """Toggle domain enabled/disabled state for automated agent runs."""
+    domains = get_domains()
+    if domain_name not in domains:
+        return jsonify({"error": "Domain not found"}), 404
+
+    try:
+        # Get current state
+        current_state = domains[domain_name].get("disabled", False)
+        new_state = not current_state
+
+        # Update the state
+        set_domain_disabled(domain_name, new_state)
+
+        return jsonify(
+            {
+                "success": True,
+                "domain": domain_name,
+                "disabled": new_state,
+                "message": f"Domain {'disabled' if new_state else 'enabled'}",
+            }
+        )
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to toggle domain state: {str(e)}"}), 500
 
 
 def get_domain_entities_data(domain_name: str) -> dict:

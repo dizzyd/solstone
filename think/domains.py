@@ -150,6 +150,7 @@ def get_domains() -> dict[str, dict[str, object]]:
                     "description": domain_data.get("description", ""),
                     "color": domain_data.get("color", ""),
                     "emoji": domain_data.get("emoji", ""),
+                    "disabled": domain_data.get("disabled", False),
                 }
 
                 domains[domain_name] = domain_info
@@ -330,6 +331,95 @@ def get_domain_news(
         next_cursor = selected[-1].stem if has_more and selected else None
 
     return {"days": days, "next_cursor": next_cursor, "has_more": has_more}
+
+
+def is_domain_disabled(domain: str) -> bool:
+    """Check if a domain is currently disabled.
+
+    Args:
+        domain: Domain name to check
+
+    Returns:
+        True if domain is disabled, False if enabled or domain doesn't exist
+    """
+    domains = get_domains()
+    if domain not in domains:
+        return False
+    return bool(domains[domain].get("disabled", False))
+
+
+def set_domain_disabled(domain: str, disabled: bool) -> None:
+    """Enable or disable a domain by updating domain.json.
+
+    Creates an audit log entry when the state changes.
+
+    Args:
+        domain: Domain name to modify
+        disabled: True to disable, False to enable
+
+    Raises:
+        FileNotFoundError: If domain doesn't exist
+        RuntimeError: If JOURNAL_PATH not set
+    """
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+
+    domain_path = Path(journal) / "domains" / domain
+    if not domain_path.exists():
+        raise FileNotFoundError(f"Domain '{domain}' not found at {domain_path}")
+
+    domain_json_path = domain_path / "domain.json"
+    if not domain_json_path.exists():
+        raise FileNotFoundError(f"domain.json not found for domain '{domain}'")
+
+    # Load current config
+    with open(domain_json_path, "r", encoding="utf-8") as f:
+        domain_data = json.load(f)
+
+    # Check if state is actually changing
+    current_state = bool(domain_data.get("disabled", False))
+    if current_state == disabled:
+        # No change needed
+        return
+
+    # Update disabled field
+    if disabled:
+        domain_data["disabled"] = True
+    else:
+        # Remove the field when enabling (cleaner for default case)
+        domain_data.pop("disabled", None)
+
+    # Write back atomically
+    import tempfile
+
+    temp_fd, temp_path = tempfile.mkstemp(
+        dir=domain_json_path.parent, suffix=".json", text=True
+    )
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            json.dump(domain_data, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(temp_path, domain_json_path)
+    except Exception:
+        # Clean up temp file on error
+        try:
+            os.unlink(temp_path)
+        except Exception:
+            pass
+        raise
+
+    # Log the change
+    today = datetime.now().strftime("%Y%m%d")
+    action = "domain_disable" if disabled else "domain_enable"
+    log_action(
+        domain=domain,
+        day=today,
+        action=action,
+        params={"disabled": disabled},
+        context=None,
+    )
 
 
 def domain_summaries(*, detailed_entities: bool = False) -> str:
