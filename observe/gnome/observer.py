@@ -81,13 +81,14 @@ class Observer:
         Check system activity status.
 
         Returns:
-            True if user is active (not idle and screen unlocked)
+            True if user is active (not idle and screen unlocked, OR has audio activity)
         """
         idle_time = await get_idle_time_ms(self.bus)
         screen_locked = await is_screen_locked(self.bus)
 
         is_idle = (idle_time > IDLE_THRESHOLD_MS) or screen_locked
-        is_active = not is_idle
+        has_audio_activity = self.threshold_hits >= MIN_HITS_FOR_SAVE
+        is_active = (not is_idle) or has_audio_activity
 
         return is_active
 
