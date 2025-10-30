@@ -826,7 +826,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    if args.verbose:
+    if args.verbose or args.debug:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         console_handler.setFormatter(
@@ -863,8 +863,8 @@ def main() -> None:
                 )
             ]
 
-            # Enable auto-reload when verbose mode is active
-            if args.verbose and procs:
+            # Enable auto-reload when verbose or debug mode is active
+            if (args.verbose or args.debug) and procs:
                 tasks.append(watch_source_changes(procs))
                 tasks.append(check_reload_timers(procs))
 
