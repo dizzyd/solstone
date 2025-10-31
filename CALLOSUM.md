@@ -1,10 +1,10 @@
 # Callosum Message Specification
 
-Callosum is a WebSocket broadcast bus for real-time event distribution across Sunstone services.
+Callosum is a Unix domain socket broadcast bus for real-time event distribution across Sunstone services.
 
-**Endpoint:** `ws://localhost:PORT/callosum`
+**Socket:** `$JOURNAL_PATH/health/callosum.sock`
 
-**Protocol:** All messages are broadcast to all connected clients. No routing, no filtering.
+**Protocol:** JSON-per-line broadcast. No routing, no filtering.
 
 ## Message Format
 
@@ -22,14 +22,100 @@ All messages follow this structure:
 - `tract` - Source service/subsystem identifier
 - `event` - Event type within the tract
 
+**Auto-added fields:**
+- `ts` - Timestamp in milliseconds (added by server if not present)
+
 All other fields are tract-specific and documented below.
 
-# `"tract": "cortex"`
+## Client Usage
+
+**Emit events:**
+```python
+from think.callosum import CallosumClient
+
+client = CallosumClient()
+client.emit("cortex", "agent_start", agent_id="123", persona="analyst")
+```
+
+**Listen for events:**
+```python
+from think.callosum import CallosumListener
+
+listener = CallosumListener()
+listener.connect()
+listener.listen(lambda msg: print(msg), stop_event)
+```
+
+## Notes
+
+- Messages are JSON objects, one per line
+- Clients auto-reconnect on failure
+- Missing `tract` or `event` fields are rejected
+
+---
+
+# Tract Specifications
+
+## `"tract": "cortex"`
 
 Agent execution events from the Muse cortex service.
 
 **Event types:** `request`, `start`, `thinking`, `tool_start`, `tool_end`, `finish`, `error`, `agent_updated`
 
-**Notes:**
-- `usage` field on `finish` contains token statistics when available
-- `error` events include optional `trace` (string) and `exit_code` (integer)
+**Common fields:**
+- `agent_id` - Unique agent identifier (timestamp-based)
+- `persona` - Agent persona name
+
+**Event-specific fields:**
+
+### `request`
+- `prompt` - Task prompt for the agent
+- `backend` - AI backend (openai, google, anthropic)
+
+### `finish`
+- `result` - Agent output/result text
+- `usage` - Token usage statistics (optional)
+  - `input_tokens` - Tokens in input
+  - `output_tokens` - Tokens in output
+  - `total_tokens` - Total tokens used
+
+### `error`
+- `error` - Error message
+- `trace` - Stack trace (optional)
+- `exit_code` - Process exit code (optional)
+
+### `tool_start` / `tool_end`
+- `tool` - Name of the tool being called
+- `call_id` - Unique identifier for this tool call
+
+## `"tract": "indexer"` (future)
+
+Database indexing events from the think.indexer service.
+
+**Event types:** `scan_start`, `scan_progress`, `scan_complete`, `scan_error`
+
+**Example fields:**
+- `index_type` - Type of index (transcripts, events, summaries, entities, news)
+- `changes` - Number of changes detected
+- `day` - Day being indexed (YYYYMMDD format)
+
+## `"tract": "supervisor"` (future)
+
+Process supervision events from think.supervisor.
+
+**Event types:** `process_start`, `process_exit`, `heartbeat_stale`, `heartbeat_ok`
+
+**Example fields:**
+- `process_name` - Name of the managed process
+- `exit_code` - Exit code for process_exit events
+- `pid` - Process ID
+
+## `"tract": "observe"` (future)
+
+Observation events from the observe subsystem.
+
+**Event types:** `capture_start`, `capture_complete`, `vad_activity`, `vad_silence`
+
+**Example fields:**
+- `source` - Capture source (screen, mic, etc.)
+- `file_path` - Path to captured file
