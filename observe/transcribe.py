@@ -535,15 +535,25 @@ class Transcriber:
 
             # Process each stream
             success = True
+            any_segments = False
             for stream, segments in segments_dict.items():
                 if len(segments) == 0:
-                    logging.warning(
-                        f"No speech segments detected in {stream} for {raw_path}, skipping"
+                    logging.info(
+                        f"No speech segments detected in {stream} for {raw_path}"
                     )
                     continue
 
+                any_segments = True
                 if not self._transcribe(raw_path, segments, stream=stream):
                     success = False
+
+            # If no streams had any speech, delete the file
+            if not any_segments:
+                logging.info(
+                    f"No speech segments detected in any stream for {raw_path}, removing file"
+                )
+                raw_path.unlink()
+                return
 
             if success:
                 self._move_to_heard(raw_path)
@@ -563,10 +573,11 @@ class Transcriber:
 
             # Skip if no speech detected
             if len(segments) == 0:
-                logging.warning(
-                    f"No speech segments detected in {raw_path}, skipping transcription"
+                logging.info(
+                    f"No speech segments detected in {raw_path}, removing file"
                 )
-                raise SystemExit(1)
+                raw_path.unlink()
+                return
 
             # Transcribe
             success = self._transcribe(raw_path, segments)
