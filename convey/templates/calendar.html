@@ -61,7 +61,6 @@ let dayStats = {};
 let availableDays = new Set();
 const dayBase = '{{ url_for("calendar.calendar_day", day="") }}';
 const todosBase = '{{ url_for("todos.todos_day", day="") }}';
-const adminBase = '{{ url_for("admin.admin_day_page", day="") }}';
 let months = [];
 let currentIndex = 0;
 const now = new Date();
@@ -128,8 +127,6 @@ function createDayContent(dateStr, day) {
     // Transcript icon - only if transcripts exist
     if (stats.has_transcripts) {
       html += `<a href='${dayBase}${dateStr}/transcript' title='Transcript'>💬</a>`;
-      // Admin icon - only if transcripts exist
-      html += `<a href='${adminBase}${dateStr}' title='Admin'>⚙️</a>`;
     }
 
     html += `</div>`;
