@@ -9,41 +9,49 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from observe.sense import (
-    FileSensor,
-    HandlerProcess,
-    ProcessLogWriter,
-    _format_log_line,
-)
+from observe.sense import FileSensor, HandlerProcess
+from think.runner import DailyLogWriter as ProcessLogWriter
+from think.runner import _format_log_line
 
 
 def test_format_log_line():
     """Test log line formatting."""
-    line = _format_log_line("transcribe", "test.flac", "stdout", "Processing...\n")
+    line = _format_log_line("transcribe:test.flac", "stdout", "Processing...\n")
     assert "[transcribe:test.flac:stdout]" in line
     assert "Processing..." in line
     assert line.endswith("\n")
 
 
-def test_process_log_writer(tmp_path):
+def test_process_log_writer(tmp_path, monkeypatch):
     """Test ProcessLogWriter creates and writes to log file."""
-    log_path = tmp_path / "test.log"
-    writer = ProcessLogWriter(log_path)
+    from think import runner
+
+    # Mock journal path and current day to use tmp_path
+    monkeypatch.setattr(runner, "_get_journal_path", lambda: tmp_path)
+    monkeypatch.setattr(runner, "_current_day", lambda: "20241101")
+
+    writer = ProcessLogWriter("test")
 
     writer.write("line 1\n")
     writer.write("line 2\n")
     writer.close()
 
+    log_path = tmp_path / "20241101" / "health" / "test.log"
     assert log_path.exists()
     content = log_path.read_text()
     assert "line 1\n" in content
     assert "line 2\n" in content
 
 
-def test_process_log_writer_thread_safe(tmp_path):
+def test_process_log_writer_thread_safe(tmp_path, monkeypatch):
     """Test ProcessLogWriter is thread-safe."""
-    log_path = tmp_path / "test.log"
-    writer = ProcessLogWriter(log_path)
+    from think import runner
+
+    # Mock journal path and current day to use tmp_path
+    monkeypatch.setattr(runner, "_get_journal_path", lambda: tmp_path)
+    monkeypatch.setattr(runner, "_current_day", lambda: "20241101")
+
+    writer = ProcessLogWriter("test")
 
     def write_lines(prefix):
         for i in range(10):
@@ -60,6 +68,7 @@ def test_process_log_writer_thread_safe(tmp_path):
 
     writer.close()
 
+    log_path = tmp_path / "20241101" / "health" / "test.log"
     lines = log_path.read_text().split("\n")
     # Should have 50 lines (5 threads * 10 lines each)
     assert len([line for line in lines if line]) == 50
@@ -67,19 +76,15 @@ def test_process_log_writer_thread_safe(tmp_path):
 
 def test_handler_process_cleanup():
     """Test HandlerProcess cleanup joins threads and closes logger."""
-    mock_proc = MagicMock()
-    mock_logger = MagicMock()
-    mock_thread = MagicMock()
+    mock_managed = MagicMock()
+    mock_managed.name = "transcribe"
+    mock_managed.process = MagicMock()
 
-    handler = HandlerProcess(
-        Path("/tmp/test.flac"), mock_proc, "transcribe", mock_logger
-    )
-    handler.threads = [mock_thread]
+    handler = HandlerProcess(Path("/tmp/test.flac"), mock_managed)
 
     handler.cleanup()
 
-    mock_thread.join.assert_called_once_with(timeout=1)
-    mock_logger.close.assert_called_once()
+    mock_managed.cleanup.assert_called_once()
 
 
 def test_file_sensor_register():
@@ -128,9 +133,15 @@ def test_file_sensor_match_pattern():
         assert sensor._match_pattern(heard_file) is None
 
 
-@patch("observe.sense.subprocess.Popen")
-def test_file_sensor_spawn_handler(mock_popen, tmp_path):
+@patch("think.runner._get_journal_path")
+@patch("think.runner._current_day")
+@patch("think.runner.subprocess.Popen")
+def test_file_sensor_spawn_handler(mock_popen, mock_day, mock_journal, tmp_path):
     """Test spawning handler process."""
+    # Mock runner functions to use tmp_path
+    mock_journal.return_value = tmp_path
+    mock_day.return_value = "20241101"
+
     # Setup mock process
     mock_proc = MagicMock()
     mock_proc.stdout = None
@@ -150,8 +161,8 @@ def test_file_sensor_spawn_handler(mock_popen, tmp_path):
     args = mock_popen.call_args[0][0]
     assert args == ["echo", str(test_file)]
 
-    # Verify log file was created
-    log_file = tmp_path / "health" / "sense_test.log"
+    # Verify log file was created (now in daily health directory)
+    log_file = tmp_path / "20241101" / "health" / "sense_test:test.txt.log"
     assert log_file.exists()
 
 
@@ -181,8 +192,14 @@ def test_file_sensor_spawn_handler_duplicate(tmp_path):
         mock_popen.assert_not_called()
 
 
-def test_file_sensor_spawn_handler_real_process(tmp_path):
+@patch("think.runner._get_journal_path")
+@patch("think.runner._current_day")
+def test_file_sensor_spawn_handler_real_process(mock_day, mock_journal, tmp_path):
     """Test spawning a real process and monitoring completion."""
+    # Mock runner functions to use tmp_path
+    mock_journal.return_value = tmp_path
+    mock_day.return_value = "20241101"
+
     sensor = FileSensor(tmp_path)
 
     test_file = tmp_path / "test.txt"
@@ -197,12 +214,13 @@ def test_file_sensor_spawn_handler_real_process(tmp_path):
     # Process should have completed and been removed from running dict
     assert test_file not in sensor.running
 
-    # Check log file contains output
-    log_file = tmp_path / "health" / "sense_echo.log"
+    # Check log file contains output (now in daily health directory)
+    log_file = tmp_path / "20241101" / "health" / "sense_echo:test.txt.log"
     assert log_file.exists()
     log_content = log_file.read_text()
     assert "hello" in log_content
-    assert "[echo:test.txt:stdout]" in log_content
+    # New format is [name:stream] not [handler:file:stream]
+    assert "[sense_echo:test.txt:stdout]" in log_content
 
 
 def test_file_sensor_spawn_handler_failing_process(tmp_path):

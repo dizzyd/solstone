@@ -123,15 +123,33 @@ def test_start_runners(tmp_path, monkeypatch):
 
 def test_run_dream(tmp_path, monkeypatch):
     mod = importlib.import_module("think.supervisor")
+    runner_mod = importlib.import_module("think.runner")
 
-    launch_calls = {}
+    spawn_calls = {}
 
     class DummyProcess:
         def __init__(self):
             self.pid = 12345
+            self.returncode = 0
 
-        def wait(self):
+        def wait(self, timeout=None):
             return 0
+
+    class DummyManagedProcess:
+        def __init__(self, cmd, name):
+            self.process = DummyProcess()
+            self.name = name
+            self.cmd = cmd
+            self.log_writer = DummyLogger()
+            self._threads = []
+            spawn_calls["name"] = name
+            spawn_calls["cmd"] = cmd
+
+        def wait(self, timeout=None):
+            return 0
+
+        def cleanup(self):
+            self.log_writer.close()
 
     class DummyLogger:
         def __init__(self):
@@ -140,20 +158,10 @@ def test_run_dream(tmp_path, monkeypatch):
         def close(self):
             self.closed = True
 
-    def fake_launch(name, cmd, *, restart=False, log_name=None):
-        dummy_logger = DummyLogger()
-        launch_calls["args"] = (name, cmd, restart, log_name)
-        launch_calls["logger"] = dummy_logger
-        return mod.ManagedProcess(
-            process=DummyProcess(),
-            name=name,
-            logger=dummy_logger,
-            cmd=list(cmd),
-            restart=restart,
-            threads=[],
-        )
+    def fake_spawn(cmd, *, name=None, env=None):
+        return DummyManagedProcess(cmd, name)
 
-    monkeypatch.setattr(mod, "_launch_process", fake_launch)
+    monkeypatch.setattr(runner_mod.ManagedProcess, "spawn", fake_spawn)
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
 
     times = iter([0, 1])
@@ -166,13 +174,9 @@ def test_run_dream(tmp_path, monkeypatch):
 
     assert mod.run_dream() is True
 
-    name, cmd, restart, log_name = launch_calls["args"]
-    assert name == "dream"
-    assert cmd == ["think-dream", "-v"]
-    assert restart is False
-    assert log_name is None
+    assert spawn_calls["name"] == "dream"
+    assert spawn_calls["cmd"] == ["think-dream", "-v"]
     assert os.environ["JOURNAL_PATH"] == str(tmp_path)
-    assert launch_calls["logger"].closed is True
     assert any("seconds" in m for m in messages)
 
 

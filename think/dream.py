@@ -1,9 +1,9 @@
 import argparse
 import logging
 import os
-import subprocess
 from datetime import datetime, timedelta
 
+from think.runner import run_task
 from think.utils import day_log, day_path, get_topics, setup_cli
 
 
@@ -11,13 +11,15 @@ def run_command(cmd: list[str], day: str) -> bool:
     logging.info("==> %s", " ".join(cmd))
     # Extract command name for logging (e.g., "think-summarize" -> "summarize")
     cmd_name = cmd[0].replace("think-", "").replace("-", "_")
+
+    # Use unified runner with automatic logging
     try:
-        result = subprocess.run(cmd)
-        if result.returncode != 0:
+        success, exit_code = run_task(cmd, name=f"dream_{cmd_name}")
+        if not success:
             logging.error(
-                "Command failed with exit code %s: %s", result.returncode, " ".join(cmd)
+                "Command failed with exit code %s: %s", exit_code, " ".join(cmd)
             )
-            day_log(day, f"{cmd_name} error {result.returncode}")
+            day_log(day, f"{cmd_name} error {exit_code}")
             return False
         return True
     except Exception as e:

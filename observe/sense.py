@@ -20,77 +20,24 @@ from typing import Dict, List, Optional
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from think.runner import ManagedProcess as RunnerManagedProcess
+from think.runner import run_task
 from think.utils import day_path, setup_cli
 
 logger = logging.getLogger(__name__)
 
 
-class ProcessLogWriter:
-    """Thread-safe writer that appends process output to a log file."""
-
-    def __init__(self, log_path: Path):
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        self._log_path = log_path
-        self._lock = threading.Lock()
-        self._fh = log_path.open("a", encoding="utf-8")
-
-    def write(self, message: str):
-        with self._lock:
-            self._fh.write(message)
-            self._fh.flush()
-
-    def close(self):
-        with self._lock:
-            if not self._fh.closed:
-                self._fh.close()
-
-    @property
-    def path(self) -> Path:
-        return self._log_path
-
-
 class HandlerProcess:
-    """Manages a running handler subprocess."""
+    """Manages a running handler subprocess with RunnerManagedProcess."""
 
-    def __init__(
-        self,
-        file_path: Path,
-        process: subprocess.Popen,
-        handler_name: str,
-        logger: ProcessLogWriter,
-    ):
+    def __init__(self, file_path: Path, managed: RunnerManagedProcess):
         self.file_path = file_path
-        self.process = process
-        self.handler_name = handler_name
-        self.logger = logger
-        self.threads: List[threading.Thread] = []
+        self.managed = managed
+        self.handler_name = managed.name
+        self.process = managed.process
 
     def cleanup(self):
-        for thread in self.threads:
-            thread.join(timeout=1)
-        self.logger.close()
-
-
-def _format_log_line(handler_name: str, file_name: str, stream: str, line: str) -> str:
-    """Format log line with timestamp, handler, file, and stream label."""
-    timestamp = datetime.now().isoformat(timespec="seconds")
-    clean_line = line.rstrip("\n")
-    return f"{timestamp} [{handler_name}:{file_name}:{stream}] {clean_line}\n"
-
-
-def _stream_output(
-    pipe,
-    handler_name: str,
-    file_name: str,
-    stream_label: str,
-    logger: ProcessLogWriter,
-):
-    """Stream process output to log file."""
-    if pipe is None:
-        return
-    with pipe:
-        for line in pipe:
-            logger.write(_format_log_line(handler_name, file_name, stream_label, line))
+        self.managed.cleanup()
 
 
 class FileSensor:
@@ -174,43 +121,22 @@ class FileSensor:
         elif self.verbose:
             cmd.append("-v")
 
-        # Create log file in day-specific health directory: YYYYMMDD/health/sense_{handler_name}.log
-        day_health_dir = file_path.parent / "health"
-        log_writer = ProcessLogWriter(day_health_dir / f"sense_{handler_name}.log")
-
+        # Use unified runner to spawn process with automatic logging
         logger.info(f"Spawning {handler_name} for {file_path.name}: {' '.join(cmd)}")
 
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
+            managed = RunnerManagedProcess.spawn(
+                cmd, name=f"sense_{handler_name}:{file_path.name}"
             )
-        except Exception as exc:
-            logger.error(f"Failed to spawn {handler_name} for {file_path.name}: {exc}")
-            log_writer.close()
+        except RuntimeError as exc:
+            logger.error(str(exc))
+            # Release describe lock if this was a describe handler
+            if handler_name == "describe":
+                with self.lock:
+                    self.describe_running = False
             return
 
-        handler_proc = HandlerProcess(file_path, proc, handler_name, log_writer)
-
-        # Start output streaming threads
-        threads = [
-            threading.Thread(
-                target=_stream_output,
-                args=(proc.stdout, handler_name, file_path.name, "stdout", log_writer),
-                daemon=True,
-            ),
-            threading.Thread(
-                target=_stream_output,
-                args=(proc.stderr, handler_name, file_path.name, "stderr", log_writer),
-                daemon=True,
-            ),
-        ]
-        for thread in threads:
-            thread.start()
-        handler_proc.threads = threads
+        handler_proc = HandlerProcess(file_path, managed)
 
         with self.lock:
             self.running[file_path] = handler_proc
@@ -275,26 +201,17 @@ class FileSensor:
 
         logger.info(f"Running reduce for {video_path.name}")
 
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
-            )
+        # Use unified runner with automatic logging and timeout
+        success, exit_code = run_task(
+            cmd, name=f"reduce:{video_path.name}", timeout=300  # 5 minute timeout
+        )
 
-            if result.returncode == 0:
-                logger.info(f"Reduce completed successfully for {video_path.name}")
-            else:
-                logger.warning(
-                    f"Reduce failed for {video_path.name} (exit code {result.returncode})"
-                )
-                if result.stderr:
-                    logger.debug(f"Reduce stderr: {result.stderr}")
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Reduce timed out for {video_path.name}")
-        except Exception as exc:
-            logger.warning(f"Reduce failed for {video_path.name}: {exc}")
+        if success:
+            logger.info(f"Reduce completed successfully for {video_path.name}")
+        else:
+            logger.warning(
+                f"Reduce failed for {video_path.name} (exit code {exit_code})"
+            )
 
     def _handle_file(self, file_path: Path):
         """Route file to appropriate handler."""

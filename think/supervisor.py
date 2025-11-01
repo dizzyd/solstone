@@ -9,13 +9,13 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TextIO
 
 from desktop_notifier import DesktopNotifier, Urgency
 from watchfiles import PythonFilter, awatch
 
 from muse.cortex_client import cortex_request
 from think.domains import get_domains
+from think.runner import ManagedProcess as RunnerManagedProcess
 from think.utils import get_agents, setup_cli
 
 DEFAULT_THRESHOLD = 60
@@ -126,35 +126,13 @@ def _get_restart_policy(name: str) -> RestartPolicy:
     return _RESTART_POLICIES.setdefault(name, RestartPolicy())
 
 
-class ProcessLogWriter:
-    """Thread-safe writer that appends process output to a log file."""
-
-    def __init__(self, log_path: Path) -> None:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        self._log_path = log_path
-        self._lock = threading.Lock()
-        self._fh = log_path.open("a", encoding="utf-8")
-
-    def write(self, message: str) -> None:
-        with self._lock:
-            self._fh.write(message)
-            self._fh.flush()
-
-    def close(self) -> None:
-        with self._lock:
-            if not self._fh.closed:
-                self._fh.close()
-
-    @property
-    def path(self) -> Path:
-        return self._log_path
-
-
 @dataclass
 class ManagedProcess:
+    """Wrapper around RunnerManagedProcess for restart policy tracking."""
+
     process: subprocess.Popen
     name: str
-    logger: ProcessLogWriter
+    logger: RunnerManagedProcess  # Actually stores the runner's log_writer
     cmd: list[str]
     restart: bool = False
     threads: list[threading.Thread] = field(default_factory=list)
@@ -165,25 +143,6 @@ class ManagedProcess:
         self.logger.close()
 
 
-def _format_log_line(process_name: str, stream_label: str, line: str) -> str:
-    timestamp = datetime.now().isoformat(timespec="seconds")
-    clean_line = line.rstrip("\n")
-    return f"{timestamp} [{process_name}:{stream_label}] {clean_line}\n"
-
-
-def _stream_output(
-    pipe: TextIO | None,
-    process_name: str,
-    stream_label: str,
-    logger: ProcessLogWriter,
-) -> None:
-    if pipe is None:
-        return
-    with pipe:
-        for line in pipe:
-            logger.write(_format_log_line(process_name, stream_label, line))
-
-
 def _launch_process(
     name: str,
     cmd: list[str],
@@ -191,50 +150,29 @@ def _launch_process(
     restart: bool = False,
     log_name: str | None = None,
 ) -> ManagedProcess:
-    journal_path = _get_journal_path()
-    log_writer = ProcessLogWriter(journal_path / "health" / f"{(log_name or name)}.log")
+    """Launch process with automatic output logging and restart policy tracking."""
     policy: RestartPolicy | None = None
     if restart:
         policy = _get_restart_policy(name)
 
-    logging.info(f"Starting {name}: {' '.join(cmd)}")
+    # Use unified runner to spawn process
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            start_new_session=True,
-        )
-    except Exception as exc:
-        logging.error(f"Failed to start {name}: {exc}")
-        log_writer.close()
+        managed = RunnerManagedProcess.spawn(cmd, name=log_name or name)
+    except RuntimeError as exc:
+        logging.error(str(exc))
         raise
-    logging.info(f"Started {name} with PID {proc.pid}")
-    threads = [
-        threading.Thread(
-            target=_stream_output,
-            args=(proc.stdout, name, "stdout", log_writer),
-            daemon=True,
-        ),
-        threading.Thread(
-            target=_stream_output,
-            args=(proc.stderr, name, "stderr", log_writer),
-            daemon=True,
-        ),
-    ]
-    for thread in threads:
-        thread.start()
+
     if policy:
         policy.record_start()
+
+    # Wrap in ManagedProcess for restart tracking
     return ManagedProcess(
-        process=proc,
+        process=managed.process,
         name=name,
-        logger=log_writer,
+        logger=managed.log_writer,
         cmd=list(cmd),
         restart=restart,
-        threads=threads,
+        threads=managed._threads,
     )
 
 
@@ -322,9 +260,9 @@ def run_subprocess_task(name: str, cmd: list[str], log_name: str | None = None) 
         True when the subprocess exits successfully.
     """
     start = time.time()
-    managed = _launch_process(name, cmd, log_name=log_name)
     try:
-        return_code = managed.process.wait()
+        managed = RunnerManagedProcess.spawn(cmd, name=log_name or name)
+        return_code = managed.wait()
     finally:
         managed.cleanup()
 
