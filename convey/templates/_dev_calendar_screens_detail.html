@@ -241,7 +241,7 @@
         prev_day and url_for('calendar._dev_calendar_screens_list', day=prev_day),
         next_day and url_for('calendar._dev_calendar_screens_list', day=next_day),
         url_for('calendar.calendar_transcript_page', day=day),
-        url_for('admin.admin_day_page', day=day),
+        None,
         url_for('todos.todos_day', day=day)) }}
 
   <div class="screens-detail">

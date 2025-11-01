@@ -93,99 +93,7 @@ def run_task(
     commands: list[str] = []
     with contextlib.redirect_stdout(out_logger), contextlib.redirect_stderr(err_logger):
         try:
-            if name == "reindex":
-                args = [
-                    "think-indexer",
-                    "--rescan-all",
-                    "--verbose",
-                ]
-                commands.append(" ".join(args))
-                code = (
-                    _run_command(args, logger, stop)
-                    if use_stop
-                    else _run_command(args, logger)
-                )
-            elif name == "reset_indexes":
-                # Reset all indexes (both journal-level and per-day)
-                indexes = ["summaries", "events", "entities"]
-                code = 0
-                # Reset journal-level indexes
-                for index in indexes:
-                    args = [
-                        "think-indexer",
-                        "--index",
-                        index,
-                        "--reset",
-                    ]
-                    commands.append(" ".join(args))
-                    result = (
-                        _run_command(args, logger, stop)
-                        if use_stop
-                        else _run_command(args, logger)
-                    )
-                    if result != 0:
-                        code = result
-                # Reset per-day transcript indexes
-                args = [
-                    "think-indexer",
-                    "--index",
-                    "transcripts",
-                    "--reset",
-                ]
-                commands.append(" ".join(args))
-                result = (
-                    _run_command(args, logger, stop)
-                    if use_stop
-                    else _run_command(args, logger)
-                )
-                if result != 0:
-                    code = result
-            elif name == "summary":
-                args = ["think-journal-stats", "--verbose"]
-                commands.append(" ".join(args))
-                code = (
-                    _run_command(args, logger, stop)
-                    if use_stop
-                    else _run_command(args, logger)
-                )
-            elif name == "sense_repair":
-                if not day:
-                    raise ValueError("day required")
-                args = ["observe-sense", "--day", day, "-v"]
-                commands.append(" ".join(args))
-                code = (
-                    _run_command(args, logger, stop)
-                    if use_stop
-                    else _run_command(args, logger)
-                )
-            elif name == "summarize":
-                if not day:
-                    raise ValueError("day required")
-                from think.utils import get_topics
-
-                prompts = [info["path"] for info in get_topics().values()]
-                prompts.sort()
-                code = 0
-                for prompt in prompts:
-                    cmd = [
-                        "think-summarize",
-                        day,
-                        "-f",
-                        prompt,
-                        "-p",
-                        "--verbose",
-                    ]
-                    if force:
-                        cmd.append("--force")
-                    commands.append(" ".join(cmd))
-                    code = (
-                        _run_command(cmd, logger, stop)
-                        if use_stop
-                        else _run_command(cmd, logger)
-                    )
-                    if code != 0:
-                        break
-            elif name == "importer":
+            if name == "importer":
                 if not day:
                     raise ValueError("file and timestamp required")
                 try:
@@ -230,23 +138,6 @@ def run_task(
                     cmd.extend(["--domain", domain])
                 if setting:
                     cmd.extend(["--setting", setting])
-                commands.append(" ".join(cmd))
-                code = (
-                    _run_command(cmd, logger, stop)
-                    if use_stop
-                    else _run_command(cmd, logger)
-                )
-            elif name == "dream":
-                if not day:
-                    raise ValueError("day required")
-                cmd = [
-                    "think-dream",
-                    "--day",
-                    day,
-                    "--verbose",
-                ]
-                if force:
-                    cmd.append("--force")
                 commands.append(" ".join(cmd))
                 code = (
                     _run_command(cmd, logger, stop)

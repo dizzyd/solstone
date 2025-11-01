@@ -6,12 +6,6 @@
 .container { padding:0 1em; }
 button { padding:8px 16px; margin:0.5em 0; }
 pre { background:#f5f5f5; padding:0.5em; }
-.modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); }
-.modal-content { background:white; margin:5% auto; padding:1em; border-radius:8px; max-width:800px; max-height:80vh; overflow:auto; position:relative; }
-.close { position:absolute; top:10px; right:15px; cursor:pointer; font-size:24px; }
-.spinner { display:inline-block; width:12px; height:12px; border:2px solid #ccc; border-top-color:#333; border-radius:50%; animation:spin 1s linear infinite; margin-left:4px; }
-#taskOutput { white-space: pre-wrap; word-wrap: break-word; }
-@keyframes spin { to { transform:rotate(360deg); } }
 
 /* Config form styles */
 .config-section { max-width: 600px; margin-top: 1em; }
@@ -30,20 +24,8 @@ pre { background:#f5f5f5; padding:0.5em; }
 {% endblock %}
 {% block body %}
 <div class="container">
-  <button id="reindexBtn">Reindex</button>
-  <button id="resetIndexesBtn">Reset Indexes</button>
-  <button id="summaryBtn">Refresh Summary</button>
-  <pre id="status"></pre>
-  {% set cats = ['sense','summaries','entity'] %}
-  <div class="tabs">
-    <div class="tab active" data-target="config">Config</div>
-    {% for cat in cats %}
-    <div class="tab" data-target="{{ cat }}">{{ cat.capitalize() }}</div>
-    {% endfor %}
-    <div class="tab" data-target="log">Task Log</div>
-  </div>
+  <h2>Journal Configuration</h2>
   <div class="content" id="config">
-    <h2>Journal Configuration</h2>
     <div class="config-section">
       <h3>Identity</h3>
       <div class="form-group">
@@ -155,84 +137,10 @@ pre { background:#f5f5f5; padding:0.5em; }
       <div id="config-status" class="config-status"></div>
     </div>
   </div>
-  {% for cat in cats %}
-  <ul class="content" id="{{ cat }}" style="display:none">
-    {% for item in repair_data[cat] %}
-    <li><a href="{{ url_for('admin.admin_day_page', day=item.day) }}">{{ item.day }}</a> - {{ item.count }}</li>
-    {% else %}
-    <li>No items</li>
-    {% endfor %}
-  </ul>
-  {% endfor %}
-  <div class="content" id="log" style="display:none">
-    <pre id="logOutput"></pre>
-  </div>
-</div>
-<div id="taskModal" class="modal">
-  <div class="modal-content">
-    <span class="close">&times;</span>
-    <pre id="taskOutput"></pre>
-  </div>
 </div>
 <script>
-let taskDone=false;
 let configData = null;
 let saveTimeout = null;
-const tabs = document.querySelectorAll('.tab');
-const contents = document.querySelectorAll('.content');
-function showTab(id){
-  tabs.forEach(t=>t.classList.toggle('active', t.dataset.target===id));
-  contents.forEach(c=>{c.style.display=c.id===id?'block':'none';});
-  if(id==='config' && !configData) loadConfig();
-}
-tabs.forEach(t=>t.addEventListener('click', ()=>showTab(t.dataset.target)));
-function runTask(data){
-  const modal=document.getElementById('taskModal');
-  const out=document.getElementById('taskOutput');
-  const modalContent=document.querySelector('#taskModal .modal-content');
-  out.innerHTML='';
-  modal.style.display='block';
-  taskDone=false;
-  if(data.force) out.innerHTML='[using --force]\n';
-  const spinner=document.createElement('span');
-  spinner.className='spinner';
-  out.appendChild(spinner);
-  const scroll=()=>{modalContent.scrollTop=modalContent.scrollHeight;};
-  const addLine=html=>{spinner.remove();out.innerHTML+=html+'\n';out.appendChild(spinner);scroll();};
-  const ws=new WebSocket(`ws://${location.host}/ws/tasks`);
-  const start=Date.now();
-  ws.onopen=()=>ws.send(JSON.stringify(data));
-  ws.onmessage=e=>{
-    const msg=JSON.parse(e.data);
-    if(msg.type==='stdout') addLine(msg.text);
-    else if(msg.type==='stderr') addLine('<span style="color:red">'+msg.text+'</span>');
-    else if(msg.type==='exit'){spinner.remove();out.innerHTML+='[exit '+msg.code+']\n';scroll();ws.close();}
-  };
-  ws.onclose=()=>{spinner.remove();const s=Math.round((Date.now()-start)/1000);
-    const msg=s>=60?(Math.round(s/6)/10+' minutes'):s+' seconds';
-    out.innerHTML+=`\n[completed in ${msg}]\n`;scroll();taskDone=true;};
-}
-document.getElementById('reindexBtn').onclick=()=>runTask({task:'reindex',src:'admin'});
-document.getElementById('resetIndexesBtn').onclick=()=>{
-  if(confirm('This will delete all search indexes. They will need to be rebuilt. Continue?')){
-    runTask({task:'reset_indexes',src:'admin'});
-  }
-};
-document.getElementById('summaryBtn').onclick=()=>runTask({task:'summary',src:'admin'});
-function loadLog(){
-  fetch('{{ url_for('admin.task_log') }}').then(r=>r.json()).then(data=>{
-    const pre=document.getElementById('logOutput');
-    pre.textContent=data.map(e=>`${e.since} - ${e.message}`).join('\n');
-  });
-}
-function hideModal(){
-  document.getElementById('taskModal').style.display='none';
-  if(taskDone) location.reload();
-}
-document.querySelectorAll('#taskModal .close')[0].onclick=hideModal;
-window.onclick=e=>{
-  if(e.target==document.getElementById('taskModal')) hideModal();
-};
 
 // Config management functions
 function loadConfig(){
@@ -370,11 +278,7 @@ function hideConfigStatus(){
   status.className = 'config-status';
 }
 
-// Load config on page load if config tab is active
-if(document.querySelector('.tab.active').dataset.target === 'config'){
-  loadConfig();
-}
-
-loadLog();
+// Load config on page load
+loadConfig();
 </script>
 {% endblock %}

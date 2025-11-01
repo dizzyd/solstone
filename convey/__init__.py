@@ -166,14 +166,6 @@ tasks_page = tasks_view.tasks_page
 tasks_list = tasks_view.tasks_list
 clear_old = tasks_view.clear_old
 admin_page = admin_view.admin_page
-admin_day_page = admin_view.admin_day_page
-admin_sense_repair = admin_view.admin_sense_repair
-admin_summarize = admin_view.admin_summarize
-admin_process = admin_view.admin_process
-task_log = admin_view.task_log
-reindex = admin_view.reindex
-reset_indexes = admin_view.reset_indexes
-refresh_summary = admin_view.refresh_summary
 calendar_occurrences = calendar_view.calendar_occurrences
 calendar_days = calendar_view.calendar_days
 calendar_stats = calendar_view.calendar_stats
@@ -212,15 +204,6 @@ __all__ = [
     "login",
     "logout",
     "admin_page",
-    "admin_day_page",
-    "admin_sense_repair",
-    "admin_summarize",
-    "admin_entity",
-    "admin_process",
-    "task_log",
-    "reindex",
-    "reset_indexes",
-    "refresh_summary",
     "tasks_page",
     "tasks_list",
     "clear_old",
@@ -270,10 +253,11 @@ def run_service(
     """Run the Convey service, optionally starting the Cortex watcher."""
 
     if start_watcher:
-        # Only start watcher in Flask's main process (not the reloader parent)
+        # In debug mode with reloader, only start in child process
+        # In non-debug mode, always start (no reloader)
         # WERKZEUG_RUN_MAIN is set to 'true' only in the child/main process
-        is_reloader_process = os.environ.get("WERKZEUG_RUN_MAIN") != "true"
-        if not is_reloader_process:
+        should_start = not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+        if should_start:
             logger.info("Starting Cortex event watcher")
             start_cortex_event_watcher()
         else:
