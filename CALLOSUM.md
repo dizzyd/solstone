@@ -29,26 +29,49 @@ All other fields are tract-specific and documented below.
 
 ## Client Usage
 
-**Emit events:**
-```python
-from think.callosum import CallosumClient
+**Unified bidirectional connections:**
 
-client = CallosumClient()
+All connections can both emit and receive messages. A background receive loop always runs to drain the socket buffer.
+
+**Emit-only usage (no callback):**
+```python
+from think.callosum import CallosumConnection
+
+client = CallosumConnection()
 client.emit("cortex", "agent_start", agent_id="123", persona="analyst")
+client.close()
 ```
 
-**Listen for events:**
+**Listen-only usage (with callback):**
 ```python
-from think.callosum import CallosumListener
+from think.callosum import CallosumConnection
 
-listener = CallosumListener()
-listener.connect()
-listener.listen(lambda msg: print(msg), stop_event)
+def handle_message(msg):
+    print(f"Received: {msg}")
+
+listener = CallosumConnection(callback=handle_message)
+listener.connect()  # Starts background receive loop
+# Messages are now processed in background
+# ...
+listener.close()  # Stops receive loop
+```
+
+**Both emit and receive:**
+```python
+from think.callosum import CallosumConnection
+
+messages_received = []
+conn = CallosumConnection(callback=lambda msg: messages_received.append(msg))
+conn.emit("cortex", "status", message="active")  # Auto-connects
+# Connection drains broadcasts in background
+conn.close()
 ```
 
 ## Notes
 
 - Messages are JSON objects, one per line
+- All connections are bidirectional (emit + receive)
+- Background receive loop prevents TCP backpressure
 - Clients auto-reconnect on failure
 - Missing `tract` or `event` fields are rejected
 
