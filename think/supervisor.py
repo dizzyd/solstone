@@ -85,6 +85,7 @@ WATCH_DIRS = {
     "observe": ["observer", "sense"],
     "convey": ["convey"],
     "muse": ["cortex"],
+    "think": ["callosum"],
 }
 
 # State for auto-reload debounce tracking
@@ -437,6 +438,12 @@ def start_observers() -> list[ManagedProcess]:
     return procs
 
 
+def start_callosum_server() -> ManagedProcess:
+    """Launch the Callosum message bus server."""
+    cmd = ["think-callosum", "-v"]
+    return _launch_process("callosum", cmd, restart=True)
+
+
 def start_cortex_server() -> ManagedProcess:
     """Launch the Cortex WebSocket API server."""
     cmd = ["muse-cortex", "-v"]
@@ -779,6 +786,8 @@ def main() -> None:
     logging.info("Supervisor starting...")
 
     procs: list[ManagedProcess] = []
+    # Start Callosum first - it's the message bus that other services depend on
+    procs.append(start_callosum_server())
     if not args.no_observers:
         procs.extend(start_observers())
     if not args.no_cortex:
