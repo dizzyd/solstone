@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from muse.cortex import CortexService
-from muse.cortex_client import cortex_agents, cortex_request, cortex_watch
+from muse.cortex_client import cortex_agents, cortex_request
 from think.callosum import CallosumServer
 
 
@@ -72,9 +72,7 @@ def test_cortex_request_creation(integration_journal_path, callosum_server):
     time.sleep(0.1)
 
     # Create a request
-    agent_id = cortex_request(
-        prompt="Test prompt", persona="default", backend="openai"
-    )
+    agent_id = cortex_request(prompt="Test prompt", persona="default", backend="openai")
 
     time.sleep(0.2)
 
@@ -107,18 +105,18 @@ def test_cortex_end_to_end_with_echo_agent(integration_journal_path, callosum_se
 
     # Collect events
     received_events = []
-    stop_event = threading.Event()
 
-    def callback(event):
-        received_events.append(event)
-        if event.get("event") in ["finish", "error"]:
-            stop_event.set()
+    def callback(message):
+        # Filter for cortex tract
+        if message.get("tract") != "cortex":
+            return
+        received_events.append(message)
 
-    # Start watching
-    watcher_thread = threading.Thread(
-        target=cortex_watch, args=(callback, stop_event), daemon=True
-    )
-    watcher_thread.start()
+    # Start watching with CallosumConnection
+    from think.callosum import CallosumConnection
+
+    watcher = CallosumConnection(callback=callback)
+    watcher.connect()
 
     time.sleep(0.2)
 
@@ -135,6 +133,7 @@ def test_cortex_end_to_end_with_echo_agent(integration_journal_path, callosum_se
     assert len(request_events) >= 1
     assert request_events[0]["agent_id"] == agent_id
 
+    watcher.close()
     cortex.stop()
 
 

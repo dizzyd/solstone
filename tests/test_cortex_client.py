@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from muse.cortex_client import cortex_agents, cortex_request, cortex_watch
+from muse.cortex_client import cortex_agents, cortex_request
 from think.callosum import CallosumServer
 
 
@@ -83,9 +83,7 @@ def test_cortex_request_returns_agent_id(tmp_path, monkeypatch, callosum_server)
     """Test that cortex_request returns agent_id string."""
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
 
-    agent_id = cortex_request(
-        prompt="Test", persona="default", backend="openai"
-    )
+    agent_id = cortex_request(prompt="Test", persona="default", backend="openai")
 
     # Verify agent_id is a string timestamp
     assert isinstance(agent_id, str)
@@ -148,132 +146,6 @@ def test_cortex_request_no_journal_path(callosum_server):
             ValueError, match="JOURNAL_PATH environment variable not set"
         ):
             cortex_request("test", "default", "openai")
-    finally:
-        if old_path:
-            os.environ["JOURNAL_PATH"] = old_path
-
-
-def test_cortex_watch_receives_events(tmp_path, monkeypatch, callosum_server):
-    """Test cortex_watch receiving events from Callosum."""
-    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-
-    received_events = []
-    stop_event = threading.Event()
-
-    def callback(event):
-        received_events.append(event)
-        if event.get("event") == "finish":
-            stop_event.set()
-        return True
-
-    # Start watcher in background
-    watcher_thread = threading.Thread(
-        target=cortex_watch, args=(callback, stop_event), daemon=True
-    )
-    watcher_thread.start()
-
-    time.sleep(0.2)
-
-    # Broadcast events
-    from think.callosum import CallosumConnection
-
-    broadcaster = CallosumConnection()
-    broadcaster.emit("cortex", "request", agent_id="123", prompt="Test")
-    time.sleep(0.1)
-    broadcaster.emit("cortex", "start", agent_id="123")
-    time.sleep(0.1)
-    broadcaster.emit("cortex", "finish", agent_id="123", result="Done")
-    broadcaster.close()
-
-    # Wait for watcher to process
-    stop_event.wait(timeout=2)
-
-    # Verify events were received
-    assert len(received_events) == 3
-    assert received_events[0]["event"] == "request"
-    assert received_events[1]["event"] == "start"
-    assert received_events[2]["event"] == "finish"
-
-
-def test_cortex_watch_filters_by_tract(tmp_path, monkeypatch, callosum_server):
-    """Test that cortex_watch only receives cortex tract events."""
-    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-
-    received_events = []
-    stop_event = threading.Event()
-
-    def callback(event):
-        received_events.append(event)
-        return True
-
-    # Start watcher in background
-    watcher_thread = threading.Thread(
-        target=cortex_watch, args=(callback, stop_event), daemon=True
-    )
-    watcher_thread.start()
-
-    time.sleep(0.2)
-
-    # Broadcast events from different tracts
-    from think.callosum import CallosumConnection
-
-    broadcaster = CallosumConnection()
-    broadcaster.emit("cortex", "request", agent_id="123")
-    broadcaster.emit("indexer", "scan_start", index_type="transcripts")  # Different tract
-    broadcaster.emit("cortex", "finish", agent_id="123")
-    broadcaster.close()
-
-    time.sleep(0.2)
-    stop_event.set()
-
-    # Should only receive cortex events
-    assert len(received_events) == 2
-    assert all(e["tract"] == "cortex" for e in received_events)
-
-
-def test_cortex_watch_stop_event(tmp_path, monkeypatch, callosum_server):
-    """Test that stop_event stops the watcher."""
-    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-
-    received_events = []
-    stop_event = threading.Event()
-
-    def callback(event):
-        received_events.append(event)
-        return True
-
-    # Start watcher
-    watcher_thread = threading.Thread(
-        target=cortex_watch, args=(callback, stop_event), daemon=True
-    )
-    watcher_thread.start()
-
-    time.sleep(0.2)
-
-    # Send an event
-    from think.callosum import CallosumConnection
-
-    broadcaster = CallosumConnection()
-    broadcaster.emit("cortex", "request", agent_id="123")
-    broadcaster.close()
-
-    time.sleep(0.2)
-    assert len(received_events) == 1
-
-    # Stop watcher
-    stop_event.set()
-    watcher_thread.join(timeout=2)
-    assert not watcher_thread.is_alive()
-
-
-def test_cortex_watch_no_journal_path(callosum_server):
-    """Test cortex_watch fails without JOURNAL_PATH."""
-    old_path = os.environ.pop("JOURNAL_PATH", None)
-    try:
-        with pytest.raises(
-            ValueError, match="JOURNAL_PATH not set"
-        ):
-            cortex_watch(lambda e: None)
     finally:
         if old_path:
             os.environ["JOURNAL_PATH"] = old_path

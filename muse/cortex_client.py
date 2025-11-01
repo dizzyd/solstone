@@ -85,67 +85,6 @@ def cortex_request(
     return agent_id
 
 
-def cortex_watch(
-    on_event: Callable[[Dict[str, Any]], Optional[bool]],
-    stop_event: Optional[Any] = None,
-) -> None:
-    """Watch for Cortex agent events via Callosum broadcast.
-
-    This function blocks and listens for Cortex events broadcast on the Callosum
-    message bus. All events from all agents are received in real-time.
-
-    Args:
-        on_event: Callback function that receives each event as a dict.
-                 Should return False to stop watching, True/None to continue.
-        stop_event: Optional threading.Event() to stop watching cleanly.
-                   When set(), the watcher will exit its loop gracefully.
-
-    The callback receives event dictionaries with at least:
-        - tract: "cortex"
-        - event: Event type (request, start, tool_start, tool_end, finish, error, etc.)
-        - ts: Millisecond timestamp
-        - agent_id: Agent identifier
-        - Additional fields depend on event type
-
-    Clean shutdown example:
-        import threading
-        stop_ev = threading.Event()
-        t = threading.Thread(target=lambda: cortex_watch(on_event, stop_ev))
-        t.start()
-        # Later, to stop:
-        stop_ev.set()
-        t.join()
-    """
-
-    def _callback(message: Dict[str, Any]) -> None:
-        """Handle incoming Callosum messages."""
-        # Filter for cortex tract
-        if message.get("tract") != "cortex":
-            return
-
-        # Call user callback
-        try:
-            result = on_event(message)
-            if result is False:
-                # User wants to stop - close connection
-                connection.close()
-        except Exception as e:
-            logger.exception(f"Error in cortex_watch callback: {e}")
-
-    # Create Callosum connection with callback
-    connection = CallosumConnection(callback=_callback)
-    connection.connect()
-
-    # Wait for stop event if provided
-    if stop_event is not None:
-        stop_event.wait()
-        connection.close()
-    else:
-        # Block until connection closes
-        if connection.receive_thread:
-            connection.receive_thread.join()
-
-
 def read_agent_events(agent_id: str) -> list[Dict[str, Any]]:
     """Read all events from an agent's JSONL log file.
 

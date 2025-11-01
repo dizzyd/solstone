@@ -85,22 +85,30 @@ The Cortex service (`muse-cortex`) is the central system for managing AI agent i
 To spawn agents programmatically, use the cortex_client functions:
 
 ```python
-from muse.cortex_client import cortex_request, cortex_watch
+from muse.cortex_client import cortex_request
+from think.callosum import CallosumConnection
 
 # Create a request
-request_file = cortex_request(
+agent_id = cortex_request(
     prompt="Your task here",
     persona="default",
     backend="openai"  # or "google", "anthropic", "claude"
 )
 
-# Watch for all agent events
-def on_event(event):
-    print(f"Event: {event['event']}")
-    if event.get('event') == 'finish':
-        print(f"Result: {event.get('result')}")
+# Watch for agent events via Callosum
+def on_event(message):
+    # Filter for cortex tract events
+    if message.get('tract') != 'cortex':
+        return
 
-cortex_watch(on_event)
+    print(f"Event: {message['event']}")
+    if message.get('event') == 'finish':
+        print(f"Result: {message.get('result')}")
+
+watcher = CallosumConnection(callback=on_event)
+watcher.connect()
+# ... later, when done:
+watcher.close()
 ```
 
 ### Direct CLI Usage (Testing Only)
