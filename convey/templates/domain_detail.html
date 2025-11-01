@@ -1872,8 +1872,8 @@ function generateDescription() {
       }
     };
 
-    // Listen for events on the 'domains' view
-    appEvents.listen('domains', eventHandler);
+    // Listen for cortex events from our agent
+    appEvents.listen('cortex', eventHandler);
   })
   .catch(error => {
     console.error('Error generating description:', error);
@@ -2104,8 +2104,8 @@ function generateDescription() {
       }
     };
 
-    // Listen for events on the 'domains' view
-    appEvents.listen('domains', eventHandler);
+    // Listen for cortex events from our agent
+    appEvents.listen('cortex', eventHandler);
   })
   .catch(error => {
     console.error('Error generating description:', error);
@@ -2254,7 +2254,7 @@ function submitEntityAssist(name) {
 }
 
 // Listen for entity assist completion events
-appEvents.listen('domains', function(event) {
+appEvents.listen('cortex', function(event) {
   // Only process events for our entity assist agent
   if (!entityAssistAgentId || event.agent_id !== entityAssistAgentId) return;
 

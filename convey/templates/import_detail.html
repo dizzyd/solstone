@@ -271,7 +271,7 @@ function loadDomains() {
     .catch(() => {/* ignore */});
 }
 
-// Run task with WebSocket output
+// Run task with event stream output
 function runTask(taskId) {
   const modal = document.getElementById('taskModal');
   const out = document.getElementById('taskOutput');
@@ -285,12 +285,10 @@ function runTask(taskId) {
   const scroll = () => { content.scrollTop = content.scrollHeight; };
   const addLine = html => { spinner.remove(); out.innerHTML += html + '\n'; out.appendChild(spinner); scroll(); };
 
-  // Connect to /ws/events and filter for our task
-  const ws = new WebSocket(`ws://${location.host}/ws/events`);
-  ws.onmessage = e => {
-    const msg = JSON.parse(e.data);
+  // Listen for task events from our specific task
+  const handler = msg => {
     // Only process events for our task
-    if (msg.tract !== 'task' || msg.task_id !== taskId) return;
+    if (msg.task_id !== taskId) return;
 
     if (msg.event === 'start') {
       addLine('Task started...');
@@ -298,17 +296,18 @@ function runTask(taskId) {
       spinner.remove();
       out.innerHTML += '[Task completed successfully]\n';
       scroll();
-      ws.close();
+      cleanup();
       // Reload page after successful re-run
       setTimeout(() => location.reload(), 2000);
     } else if (msg.event === 'error') {
       spinner.remove();
       out.innerHTML += '<span style="color:red">[Task failed: ' + msg.error + ']</span>\n';
       scroll();
-      ws.close();
+      cleanup();
     }
   };
-  ws.onclose = () => { spinner.remove(); };
+
+  const cleanup = appEvents.listen('task', handler);
 }
 
 // Handle re-run button click

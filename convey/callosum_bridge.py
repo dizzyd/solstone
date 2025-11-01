@@ -30,26 +30,6 @@ def _ensure_journal_env() -> None:
         os.environ["JOURNAL_PATH"] = state.journal_root
 
 
-def _event_identifier(event: Dict[str, Any]) -> str:
-    agent_id = event.get("agent_id") or ""
-    event_type = event.get("event") or ""
-    call_id = event.get("call_id") or ""
-    tool = event.get("tool") or ""
-    ts = event.get("ts") or ""
-    # Ensure deterministic string so duplicates can be filtered client-side
-    return f"{agent_id}:{event_type}:{call_id}:{tool}:{ts}"
-
-
-def build_cortex_event_payload(
-    event: Dict[str, Any], *, source: str = "cortex", view: str = "chat"
-) -> Dict[str, Any]:
-    payload = dict(event)
-    payload.setdefault("view", view)
-    payload["source"] = source
-    payload["event_id"] = payload.get("event_id") or _event_identifier(payload)
-    return payload
-
-
 def _broadcast_to_websockets(event: dict) -> None:
     """Broadcast event to all connected WebSocket clients."""
     msg = json.dumps(event)
@@ -63,22 +43,10 @@ def _broadcast_to_websockets(event: dict) -> None:
 
 def _broadcast_callosum_event(message: Dict[str, Any]) -> None:
     """Broadcast Callosum event to all connected clients."""
-    tract = message.get("tract")
-
-    # For cortex events, broadcast to all cortex views with enriched payload
-    if tract == "cortex":
-        for view in ["chat", "entities", "domains"]:
-            payload = build_cortex_event_payload(message, view=view)
-            try:
-                _broadcast_to_websockets(payload)
-            except Exception:  # pragma: no cover - defensive against socket errors
-                logger.exception("Failed to broadcast Cortex event to view %s", view)
-    else:
-        # For all other tracts (task, indexer, etc.), broadcast as-is
-        try:
-            _broadcast_to_websockets(message)
-        except Exception:  # pragma: no cover - defensive against socket errors
-            logger.exception("Failed to broadcast %s event", tract)
+    try:
+        _broadcast_to_websockets(message)
+    except Exception:  # pragma: no cover - defensive against socket errors
+        logger.exception("Failed to broadcast %s event", message.get("tract"))
 
 
 def start_callosum_bridge() -> None:

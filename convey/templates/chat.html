@@ -975,9 +975,9 @@ function initChatControls(){
     input.focus();
   });
 
-  // Global event listener for all chat events
+  // Global event listener for all cortex events
   // Handles both regular chat responses and watched agent events
-  appEvents.listen('chat', e => {
+  appEvents.listen('cortex', e => {
     // Check if this event is relevant to us:
     // 1. We're processing a direct response from the active chat agent
     // 2. We're watching a specific agent and this event is from that agent

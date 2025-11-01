@@ -42,7 +42,7 @@
   </script>
   <script>
   (function(){
-    const listeners = {};
+    const listeners = {};  // Keyed by tract: 'cortex', 'task', 'indexer', etc.
     let ws;
     let retry = 1000;
     const home = document.getElementById('homeIcon');
@@ -58,18 +58,34 @@
         setTimeout(connect, retry);
       };
       ws.onmessage = e => {
-        let m;
-        try { m = JSON.parse(e.data); } catch(err) { return; }
-        if(m.view && listeners[m.view]){
-          listeners[m.view].forEach(fn => fn(m));
+        let msg;
+        try { msg = JSON.parse(e.data); } catch(err) { return; }
+
+        const tract = msg.tract;
+        if(tract && listeners[tract]){
+          listeners[tract].forEach(fn => fn(msg));
+        }
+
+        // Also support wildcard listeners for all events
+        if(listeners['*']){
+          listeners['*'].forEach(fn => fn(msg));
         }
       };
     }
     connect();
     window.appEvents = {
-      listen(view, fn){
-        if(!listeners[view]) listeners[view] = [];
-        listeners[view].push(fn);
+      // Listen for events from a specific tract (cortex, task, indexer, etc.)
+      listen(tract, fn){
+        if(!listeners[tract]) listeners[tract] = [];
+        listeners[tract].push(fn);
+        // Return cleanup function
+        return () => this.unlisten(tract, fn);
+      },
+      // Remove a specific listener
+      unlisten(tract, fn){
+        if(listeners[tract]){
+          listeners[tract] = listeners[tract].filter(f => f !== fn);
+        }
       }
     };
   })();
