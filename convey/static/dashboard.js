@@ -210,19 +210,18 @@ const Dashboard = (function() {
       }
       
       bar.appendChild(stack);
-      bar.appendChild(el('div', {className: 'bar-label'}, [d.day.slice(4, 6) + '/' + d.day.slice(6, 8)]));
-      
+
       if (d.total > 0) {
         let formatted;
         if (d.total >= 1000000) {
-          formatted = `${(d.total/1000000).toFixed(1)}m`;
+          formatted = `${Math.round(d.total/1000000)}m`;
         } else if (d.total >= 1000) {
-          formatted = `${(d.total/1000).toFixed(1)}k`;
+          formatted = `${Math.round(d.total/1000)}k`;
         } else {
           formatted = String(d.total);
         }
         bar.appendChild(el('div', {className: 'bar-value'}, [formatted]));
-        bar.setAttribute('title', `Input: ${d.input}, Reasoning: ${d.reasoning}, Output: ${d.output}`);
+        bar.setAttribute('title', `${d.day.slice(4, 6)}/${d.day.slice(6, 8)} - Input: ${d.input}, Reasoning: ${d.reasoning}, Output: ${d.output}`);
       }
       
       chart.appendChild(bar);
@@ -303,12 +302,11 @@ const Dashboard = (function() {
       }
 
       bar.appendChild(stack);
-      bar.appendChild(el('div', {className: 'bar-label'}, [d.day]));
 
       if (total > 0) {
         const formatted = total > 10 ? Math.round(total) : total.toFixed(1);
         bar.appendChild(el('div', {className: 'bar-value'}, [`${formatted}h`]));
-        bar.setAttribute('title', `Audio: ${d.audio.toFixed(1)}h, Screen: ${d.screen.toFixed(1)}h`);
+        bar.setAttribute('title', `${d.day} - Audio: ${d.audio.toFixed(1)}h, Screen: ${d.screen.toFixed(1)}h`);
       }
 
       chart.appendChild(bar);
