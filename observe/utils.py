@@ -101,6 +101,9 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
     """
     Load and parse analysis JSONL, filtering out error frames.
 
+    The first line is a header with metadata (e.g., {"raw": "path"}).
+    Subsequent frames are sorted by frame_id before being returned.
+
     Parameters
     ----------
     jsonl_path : Path
@@ -109,8 +112,9 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
     Returns
     -------
     list[dict]
-        List of valid frame analysis results
+        List of valid frame analysis results, with header first and frames sorted by frame_id
     """
+    header = None
     frames = []
     try:
         with open(jsonl_path, "r") as f:
@@ -122,7 +126,11 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
                     frame = json.loads(line)
                     # Skip frames with errors
                     if "error" not in frame:
-                        frames.append(frame)
+                        # First line without frame_id is the header
+                        if "frame_id" not in frame and header is None:
+                            header = frame
+                        else:
+                            frames.append(frame)
                 except json.JSONDecodeError as e:
                     logger.warning(
                         f"Invalid JSON at line {line_num} in {jsonl_path}: {e}"
@@ -134,6 +142,13 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
         logger.error(f"Error reading {jsonl_path}: {e}")
         return []
 
+    # Sort frames by frame_id for sequential video decoding
+    # Note: Duplicate frame_ids are normal when multiple monitors qualify the same frame
+    frames.sort(key=lambda f: f.get("frame_id", 0))
+
+    # Return header first, then sorted frames
+    if header:
+        return [header] + frames
     return frames
 
 

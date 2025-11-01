@@ -150,11 +150,12 @@ def decode_frames(
 
     Args:
         video_path: Path to the raw video file
-        frames: List of frame dicts from screen.jsonl (must be time-ordered), each containing:
+        frames: List of frame dicts from screen.jsonl, each containing:
             - frame_id (int): Sequential frame number from video
             - monitor (str): Monitor ID
             - box_2d (list[int], optional): [y_min, x_min, y_max, x_max] change region
             Additional fields (timestamp, etc.) are preserved but not used
+            Note: Duplicate frame_ids are normal when multiple monitors qualify the same frame
         annotate_boxes: Draw red borders around box_2d regions (default True)
 
     Returns:
@@ -163,7 +164,7 @@ def decode_frames(
         Each image is cropped to its monitor bounds.
 
     Raises:
-        ValueError: If frames are not ordered by frame_id ascending
+        ValueError: If frames are missing frame_id field
 
     Example:
         >>> from observe.utils import load_analysis_frames
@@ -179,18 +180,10 @@ def decode_frames(
     if not frames:
         return []
 
-    # Validate frames are ordered by frame_id
-    last_id = -1
+    # Validate frames have frame_id field
     for frame in frames:
-        frame_id = frame.get("frame_id")
-        if frame_id is None:
+        if frame.get("frame_id") is None:
             raise ValueError("All frames must have 'frame_id' field")
-        if frame_id <= last_id:
-            raise ValueError(
-                f"Frames must be ordered by frame_id ascending. "
-                f"Found frame_id {frame_id} after {last_id}"
-            )
-        last_id = frame_id
 
     # Import heavy dependencies only after validation
     import pathlib
