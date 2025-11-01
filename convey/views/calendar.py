@@ -793,12 +793,8 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
         return "", 404
 
     try:
-        import io
-
-        import av
-        from PIL import Image, ImageDraw
-
-        from observe.utils import load_analysis_frames, parse_monitor_metadata
+        from observe.see import decode_frames, image_to_jpeg_bytes
+        from observe.utils import load_analysis_frames
 
         all_frames = load_analysis_frames(jsonl_path)
 
@@ -816,87 +812,17 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
         if cache_key not in _frame_cache and raw_video_path:
             video_path = os.path.join(day_dir, raw_video_path)
             if os.path.isfile(video_path):
+                # Use the new decode_frames utility
+                images = decode_frames(video_path, frames, annotate_boxes=True)
+
+                # Convert images to JPEG bytes and cache
                 _frame_cache[cache_key] = {}
-
-                # Parse monitor metadata from video
-                with av.open(str(video_path)) as container:
-                    title = container.metadata.get("title", "")
-                    stream = container.streams.video[0]
-                    width = stream.width
-                    height = stream.height
-
-                monitors = parse_monitor_metadata(title, width, height)
-
-                # Build a mapping of timestamp -> frame_id, box_2d, and monitor
-                frame_map = {}
-                for frame in frames:
-                    ts = frame.get("timestamp")
-                    monitor_id = frame.get("monitor", "0")
-                    if ts is not None:
-                        frame_map[ts] = {
-                            "frame_id": frame.get("frame_id"),
-                            "box_2d": frame.get("box_2d"),
-                            "monitor_id": monitor_id,
-                            "monitor_bounds": monitors.get(monitor_id, {}),
-                        }
-
-                # Decode the entire video in one pass
-                with av.open(str(video_path)) as container:
-                    stream = container.streams.video[0]
-
-                    for av_frame in container.decode(stream):
-                        if av_frame.time is None:
-                            continue
-
-                        # Find matching frame metadata (with tolerance)
-                        tolerance = 0.1
-                        for ts, metadata in frame_map.items():
-                            if abs(av_frame.time - ts) < tolerance:
-                                # Convert to PIL Image (full multi-monitor frame)
-                                arr = av_frame.to_ndarray(format="rgb24")
-                                full_img = Image.fromarray(arr)
-
-                                # Crop to monitor bounds to match what's sent to Gemini
-                                monitor_bounds = metadata.get("monitor_bounds", {})
-                                x1 = monitor_bounds.get("x1", 0)
-                                y1 = monitor_bounds.get("y1", 0)
-                                x2 = monitor_bounds.get("x2", full_img.width)
-                                y2 = monitor_bounds.get("y2", full_img.height)
-
-                                # Crop to monitor
-                                img = full_img.crop((x1, y1, x2, y2))
-                                full_img.close()
-
-                                # Draw red border around the change region (box_2d is monitor-relative)
-                                box_2d = metadata.get("box_2d")
-                                if box_2d:
-                                    y_min, x_min, y_max, x_max = box_2d
-
-                                    # Draw 3px red border
-                                    draw = ImageDraw.Draw(img)
-                                    for i in range(3):
-                                        draw.rectangle(
-                                            [
-                                                x_min - i,
-                                                y_min - i,
-                                                x_max + i,
-                                                y_max + i,
-                                            ],
-                                            outline="red",
-                                        )
-
-                                # Convert to JPEG bytes and cache
-                                buffer = io.BytesIO()
-                                img.save(buffer, format="JPEG", quality=85)
-                                jpeg_bytes = buffer.getvalue()
-                                img.close()
-
-                                frame_id = metadata.get("frame_id")
-                                _frame_cache[cache_key][frame_id] = jpeg_bytes
-
-                                # Remove from map so we don't match it again
-                                del frame_map[ts]
-                                break
+                for frame, img in zip(frames, images):
+                    if img is not None:
+                        frame_id = frame["frame_id"]
+                        jpeg_bytes = image_to_jpeg_bytes(img)
+                        _frame_cache[cache_key][frame_id] = jpeg_bytes
+                        img.close()
 
         return jsonify({"frames": frames, "raw_video_path": raw_video_path})
 
