@@ -85,31 +85,83 @@ Agent execution events from the Muse cortex service.
 
 **Event types:** `request`, `start`, `thinking`, `tool_start`, `tool_end`, `finish`, `error`, `agent_updated`
 
-**Common fields:**
+**Common fields (all events):**
 - `agent_id` - Unique agent identifier (timestamp-based)
-- `persona` - Agent persona name
+- `ts` - Timestamp in milliseconds
 
 **Event-specific fields:**
 
 ### `request`
+Agent request sent by client via `cortex_request()`.
+
+Required:
 - `prompt` - Task prompt for the agent
+- `persona` - Agent persona name (e.g., "default", "analyst")
 - `backend` - AI backend (openai, google, anthropic)
 
+Optional:
+- `handoff_from` - Previous agent ID if this is a handoff
+- `save` - Filename to save result to in day directory
+- `model` - Model name override
+- `max_tokens` - Token limit override
+- `timeout_seconds` - Timeout in seconds (default 600)
+- Additional backend-specific configuration
+
+### `start`
+Agent process has started executing.
+
+- `prompt` - The task prompt
+- `persona` - Agent persona name
+- `model` - Model being used
+- `backend` - AI backend
+
+### `thinking`
+Agent reasoning/thinking summary (for models that support extended thinking).
+
+- `summary` - Thinking summary text
+- `model` - Model name (optional)
+
+### `tool_start`
+Agent is starting a tool call.
+
+- `tool` - Name of the tool being called
+- `call_id` - Unique identifier for this tool call
+- `args` - Tool arguments (optional)
+
+### `tool_end`
+Agent tool call has completed.
+
+- `tool` - Name of the tool
+- `call_id` - Matches the call_id from tool_start
+- `args` - Tool arguments (optional)
+- `result` - Tool result
+
 ### `finish`
+Agent has completed successfully.
+
 - `result` - Agent output/result text
 - `usage` - Token usage statistics (optional)
   - `input_tokens` - Tokens in input
   - `output_tokens` - Tokens in output
   - `total_tokens` - Total tokens used
+- `conversation_id` - OpenAI conversation ID (optional, for continuations)
 
 ### `error`
+Agent encountered an error.
+
 - `error` - Error message
 - `trace` - Stack trace (optional)
 - `exit_code` - Process exit code (optional)
 
-### `tool_start` / `tool_end`
-- `tool` - Name of the tool being called
-- `call_id` - Unique identifier for this tool call
+### `agent_updated`
+Agent context or state has changed.
+
+- `agent` - Agent description or identifier
+
+### `info`
+Non-JSON output from agent process (captured as info event).
+
+- `message` - The info message text
 
 ## `"tract": "indexer"` (future)
 

@@ -5,21 +5,17 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from muse.cortex_client import cortex_watch
+from think.callosum import CallosumConnection
 
 from . import state
 from .push import push_server
 
-# Note: The async infrastructure has been removed since cortex_client.py
-# now provides synchronous functions directly
-
 logger = logging.getLogger(__name__)
 
 _WATCH_LOCK = threading.Lock()
-_WATCH_THREAD: Optional[threading.Thread] = None
-_WATCH_STOP: Optional[threading.Event] = None
+_CALLOSUM_CONNECTION: Optional[CallosumConnection] = None
 
 
 def _ensure_journal_env() -> None:
@@ -47,52 +43,46 @@ def build_cortex_event_payload(
     return payload
 
 
-def _broadcast_cortex_event(event: Dict[str, Any]) -> Optional[bool]:
-    """Broadcast raw Cortex event to all connected clients."""
-    # Broadcast raw events - client handles rendering
+def _broadcast_cortex_event(message: Dict[str, Any]) -> None:
+    """Broadcast Cortex event from Callosum to all connected clients."""
+    # Filter for cortex tract
+    if message.get("tract") != "cortex":
+        return
+
+    # Broadcast to all views
     for view in ["chat", "entities", "domains"]:
-        payload = build_cortex_event_payload(event, view=view)
+        payload = build_cortex_event_payload(message, view=view)
         try:
             push_server.push(payload)
         except Exception:  # pragma: no cover - defensive against socket errors
             logger.exception("Failed to broadcast Cortex event to view %s", view)
-    return True
-
-
-def _run_cortex_watcher() -> None:
-    assert _WATCH_STOP is not None
-    backoff = 1.0
-    while not _WATCH_STOP.is_set():
-        try:
-            _ensure_journal_env()
-            cortex_watch(_broadcast_cortex_event, stop_event=_WATCH_STOP)
-            break
-        except ValueError:
-            logger.debug("Cortex watcher waiting for JOURNAL_PATH; retrying")
-        except Exception:  # pragma: no cover - guard against unexpected failures
-            logger.exception("Cortex watcher crashed; retrying")
-        if _WATCH_STOP.wait(backoff):
-            break
-        backoff = min(backoff * 2, 30.0)
 
 
 def start_cortex_event_watcher() -> None:
-    global _WATCH_THREAD, _WATCH_STOP
+    """Start listening for Cortex events via Callosum."""
+    global _CALLOSUM_CONNECTION
     with _WATCH_LOCK:
-        if _WATCH_THREAD and _WATCH_THREAD.is_alive():
+        if _CALLOSUM_CONNECTION:
             return
-        _WATCH_STOP = threading.Event()
-        _WATCH_THREAD = threading.Thread(
-            target=_run_cortex_watcher, name="cortex-watch", daemon=True
-        )
-        _WATCH_THREAD.start()
+
+        # Ensure JOURNAL_PATH is set
+        _ensure_journal_env()
+
+        # Create Callosum connection with callback
+        try:
+            _CALLOSUM_CONNECTION = CallosumConnection(callback=_broadcast_cortex_event)
+            _CALLOSUM_CONNECTION.connect()
+            logger.info("Cortex event watcher connected to Callosum")
+        except Exception as e:
+            logger.warning(f"Failed to start Cortex watcher: {e}")
+            _CALLOSUM_CONNECTION = None
 
 
 def stop_cortex_event_watcher(timeout: float = 5.0) -> None:
+    """Stop listening for Cortex events."""
+    global _CALLOSUM_CONNECTION
     with _WATCH_LOCK:
-        stop_event = _WATCH_STOP
-        thread = _WATCH_THREAD
-        if stop_event:
-            stop_event.set()
-    if thread:
-        thread.join(timeout)
+        if _CALLOSUM_CONNECTION:
+            _CALLOSUM_CONNECTION.close()
+            _CALLOSUM_CONNECTION = None
+            logger.info("Cortex event watcher stopped")

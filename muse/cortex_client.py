@@ -4,21 +4,12 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from watchfiles import Change, watch
+from think.callosum import CallosumConnection
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AgentState:
-    """Track reading state for an agent."""
-
-    position: int = 0
-    partial_line: str = ""
 
 
 def cortex_request(
@@ -29,7 +20,7 @@ def cortex_request(
     config: Optional[Dict[str, Any]] = None,
     save: Optional[str] = None,
 ) -> str:
-    """Create a Cortex agent request file.
+    """Create a Cortex agent request via Callosum broadcast.
 
     Args:
         prompt: The task or question for the agent
@@ -40,9 +31,9 @@ def cortex_request(
         save: Optional filename to save result to in current day directory
 
     Returns:
-        Path to the created request file
+        Agent ID (timestamp-based string)
     """
-    # Get journal path from environment
+    # Get journal path from environment (for agent_id uniqueness check)
     journal_path = os.environ.get("JOURNAL_PATH")
     if not journal_path:
         raise ValueError("JOURNAL_PATH environment variable not set")
@@ -54,15 +45,17 @@ def cortex_request(
     # Generate timestamp in milliseconds, ensuring uniqueness
     ts = int(time.time() * 1000)
     while (agents_dir / f"{ts}_active.jsonl").exists() or (
-        agents_dir / f"{ts}_pending.jsonl"
+        agents_dir / f"{ts}.jsonl"
     ).exists():
         ts += 1
+
+    agent_id = str(ts)
 
     # Build request object
     request = {
         "event": "request",
         "ts": ts,
-        "agent_id": str(ts),
+        "agent_id": agent_id,
         "prompt": prompt,
         "backend": backend,
         "persona": persona,
@@ -81,94 +74,25 @@ def cortex_request(
     if save:
         request["save"] = save
 
-    # Write to pending file
-    pending_file = agents_dir / f"{ts}_pending.jsonl"
-    with open(pending_file, "w") as f:
-        json.dump(request, f)
-        f.write("\n")
+    # Broadcast request to Callosum
+    # Note: emit() signature is emit(tract, event, **fields)
+    # Remove "event" from request dict to avoid conflict
+    request_fields = {k: v for k, v in request.items() if k != "event"}
+    client = CallosumConnection()
+    client.emit("cortex", "request", **request_fields)
+    client.close()
 
-    # Rename to active to trigger Cortex processing (atomic operation)
-    active_file = agents_dir / f"{ts}_active.jsonl"
-    pending_file.rename(active_file)
-
-    return str(active_file)
-
-
-def _extract_agent_id(path: Path) -> Optional[str]:
-    """Extract agent_id from filename. Returns None for _pending files."""
-    name = path.name
-    if name.endswith("_pending.jsonl"):
-        return None
-    if name.endswith("_active.jsonl"):
-        return name[:-13]  # Remove "_active.jsonl"
-    if name.endswith(".jsonl"):
-        return name[:-6]  # Remove ".jsonl"
-    return None
-
-
-def _process_agent_file(
-    path: Path,
-    agent_id: str,
-    state: AgentState,
-    on_event: Callable[[Dict[str, Any]], Optional[bool]],
-) -> bool:
-    """Process agent file and return True if should stop tracking.
-
-    Returns True if saw finish/error event or callback requested stop.
-    """
-    try:
-        with open(path, "r") as f:
-            f.seek(state.position)
-            new_content = f.read()
-
-            if not new_content:
-                return False
-
-            content = state.partial_line + new_content
-            lines = content.split("\n")
-
-            if not content.endswith("\n"):
-                state.partial_line = lines[-1]
-                lines = lines[:-1]
-            else:
-                state.partial_line = ""
-
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-
-                try:
-                    event = json.loads(line)
-
-                    try:
-                        result = on_event(event)
-                        if result is False:
-                            state.position = f.tell()
-                            return True
-                    except Exception:
-                        state.position = f.tell()
-                        return True
-                except json.JSONDecodeError:
-                    continue
-
-            state.position = f.tell()
-            return False
-
-    except (OSError, IOError):
-        # File doesn't exist (might be renamed), just skip
-        return False
+    return agent_id
 
 
 def cortex_watch(
     on_event: Callable[[Dict[str, Any]], Optional[bool]],
     stop_event: Optional[Any] = None,
 ) -> None:
-    """Watch for Cortex agent events and emit callbacks.
+    """Watch for Cortex agent events via Callosum broadcast.
 
-    This function blocks and watches for any agent files in the agents
-    directory, efficiently tailing them for new events. When new events are
-    written, they are parsed and passed to the on_event callback.
+    This function blocks and listens for Cortex events broadcast on the Callosum
+    message bus. All events from all agents are received in real-time.
 
     Args:
         on_event: Callback function that receives each event as a dict.
@@ -177,8 +101,10 @@ def cortex_watch(
                    When set(), the watcher will exit its loop gracefully.
 
     The callback receives event dictionaries with at least:
+        - tract: "cortex"
         - event: Event type (request, start, tool_start, tool_end, finish, error, etc.)
         - ts: Millisecond timestamp
+        - agent_id: Agent identifier
         - Additional fields depend on event type
 
     Clean shutdown example:
@@ -190,58 +116,34 @@ def cortex_watch(
         stop_ev.set()
         t.join()
     """
-    # Get journal path from environment
-    journal_path = os.environ.get("JOURNAL_PATH")
-    if not journal_path:
-        raise ValueError("JOURNAL_PATH environment variable not set")
 
-    agents_dir = Path(journal_path) / "agents"
-    agents_dir.mkdir(parents=True, exist_ok=True)
+    def _callback(message: Dict[str, Any]) -> None:
+        """Handle incoming Callosum messages."""
+        # Filter for cortex tract
+        if message.get("tract") != "cortex":
+            return
 
-    # Track state by agent_id (stable across renames)
-    agent_states: Dict[str, AgentState] = {}
+        # Call user callback
+        try:
+            result = on_event(message)
+            if result is False:
+                # User wants to stop - close connection
+                connection.close()
+        except Exception as e:
+            logger.exception(f"Error in cortex_watch callback: {e}")
 
-    # Initial scan for existing active files
-    for active_file in agents_dir.glob("*_active.jsonl"):
-        if active_file.is_file():
-            agent_id = _extract_agent_id(active_file)
-            if agent_id:
-                # Start from current end of file for existing files
-                stat = active_file.stat()
-                agent_states[agent_id] = AgentState(position=stat.st_size)
+    # Create Callosum connection with callback
+    connection = CallosumConnection(callback=_callback)
+    connection.connect()
 
-    # Watch for changes in the agents directory
-    watch_kwargs = {"raise_interrupt": False}
+    # Wait for stop event if provided
     if stop_event is not None:
-        watch_kwargs["stop_event"] = stop_event
-
-    for changes in watch(agents_dir, **watch_kwargs):
-        for change_type, path_str in changes:
-            path = Path(path_str)
-
-            # Extract agent_id from filename
-            agent_id = _extract_agent_id(path)
-            if not agent_id:
-                continue
-
-            # Ignore delete events - state persists by agent_id
-            if change_type == Change.deleted:
-                continue
-
-            # Process added or modified events
-            if change_type in (Change.added, Change.modified):
-                # Get or create state for this agent
-                if agent_id not in agent_states:
-                    agent_states[agent_id] = AgentState()
-
-                # Process the file
-                should_stop = _process_agent_file(
-                    path, agent_id, agent_states[agent_id], on_event
-                )
-
-                # Clean up agent state when done, but continue watching other agents
-                if should_stop:
-                    del agent_states[agent_id]
+        stop_event.wait()
+        connection.close()
+    else:
+        # Block until connection closes
+        if connection.receive_thread:
+            connection.receive_thread.join()
 
 
 def read_agent_events(agent_id: str) -> list[Dict[str, Any]]:

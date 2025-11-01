@@ -1,13 +1,15 @@
-"""File-based agent process manager for Sunstone.
+"""Callosum-based agent process manager for Sunstone.
 
-Cortex monitors the journal's agents/ directory for new request files and manages
-agent process lifecycle through file state transitions:
-- <timestamp>_pending.jsonl: Request awaiting processing
-- <timestamp>_active.jsonl: Agent currently executing
-- <timestamp>.jsonl: Agent completed
+Cortex listens for agent requests via the Callosum message bus and manages
+agent process lifecycle:
+- Receives requests via Callosum (tract="cortex", event="request")
+- Creates <timestamp>_active.jsonl files to track active agents
+- Spawns agent processes and captures their stdout events
+- Broadcasts all agent events back to Callosum
+- Renames to <timestamp>.jsonl when complete
 
-This service uses watchdog to detect new active files and spawns agent processes,
-capturing their stdout events and appending them to the JSONL files.
+Agent files provide persistence and historical record, while Callosum provides
+real-time event distribution to all interested services.
 """
 
 from __future__ import annotations
@@ -18,15 +20,13 @@ import logging
 import os
 import socket
 import subprocess
+import sys
 import threading
 import time
-
-# Removed datetime - using time.time() instead
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
+from think.callosum import CallosumConnection
 
 
 class AgentProcess:
@@ -64,42 +64,8 @@ class AgentProcess:
                 self.process.wait()  # Ensure zombie is reaped
 
 
-class AgentFileHandler(FileSystemEventHandler):
-    """Handles file system events for agent request files."""
-
-    def __init__(self, cortex_service: "CortexService"):
-        self.cortex_service = cortex_service
-        self.logger = logging.getLogger(__name__)
-
-    def on_created(self, event):
-        """Handle file creation events (for direct _active.jsonl creation)."""
-        if event.is_directory:
-            return
-
-        file_path = Path(event.src_path)
-        if file_path.name.endswith("_active.jsonl"):
-            agent_id = file_path.stem.replace("_active", "")
-            self.logger.info(f"Detected created active file: {agent_id}")
-            # Small delay to ensure file is fully written
-            time.sleep(0.1)
-            self.cortex_service._handle_active_file(agent_id, file_path)
-
-    def on_moved(self, event):
-        """Handle rename events (pending -> active transitions)."""
-        if event.is_directory:
-            return
-
-        # watchdog emits both src_path and dest_path; we care about the new name
-        dest_path = Path(getattr(event, "dest_path", event.src_path))
-        if dest_path.name.endswith("_active.jsonl"):
-            agent_id = dest_path.stem.replace("_active", "")
-            self.logger.info(f"Detected activated agent via rename: {agent_id}")
-            time.sleep(0.1)
-            self.cortex_service._handle_active_file(agent_id, dest_path)
-
-
 class CortexService:
-    """File-based agent process manager."""
+    """Callosum-based agent process manager."""
 
     def __init__(self, journal_path: Optional[str] = None):
         self.journal_path = Path(journal_path or os.getenv("JOURNAL_PATH", "."))
@@ -113,9 +79,11 @@ class CortexService:
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.shutdown_requested = threading.Event()
-        self.observer = None
         self.mcp_thread: Optional[threading.Thread] = None
         self.mcp_server_url: Optional[str] = None
+
+        # Callosum connection for receiving requests and broadcasting events
+        self.callosum = CallosumConnection(callback=self._handle_callosum_message)
 
         self._start_mcp_server()
 
@@ -197,17 +165,28 @@ class CortexService:
         return event
 
     def start(self) -> None:
-        """Start monitoring for new agent requests."""
-        # Process any existing active files on startup
-        self._process_existing_active_files()
+        """Start listening for agent requests via Callosum."""
+        # Check for existing active files - another instance may be running
+        active_files = list(self.agents_dir.glob("*_active.jsonl"))
+        if active_files:
+            self.logger.error(
+                f"Found {len(active_files)} active agent(s) - another Cortex instance may be running!"
+            )
+            self.logger.error(f"Active files: {[f.name for f in active_files]}")
+            self.logger.error(
+                "Please ensure only one Cortex service is running at a time."
+            )
+            sys.exit(1)
 
-        # Set up file system observer
-        event_handler = AgentFileHandler(self)
-        self.observer = Observer()
-        self.observer.schedule(event_handler, str(self.agents_dir), recursive=False)
-        self.observer.start()
+        # Connect to Callosum to receive requests
+        try:
+            self.callosum.connect()
+            self.logger.info("Connected to Callosum message bus")
+        except Exception as e:
+            self.logger.error(f"Failed to connect to Callosum: {e}")
+            sys.exit(1)
 
-        self.logger.info(f"Monitoring {self.agents_dir} for agent requests")
+        self.logger.info("Cortex service started, listening for agent requests")
 
         while True:
             try:
@@ -226,64 +205,53 @@ class CortexService:
                 self.logger.info("Shutdown requested, will exit when idle")
                 self.shutdown_requested.set()
 
-    def _process_existing_active_files(self) -> None:
-        """Clean up any stale active files that exist on startup."""
-        for file_path in self.agents_dir.glob("*_active.jsonl"):
-            agent_id = file_path.stem.replace("_active", "")
+    def _handle_callosum_message(self, message: Dict[str, Any]) -> None:
+        """Handle incoming Callosum messages (callback)."""
+        # Filter for cortex tract and request event
+        if message.get("tract") != "cortex" or message.get("event") != "request":
+            return
 
-            # Check if this agent never started (only has request event)
-            try:
-                with open(file_path, "r") as f:
-                    lines = f.readlines()
-                    if (
-                        len(lines) == 1
-                        and json.loads(lines[0]).get("event") == "request"
-                    ):
-                        # Agent never started - treat as new activation
-                        self.logger.info(f"Reactivating unstarted agent: {agent_id}")
-                        self._handle_active_file(agent_id, file_path)
-                        continue
-            except (json.JSONDecodeError, OSError):
-                pass
-
-            # Agent had started but didn't complete - mark as failed
-            self.logger.warning(
-                f"Found stale active file from previous session: {agent_id}"
-            )
-            error_message = "Agent failed due to unexpected Cortex service shutdown"
-            self._write_error_and_complete(file_path, error_message)
-
-    def _handle_active_file(self, agent_id: str, file_path: Path) -> None:
-        """Handle a newly activated agent request file."""
+        # Handle the request
         try:
-            # Skip if this agent is already being processed (dedupe rename/create)
+            self._handle_request(message)
+        except Exception as e:
+            self.logger.exception(f"Error handling request: {e}")
+
+    def _handle_request(self, request: Dict[str, Any]) -> None:
+        """Handle a new agent request from Callosum."""
+        agent_id = request.get("agent_id")
+        if not agent_id:
+            self.logger.error("Received request without agent_id")
+            return
+
+        try:
+            # Skip if this agent is already being processed
             with self.lock:
                 if agent_id in self.running_agents:
                     self.logger.debug(
-                        f"Agent {agent_id} already running, skipping duplicate activation"
+                        f"Agent {agent_id} already running, skipping duplicate"
                     )
                     return
 
-            # Check if file still exists (may have already been processed)
-            if not file_path.exists():
-                self.logger.debug(f"Active file already processed: {file_path}")
+            # Create _active.jsonl file (exclusive creation to prevent race conditions)
+            file_path = self.agents_dir / f"{agent_id}_active.jsonl"
+            if file_path.exists():
+                self.logger.debug(
+                    f"Agent {agent_id} already claimed by another process"
+                )
                 return
 
-            # Read the request from the first line
-            with open(file_path, "r") as f:
-                first_line = f.readline()
-                if not first_line:
-                    self._write_error_and_complete(file_path, "Empty request file")
-                    self.logger.error(f"Empty request file: {file_path}")
-                    return
+            # Write request as first line
+            with open(file_path, "x") as f:  # 'x' mode fails if file exists
+                f.write(json.dumps(request) + "\n")
 
-                request = json.loads(first_line)
+            self.logger.info(f"Processing agent request: {agent_id}")
 
             # Validate request format
             if request.get("event") != "request":
                 self._write_error_and_complete(file_path, "Invalid request format")
                 self.logger.error(
-                    f"Invalid request format in {file_path}: missing 'request' event"
+                    f"Invalid request format: missing 'request' event"
                 )
                 return
 
@@ -556,6 +524,12 @@ class CortexService:
                     with open(agent.log_path, "a") as f:
                         f.write(json.dumps(event) + "\n")
 
+                    # Broadcast event to Callosum
+                    try:
+                        self.callosum.emit("cortex", event.get("event", "unknown"), **event)
+                    except Exception as e:
+                        self.logger.debug(f"Failed to broadcast event to Callosum: {e}")
+
                     # Handle finish or error event
                     if event.get("event") in ["finish", "error"]:
                         # Check for save and handoff (only on finish)
@@ -805,10 +779,9 @@ class CortexService:
         """Stop the Cortex service."""
         self.stop_event.set()
 
-        # Stop the file observer
-        if self.observer and self.observer.is_alive():
-            self.observer.stop()
-            self.observer.join(timeout=5)
+        # Close Callosum connection
+        if self.callosum:
+            self.callosum.close()
 
         # Stop all running agents
         with self.lock:

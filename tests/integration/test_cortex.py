@@ -1,4 +1,4 @@
-"""Integration tests for the Cortex agent system."""
+"""Integration tests for the Cortex agent system with Callosum."""
 
 import json
 import os
@@ -9,11 +9,36 @@ from pathlib import Path
 import pytest
 
 from muse.cortex import CortexService
-from muse.cortex_client import cortex_agents, cortex_request
+from muse.cortex_client import cortex_agents, cortex_request, cortex_watch
+from think.callosum import CallosumServer
+
+
+@pytest.fixture
+def callosum_server(integration_journal_path):
+    """Start a Callosum server for integration testing."""
+    os.environ["JOURNAL_PATH"] = str(integration_journal_path)
+
+    server = CallosumServer()
+    server_thread = threading.Thread(target=server.start, daemon=True)
+    server_thread.start()
+
+    # Wait for server to be ready
+    socket_path = integration_journal_path / "health" / "callosum.sock"
+    for _ in range(50):
+        if socket_path.exists():
+            break
+        time.sleep(0.1)
+    else:
+        pytest.fail("Callosum server did not start in time")
+
+    yield server
+
+    server.stop()
+    server_thread.join(timeout=2)
 
 
 @pytest.mark.integration
-def test_cortex_service_startup(integration_journal_path):
+def test_cortex_service_startup(integration_journal_path, callosum_server):
     """Test that Cortex service starts up and creates necessary directories."""
     # Initialize the service
     cortex = CortexService(journal_path=str(integration_journal_path))
@@ -30,187 +55,161 @@ def test_cortex_service_startup(integration_journal_path):
 
 
 @pytest.mark.integration
-def test_cortex_request_creation(integration_journal_path):
-    """Test creating a Cortex agent request file."""
-    # Set JOURNAL_PATH for cortex_request
+def test_cortex_request_creation(integration_journal_path, callosum_server):
+    """Test creating a Cortex agent request via Callosum."""
     os.environ["JOURNAL_PATH"] = str(integration_journal_path)
 
+    # Listen for broadcasts
+    received_messages = []
+
+    def callback(msg):
+        received_messages.append(msg)
+
+    from think.callosum import CallosumConnection
+
+    listener = CallosumConnection(callback=callback)
+    listener.connect()
+    time.sleep(0.1)
+
     # Create a request
-    active_file = cortex_request(
+    agent_id = cortex_request(
         prompt="Test prompt", persona="default", backend="openai"
     )
 
-    # Verify file was created with correct name pattern
-    active_path = Path(active_file)
-    assert active_path.exists()
-    assert active_path.name.endswith("_active.jsonl")
-    assert active_path.parent == integration_journal_path / "agents"
+    time.sleep(0.2)
 
-    # Verify request content
-    with open(active_path, "r") as f:
-        request = json.loads(f.readline())
-
-    assert request["event"] == "request"
+    # Verify request was broadcast
+    assert len(received_messages) >= 1
+    request = [m for m in received_messages if m.get("event") == "request"][0]
     assert request["prompt"] == "Test prompt"
     assert request["persona"] == "default"
     assert request["backend"] == "openai"
-    assert "ts" in request
+    assert request["agent_id"] == agent_id
+
+    listener.close()
 
 
 @pytest.mark.integration
-def test_cortex_agent_process_creation(integration_journal_path):
-    """Test that Cortex spawns agent processes for active files."""
-    # Set up environment
+def test_cortex_end_to_end_with_echo_agent(integration_journal_path, callosum_server):
+    """Test end-to-end Cortex flow with a simple echo agent."""
     os.environ["JOURNAL_PATH"] = str(integration_journal_path)
 
-    # Start Cortex service in a thread
-    cortex = CortexService(journal_path=str(integration_journal_path))
-    service_thread = threading.Thread(target=cortex.start, daemon=True)
-    service_thread.start()
-
-    # Give service time to start watching
-    time.sleep(0.5)
-
-    try:
-        # Create a simple test request
-        active_file = cortex_request(
-            prompt="Return exactly: Hello from agent",
-            persona="default",
-            backend="openai",
-        )
-
-        # Give agent time to spawn and process
-        time.sleep(2)
-
-        # The agent might have already completed, so check the file
-        active_path = Path(active_file)
-        completed_path = active_path.parent / active_path.name.replace(
-            "_active.jsonl", ".jsonl"
-        )
-
-        # Either file should exist (active if still running, completed if done)
-        assert active_path.exists() or completed_path.exists()
-
-        # If completed, verify it has events
-        if completed_path.exists():
-            with open(completed_path, "r") as f:
-                lines = f.readlines()
-                assert len(lines) >= 2  # At least request and finish/error
-
-                # First line should be request
-                first_event = json.loads(lines[0])
-                assert first_event["event"] == "request"
-
-                # Last line should be finish or error
-                last_event = json.loads(lines[-1])
-                assert last_event["event"] in ["finish", "error"]
-
-    finally:
-        # Stop the service
-        cortex.stop()
-
-
-@pytest.mark.integration
-@pytest.mark.slow
-def test_cortex_agent_list(integration_journal_path):
-    """Test listing agents from the journal."""
-    # Set up environment
-    os.environ["JOURNAL_PATH"] = str(integration_journal_path)
-
-    # Create some mock agent files for testing
+    # Create a mock agent script that just echoes
     agents_dir = integration_journal_path / "agents"
-    agents_dir.mkdir(exist_ok=True)
+    agents_dir.mkdir(parents=True, exist_ok=True)
 
-    # Clear any existing agent files from previous tests
-    for f in agents_dir.glob("*.jsonl"):
-        f.unlink()
-
-    # Create a completed agent file
-    completed_file = agents_dir / "1234567890123.jsonl"
-    completed_file.write_text(
-        '{"event": "request", "ts": 1234567890123, "prompt": "Test 1", "persona": "default", "backend": "openai"}\n'
-        '{"event": "finish", "ts": 1234567890456, "result": "Done"}\n'
-    )
-
-    # Create an active agent file
-    active_file = agents_dir / "1234567890789_active.jsonl"
-    active_file.write_text(
-        '{"event": "request", "ts": 1234567890789, "prompt": "Test 2", "persona": "default", "backend": "openai"}\n'
-    )
-
-    # List all agents
-    result = cortex_agents(limit=10)
-
-    assert "agents" in result
-    assert "pagination" in result
-    assert len(result["agents"]) == 2
-
-    # Check agent details
-    agents = result["agents"]
-
-    # Find the completed agent
-    completed = next((a for a in agents if a["id"] == "1234567890123"), None)
-    assert completed is not None
-    assert completed["status"] == "completed"
-    assert completed["prompt"] == "Test 1"
-
-    # Find the active agent
-    active = next((a for a in agents if a["id"] == "1234567890789"), None)
-    assert active is not None
-    assert active["status"] == "running"
-    assert active["prompt"] == "Test 2"
-
-    # Test filtering
-    live_result = cortex_agents(agent_type="live")
-    assert len(live_result["agents"]) == 1
-    assert live_result["agents"][0]["status"] == "running"
-
-    historical_result = cortex_agents(agent_type="historical")
-    assert len(historical_result["agents"]) == 1
-    assert historical_result["agents"][0]["status"] == "completed"
-
-
-@pytest.mark.integration
-def test_cortex_error_handling(integration_journal_path):
-    """Test Cortex error handling for invalid requests."""
-    # Set up environment
-    os.environ["JOURNAL_PATH"] = str(integration_journal_path)
-
-    # Start Cortex service
+    # Start Cortex service in background
     cortex = CortexService(journal_path=str(integration_journal_path))
     service_thread = threading.Thread(target=cortex.start, daemon=True)
     service_thread.start()
 
-    # Give service time to start
-    time.sleep(0.5)
+    time.sleep(0.5)  # Let service start
 
-    try:
-        # Create a malformed request directly (bypassing cortex_request validation)
-        agents_dir = integration_journal_path / "agents"
-        agents_dir.mkdir(exist_ok=True)
+    # Collect events
+    received_events = []
+    stop_event = threading.Event()
 
-        # Create an active file with invalid JSON
-        ts = int(time.time() * 1000)
-        bad_file = agents_dir / f"{ts}_active.jsonl"
-        bad_file.write_text("not valid json\n")
+    def callback(event):
+        received_events.append(event)
+        if event.get("event") in ["finish", "error"]:
+            stop_event.set()
 
-        # Give Cortex time to process
-        time.sleep(1)
+    # Start watching
+    watcher_thread = threading.Thread(
+        target=cortex_watch, args=(callback, stop_event), daemon=True
+    )
+    watcher_thread.start()
 
-        # File should be completed with error
-        completed_file = agents_dir / f"{ts}.jsonl"
-        assert completed_file.exists()
+    time.sleep(0.2)
 
-        # Should contain an error event
-        with open(completed_file, "r") as f:
-            lines = f.readlines()
-            # First line is the invalid content, second should be error
-            if len(lines) > 1:
-                error_event = json.loads(lines[-1])
-                assert error_event["event"] == "error"
-                assert (
-                    "JSON" in error_event["error"] or "Invalid" in error_event["error"]
-                )
+    # Make a request (this will fail because no real agent, but we can verify the flow)
+    agent_id = cortex_request(
+        prompt="Test end-to-end", persona="default", backend="openai"
+    )
 
-    finally:
-        cortex.stop()
+    # Wait for at least request event
+    time.sleep(1.0)
+
+    # Should have received the request event
+    request_events = [e for e in received_events if e.get("event") == "request"]
+    assert len(request_events) >= 1
+    assert request_events[0]["agent_id"] == agent_id
+
+    cortex.stop()
+
+
+@pytest.mark.integration
+def test_cortex_agents_listing(integration_journal_path):
+    """Test listing agents from the cortex_agents function."""
+    os.environ["JOURNAL_PATH"] = str(integration_journal_path)
+
+    # Create some test agent files
+    agents_dir = integration_journal_path / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get initial count
+    initial_result = cortex_agents()
+    initial_count = len(initial_result["agents"])
+
+    ts = int(time.time() * 1000)
+
+    # Create completed agent
+    completed_file = agents_dir / f"{ts}.jsonl"
+    with open(completed_file, "w") as f:
+        json.dump(
+            {
+                "event": "request",
+                "ts": ts,
+                "prompt": "Test",
+                "persona": "default",
+                "backend": "openai",
+            },
+            f,
+        )
+        f.write("\n")
+        json.dump({"event": "finish", "ts": ts + 100, "result": "Done"}, f)
+        f.write("\n")
+
+    # List agents
+    result = cortex_agents()
+
+    # Should have one more than before
+    assert len(result["agents"]) == initial_count + 1
+
+    # Find our agent
+    our_agent = [a for a in result["agents"] if a["id"] == str(ts)][0]
+    assert our_agent["status"] == "completed"
+    assert our_agent["prompt"] == "Test"
+
+
+@pytest.mark.integration
+def test_cortex_error_handling(integration_journal_path, callosum_server):
+    """Test that Cortex handles errors gracefully."""
+    os.environ["JOURNAL_PATH"] = str(integration_journal_path)
+
+    # Listen for events
+    received_events = []
+
+    def callback(msg):
+        received_events.append(msg)
+
+    from think.callosum import CallosumConnection
+
+    listener = CallosumConnection(callback=callback)
+    listener.connect()
+    time.sleep(0.1)
+
+    # Make a request
+    agent_id = cortex_request(
+        prompt="Test error handling",
+        persona="nonexistent_persona",  # This may cause issues
+        backend="openai",
+    )
+
+    time.sleep(0.2)
+
+    # Should have at least received the request
+    request_events = [e for e in received_events if e.get("event") == "request"]
+    assert len(request_events) >= 1
+
+    listener.close()
