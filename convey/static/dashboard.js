@@ -36,6 +36,21 @@ const Dashboard = (function() {
     return Math.round(value) + 'm';
   }
 
+  // Format token counts with Bil/Mil suffixes
+  function fmtTokens(num) {
+    const value = Number(num);
+    if (value >= 1e9) {
+      return (value / 1e9).toFixed(1) + 'B';
+    }
+    if (value >= 1e6) {
+      return (value / 1e6).toFixed(1) + 'M';
+    }
+    if (value >= 1e3) {
+      return (value / 1e3).toFixed(1) + 'K';
+    }
+    return String(Math.round(value));
+  }
+
   // Create a stat card
   function statCard(title, value, subtitle, color) {
     return el('div', {className: 'stat-card'}, [
@@ -233,6 +248,88 @@ const Dashboard = (function() {
     container.appendChild(legend);
   }
 
+  // Build stacked hours chart (audio + screen)
+  function buildStackedHoursChart(container, data) {
+    container.innerHTML = ''; // Clear existing content
+
+    if (!data || !data.length) {
+      container.appendChild(
+        el('div', {className: 'empty-chart'}, ['No data available'])
+      );
+      return;
+    }
+
+    // Calculate max total for scaling
+    const maxTotal = Math.max(...data.map(d => d.audio + d.screen)) || 1;
+
+    const chart = el('div', {className: 'bar-chart'});
+
+    data.forEach(d => {
+      const total = d.audio + d.screen;
+      const height = (total / maxTotal) * 100;
+      const bar = el('div', {
+        className: 'bar',
+        style: {height: `${height}%`, background: 'transparent', overflow: 'visible'}
+      });
+
+      // Create stacked segments
+      const stack = el('div', {className: 'bar-stack', style: {height: '100%'}});
+
+      // Calculate segment heights as percentages of the bar
+      if (total > 0) {
+        const audioPct = (d.audio / total) * 100;
+        const screenPct = (d.screen / total) * 100;
+
+        // Screen on top (pink/purple)
+        if (d.screen > 0) {
+          stack.appendChild(el('div', {
+            className: 'stack-segment',
+            style: {
+              height: `${screenPct}%`,
+              background: '#e91e63'
+            }
+          }));
+        }
+        // Audio on bottom (blue/purple)
+        if (d.audio > 0) {
+          stack.appendChild(el('div', {
+            className: 'stack-segment',
+            style: {
+              height: `${audioPct}%`,
+              background: '#667eea'
+            }
+          }));
+        }
+      }
+
+      bar.appendChild(stack);
+      bar.appendChild(el('div', {className: 'bar-label'}, [d.day]));
+
+      if (total > 0) {
+        const formatted = total > 10 ? Math.round(total) : total.toFixed(1);
+        bar.appendChild(el('div', {className: 'bar-value'}, [`${formatted}h`]));
+        bar.setAttribute('title', `Audio: ${d.audio.toFixed(1)}h, Screen: ${d.screen.toFixed(1)}h`);
+      }
+
+      chart.appendChild(bar);
+    });
+
+    container.appendChild(chart);
+
+    // Add legend
+    const legend = el('div', {className: 'token-legend'}, [
+      el('div', {className: 'legend-item'}, [
+        el('div', {className: 'legend-color', style: {background: '#667eea'}}),
+        'Audio'
+      ]),
+      el('div', {className: 'legend-item'}, [
+        el('div', {className: 'legend-color', style: {background: '#e91e63'}}),
+        'Screen'
+      ])
+    ]);
+    container.appendChild(legend);
+  }
+
   // Build heatmap
   function buildHeatmap(container, data) {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -301,10 +398,9 @@ const Dashboard = (function() {
   // Main render function
   function render(data) {
     if (!data) return;
-    
+
     const stats = data.stats || {};
-    const summary = data.summary_html || '';
-    
+
     // Clear loading state and notices
     document.getElementById('loading').style.display = 'none';
     document.getElementById('notice').innerHTML = '';
@@ -328,34 +424,35 @@ const Dashboard = (function() {
     const days = Object.keys(stats.days).sort();
     const totals = stats.totals || {};
     const totalDays = days.length;
-    const totalAudioHours = fmt((stats.total_audio_seconds || 0) / 3600);
-    const totalStorageBytes = (stats.total_audio_bytes || 0) + (stats.total_image_bytes || 0);
-    const totalStorageMB = totalStorageBytes / (1024 * 1024);
-    const totalStorageValue = totalStorageMB >= 1000
-      ? fmt(totalStorageMB / 1024)
-      : fmt(totalStorageMB);
-    const totalStorageUnit = totalStorageMB >= 1000 ? 'GB total' : 'MB total';
-    const completion = totals.audio_flac > 0 ?
-      Math.round((totals.audio_json / totals.audio_flac) * 100) : 100;
-    
+    const totalAudioHours = Math.round((stats.total_audio_duration || 0) / 3600);
+    const totalScreenHours = Math.round((stats.total_screen_duration || 0) / 3600);
+
+    // Calculate total tokens across all models
+    const tokenTotals = stats.token_totals_by_model || {};
+    const totalTokens = Object.values(tokenTotals).reduce((sum, model) => {
+      return sum + (model.total_tokens || 0);
+    }, 0);
+
     // Render stats cards
     const statsGrid = document.getElementById('statsGrid');
     statsGrid.innerHTML = ''; // Clear existing content
     statsGrid.appendChild(statCard('Total Days', totalDays, 'days recorded'));
-    statsGrid.appendChild(statCard('Audio Duration', totalAudioHours, 'hours recorded'));
-    statsGrid.appendChild(statCard('Storage Used', totalStorageValue, totalStorageUnit));
-    statsGrid.appendChild(statCard('Processing Status', `${completion}%`, 'complete'));
+    statsGrid.appendChild(statCard('Audio Hours', totalAudioHours, 'hours'));
+    statsGrid.appendChild(statCard('Screen Hours', totalScreenHours, 'hours'));
+    statsGrid.appendChild(statCard('Total Tokens', fmtTokens(totalTokens), 'tokens'));
     
     // Render progress cards
     const progressSection = document.getElementById('progressSection');
     progressSection.innerHTML = ''; // Clear existing content
     progressSection.appendChild(
-      progressCard('Observe Processing', (totals.audio_json || 0) + (totals.desc_json || 0), totals.repair_observe || 0)
+      progressCard('Audio Processing', totals.audio_sessions || 0, totals.unprocessed_files || 0)
+    );
+    progressSection.appendChild(
+      progressCard('Topic Summaries', totals.topics_processed || 0, totals.topics_pending || 0)
     );
     
     // Token usage setup
     const tokenUsage = stats.token_usage_by_day || {};
-    const tokenTotals = stats.token_totals_by_model || {};
     const models = Object.keys(tokenTotals).sort();
     
     // Populate model selector
@@ -388,19 +485,21 @@ const Dashboard = (function() {
       buildTokenChart(document.getElementById('tokenChart'), null, null);
     }
     
-    // Audio chart data
+    // Combined audio + screen chart data
     const recent = days.slice(-30);
-    const audioData = recent.map(day => ({
-      day: day.slice(4, 6) + '/' + day.slice(6, 8),
-      hours: parseFloat(fmt((stats.days[day].audio_seconds || 0) / 3600))
-    }));
-    
-    // Render audio chart
-    buildChart(document.getElementById('audioChart'), audioData, {
-      valueKey: 'hours',
-      unit: 'h',
-      color: 'linear-gradient(to top, #f093fb, #f5576c)'
+    const hoursData = recent.map(day => {
+      const dayData = stats.days[day];
+      const audioHours = (dayData.audio_duration || 0) / 3600;
+      const screenHours = (dayData.screen_duration || 0) / 3600;
+      return {
+        day: day.slice(4, 6) + '/' + day.slice(6, 8),
+        audio: audioHours,
+        screen: screenHours
+      };
     });
+
+    // Render stacked hours chart
+    buildStackedHoursChart(document.getElementById('audioChart'), hoursData);
     
     // Render heatmap
     if (stats.heatmap) {
@@ -418,24 +517,22 @@ const Dashboard = (function() {
     }
     
     // Render repairs if needed
-    const repairs = ['repair_observe', 'repair_reduce', 'repair_entity', 'repair_summaries'];
+    const repairs = ['unprocessed_files', 'topics_pending'];
     const hasRepairs = repairs.some(key => (totals[key] || 0) > 0);
 
     if (hasRepairs) {
       const repairSection = document.getElementById('repairSection');
       const alert = el('div', {className: 'chart-section alert-repair'}, [
-        el('h2', {}, ['Items Needing Repair']),
+        el('h2', {}, ['Items Needing Processing']),
         el('div', {className: 'stats-grid', id: 'repairGrid'})
       ]);
 
       const repairGrid = alert.querySelector('#repairGrid');
       const repairLabels = {
-        repair_observe: 'Observe',
-        repair_reduce: 'Summaries',
-        repair_entity: 'Entities',
-        repair_summaries: 'Topic Summaries'
+        unprocessed_files: 'Unprocessed Media',
+        topics_pending: 'Topic Summaries'
       };
-      
+
       repairs.forEach(key => {
         const count = totals[key] || 0;
         if (count > 0) {
@@ -444,13 +541,8 @@ const Dashboard = (function() {
           );
         }
       });
-      
+
       repairSection.appendChild(alert);
-    }
-    
-    // Render summary if available
-    if (summary) {
-      document.getElementById('summarySection').innerHTML = summary;
     }
   }
 
