@@ -178,7 +178,7 @@ make check-all   # Format, lint, and test (run before commit)
 ## 📝 Important Development Notes
 
 ### Environment Management
-* **JOURNAL_PATH**: MUST call `setup_cli()` first in any CLI tool, or manually use `load_dotenv()` - then available via environment
+* **JOURNAL_PATH**: MUST call `setup_cli()` first in any CLI tool, or manually use `load_dotenv()` - then available via environment. To find current path: `grep JOURNAL_PATH .env`
 * **API Keys**: Store in `.env` file, never commit to repository
 * **Entry Points**: Use command names (e.g., `think-indexer`) NOT `python -m ...`
 
@@ -242,7 +242,7 @@ make clean-install # Clean and reinstall
 ### File Locations
 * **Entry Points**: `pyproject.toml` `[project.scripts]`
 * **Test Fixtures**: `fixtures/journal/` - complete mock journal
-* **Logs**: `logs/` directory (gitignored)
+* **Live Logs**: Active services have logs available at `$JOURNAL_PATH/health/<service>.log`
 * **Journal Data**: Path from `JOURNAL_PATH` env var (set in `.env`)
 * **Config**: `.env` file in project root
 * **Agent Personas**: `muse/agents/*.txt` and `*.json`
