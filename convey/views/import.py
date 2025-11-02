@@ -330,13 +330,60 @@ def import_start() -> Any:
     # Generate task ID
     task_id = str(int(time.time() * 1000))
 
+    # Extract original timestamp from path and handle timestamp changes
+    file_path = Path(path)
+    original_timestamp = file_path.parent.name
+    journal_root = Path(state.journal_root)
+
+    # If timestamp changed, rename the import directory
+    if original_timestamp != ts:
+        old_import_dir = journal_root / "imports" / original_timestamp
+        new_import_dir = journal_root / "imports" / ts
+
+        # Check if old directory exists
+        if not old_import_dir.exists():
+            return jsonify(
+                {"error": f"Import directory not found for {original_timestamp}"}
+            ), 404
+
+        # Check if target directory already exists
+        if new_import_dir.exists():
+            return jsonify(
+                {"error": f"Import already exists for timestamp {ts}"}
+            ), 409
+
+        # Rename the directory
+        try:
+            old_import_dir.rename(new_import_dir)
+        except Exception as e:
+            return jsonify({"error": f"Failed to rename import directory: {str(e)}"}), 500
+
+        # Update path to point to new location
+        path = str(new_import_dir / file_path.name)
+
+        # Update file_path in metadata (need to update after reading)
+        # We'll handle this after reading the metadata below
+
     # Read import metadata to get domain and setting
     try:
         metadata = read_import_metadata(
-            journal_root=Path(state.journal_root), timestamp=ts
+            journal_root=journal_root, timestamp=ts
         )
+    except FileNotFoundError:
+        return jsonify({"error": f"Import metadata not found for {ts}"}), 404
     except Exception as e:
         return jsonify({"error": f"Failed to read metadata: {str(e)}"}), 500
+
+    # Update file_path in metadata if timestamp changed
+    if original_timestamp != ts:
+        try:
+            update_import_metadata_fields(
+                journal_root=journal_root,
+                timestamp=ts,
+                updates={"file_path": path},
+            )
+        except Exception as e:
+            return jsonify({"error": f"Failed to update file path in metadata: {str(e)}"}), 500
 
     domain = metadata.get("domain")
     setting = metadata.get("setting")
@@ -351,7 +398,7 @@ def import_start() -> Any:
     # Store task_id in metadata
     try:
         update_import_metadata_fields(
-            journal_root=Path(state.journal_root),
+            journal_root=journal_root,
             timestamp=ts,
             updates={"task_id": task_id},
         )
