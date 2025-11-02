@@ -32,22 +32,35 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 
 ## Tract Registry
 
+> **Note:** This registry is kept intentionally high-level. For detailed event schemas, field specifications, and usage patterns, always refer to the source files listed for each tract.
+
 ### `cortex` - Agent execution events
 **Source:** `muse/cortex.py`
 **Events:** `request`, `start`, `thinking`, `tool_start`, `tool_end`, `finish`, `error`, `agent_updated`, `info`
 **Details:** See [CORTEX.md](CORTEX.md) for agent lifecycle, personas, and event schemas
 
-### `task` - Generic task execution
+### `supervisor` - Process lifecycle management
 **Source:** `think/supervisor.py`
-**Events:** `request`, `start`, `finish`, `error`
-**Fields:** `task_id`, `cmd` (command array), `exit_code`, `error`
-**Details:** See `think/supervisor.py` implementation
+**Events:** `request`, `started`, `stopped`, `restarting`, `status`
+**Fields:** `ref`, `service`, `cmd`, `pid`, `exit_code`
+**Purpose:** Unified lifecycle events for all supervised processes (services and tasks)
 
 ### `logs` - Process output streaming
 **Source:** `think/runner.py`
 **Events:** `exec`, `line`, `exit`
-**Fields:** `process`, `name`, `pid`, `cmd`, `stream`, `line`, `exit_code`, `duration_ms`, `log_path`
-**Details:** See `think/runner.py` `ManagedProcess` class
+**Fields:** `ref`, `name`, `pid`, `cmd`, `stream`, `line`, `exit_code`, `duration_ms`, `log_path`
+**Purpose:** Real-time stdout/stderr streaming and process exit events
+
+---
+
+## Key Concepts
+
+**Correlation ID (`ref`):** Universal identifier for process instances, used across all tracts to correlate events. Auto-generated as epoch milliseconds if not provided by client.
+
+**Field Semantics:**
+- `service` - Human-readable name (e.g., "cortex", "think-importer")
+- `ref` - Unique instance ID (changes on each restart)
+- `pid` - Operating system process ID
 
 ---
 

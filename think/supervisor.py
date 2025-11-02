@@ -83,11 +83,11 @@ _scheduled_state = {
 
 # State for task execution
 _task_state = {
-    "running_tasks": set(),  # Set of task_ids currently running
+    "running_tasks": set(),  # Set of refs currently running
     "lock": threading.Lock(),  # Lock for thread-safe task state access
 }
 
-# Active task processes (task_id -> ManagedProcess)
+# Active task processes (ref -> ManagedProcess)
 _active_tasks: dict[str, RunnerManagedProcess] = {}
 
 # Global supervisor callosum connection for event emissions
@@ -142,7 +142,7 @@ class ManagedProcess:
     cmd: list[str]
     restart: bool = False
     threads: list[threading.Thread] = field(default_factory=list)
-    process_id: str = ""
+    ref: str = ""
 
     def cleanup(self) -> None:
         for thread in self.threads:
@@ -156,15 +156,19 @@ def _launch_process(
     *,
     restart: bool = False,
     log_name: str | None = None,
+    ref: str | None = None,
 ) -> ManagedProcess:
     """Launch process with automatic output logging and restart policy tracking."""
     policy: RestartPolicy | None = None
     if restart:
         policy = _get_restart_policy(name)
 
+    # Generate ref if not provided
+    ref = ref if ref else str(int(time.time() * 1000))
+
     # Use unified runner to spawn process
     try:
-        managed = RunnerManagedProcess.spawn(cmd, name=log_name or name)
+        managed = RunnerManagedProcess.spawn(cmd, name=log_name or name, ref=ref)
     except RuntimeError as exc:
         logging.error(str(exc))
         raise
@@ -179,7 +183,7 @@ def _launch_process(
             "started",
             service=name,
             pid=managed.process.pid,
-            process=managed.process_id,
+            ref=managed.ref,
         )
 
     # Wrap in ManagedProcess for restart tracking
@@ -190,7 +194,7 @@ def _launch_process(
         cmd=list(cmd),
         restart=restart,
         threads=managed._threads,
-        process_id=managed.process_id,
+        ref=managed.ref,
     )
 
 
@@ -445,85 +449,95 @@ def check_scheduled_agents() -> None:
 
 def _handle_task_request(message: dict) -> None:
     """Handle incoming task request from Callosum."""
-    # Filter for task tract and request event
-    if message.get("tract") != "task" or message.get("event") != "request":
+    # Filter for supervisor tract and request event
+    if message.get("tract") != "supervisor" or message.get("event") != "request":
         return
 
-    task_id = message.get("task_id")
+    ref = message.get("ref")
     cmd = message.get("cmd")
 
-    if not task_id or not cmd:
-        logging.error(f"Invalid task request: missing task_id or cmd: {message}")
+    if not cmd:
+        logging.error(f"Invalid task request: missing cmd: {message}")
         return
+
+    # Generate ref if not provided
+    ref = ref if ref else str(int(time.time() * 1000))
 
     # Check if task is already running
     with _task_state["lock"]:
-        if task_id in _task_state["running_tasks"]:
-            logging.debug(f"Task {task_id} already running, skipping duplicate")
+        if ref in _task_state["running_tasks"]:
+            logging.debug(f"Task {ref} already running, skipping duplicate")
             return
-        _task_state["running_tasks"].add(task_id)
+        _task_state["running_tasks"].add(ref)
 
     # Spawn task in background thread
     threading.Thread(
         target=_run_task,
-        args=(task_id, cmd),
+        args=(ref, cmd),
         daemon=True,
     ).start()
 
 
-def _run_task(task_id: str, cmd: list[str]) -> None:
+def _run_task(ref: str, cmd: list[str]) -> None:
     """Execute a task and broadcast events to Callosum."""
     callosum = CallosumConnection()
     managed = None
+
+    # Extract service name from command
+    service = Path(cmd[0]).name if cmd else "unknown"
 
     try:
         # Start Callosum connection (auto-connects in background)
         callosum.start()
 
-        # Emit start event
-        callosum.emit("task", "start", task_id=task_id, cmd=cmd)
-        logging.info(f"Starting task {task_id}: {' '.join(cmd)}")
+        logging.info(f"Starting task {ref}: {' '.join(cmd)}")
 
         # Spawn process and track it
-        managed = RunnerManagedProcess.spawn(cmd, log_name=task_id)
-        _active_tasks[task_id] = managed
+        managed = RunnerManagedProcess.spawn(cmd, log_name=ref, ref=ref)
+        _active_tasks[ref] = managed
+
+        # Emit started event (runner already emits logs/exec, this is supervisor-level)
+        callosum.emit("supervisor", "started", service=service, pid=managed.pid, ref=ref)
 
         # Wait for completion (blocks)
         exit_code = managed.wait()
-        success = exit_code == 0
 
-        # Emit finish or error event
-        if success:
-            callosum.emit("task", "finish", task_id=task_id, exit_code=exit_code)
-            logging.info(f"Task {task_id} finished successfully")
+        # Emit stopped event
+        callosum.emit(
+            "supervisor",
+            "stopped",
+            service=service,
+            pid=managed.pid,
+            ref=ref,
+            exit_code=exit_code,
+        )
+
+        if exit_code == 0:
+            logging.info(f"Task {ref} finished successfully")
         else:
-            callosum.emit(
-                "task",
-                "error",
-                task_id=task_id,
-                error=f"Task exited with code {exit_code}",
-                exit_code=exit_code,
-            )
-            logging.warning(f"Task {task_id} failed with exit code {exit_code}")
+            logging.warning(f"Task {ref} failed with exit code {exit_code}")
 
     except Exception as e:
-        logging.exception(f"Task {task_id} encountered exception: {e}")
-        callosum.emit(
-            "task",
-            "error",
-            task_id=task_id,
-            error=str(e),
-            exit_code=-1,
-        )
+        logging.exception(f"Task {ref} encountered exception: {e}")
+        # Still emit stopped event with error code
+        if managed:
+            callosum.emit(
+                "supervisor",
+                "stopped",
+                service=service,
+                pid=managed.pid if managed else 0,
+                ref=ref,
+                exit_code=-1,
+            )
     finally:
         # Cleanup managed process
         if managed:
             managed.cleanup()
-        _active_tasks.pop(task_id, None)
+        _active_tasks.pop(ref, None)
 
         # Remove from running tasks
         with _task_state["lock"]:
-            _task_state["running_tasks"].discard(task_id)
+            _task_state["running_tasks"].discard(ref)
 
         callosum.stop()
 
@@ -550,7 +564,7 @@ def _handle_supervisor_request(message: dict) -> None:
                     "restarting",
                     service=service,
                     pid=proc.process.pid,
-                    process=proc.process_id,
+                    ref=proc.ref,
                 )
 
             # Send SIGINT to trigger graceful shutdown
@@ -563,42 +577,42 @@ def _handle_supervisor_request(message: dict) -> None:
     logging.warning(f"Cannot restart {service}: not found or not running")
 
 
-def cancel_task(task_id: str) -> bool:
+def cancel_task(ref: str) -> bool:
     """Cancel a running task.
 
     Args:
-        task_id: Task identifier
+        ref: Task correlation ID
 
     Returns:
         True if task was found and terminated, False otherwise
     """
-    if task_id not in _active_tasks:
-        logging.warning(f"Cannot cancel task {task_id}: not found")
+    if ref not in _active_tasks:
+        logging.warning(f"Cannot cancel task {ref}: not found")
         return False
 
-    managed = _active_tasks[task_id]
+    managed = _active_tasks[ref]
     if not managed.is_running():
-        logging.debug(f"Task {task_id} already finished")
+        logging.debug(f"Task {ref} already finished")
         return False
 
-    logging.info(f"Cancelling task {task_id}...")
+    logging.info(f"Cancelling task {ref}...")
     managed.terminate()
     return True
 
 
-def get_task_status(task_id: str) -> dict:
+def get_task_status(ref: str) -> dict:
     """Get status of a task.
 
     Args:
-        task_id: Task identifier
+        ref: Task correlation ID
 
     Returns:
         Dict with status info, or {"status": "not_found"} if task doesn't exist
     """
-    if task_id not in _active_tasks:
+    if ref not in _active_tasks:
         return {"status": "not_found"}
 
-    managed = _active_tasks[task_id]
+    managed = _active_tasks[ref]
     return {
         "status": "running" if managed.is_running() else "finished",
         "pid": managed.pid,
@@ -609,13 +623,13 @@ def get_task_status(task_id: str) -> dict:
 
 
 def list_running_tasks() -> list[str]:
-    """List all currently running task IDs.
+    """List all currently running task correlation IDs.
 
     Returns:
-        List of task_ids for tasks that are still running
+        List of refs for tasks that are still running
     """
     return [
-        task_id for task_id, managed in _active_tasks.items() if managed.is_running()
+        ref for ref, managed in _active_tasks.items() if managed.is_running()
     ]
 
 
@@ -633,7 +647,7 @@ def collect_status(procs: list[ManagedProcess]) -> dict:
             services.append(
                 {
                     "name": proc.name,
-                    "process": proc.process_id,
+                    "ref": proc.ref,
                     "pid": proc.process.pid,
                     "uptime_seconds": uptime,
                 }
@@ -653,16 +667,15 @@ def collect_status(procs: list[ManagedProcess]) -> dict:
 
     # Running tasks
     tasks = []
-    for task_id, managed in _active_tasks.items():
+    for ref, managed in _active_tasks.items():
         if managed.is_running():
             duration = int(now - managed._start_time)
             # Extract command name (first element of cmd)
             cmd_name = managed.cmd[0] if managed.cmd else "unknown"
             tasks.append(
                 {
-                    "task_id": task_id,
+                    "ref": ref,
                     "name": cmd_name,
-                    "process": managed.process_id,
                     "duration_seconds": duration,
                 }
             )
@@ -770,7 +783,7 @@ async def handle_runner_exits(
                 "stopped",
                 service=managed.name,
                 pid=managed.process.pid,
-                process=managed.process_id,
+                ref=managed.ref,
                 exit_code=returncode,
             )
 

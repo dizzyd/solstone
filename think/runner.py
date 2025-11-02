@@ -126,7 +126,7 @@ class ManagedProcess:
     log_writer: DailyLogWriter
     cmd: list[str]
     _threads: list[threading.Thread]
-    process_id: str
+    ref: str
     _start_time: float
     _callosum: CallosumConnection | None
 
@@ -138,7 +138,7 @@ class ManagedProcess:
         name: str | None = None,
         log_name: str | None = None,
         env: dict | None = None,
-        task_id: str | None = None,
+        ref: str | None = None,
     ) -> "ManagedProcess":
         """Spawn process with automatic output logging to daily health directory.
 
@@ -147,7 +147,7 @@ class ManagedProcess:
             name: Process name for logging (defaults to cmd[0] basename)
             log_name: Override log filename base (defaults to name)
             env: Optional environment variables (inherits parent env if not provided)
-            task_id: Optional task ID (used as process ID if provided)
+            ref: Optional correlation ID (auto-generated if not provided)
 
         Returns:
             ManagedProcess instance
@@ -169,18 +169,18 @@ class ManagedProcess:
                 log_name="1730476800123",  # Logs to: 1730476800123.log
             )
 
-            # Link to a task:
+            # With explicit correlation ID:
             managed = ManagedProcess.spawn(
                 ["think-indexer", "--full"],
                 name="indexer",
-                task_id="1730476800000",  # Uses task_id as process ID
+                ref="1730476800000",  # Use specific ref for correlation
             )
         """
         if name is None:
             name = Path(cmd[0]).name
 
-        # Generate process ID (use task_id if provided, else timestamp)
-        process_id = task_id if task_id else str(int(time.time() * 1000))
+        # Generate correlation ID (use provided ref, else timestamp)
+        ref = ref if ref else str(int(time.time() * 1000))
         start_time = time.time()
 
         # Setup Callosum connection
@@ -214,7 +214,7 @@ class ManagedProcess:
             callosum.emit(
                 "logs",
                 "exec",
-                process=process_id,
+                ref=ref,
                 name=name,
                 pid=proc.pid,
                 cmd=list(cmd),
@@ -235,7 +235,7 @@ class ManagedProcess:
                         callosum.emit(
                             "logs",
                             "line",
-                            process=process_id,
+                            ref=ref,
                             name=name,
                             pid=proc.pid,
                             stream=stream_label,
@@ -263,7 +263,7 @@ class ManagedProcess:
             log_writer=log_writer,
             cmd=list(cmd),
             _threads=threads,
-            process_id=process_id,
+            ref=ref,
             _start_time=start_time,
             _callosum=callosum,
         )
@@ -343,7 +343,7 @@ class ManagedProcess:
             self._callosum.emit(
                 "logs",
                 "exit",
-                process=self.process_id,
+                ref=self.ref,
                 name=self.name,
                 pid=self.pid,
                 exit_code=self.returncode,
@@ -371,7 +371,7 @@ def run_task(
     log_name: str | None = None,
     timeout: float | None = None,
     env: dict | None = None,
-    task_id: str | None = None,
+    ref: str | None = None,
 ) -> tuple[bool, int]:
     """Run a task to completion with automatic logging (blocking).
 
@@ -384,7 +384,7 @@ def run_task(
         log_name: Override log filename base (defaults to name)
         timeout: Optional timeout in seconds
         env: Optional environment variables
-        task_id: Optional task ID (used as process ID if provided)
+        ref: Optional correlation ID (auto-generated if not provided)
 
     Returns:
         (success, exit_code) tuple where success = (exit_code == 0)
@@ -405,11 +405,11 @@ def run_task(
             log_name="1730476800123",  # Logs to: 1730476800123.log
         )
 
-        # Link to a task:
+        # With explicit correlation ID:
         success, code = run_task(
             ["think-indexer", "--full"],
             name="indexer",
-            task_id="1730476800000",  # Uses task_id as process ID
+            ref="1730476800000",  # Use specific ref for correlation
         )
     """
     if name is None:
@@ -420,7 +420,7 @@ def run_task(
         name=name,
         log_name=log_name,
         env=env,
-        task_id=task_id,
+        ref=ref,
     )
     try:
         exit_code = managed.wait(timeout=timeout)

@@ -19,16 +19,16 @@ def journal_path(tmp_path):
         del os.environ["JOURNAL_PATH"]
 
 
-def test_managed_process_has_process_id_and_pid(journal_path, mock_callosum):
-    """Test that ManagedProcess exposes process_id and pid."""
+def test_managed_process_has_ref_and_pid(journal_path, mock_callosum):
+    """Test that ManagedProcess exposes ref and pid."""
     managed = ManagedProcess.spawn(
         ["echo", "test"],
         name="test-echo",
     )
 
-    # Verify process_id and pid are accessible
-    assert managed.process_id is not None
-    assert isinstance(managed.process_id, str)
+    # Verify ref and pid are accessible
+    assert managed.ref is not None
+    assert isinstance(managed.ref, str)
     assert managed.pid > 0
     assert isinstance(managed.pid, int)
 
@@ -37,17 +37,17 @@ def test_managed_process_has_process_id_and_pid(journal_path, mock_callosum):
     managed.cleanup()
 
 
-def test_managed_process_uses_task_id_as_process_id(journal_path, mock_callosum):
-    """Test that task_id becomes the process_id when provided."""
-    task_id = "1730476800123"
+def test_managed_process_uses_ref_as_ref(journal_path, mock_callosum):
+    """Test that ref becomes the ref when provided."""
+    ref = "1730476800123"
     managed = ManagedProcess.spawn(
         ["echo", "test"],
         name="test-echo",
-        task_id=task_id,
+        ref=ref,
     )
 
-    # Verify process_id matches task_id
-    assert managed.process_id == task_id
+    # Verify ref matches ref
+    assert managed.ref == ref
 
     # Wait and cleanup
     managed.wait()
@@ -75,7 +75,7 @@ def test_logs_tract_exec_event(journal_path, mock_callosum):
     exec_event = exec_events[0]
     assert exec_event["tract"] == "logs"
     assert exec_event["event"] == "exec"
-    assert exec_event["process"] == managed.process_id
+    assert exec_event["ref"] == managed.ref
     assert exec_event["name"] == "test-exec"
     assert exec_event["pid"] == managed.pid
     assert exec_event["cmd"] == ["echo", "hello"]
@@ -113,7 +113,7 @@ def test_logs_tract_line_event(journal_path, mock_callosum):
     line_event = line_events[0]
     assert line_event["tract"] == "logs"
     assert line_event["event"] == "line"
-    assert line_event["process"] == managed.process_id
+    assert line_event["ref"] == managed.ref
     assert line_event["name"] == "test-line"
     assert line_event["pid"] == managed.pid
     assert line_event["stream"] in ["stdout", "stderr"]
@@ -147,7 +147,7 @@ def test_logs_tract_exit_event(journal_path, mock_callosum):
     exit_event = exit_events[0]
     assert exit_event["tract"] == "logs"
     assert exit_event["event"] == "exit"
-    assert exit_event["process"] == managed.process_id
+    assert exit_event["ref"] == managed.ref
     assert exit_event["name"] == "test-exit"
     assert exit_event["pid"] == managed.pid
     assert exit_event["exit_code"] == 0
@@ -178,11 +178,11 @@ def test_logs_tract_all_events_have_common_fields(journal_path, mock_callosum):
 
     # Verify common fields in all events
     for event in logs_events:
-        assert "process" in event
+        assert "ref" in event
         assert "name" in event
         assert "pid" in event
         assert "ts" in event  # Auto-added by Callosum
-        assert event["process"] == managed.process_id
+        assert event["ref"] == managed.ref
         assert event["name"] == "test-common"
         assert event["pid"] == managed.pid
 
@@ -218,29 +218,29 @@ def test_run_task_emits_logs_tract_events(journal_path, mock_callosum):
     listener.stop()
 
 
-def test_task_id_links_to_task_tract(journal_path, mock_callosum):
-    """Test that providing task_id links logs to task tract."""
+def test_ref_links_to_task_tract(journal_path, mock_callosum):
+    """Test that providing ref links logs to task tract."""
     from think.callosum import CallosumConnection
 
     received = []
     listener = CallosumConnection()
     listener.start(callback=lambda msg: received.append(msg))
 
-    task_id = "1730476800999"
+    ref = "1730476800999"
     managed = ManagedProcess.spawn(
         ["echo", "linked"],
         name="test-linked",
-        task_id=task_id,
+        ref=ref,
     )
     managed.wait()
     managed.cleanup()
 
-    # Verify all logs events use task_id as process
+    # Verify all logs events use ref as process
     logs_events = [msg for msg in received if msg.get("tract") == "logs"]
     assert len(logs_events) >= 3
 
     for event in logs_events:
-        assert event["process"] == task_id
+        assert event["ref"] == ref
 
     listener.stop()
 
