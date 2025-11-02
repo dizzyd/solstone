@@ -101,8 +101,9 @@ def test_logs_tract_line_event(journal_path, mock_callosum):
         name="test-line",
     )
 
-    # Wait for process and events
+    # Wait for process and cleanup threads before checking events
     managed.wait()
+    managed.cleanup()
 
     # Find line events
     line_events = [msg for msg in received if msg.get("event") == "line"]
@@ -119,8 +120,7 @@ def test_logs_tract_line_event(journal_path, mock_callosum):
     assert "line" in line_event
     assert "hello logs tract" in line_event["line"]
 
-    # Cleanup
-    managed.cleanup()
+    # Stop listener
     listener.stop()
 
 
