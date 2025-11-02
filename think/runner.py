@@ -13,9 +13,12 @@ import logging
 import os
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+from think.callosum import CallosumConnection
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +117,8 @@ class ManagedProcess:
         {JOURNAL_PATH}/{YYYYMMDD}/health/{name}.log
 
     Logs roll over automatically at midnight for long-running processes.
+
+    Process lifecycle events are broadcast via Callosum logs tract.
     """
 
     process: subprocess.Popen
@@ -121,6 +126,9 @@ class ManagedProcess:
     log_writer: DailyLogWriter
     cmd: list[str]
     _threads: list[threading.Thread]
+    process_id: str
+    _start_time: float
+    _callosum: CallosumConnection | None
 
     @classmethod
     def spawn(
@@ -130,6 +138,8 @@ class ManagedProcess:
         name: str | None = None,
         log_name: str | None = None,
         env: dict | None = None,
+        emit_logs: bool = True,
+        task_id: str | None = None,
     ) -> "ManagedProcess":
         """Spawn process with automatic output logging to daily health directory.
 
@@ -138,6 +148,8 @@ class ManagedProcess:
             name: Process name for logging (defaults to cmd[0] basename)
             log_name: Override log filename base (defaults to name)
             env: Optional environment variables (inherits parent env if not provided)
+            emit_logs: Emit process lifecycle events to Callosum logs tract (default: True)
+            task_id: Optional task ID (used as process ID if provided)
 
         Returns:
             ManagedProcess instance
@@ -158,9 +170,23 @@ class ManagedProcess:
                 name="importer",
                 log_name="1730476800123",  # Logs to: 1730476800123.log
             )
+
+            # Link to a task:
+            managed = ManagedProcess.spawn(
+                ["think-indexer", "--full"],
+                name="indexer",
+                task_id="1730476800000",  # Uses task_id as process ID
+            )
         """
         if name is None:
             name = Path(cmd[0]).name
+
+        # Generate process ID (use task_id if provided, else timestamp)
+        process_id = task_id if task_id else str(int(time.time() * 1000))
+        start_time = time.time()
+
+        # Setup Callosum connection if emitting logs
+        callosum = CallosumConnection() if emit_logs else None
 
         log_writer = DailyLogWriter(log_name or name)
 
@@ -177,9 +203,23 @@ class ManagedProcess:
             )
         except Exception as exc:
             log_writer.close()
+            if callosum:
+                callosum.close()
             raise RuntimeError(f"Failed to spawn {name}: {exc}") from exc
 
         logger.info(f"Started {name} with PID {proc.pid}")
+
+        # Emit exec event
+        if callosum:
+            callosum.emit(
+                "logs",
+                "exec",
+                process=process_id,
+                name=name,
+                pid=proc.pid,
+                cmd=list(cmd),
+                log_path=str(log_writer.path),
+            )
 
         # Start output streaming threads
         def stream_output(pipe, stream_label: str):
@@ -189,6 +229,18 @@ class ManagedProcess:
                 for line in pipe:
                     formatted = _format_log_line(name, stream_label, line)
                     log_writer.write(formatted)
+
+                    # Emit line event
+                    if callosum:
+                        callosum.emit(
+                            "logs",
+                            "line",
+                            process=process_id,
+                            name=name,
+                            pid=proc.pid,
+                            stream=stream_label,
+                            line=line.rstrip("\n"),
+                        )
 
         threads = [
             threading.Thread(
@@ -211,6 +263,9 @@ class ManagedProcess:
             log_writer=log_writer,
             cmd=list(cmd),
             _threads=threads,
+            process_id=process_id,
+            _start_time=start_time,
+            _callosum=callosum,
         )
 
     def wait(self, timeout: float | None = None) -> int:
@@ -282,6 +337,22 @@ class ManagedProcess:
             thread.join(timeout=1)
         self.log_writer.close()
 
+        # Emit exit event
+        if self._callosum:
+            duration_ms = int((time.time() - self._start_time) * 1000)
+            self._callosum.emit(
+                "logs",
+                "exit",
+                process=self.process_id,
+                name=self.name,
+                pid=self.pid,
+                exit_code=self.returncode,
+                duration_ms=duration_ms,
+                cmd=self.cmd,
+                log_path=str(self.log_writer.path),
+            )
+            self._callosum.close()
+
     @property
     def pid(self) -> int:
         """Process ID."""
@@ -300,6 +371,8 @@ def run_task(
     log_name: str | None = None,
     timeout: float | None = None,
     env: dict | None = None,
+    emit_logs: bool = True,
+    task_id: str | None = None,
 ) -> tuple[bool, int]:
     """Run a task to completion with automatic logging (blocking).
 
@@ -312,6 +385,8 @@ def run_task(
         log_name: Override log filename base (defaults to name)
         timeout: Optional timeout in seconds
         env: Optional environment variables
+        emit_logs: Emit process lifecycle events to Callosum logs tract (default: True)
+        task_id: Optional task ID (used as process ID if provided)
 
     Returns:
         (success, exit_code) tuple where success = (exit_code == 0)
@@ -331,11 +406,25 @@ def run_task(
             name="importer",
             log_name="1730476800123",  # Logs to: 1730476800123.log
         )
+
+        # Link to a task:
+        success, code = run_task(
+            ["think-indexer", "--full"],
+            name="indexer",
+            task_id="1730476800000",  # Uses task_id as process ID
+        )
     """
     if name is None:
         name = Path(cmd[0]).name
 
-    managed = ManagedProcess.spawn(cmd, name=name, log_name=log_name, env=env)
+    managed = ManagedProcess.spawn(
+        cmd,
+        name=name,
+        log_name=log_name,
+        env=env,
+        emit_logs=emit_logs,
+        task_id=task_id,
+    )
     try:
         exit_code = managed.wait(timeout=timeout)
     except subprocess.TimeoutExpired:

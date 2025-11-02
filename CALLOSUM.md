@@ -220,6 +220,66 @@ client.close()
 # Supervisor picks up request, spawns process, broadcasts start/finish/error events
 ```
 
+## `"tract": "logs"`
+
+Process execution and output logging events from think.runner.
+
+All processes spawned via `ManagedProcess` or `run_task()` emit real-time lifecycle and output events.
+
+**Event types:** `exec`, `line`, `exit`
+
+**Common fields (all events):**
+- `process` - Process identifier (task_id if linked, else timestamp-based)
+- `name` - Process name for filtering
+- `pid` - Operating system process ID
+- `ts` - Timestamp in milliseconds (auto-added)
+
+**Event-specific fields:**
+
+### `exec`
+Process started executing.
+
+Required:
+- `cmd` - Command and arguments as list
+- `log_path` - Path to health log file
+
+### `line`
+Real-time output line from process stdout/stderr.
+
+Required:
+- `stream` - Stream identifier ("stdout" or "stderr")
+- `line` - Output line content (newlines stripped)
+
+### `exit`
+Process has exited (success or error).
+
+Required:
+- `exit_code` - Process exit code (0 = success, non-zero = error)
+- `duration_ms` - Time from exec to exit in milliseconds
+- `cmd` - Command and arguments as list
+- `log_path` - Path to health log file
+
+**Usage Example:**
+```python
+from think.runner import ManagedProcess
+
+# Spawn with automatic log emissions
+managed = ManagedProcess.spawn(
+    ["think-indexer", "--full"],
+    name="indexer",
+    task_id="1730476800123",  # Optional: links to task tract
+)
+# Emits: exec, line (streaming), exit
+
+# Or blocking run
+from think.runner import run_task
+success, code = run_task(
+    ["think-summarize", "20241101"],
+    name="summarize",
+)
+# Emits: exec, line (streaming), exit
+```
+
 ## `"tract": "indexer"` (future)
 
 Database indexing events from the think.indexer service.
