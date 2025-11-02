@@ -15,19 +15,40 @@ The project uses a modular architecture where each package can operate independe
 
 ---
 
+## 🔑 Key Concepts
+
+Understanding these core concepts is essential for working with Sunstone:
+
+* **Journal**: Central data structure organized as `JOURNAL_PATH/YYYYMMDD/` directories. All captured data, transcripts, and analysis artifacts are stored here. See **JOURNAL.md** for detailed structure.
+
+* **Domains**: Project/context organization system (e.g., "work", "personal", "acme"). Domains group related content and provide scoped views of entities, tasks, and activities.
+
+* **Entities**: Extracted information (people, projects, concepts) tracked over time across transcripts and interactions. Entities are associated with domains and enable semantic navigation.
+
+* **Agents**: AI processors with configurable personas that analyze content, extract insights, and respond to queries. Managed by Cortex. See **CORTEX.md** for agent system architecture.
+
+* **Callosum**: Message bus that enables asynchronous communication between components (observe, think, convey, cortex). Uses file-based persistence. See **CALLOSUM.md** for protocol details.
+
+* **Indexer**: Builds and maintains SQLite database from journal data, enabling fast search and retrieval. Indexes transcripts, summaries, entities, and events.
+
+* **Crumbs**: JSON transcript format with timestamps, speaker attribution, and metadata. See **CRUMBS.md** for specification.
+
+---
+
 ## 🏗️ Project Structure
 
 ```
 sunstone/
 ├── observe/        # Multimodal capture & AI analysis
 ├── think/          # Data post-processing & AI analysis
-│   ├── agents/     # Agent system prompts and configs
 │   ├── indexer/    # Database indexing subsystem
 │   └── topics/     # Topic extraction templates
 ├── convey/         # Web app frontend & backend
 │   ├── static/     # JavaScript and CSS assets
 │   ├── templates/  # Jinja2 HTML templates
 │   └── views/      # Flask view modules
+├── muse/           # AI agent system and MCP tooling
+│   └── agents/     # Agent system prompts and configs
 ├── tests/          # Comprehensive pytest test suites
 │   └── integration/# Integration test suite
 ├── fixtures/       # Test data and examples
@@ -38,14 +59,15 @@ sunstone/
 ├── README.md       # Project overview and quick start
 ├── CRUMBS.md       # Crumb file format specification
 ├── CORTEX.md       # Agent system documentation
+├── CALLOSUM.md     # Callosum connection system documentation
 └── AGENTS.md       # Development guidelines (this file)
 ```
 
 ### Package Organization
 
 * **Modules**: Each top-level folder is a Python package with `__init__.py`
-* **Imports**: Use absolute imports (e.g., `from hear.capture import record_audio`)
-* **Entry Points**: Defined in `pyproject.toml` under `[project.scripts]`
+* **Imports**: Use absolute imports (e.g., `from think.utils import setup_cli`)
+* **Entry Points**: Defined in `pyproject.toml` under `[project.scripts]` - see this file for the full list of available commands
 * **Journal**: Data stored under `JOURNAL_PATH` environment variable location always loaded from .env
 * **Calling**: When calling other modules as a separate process always use their command name and never call using `python -m ...` (e.g., use `think-indexer`, NOT `python -m think.indexer`)
 
@@ -53,7 +75,25 @@ sunstone/
 
 ## 🏛️ Architecture & Data Flow
 
-**Pipeline**: `observe` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `convey` (web UI)
+**Core Pipeline**: `observe` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `convey` (web UI)
+
+**Data Organization**:
+* Everything organized under `JOURNAL_PATH/YYYYMMDD/` daily directories
+* Domains provide project-scoped organization and filtering
+* Entities are extracted from transcripts and tracked across time
+* Indexer builds SQLite database for fast search and retrieval
+
+**Component Communication**:
+* Callosum message bus enables async communication between services
+* Cortex orchestrates agent execution, managing requests and event distribution
+* Agents process via `muse-agents` command with persona configurations
+
+**Main Entry Points**:
+* `observe-gnome` - Multimodal capture (requires Linux/GNOME)
+* `think-indexer` - Build searchable database
+* `convey` - Launch web UI
+* `muse-cortex` - Agent system server
+* See `pyproject.toml` `[project.scripts]` for complete command list
 
 ---
 
@@ -65,91 +105,73 @@ os.environ["JOURNAL_PATH"] = "fixtures/journal"
 # Now all journal operations work with test data
 ```
 
+The `fixtures/journal/` directory contains a complete mock journal structure with sample domains, agents, transcripts, and indexed data for testing.
+
 ---
 
 ## 💻 Coding Standards & Style
 
 ### Language & Tools
-* **Code Formatting**: 
-  - Black (`make format` or `black .`)
-  - isort (`make format` or `isort .`)
-  - Settings configured in `pyproject.toml`
-* **Linting & Type Checking**:
-  - flake8 (`make lint-flake8` or `flake8 .`)
-  - mypy (`make check` or `mypy .`)
-  - All new code must pass these checks
+* **Black** (`make format`) - Code formatting
+* **isort** (`make format`) - Import sorting
+* **flake8** (`make lint`) - Linting
+* **mypy** (`make check`) - Type checking
+* Configuration in `pyproject.toml`
 
 ### Naming Conventions
-* **Modules & Packages**: `snake_case` (e.g., `audio_utils.py`)
-* **Classes**: `PascalCase` (e.g., `AudioProcessor`)
-* **Functions & Variables**: `snake_case` (e.g., `process_audio()`)
-* **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_BUFFER_SIZE`)
-* **Private Members**: Leading underscore (e.g., `_internal_method()`)
+* **Modules/Functions/Variables**: `snake_case`
+* **Classes**: `PascalCase`
+* **Constants**: `UPPER_SNAKE_CASE`
+* **Private Members**: `_leading_underscore`
 
 ### Code Organization
+* **Imports**: Absolute only, grouped (stdlib, third-party, local), one per line
 * **Docstrings**: Google or NumPy style with parameter/return descriptions
-* **Imports**: 
-  - Absolute imports only
-  - Grouped in order: standard library, third-party, local
-  - One import per line for clarity
-* **File Structure**:
-  - Constants at top
-  - Helper functions before main functions
-  - Classes after functions
-  - Main/CLI code at bottom
+* **Type Hints**: Required on function signatures
+* **File Structure**: Constants → helpers → classes → main/CLI
 
 ---
 
 ## 🧪 Testing & Quality Assurance
 
-### Test Framework
+### Test Structure
 * **Framework**: pytest with coverage reporting
-* **Structure**: Tests in `tests/` mirroring source structure
-  - Unit tests in `tests/` root directory
-  - Integration tests in `tests/integration/` subdirectory
-* **Naming**: Test files prefixed with `test_`, functions with `test_`
+* **Unit Tests**: `tests/` root directory
+  - Fast, no external API calls
+  - Use `fixtures/journal/` mock data
+  - Test individual functions and modules
+* **Integration Tests**: `tests/integration/` subdirectory
+  - Test real backends (Anthropic, OpenAI, Google)
+  - Require API keys in `.env`
+  - Test end-to-end workflows
+* **Naming**: Files `test_*.py`, functions `test_*`
 * **Fixtures**: Shared fixtures in `tests/conftest.py`
-* **Test Data**: The `fixtures/journal/` directory contains a comprehensive mock journal structure that mimics real journal data for testing, including sample domains, agents, inbox messages, and indexed data
 
 ### Running Tests
 ```bash
-# Quick test run
-make test
+# Unit tests (fast)
+make test                    # Quick run
+make test-verbose           # With coverage details
+make test-only TEST=path    # Specific test
 
-# Verbose with coverage
-make test-verbose
+# Integration tests (require API keys)
+make test-integration
+make test-integration-only TEST=name
 
-# Specific test file or pattern
-make test-only TEST=tests/test_utils.py
-make test-only TEST="-k test_function_name"
+# Coverage report
+make coverage               # Generates htmlcov/index.html
 
-# Generate HTML coverage report
-make coverage
+# UI testing
+make screenshot VIEW=<route>  # Capture Convey view screenshot
 ```
 
 ### Development Workflow
 ```bash
-# Before committing
-make check-all  # Formats, lints, and tests
-
-# Or individually
-make format     # Auto-format code
-make lint       # Check code quality
-make test       # Run tests
-
-# Clean up
-make clean      # Remove build artifacts
+make format      # Auto-format code
+make lint        # Check code quality
+make test        # Run unit tests
+make check-all   # Format, lint, and test (run before commit)
 ```
-
-### Continuous Integration
-* Tests must pass for all changes
-* Maintain or improve code coverage
-* Fix linting issues before merging
-* Update tests when adding features
-
-### UI Screenshots
-
-Use `make screenshot VIEW=<route>` to capture full-page screenshots of Convey views for visual verification or debugging UI issues. Screenshots are saved to `logs/screenshot.png` after capture.
 
 ---
 
@@ -158,60 +180,39 @@ Use `make screenshot VIEW=<route>` to capture full-page screenshots of Convey vi
 ### Environment Management
 * **JOURNAL_PATH**: MUST call `setup_cli()` first in any CLI tool, or manually use `load_dotenv()` - then available via environment
 * **API Keys**: Store in `.env` file, never commit to repository
-* **Configuration**: Use `python-dotenv` for environment variables
+* **Entry Points**: Use command names (e.g., `think-indexer`) NOT `python -m ...`
 
-### Error Handling
-* **Exceptions**: Raise specific exceptions with clear messages
-* **Validation**: Validate all external inputs (paths, user data)
-* **Logging**: Use Python's logging module, not print statements
-* **Silent Failures**: Avoid them - fail fast with clear errors
+### Error Handling & Logging
+* Raise specific exceptions with clear messages
+* Use logging module, not print statements
+* Validate all external inputs (paths, user data)
+* Fail fast with clear errors - avoid silent failures
 
-### Documentation
-* **README Files**: Update package READMEs for new functionality
-* **Code Comments**: Explain "why" not "what" - code should be self-documenting
-* **Type Hints**: Use type hints for function signatures
+### Documentation & References
+* Update README files for new functionality
+* Code comments explain "why" not "what"
+* Type hints required on function signatures
+* **See subsystem docs**: JOURNAL.md, CORTEX.md, CALLOSUM.md, CRUMBS.md
 
 ---
 
 ## 📦 Dependencies Management
 
-### Adding Dependencies
 * **Minimize Dependencies**: Use standard library when possible
-* **Production Dependencies**: Add to `dependencies` in `pyproject.toml`
-* **Development Dependencies**: Add to `[project.optional-dependencies]` dev section
-* **Optional Features**: Add to appropriate optional dependency group (e.g., `full`)
-
-### Installing Dependencies
-```bash
-# Basic package installation
-make install
-
-# With all optional dependencies
-make full
-
-# Development environment
-make dev
-```
+* **Production**: Add to `dependencies` in `pyproject.toml`
+* **Development**: Add to `[project.optional-dependencies]` dev section
+* **Installation**: `make install` (basic), `make dev` (with dev tools), `make full` (all optional)
 
 ---
 
 ## 🎯 Development Principles
 
-### Code Quality
-* **DRY (Don't Repeat Yourself)**: Extract common logic into utilities
-* **KISS (Keep It Simple)**: Prefer simple, readable solutions
-* **YAGNI (You Aren't Gonna Need It)**: Don't over-engineer
-* **Single Responsibility**: Functions/classes should do one thing well
-
-### Best Practices
-* **Conciseness**: Write clear, concise code without sacrificing readability
-* **Maintainability**: Structure code for easy maintenance and extension
-* **Performance**: Profile before optimizing, focus on bottlenecks
-* **Security**: Never expose secrets, validate inputs, sanitize outputs
-
-### Git Workflow
-* **Commits**: Small, focused commits with CHANGELOG style commit messages
-* **Branches**: Feature branches from main, descriptive names
+* **DRY, KISS, YAGNI**: Extract common logic, prefer simple solutions, don't over-engineer
+* **Single Responsibility**: Functions/classes do one thing well
+* **Conciseness & Maintainability**: Clear code over clever code
+* **Security**: Never expose secrets, validate/sanitize all inputs
+* **Performance**: Profile before optimizing
+* **Git**: Small focused commits, descriptive branch names
 
 ---
 
@@ -221,12 +222,14 @@ make dev
 ```bash
 # Development setup
 make dev            # Install with dev dependencies
-make test          # Run tests
+make test          # Run unit tests
 make format        # Format code
 make lint          # Check code quality
 
 # Testing & Debugging
+make test-integration         # Run integration tests
 make screenshot VIEW=<route>  # Capture Convey view screenshot
+make coverage                 # Generate coverage report
 
 # Before pushing
 make check-all     # Format, lint, and test
@@ -238,13 +241,15 @@ make clean-install # Clean and reinstall
 
 ### File Locations
 * **Entry Points**: `pyproject.toml` `[project.scripts]`
-* **Test Fixtures**: `fixtures/` directory
+* **Test Fixtures**: `fixtures/journal/` - complete mock journal
 * **Logs**: `logs/` directory (gitignored)
-* **Journal Data**: Path from `JOURNAL_PATH` env var
+* **Journal Data**: Path from `JOURNAL_PATH` env var (set in `.env`)
 * **Config**: `.env` file in project root
+* **Agent Personas**: `muse/agents/*.txt` and `*.json`
+* **Topic Templates**: `think/topics/*.txt` and `*.json`
 
 ### Getting Help
 * Run `make help` for available Make targets
 * Run `sunstone` for CLI command list
-* Check package READMEs for detailed usage
-* Review test files for usage examples
+* Check **JOURNAL.md**, **CORTEX.md**, **CALLOSUM.md**, **CRUMBS.md** for subsystem details
+* Review test files in `tests/` for usage examples
