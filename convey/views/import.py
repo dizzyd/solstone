@@ -8,7 +8,7 @@ from typing import Any
 from flask import Blueprint, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
-from think.callosum import CallosumConnection
+from think.callosum import callosum_send
 from think.detect_created import detect_created
 from think.importer_utils import (
     archive_imported_results,
@@ -406,13 +406,8 @@ def import_start() -> Any:
         return jsonify({"error": f"Failed to update metadata: {str(e)}"}), 500
 
     # Emit task request to Callosum
-    try:
-        client = CallosumConnection()
-        client.connect()
-        client.emit("task", "request", task_id=task_id, cmd=cmd)
-        client.close()
-    except Exception as e:
-        return jsonify({"error": f"Failed to submit task: {str(e)}"}), 500
+    if not callosum_send("task", "request", task_id=task_id, cmd=cmd):
+        return jsonify({"error": "Failed to submit task"}), 500
 
     return jsonify({"status": "ok", "task_id": task_id})
 
@@ -497,13 +492,8 @@ def import_rerun(timestamp: str) -> Any:
         return jsonify({"error": f"Failed to update metadata: {str(e)}"}), 500
 
     # Emit task request to Callosum
-    try:
-        client = CallosumConnection()
-        client.connect()
-        client.emit("task", "request", task_id=task_id, cmd=cmd)
-        client.close()
-    except Exception as e:
-        return jsonify({"error": f"Failed to submit task: {str(e)}"}), 500
+    if not callosum_send("task", "request", task_id=task_id, cmd=cmd):
+        return jsonify({"error": "Failed to submit task"}), 500
 
     return jsonify(
         {

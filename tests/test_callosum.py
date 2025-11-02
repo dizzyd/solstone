@@ -114,139 +114,108 @@ def test_server_broadcast_removes_dead_clients():
     dead_client.close.assert_called_once()
 
 
-def test_client_emit_graceful_when_not_connected_yet():
-    """Test that emit() logs and returns silently if connect() not called yet."""
+def test_client_emit_returns_false_when_not_started():
+    """Test that emit() returns False and logs warning if start() not called yet."""
     client = CallosumConnection()
 
-    # emit() should not raise, just log when connection not established yet
+    # emit() should return False and log when thread not started
     with patch("think.callosum.logger") as mock_logger:
-        client.emit("test", "hello")
-        mock_logger.info.assert_called_once()
-        assert "Not connected to Callosum yet" in mock_logger.info.call_args[0][0]
+        result = client.emit("test", "hello")
+        assert result is False
+        mock_logger.warning.assert_called_once()
+        assert "Thread not running" in mock_logger.warning.call_args[0][0]
 
 
-def test_client_emit_graceful_when_disconnected():
-    """Test that emit() logs and returns silently if connection drops."""
+def test_client_emit_queues_message():
+    """Test that emit() queues message when thread is running."""
     client = CallosumConnection()
 
-    # Simulate that connect() was called (set receive_thread)
-    client.receive_thread = Mock()
-    client.sock = None  # But connection is now dead
+    # Setup running thread
+    mock_thread = Mock()
+    mock_thread.is_alive.return_value = True
+    client.thread = mock_thread
 
-    # Should not raise, just log
+    result = client.emit("test", "hello", data="world", count=42)
+
+    assert result is True
+    # Message should be in queue
+    assert client.send_queue.qsize() == 1
+    msg = client.send_queue.get_nowait()
+    assert msg["tract"] == "test"
+    assert msg["event"] == "hello"
+    assert msg["data"] == "world"
+    assert msg["count"] == 42
+
+
+def test_client_emit_returns_false_when_queue_full():
+    """Test that emit() returns False when queue is full."""
+    client = CallosumConnection()
+
+    # Setup running thread
+    mock_thread = Mock()
+    mock_thread.is_alive.return_value = True
+    client.thread = mock_thread
+
+    # Fill the queue
+    for i in range(1000):
+        client.send_queue.put({"tract": "test", "event": f"msg{i}"})
+
+    # Next emit should fail
     with patch("think.callosum.logger") as mock_logger:
-        client.emit("test", "hello")
-        mock_logger.info.assert_called_once()
-        assert "Not connected" in mock_logger.info.call_args[0][0]
+        result = client.emit("test", "overflow")
+        assert result is False
+        mock_logger.warning.assert_called()
+        assert "Queue full" in mock_logger.warning.call_args[0][0]
 
 
-def test_client_emit_handles_socket_errors():
-    """Test that emit() handles socket errors gracefully."""
+def test_client_start_creates_thread():
+    """Test that start() creates and starts background thread."""
     client = CallosumConnection()
 
-    # Simulate connected state
-    client.receive_thread = Mock()
-    mock_sock = Mock()
-    mock_sock.sendall.side_effect = Exception("Broken pipe")
-    client.sock = mock_sock
+    def callback(msg):
+        pass
 
-    # Should not raise, just mark connection as dead
-    with patch("think.callosum.logger") as mock_logger:
-        client.emit("test", "hello")
-        mock_logger.info.assert_called()
-        assert "Failed to emit" in mock_logger.info.call_args[0][0]
+    client.start(callback=callback)
 
-    # Connection should be marked dead
-    assert client.sock is None
+    assert client.thread is not None
+    assert client.thread.is_alive()
+    assert client.callback is callback
+
+    # Cleanup
+    client.stop()
 
 
-def test_client_emit_sends_valid_message():
-    """Test that emit() sends properly formatted JSON message."""
+def test_client_start_idempotent():
+    """Test that calling start() multiple times is safe."""
     client = CallosumConnection()
 
-    # Setup connected state
-    client.receive_thread = Mock()
-    mock_sock = Mock()
-    client.sock = mock_sock
+    client.start()
+    first_thread = client.thread
 
-    client.emit("test", "hello", data="world", count=42)
+    # Call start again
+    client.start()
 
-    # Verify sendall was called with correct JSON
-    mock_sock.sendall.assert_called_once()
-    sent_data = mock_sock.sendall.call_args[0][0]
-    sent_msg = json.loads(sent_data.decode("utf-8").strip())
+    # Should still have same thread (not restarted)
+    assert client.thread is first_thread
 
-    assert sent_msg["tract"] == "test"
-    assert sent_msg["event"] == "hello"
-    assert sent_msg["data"] == "world"
-    assert sent_msg["count"] == 42
+    # Cleanup
+    client.stop()
 
 
-def test_client_connect_retries_on_failure(journal_path):
-    """Test that connect() retries when socket connection fails."""
+def test_client_stop_stops_thread():
+    """Test that stop() stops the background thread."""
     client = CallosumConnection()
 
-    attempt_count = [0]
-
-    def mock_connect_side_effect(*args):
-        attempt_count[0] += 1
-        if attempt_count[0] < 3:
-            raise ConnectionRefusedError("Not ready yet")
-        # Succeed on 3rd attempt
-        return None
-
-    with patch("socket.socket") as mock_socket_class:
-        mock_sock = Mock()
-        mock_socket_class.return_value = mock_sock
-        mock_sock.connect.side_effect = mock_connect_side_effect
-
-        # Speed up retry for testing
-        with patch("time.sleep"):
-            client.connect(retry_delay=0.01)
-
-    # Should have succeeded after 3 attempts
-    assert attempt_count[0] == 3
-    assert client.sock is not None
-    assert client.receive_thread is not None
-
-
-def test_client_connect_idempotent(journal_path):
-    """Test that calling connect() multiple times is safe."""
-    with patch("socket.socket") as mock_socket_class:
-        mock_sock = Mock()
-        mock_socket_class.return_value = mock_sock
-
-        client = CallosumConnection()
-        client.connect()
-
-        first_sock = client.sock
-        first_thread = client.receive_thread
-
-        # Call connect again
-        client.connect()
-
-        # Should still have same connection (not reconnected)
-        assert client.sock is first_sock
-        assert client.receive_thread is first_thread
-
-
-def test_client_close_stops_receive_thread(journal_path):
-    """Test that close() stops the receive thread."""
-    client = CallosumConnection()
-
-    # Setup connected state
+    # Setup running thread
     mock_thread = Mock()
     mock_thread.is_alive.return_value = False
-    client.receive_thread = mock_thread
-    client.sock = Mock()
+    client.thread = mock_thread
 
-    client.close()
+    client.stop()
 
-    # Should join the thread
+    # Should set stop event and join thread
+    assert client.stop_event.is_set()
     mock_thread.join.assert_called_once_with(timeout=2)
-
-    # Should close socket
-    assert client.sock is None
 
 
 def test_server_socket_path_from_env(journal_path):
@@ -279,3 +248,33 @@ def test_client_socket_path_custom():
     client = CallosumConnection(socket_path=custom_path)
 
     assert client.socket_path == custom_path
+
+
+def test_callosum_send_without_journal_path():
+    """Test that callosum_send() returns False when JOURNAL_PATH not set."""
+    from think.callosum import callosum_send
+
+    # Temporarily remove JOURNAL_PATH
+    old_path = os.environ.get("JOURNAL_PATH")
+    if "JOURNAL_PATH" in os.environ:
+        del os.environ["JOURNAL_PATH"]
+
+    try:
+        result = callosum_send("test", "event", data="value")
+        assert result is False
+    finally:
+        # Restore JOURNAL_PATH
+        if old_path:
+            os.environ["JOURNAL_PATH"] = old_path
+
+
+def test_callosum_send_with_custom_path():
+    """Test that callosum_send() accepts custom socket path."""
+    from think.callosum import callosum_send
+
+    # Use non-existent socket - should return False but not crash
+    custom_path = Path("/tmp/nonexistent_callosum.sock")
+    result = callosum_send("test", "event", socket_path=custom_path, data="value")
+
+    # Should fail gracefully (no server listening)
+    assert result is False

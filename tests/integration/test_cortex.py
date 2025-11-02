@@ -67,8 +67,8 @@ def test_cortex_request_creation(integration_journal_path, callosum_server):
 
     from think.callosum import CallosumConnection
 
-    listener = CallosumConnection(callback=callback)
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=callback)
     time.sleep(0.1)
 
     # Create a request
@@ -84,7 +84,7 @@ def test_cortex_request_creation(integration_journal_path, callosum_server):
     assert request["backend"] == "openai"
     assert request["agent_id"] == agent_id
 
-    listener.close()
+    listener.stop()
 
 
 @pytest.mark.integration
@@ -115,8 +115,8 @@ def test_cortex_end_to_end_with_echo_agent(integration_journal_path, callosum_se
     # Start watching with CallosumConnection
     from think.callosum import CallosumConnection
 
-    watcher = CallosumConnection(callback=callback)
-    watcher.connect()
+    watcher = CallosumConnection()
+    watcher.start(callback=callback)
 
     time.sleep(0.2)
 
@@ -133,7 +133,7 @@ def test_cortex_end_to_end_with_echo_agent(integration_journal_path, callosum_se
     assert len(request_events) >= 1
     assert request_events[0]["agent_id"] == agent_id
 
-    watcher.close()
+    watcher.stop()
     cortex.stop()
 
 
@@ -194,8 +194,8 @@ def test_cortex_error_handling(integration_journal_path, callosum_server):
 
     from think.callosum import CallosumConnection
 
-    listener = CallosumConnection(callback=callback)
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=callback)
     time.sleep(0.1)
 
     # Make a request
@@ -211,4 +211,4 @@ def test_cortex_error_handling(integration_journal_path, callosum_server):
     request_events = [e for e in received_events if e.get("event") == "request"]
     assert len(request_events) >= 1
 
-    listener.close()
+    listener.stop()

@@ -62,10 +62,8 @@ def start_callosum_bridge() -> None:
 
         # Create Callosum connection with callback
         try:
-            _CALLOSUM_CONNECTION = CallosumConnection(
-                callback=_broadcast_callosum_event
-            )
-            _CALLOSUM_CONNECTION.connect()
+            _CALLOSUM_CONNECTION = CallosumConnection()
+            _CALLOSUM_CONNECTION.start(callback=_broadcast_callosum_event)
             logger.info("Callosum bridge connected, forwarding all events to WebSocket")
         except Exception as e:
             logger.warning(f"Failed to start Callosum bridge: {e}")
@@ -77,7 +75,7 @@ def stop_callosum_bridge(timeout: float = 5.0) -> None:
     global _CALLOSUM_CONNECTION
     with _WATCH_LOCK:
         if _CALLOSUM_CONNECTION:
-            _CALLOSUM_CONNECTION.close()
+            _CALLOSUM_CONNECTION.stop()
             _CALLOSUM_CONNECTION = None
             logger.info("Callosum bridge stopped")
 

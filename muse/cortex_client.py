@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from think.callosum import CallosumConnection
+from think.callosum import callosum_send
 
 logger = logging.getLogger(__name__)
 
@@ -75,13 +75,10 @@ def cortex_request(
         request["save"] = save
 
     # Broadcast request to Callosum
-    # Note: emit() signature is emit(tract, event, **fields)
+    # Note: callosum_send() signature is send(tract, event, **fields)
     # Remove "event" from request dict to avoid conflict
     request_fields = {k: v for k, v in request.items() if k != "event"}
-    client = CallosumConnection()
-    client.connect()
-    client.emit("cortex", "request", **request_fields)
-    client.close()
+    callosum_send("cortex", "request", **request_fields)
 
     return agent_id
 

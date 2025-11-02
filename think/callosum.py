@@ -7,6 +7,7 @@ broadcast protocol. All messages require 'tract' and 'event' fields.
 import json
 import logging
 import os
+import queue
 import socket
 import threading
 import time
@@ -147,18 +148,19 @@ class CallosumServer:
 
 
 class CallosumConnection:
-    """Unified bidirectional connection to Callosum.
+    """Lock-free bidirectional connection to Callosum.
 
-    Every connection can both emit and receive messages. A background receive loop
-    always runs to drain the socket buffer (preventing TCP backpressure), with
-    optional message processing via callback.
+    Messages are sent via a queue to avoid blocking. A background thread handles
+    connection management, queue draining, and message receiving. Messages are
+    dropped (with debug logging) when disconnected.
     """
 
-    def __init__(
-        self,
-        socket_path: Optional[Path] = None,
-        callback: Optional[Callable[[Dict[str, Any]], Any]] = None,
-    ):
+    def __init__(self, socket_path: Optional[Path] = None):
+        """Initialize connection (does not connect immediately).
+
+        Args:
+            socket_path: Path to Unix socket (defaults to $JOURNAL_PATH/health/callosum.sock)
+        """
         if socket_path is None:
             journal = os.getenv("JOURNAL_PATH")
             if not journal:
@@ -166,123 +168,198 @@ class CallosumConnection:
             socket_path = Path(journal) / "health" / "callosum.sock"
 
         self.socket_path = Path(socket_path)
-        self.callback = callback
-        self.sock: Optional[socket.socket] = None
-        self.receive_thread: Optional[threading.Thread] = None
+        self.send_queue: queue.Queue = queue.Queue(maxsize=1000)
+        self.callback: Optional[Callable[[Dict[str, Any]], Any]] = None
+        self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
-        self.lock = threading.RLock()
 
-    def connect(self, retry_delay: float = 1.0) -> None:
-        """Establish connection and start background receive loop.
+    def start(self, callback: Optional[Callable[[Dict[str, Any]], Any]] = None) -> None:
+        """Start background thread for sending and receiving.
 
-        Retries indefinitely until successful. Safe to call multiple times.
+        Thread will auto-connect with retry and drain the send queue even when
+        disconnected (dropping messages with debug logging).
 
         Args:
-            retry_delay: Delay in seconds between retries (default: 1.0)
+            callback: Optional function to process received messages
         """
-        with self.lock:
-            if self.sock:
-                return  # Already connected
+        if self.thread and self.thread.is_alive():
+            return  # Already started
 
-            # Retry indefinitely until connected (Unix socket is cheap to retry)
-            attempt = 0
-            while True:
+        self.callback = callback
+        self.stop_event.clear()
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+
+    def _run_loop(self) -> None:
+        """Main loop: drain queue, connect/reconnect, receive when connected."""
+        sock: Optional[socket.socket] = None
+        buffer = ""
+        last_connect_attempt = 0.0
+
+        while not self.stop_event.is_set():
+            # Try to connect if not connected (rate limited to 1/sec)
+            if not sock and time.time() - last_connect_attempt > 1.0:
                 try:
-                    self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    self.sock.connect(str(self.socket_path))
-                    self.sock.settimeout(1.0)
-
-                    # Always start receive loop to drain socket buffer
-                    self.receive_thread = threading.Thread(
-                        target=self._receive_loop, daemon=True
-                    )
-                    self.receive_thread.start()
-
+                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    sock.connect(str(self.socket_path))
+                    sock.settimeout(0.1)  # Short timeout for responsive queue draining
                     logger.info(f"Connected to Callosum at {self.socket_path}")
-                    return
                 except Exception as e:
-                    if self.sock:
+                    logger.debug(f"Connection attempt failed: {e}")
+                    if sock:
                         try:
-                            self.sock.close()
+                            sock.close()
                         except Exception:
                             pass
-                        self.sock = None
+                        sock = None
+                    last_connect_attempt = time.time()
 
-                    attempt += 1
-                    logger.info(
-                        f"Callosum connection attempt {attempt} failed, "
-                        f"retrying in {retry_delay}s: {e}"
-                    )
-                    time.sleep(retry_delay)
-
-    def _receive_loop(self) -> None:
-        """Background thread that continuously drains socket buffer."""
-        buffer = ""
-        while not self.stop_event.is_set():
+            # ALWAYS drain queue (send if connected, drop if not)
             try:
-                data = self.sock.recv(4096)
-                if not data:
-                    break
-
-                buffer += data.decode("utf-8")
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    if line.strip():
+                msg = self.send_queue.get(timeout=0.1)
+                if sock:
+                    try:
+                        line = json.dumps(msg) + "\n"
+                        sock.sendall(line.encode("utf-8"))
+                    except Exception as e:
+                        logger.debug(f"Send failed, reconnecting: {e}")
                         try:
-                            message = json.loads(line)
-                            # Process if callback provided, otherwise discard
-                            if self.callback:
-                                self.callback(message)
-                        except json.JSONDecodeError:
-                            logger.warning(f"Invalid JSON: {line}")
-            except socket.timeout:
-                continue  # Allows checking stop_event periodically
-            except Exception as e:
-                if not self.stop_event.is_set():
-                    logger.debug(f"Receive loop error: {e}")
-                break
+                            sock.close()
+                        except Exception:
+                            pass
+                        sock = None
+                else:
+                    # Not connected, drop message
+                    logger.debug(
+                        f"Dropping message (not connected): "
+                        f"{msg.get('tract')}/{msg.get('event')}"
+                    )
+            except queue.Empty:
+                pass  # Normal, continue to receive
 
-    def emit(self, tract: str, event: str, **fields) -> None:
-        """Emit event to Callosum.
+            # Receive incoming messages (only if connected)
+            if sock:
+                try:
+                    data = sock.recv(4096)
+                    if not data:
+                        # Connection closed by server
+                        logger.debug("Connection closed by server")
+                        try:
+                            sock.close()
+                        except Exception:
+                            pass
+                        sock = None
+                        continue
 
-        Requires connect() to be called first. If connection is not yet
-        established or not currently connected, logs info and returns silently.
+                    buffer += data.decode("utf-8")
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        if line.strip():
+                            try:
+                                message = json.loads(line)
+                                if self.callback:
+                                    try:
+                                        self.callback(message)
+                                    except Exception as e:
+                                        logger.error(f"Callback error: {e}")
+                            except json.JSONDecodeError:
+                                logger.warning(f"Invalid JSON: {line}")
+                except socket.timeout:
+                    continue  # Normal, just loop back to drain queue
+                except Exception as e:
+                    logger.debug(f"Receive error: {e}")
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                    sock = None
+
+        # Cleanup on stop
+        if sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+    def emit(self, tract: str, event: str, **fields) -> bool:
+        """Emit message via send queue.
+
+        Returns immediately after queueing. Requires start() to be called first.
+
+        Args:
+            tract: Message category/namespace
+            event: Event type
+            **fields: Additional message fields
+
+        Returns:
+            True if queued successfully, False if thread not running or queue full
         """
-        if self.receive_thread is None:
-            logger.info(f"Not connected to Callosum yet, skipping emit: {tract}/{event}")
-            return
-
-        if not self.sock:
-            logger.info(f"Not connected to Callosum, skipping emit: {tract}/{event}")
-            return
+        if not self.thread or not self.thread.is_alive():
+            logger.warning(f"Thread not running, dropping emit: {tract}/{event}")
+            return False
 
         message = {"tract": tract, "event": event, **fields}
+        try:
+            self.send_queue.put_nowait(message)
+            return True
+        except queue.Full:
+            logger.warning(f"Queue full, dropping emit: {tract}/{event}")
+            return False
 
-        with self.lock:
-            try:
-                line = json.dumps(message) + "\n"
-                self.sock.sendall(line.encode("utf-8"))
-            except Exception as e:
-                logger.info(f"Failed to emit to Callosum: {e}")
-                # Mark connection as dead so caller can reconnect
-                self.sock = None
+    def stop(self) -> None:
+        """Stop background thread gracefully."""
+        if not self.thread:
+            return
 
-    def close(self) -> None:
-        """Close connection and stop receive loop."""
         self.stop_event.set()
+        self.thread.join(timeout=2)
 
-        if self.receive_thread:
-            self.receive_thread.join(timeout=2)
-            if self.receive_thread.is_alive():
-                logger.warning("Receive thread did not stop cleanly")
+        if self.thread.is_alive():
+            logger.warning("Background thread did not stop cleanly")
 
-        with self.lock:
-            if self.sock:
-                try:
-                    self.sock.close()
-                except Exception:
-                    pass
-                self.sock = None
+
+def callosum_send(
+    tract: str,
+    event: str,
+    socket_path: Optional[Path] = None,
+    timeout: float = 2.0,
+    **fields
+) -> bool:
+    """Send single message via ephemeral Callosum connection.
+
+    Opens connection, sends message, closes. For one-off sends.
+    For frequent sends, use CallosumConnection with start() + emit().
+
+    Args:
+        tract: Message category/namespace
+        event: Event type
+        socket_path: Optional socket path (defaults to $JOURNAL_PATH/health/callosum.sock)
+        timeout: Connection timeout in seconds (default: 2.0)
+        **fields: Additional message fields
+
+    Returns:
+        True if sent successfully, False if connection/send failed
+    """
+    if socket_path is None:
+        journal = os.getenv("JOURNAL_PATH")
+        if not journal:
+            logger.warning("JOURNAL_PATH not set, cannot send message")
+            return False
+        socket_path = Path(journal) / "health" / "callosum.sock"
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect(str(socket_path))
+
+        message = {"tract": tract, "event": event, **fields}
+        line = json.dumps(message) + "\n"
+        sock.sendall(line.encode("utf-8"))
+        sock.close()
+        return True
+    except Exception as e:
+        logger.debug(f"callosum_send() failed: {e}")
+        return False
 
 
 def main() -> None:

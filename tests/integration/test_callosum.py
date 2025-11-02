@@ -85,19 +85,23 @@ def test_single_client_emit_and_listen(callosum_server):
         received_messages.append(message)
 
     # Create connection with callback (listener)
-    listener = CallosumConnection(callback=callback)
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=callback)
 
-    # Give listener time to start
-    time.sleep(0.1)
+    # Give listener time to connect
+    time.sleep(0.2)
 
     # Create connection and emit
     client = CallosumConnection()
-    client.connect()
+    client.start()
+
+    # Give client time to connect
+    time.sleep(0.2)
+
     client.emit("test", "hello", data="world")
 
-    # Wait for message
-    time.sleep(0.1)
+    # Wait for message to be sent and received
+    time.sleep(0.2)
 
     # Verify message received
     assert len(received_messages) == 1
@@ -108,8 +112,8 @@ def test_single_client_emit_and_listen(callosum_server):
     assert "ts" in msg  # Server should add timestamp
 
     # Cleanup
-    listener.close()
-    client.close()
+    listener.stop()
+    client.stop()
 
 
 def test_multiple_clients_broadcast(callosum_server):
@@ -128,20 +132,24 @@ def test_multiple_clients_broadcast(callosum_server):
         received_by_listener3.append(msg)
 
     # Create multiple listeners
-    listener1 = CallosumConnection(callback=callback1)
-    listener1.connect()
+    listener1 = CallosumConnection()
+    listener1.start(callback=callback1)
 
-    listener2 = CallosumConnection(callback=callback2)
-    listener2.connect()
+    listener2 = CallosumConnection()
+    listener2.start(callback=callback2)
 
-    listener3 = CallosumConnection(callback=callback3)
-    listener3.connect()
+    listener3 = CallosumConnection()
+    listener3.start(callback=callback3)
 
-    time.sleep(0.1)
+    time.sleep(0.2)
 
     # Emit message from client
     client = CallosumConnection()
-    client.connect()
+    client.start()
+
+    # Wait for client to connect
+    time.sleep(0.2)
+
     client.emit("cortex", "agent_start", agent_id="123", persona="analyst")
 
     # Wait for broadcast
@@ -165,7 +173,42 @@ def test_multiple_clients_broadcast(callosum_server):
         assert msg["persona"] == "analyst"
 
     # Cleanup
-    client.close()
-    listener1.close()
-    listener2.close()
-    listener3.close()
+    client.stop()
+    listener1.stop()
+    listener2.stop()
+    listener3.stop()
+
+
+def test_callosum_send_integration(callosum_server):
+    """Test that callosum_send() works with real server."""
+    from think.callosum import callosum_send
+
+    received_messages = []
+
+    def callback(msg):
+        received_messages.append(msg)
+
+    # Create listener
+    listener = CallosumConnection()
+    listener.start(callback=callback)
+
+    time.sleep(0.2)
+
+    # Send message using callosum_send
+    result = callosum_send("test", "fire_and_forget", data="ephemeral")
+
+    # Should succeed
+    assert result is True
+
+    # Wait for message to be broadcast
+    time.sleep(0.2)
+
+    # Verify message was received
+    assert len(received_messages) == 1
+    msg = received_messages[0]
+    assert msg["tract"] == "test"
+    assert msg["event"] == "fire_and_forget"
+    assert msg["data"] == "ephemeral"
+
+    # Cleanup
+    listener.stop()

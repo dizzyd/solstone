@@ -59,8 +59,8 @@ def test_logs_tract_exec_event(journal_path, mock_callosum):
     from think.callosum import CallosumConnection
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     # Spawn process
     managed = ManagedProcess.spawn(
@@ -84,7 +84,7 @@ def test_logs_tract_exec_event(journal_path, mock_callosum):
     # Wait and cleanup
     managed.wait()
     managed.cleanup()
-    listener.close()
+    listener.stop()
 
 
 def test_logs_tract_line_event(journal_path, mock_callosum):
@@ -92,8 +92,8 @@ def test_logs_tract_line_event(journal_path, mock_callosum):
     import think.callosum
 
     received = []
-    listener = think.callosum.CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = think.callosum.CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     # Spawn process that outputs text
     managed = ManagedProcess.spawn(
@@ -121,7 +121,7 @@ def test_logs_tract_line_event(journal_path, mock_callosum):
 
     # Cleanup
     managed.cleanup()
-    listener.close()
+    listener.stop()
 
 
 def test_logs_tract_exit_event(journal_path, mock_callosum):
@@ -129,8 +129,8 @@ def test_logs_tract_exit_event(journal_path, mock_callosum):
     from think.callosum import CallosumConnection
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     # Spawn and wait for process
     managed = ManagedProcess.spawn(
@@ -156,7 +156,7 @@ def test_logs_tract_exit_event(journal_path, mock_callosum):
     assert exit_event["cmd"] == ["echo", "test"]
     assert "log_path" in exit_event
 
-    listener.close()
+    listener.stop()
 
 
 def test_logs_tract_all_events_have_common_fields(journal_path, mock_callosum):
@@ -164,8 +164,8 @@ def test_logs_tract_all_events_have_common_fields(journal_path, mock_callosum):
     from think.callosum import CallosumConnection
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     # Run a process
     managed = ManagedProcess.spawn(["echo", "test"], name="test-common")
@@ -186,7 +186,7 @@ def test_logs_tract_all_events_have_common_fields(journal_path, mock_callosum):
         assert event["name"] == "test-common"
         assert event["pid"] == managed.pid
 
-    listener.close()
+    listener.stop()
 
 
 def test_run_task_emits_logs_tract_events(journal_path, mock_callosum):
@@ -194,8 +194,8 @@ def test_run_task_emits_logs_tract_events(journal_path, mock_callosum):
     from think.callosum import CallosumConnection
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     # Run task
     success, exit_code = run_task(
@@ -215,7 +215,7 @@ def test_run_task_emits_logs_tract_events(journal_path, mock_callosum):
     assert "line" in event_types
     assert "exit" in event_types
 
-    listener.close()
+    listener.stop()
 
 
 def test_task_id_links_to_task_tract(journal_path, mock_callosum):
@@ -223,8 +223,8 @@ def test_task_id_links_to_task_tract(journal_path, mock_callosum):
     from think.callosum import CallosumConnection
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     task_id = "1730476800999"
     managed = ManagedProcess.spawn(
@@ -242,7 +242,7 @@ def test_task_id_links_to_task_tract(journal_path, mock_callosum):
     for event in logs_events:
         assert event["process"] == task_id
 
-    listener.close()
+    listener.stop()
 
 
 def test_error_exit_code_in_exit_event(journal_path, mock_callosum):
@@ -250,8 +250,8 @@ def test_error_exit_code_in_exit_event(journal_path, mock_callosum):
     from think.callosum import CallosumConnection
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=lambda msg: received.append(msg))
 
     # Run process that exits with error
     managed = ManagedProcess.spawn(
@@ -271,7 +271,7 @@ def test_error_exit_code_in_exit_event(journal_path, mock_callosum):
     exit_event = exit_events[0]
     assert exit_event["exit_code"] == 42
 
-    listener.close()
+    listener.stop()
 
 
 def test_process_creates_health_log(journal_path, mock_callosum):

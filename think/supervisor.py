@@ -472,8 +472,8 @@ def _run_task(task_id: str, cmd: list[str]) -> None:
     managed = None
 
     try:
-        # Connect to Callosum (will retry if needed)
-        callosum.connect()
+        # Start Callosum connection (auto-connects in background)
+        callosum.start()
 
         # Emit start event
         callosum.emit("task", "start", task_id=task_id, cmd=cmd)
@@ -519,7 +519,10 @@ def _run_task(task_id: str, cmd: list[str]) -> None:
         # Remove from running tasks
         with _task_state["lock"]:
             _task_state["running_tasks"].discard(task_id)
-        callosum.close()
+
+        # Give time for final message to be sent before stopping
+        time.sleep(0.1)
+        callosum.stop()
 
 
 def cancel_task(task_id: str) -> bool:
@@ -640,13 +643,10 @@ def collect_status(procs: list[ManagedProcess]) -> dict:
 async def emit_periodic_status(procs: list[ManagedProcess]) -> None:
     """Emit task/status events every 5 seconds."""
     callosum = CallosumConnection()
+    callosum.start()
 
     while not shutdown_requested:
         try:
-            # Auto-connect if needed
-            if not callosum.sock:
-                callosum.connect()
-
             # Collect and emit status
             status = collect_status(procs)
             callosum.emit("task", "status", **status)
@@ -656,7 +656,7 @@ async def emit_periodic_status(procs: list[ManagedProcess]) -> None:
 
         await asyncio.sleep(5)
 
-    callosum.close()
+    callosum.stop()
 
 
 def start_observers() -> list[ManagedProcess]:
@@ -917,11 +917,11 @@ async def supervise(
     # Connect to Callosum to receive task requests
     callosum = None
     try:
-        callosum = CallosumConnection(callback=_handle_task_request)
-        callosum.connect()
+        callosum = CallosumConnection()
+        callosum.start(callback=_handle_task_request)
         logging.info("Supervisor connected to Callosum for task requests")
     except Exception as e:
-        logging.warning(f"Failed to connect to Callosum: {e}")
+        logging.warning(f"Failed to start Callosum connection: {e}")
 
     try:
         while (
@@ -948,7 +948,7 @@ async def supervise(
     finally:
         # Clean up Callosum connection
         if callosum:
-            callosum.close()
+            callosum.stop()
             logging.info("Supervisor disconnected from Callosum")
 
 

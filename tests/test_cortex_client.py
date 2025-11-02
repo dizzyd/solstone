@@ -49,8 +49,8 @@ def test_cortex_request_broadcasts_to_callosum(tmp_path, monkeypatch, callosum_s
 
     from think.callosum import CallosumConnection
 
-    listener = CallosumConnection(callback=callback)
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=callback)
 
     time.sleep(0.1)
 
@@ -76,7 +76,7 @@ def test_cortex_request_broadcasts_to_callosum(tmp_path, monkeypatch, callosum_s
     assert msg["agent_id"] == agent_id
     assert "ts" in msg
 
-    listener.close()
+    listener.stop()
 
 
 def test_cortex_request_returns_agent_id(tmp_path, monkeypatch, callosum_server):
@@ -102,8 +102,8 @@ def test_cortex_request_with_handoff(tmp_path, monkeypatch, callosum_server):
 
     from think.callosum import CallosumConnection
 
-    listener = CallosumConnection(callback=callback)
-    listener.connect()
+    listener = CallosumConnection()
+    listener.start(callback=callback)
     time.sleep(0.1)
 
     agent_id = cortex_request(
@@ -119,7 +119,7 @@ def test_cortex_request_with_handoff(tmp_path, monkeypatch, callosum_server):
     assert msg["handoff_from"] == "1234567890000"
     assert msg["persona"] == "reviewer"
 
-    listener.close()
+    listener.stop()
 
 
 def test_cortex_request_unique_agent_ids(tmp_path, monkeypatch, callosum_server):

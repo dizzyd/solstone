@@ -83,7 +83,7 @@ class CortexService:
         self.mcp_server_url: Optional[str] = None
 
         # Callosum connection for receiving requests and broadcasting events
-        self.callosum = CallosumConnection(callback=self._handle_callosum_message)
+        self.callosum = CallosumConnection()
 
         self._start_mcp_server()
 
@@ -180,7 +180,7 @@ class CortexService:
 
         # Connect to Callosum to receive requests
         try:
-            self.callosum.connect()
+            self.callosum.start(callback=self._handle_callosum_message)
             self.logger.info("Connected to Callosum message bus")
         except Exception as e:
             self.logger.error(f"Failed to connect to Callosum: {e}")
@@ -781,7 +781,7 @@ class CortexService:
 
         # Close Callosum connection
         if self.callosum:
-            self.callosum.close()
+            self.callosum.stop()
 
         # Stop all running agents
         with self.lock:

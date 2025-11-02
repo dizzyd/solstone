@@ -183,10 +183,10 @@ class ManagedProcess:
         process_id = task_id if task_id else str(int(time.time() * 1000))
         start_time = time.time()
 
-        # Setup Callosum connection in background
-        # connect() retries indefinitely, so we don't block process startup
+        # Setup Callosum connection
+        # start() manages connection in background thread
         callosum = CallosumConnection()
-        threading.Thread(target=callosum.connect, daemon=True).start()
+        callosum.start()
 
         log_writer = DailyLogWriter(log_name or name)
 
@@ -204,7 +204,7 @@ class ManagedProcess:
         except Exception as exc:
             log_writer.close()
             if callosum:
-                callosum.close()
+                callosum.stop()
             raise RuntimeError(f"Failed to spawn {name}: {exc}") from exc
 
         logger.info(f"Started {name} with PID {proc.pid}")
@@ -351,7 +351,7 @@ class ManagedProcess:
                 cmd=self.cmd,
                 log_path=str(self.log_writer.path),
             )
-            self._callosum.close()
+            self._callosum.stop()
 
     @property
     def pid(self) -> int:

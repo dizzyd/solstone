@@ -422,7 +422,7 @@ def mock_callosum(monkeypatch):
     """Mock Callosum connections to capture emitted events without real I/O.
 
     This fixture provides a MockCallosumConnection class that:
-    - Enforces the connect-before-emit requirement
+    - Enforces the start-before-emit requirement
     - Broadcasts events to all listeners (like the real Callosum)
     - Works without real socket connections
 
@@ -431,32 +431,32 @@ def mock_callosum(monkeypatch):
             from think.callosum import CallosumConnection
 
             received = []
-            listener = CallosumConnection(callback=lambda msg: received.append(msg))
-            listener.connect()
+            listener = CallosumConnection()
+            listener.start(callback=lambda msg: received.append(msg))
 
             # Now emit events and they'll be captured in received
     """
     all_listeners = []
 
     class MockCallosumConnection:
-        def __init__(self, callback=None, socket_path=None):
-            self.callback = callback
+        def __init__(self, socket_path=None):
             self.socket_path = socket_path
-            self.sock = None
-            self.receive_thread = None
+            self.callback = None
+            self.thread = None
+
+        def start(self, callback=None):
+            """Simulate starting the background thread."""
+            self.callback = callback
+            self.thread = Mock()
+            self.thread.is_alive.return_value = True
             if callback:
                 all_listeners.append(self)
 
-        def connect(self):
-            """Simulate successful connection."""
-            self.sock = Mock()
-            self.receive_thread = Mock()
-
         def emit(self, tract, event, **kwargs):
             """Emit event and broadcast to all listeners."""
-            # Silently return if not connected yet (matches real behavior)
-            if self.receive_thread is None:
-                return
+            # Return False if not started yet (matches real behavior)
+            if self.thread is None or not self.thread.is_alive():
+                return False
 
             # Build message
             msg = {"tract": tract, "event": event, **kwargs}
@@ -468,12 +468,14 @@ def mock_callosum(monkeypatch):
                 if listener.callback:
                     listener.callback(msg)
 
-        def close(self):
-            """Close connection and remove from listeners."""
+            return True
+
+        def stop(self):
+            """Stop connection and remove from listeners."""
             if self in all_listeners:
                 all_listeners.remove(self)
-            self.sock = None
-            self.receive_thread = None
+            self.thread = None
+            self.callback = None
 
     # Patch both import locations
     monkeypatch.setattr("think.runner.CallosumConnection", MockCallosumConnection)
