@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import asyncio
 import logging
@@ -88,6 +90,12 @@ _task_state = {
 # Active task processes (task_id -> ManagedProcess)
 _active_tasks: dict[str, RunnerManagedProcess] = {}
 
+# Global supervisor callosum connection for event emissions
+_supervisor_callosum: CallosumConnection | None = None
+
+# Global reference to managed processes for restart control
+_managed_procs: list[ManagedProcess] = []
+
 
 def _get_journal_path() -> Path:
     journal = os.getenv("JOURNAL_PATH")
@@ -163,6 +171,16 @@ def _launch_process(
 
     if policy:
         policy.record_start()
+
+    # Emit started event
+    if _supervisor_callosum:
+        _supervisor_callosum.emit(
+            "supervisor",
+            "started",
+            service=name,
+            pid=managed.process.pid,
+            process=managed.process_id,
+        )
 
     # Wrap in ManagedProcess for restart tracking
     return ManagedProcess(
@@ -510,6 +528,41 @@ def _run_task(task_id: str, cmd: list[str]) -> None:
         callosum.stop()
 
 
+def _handle_supervisor_request(message: dict) -> None:
+    """Handle incoming supervisor control messages."""
+    if message.get("tract") != "supervisor" or message.get("event") != "restart":
+        return
+
+    service = message.get("service")
+    if not service:
+        logging.error("Invalid restart request: missing service")
+        return
+
+    # Find and signal the process
+    for proc in _managed_procs:
+        if proc.name == service and proc.process.poll() is None:
+            logging.info(f"Restart requested for {service}, sending SIGINT...")
+
+            # Emit restarting event
+            if _supervisor_callosum:
+                _supervisor_callosum.emit(
+                    "supervisor",
+                    "restarting",
+                    service=service,
+                    pid=proc.process.pid,
+                    process=proc.process_id,
+                )
+
+            # Send SIGINT to trigger graceful shutdown
+            try:
+                proc.process.send_signal(signal.SIGINT)
+            except Exception as e:
+                logging.error(f"Failed to send SIGINT to {service}: {e}")
+            return
+
+    logging.warning(f"Cannot restart {service}: not found or not running")
+
+
 def cancel_task(task_id: str) -> bool:
     """Cancel a running task.
 
@@ -634,7 +687,7 @@ async def emit_periodic_status(procs: list[ManagedProcess]) -> None:
         try:
             # Collect and emit status
             status = collect_status(procs)
-            callosum.emit("task", "status", **status)
+            callosum.emit("supervisor", "status", **status)
 
         except Exception as e:
             logging.debug(f"Status emission failed: {e}")
@@ -709,6 +762,17 @@ async def handle_runner_exits(
     for managed in exited:
         returncode = managed.process.returncode
         logging.info("%s exited with code %s", managed.name, returncode)
+
+        # Emit stopped event
+        if _supervisor_callosum:
+            _supervisor_callosum.emit(
+                "supervisor",
+                "stopped",
+                service=managed.name,
+                pid=managed.process.pid,
+                process=managed.process_id,
+                exit_code=returncode,
+            )
 
         # Remove from procs list
         try:
@@ -815,6 +879,12 @@ async def handle_daily_tasks(last_day: datetime.date) -> datetime.date:
     return last_day
 
 
+def _handle_callosum_message(message: dict) -> None:
+    """Dispatch incoming Callosum messages to appropriate handlers."""
+    _handle_task_request(message)
+    _handle_supervisor_request(message)
+
+
 async def supervise(
     *,
     threshold: int = DEFAULT_THRESHOLD,
@@ -829,18 +899,19 @@ async def supervise(
     Subsystems manage their own timing (health checks every interval seconds,
     scheduled agents check continuously but only advance when ready).
     """
-    global shutdown_requested
+    global shutdown_requested, _supervisor_callosum
     alert_mgr = AlertManager()
     last_day = datetime.now().date()
     last_health_check = 0.0
     prev_stale: set[str] = set()
 
-    # Connect to Callosum to receive task requests
+    # Connect to Callosum to receive task and supervisor requests
     callosum = None
     try:
         callosum = CallosumConnection()
-        callosum.start(callback=_handle_task_request)
-        logging.info("Supervisor connected to Callosum for task requests")
+        callosum.start(callback=_handle_callosum_message)
+        _supervisor_callosum = callosum
+        logging.info("Supervisor connected to Callosum for task and supervisor requests")
     except Exception as e:
         logging.warning(f"Failed to start Callosum connection: {e}")
 
@@ -870,6 +941,7 @@ async def supervise(
         # Clean up Callosum connection
         if callosum:
             callosum.stop()
+            _supervisor_callosum = None
             logging.info("Supervisor disconnected from Callosum")
 
 
@@ -954,6 +1026,7 @@ def main() -> None:
 
     logging.info("Supervisor starting...")
 
+    global _managed_procs
     procs: list[ManagedProcess] = []
     # Start Callosum first - it's the message bus that other services depend on
     procs.append(start_callosum_server())
@@ -963,6 +1036,9 @@ def main() -> None:
         procs.append(start_cortex_server())
     if not args.no_convey:
         procs.append(start_convey_server(verbose=args.verbose, debug=args.debug))
+
+    # Make procs accessible to restart handler
+    _managed_procs = procs
 
     logging.info(f"Started {len(procs)} processes, entering supervision loop")
     try:
