@@ -17,7 +17,6 @@ from muse.cortex_client import cortex_request
 from think.callosum import CallosumConnection
 from think.domains import get_domains
 from think.runner import ManagedProcess as RunnerManagedProcess
-from think.runner import run_task
 from think.utils import get_agents, setup_cli
 
 DEFAULT_THRESHOLD = 60
@@ -87,6 +86,9 @@ _task_state = {
     "running_tasks": set(),  # Set of task_ids currently running
     "lock": threading.Lock(),  # Lock for thread-safe task state access
 }
+
+# Active task processes (task_id -> ManagedProcess)
+_active_tasks: dict[str, RunnerManagedProcess] = {}
 
 # Directory to process mapping for auto-reload
 WATCH_DIRS = {
@@ -465,14 +467,20 @@ def _handle_task_request(message: dict) -> None:
 def _run_task(task_id: str, cmd: list[str]) -> None:
     """Execute a task and broadcast events to Callosum."""
     callosum = CallosumConnection()
+    managed = None
 
     try:
         # Emit start event
         callosum.emit("task", "start", task_id=task_id, cmd=cmd)
         logging.info(f"Starting task {task_id}: {' '.join(cmd)}")
 
-        # Run task with custom log name
-        success, exit_code = run_task(cmd, log_name=task_id)
+        # Spawn process and track it
+        managed = RunnerManagedProcess.spawn(cmd, log_name=task_id)
+        _active_tasks[task_id] = managed
+
+        # Wait for completion (blocks)
+        exit_code = managed.wait()
+        success = exit_code == 0
 
         # Emit finish or error event
         if success:
@@ -498,10 +506,71 @@ def _run_task(task_id: str, cmd: list[str]) -> None:
             exit_code=-1,
         )
     finally:
+        # Cleanup managed process
+        if managed:
+            managed.cleanup()
+        _active_tasks.pop(task_id, None)
+
         # Remove from running tasks
         with _task_state["lock"]:
             _task_state["running_tasks"].discard(task_id)
         callosum.close()
+
+
+def cancel_task(task_id: str) -> bool:
+    """Cancel a running task.
+
+    Args:
+        task_id: Task identifier
+
+    Returns:
+        True if task was found and terminated, False otherwise
+    """
+    if task_id not in _active_tasks:
+        logging.warning(f"Cannot cancel task {task_id}: not found")
+        return False
+
+    managed = _active_tasks[task_id]
+    if not managed.is_running():
+        logging.debug(f"Task {task_id} already finished")
+        return False
+
+    logging.info(f"Cancelling task {task_id}...")
+    managed.terminate()
+    return True
+
+
+def get_task_status(task_id: str) -> dict:
+    """Get status of a task.
+
+    Args:
+        task_id: Task identifier
+
+    Returns:
+        Dict with status info, or {"status": "not_found"} if task doesn't exist
+    """
+    if task_id not in _active_tasks:
+        return {"status": "not_found"}
+
+    managed = _active_tasks[task_id]
+    return {
+        "status": "running" if managed.is_running() else "finished",
+        "pid": managed.pid,
+        "returncode": managed.returncode,
+        "log_path": str(managed.log_writer.path),
+        "cmd": managed.cmd,
+    }
+
+
+def list_running_tasks() -> list[str]:
+    """List all currently running task IDs.
+
+    Returns:
+        List of task_ids for tasks that are still running
+    """
+    return [
+        task_id for task_id, managed in _active_tasks.items() if managed.is_running()
+    ]
 
 
 def start_observers() -> list[ManagedProcess]:
