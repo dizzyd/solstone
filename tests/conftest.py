@@ -454,9 +454,9 @@ def mock_callosum(monkeypatch):
 
         def emit(self, tract, event, **kwargs):
             """Emit event and broadcast to all listeners."""
-            # Enforce connect() requirement
+            # Silently return if not connected yet (matches real behavior)
             if self.receive_thread is None:
-                raise RuntimeError("Must call connect() before emit()")
+                return
 
             # Build message
             msg = {"tract": tract, "event": event, **kwargs}

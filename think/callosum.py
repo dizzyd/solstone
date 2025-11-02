@@ -245,14 +245,12 @@ class CallosumConnection:
     def emit(self, tract: str, event: str, **fields) -> None:
         """Emit event to Callosum.
 
-        Requires connect() to be called first. If not currently connected,
-        logs info and returns silently.
-
-        Raises:
-            RuntimeError: If connect() was never called
+        Requires connect() to be called first. If connection is not yet
+        established or not currently connected, logs info and returns silently.
         """
         if self.receive_thread is None:
-            raise RuntimeError("Must call connect() before emit()")
+            logger.info(f"Not connected to Callosum yet, skipping emit: {tract}/{event}")
+            return
 
         if not self.sock:
             logger.info(f"Not connected to Callosum, skipping emit: {tract}/{event}")

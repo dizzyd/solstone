@@ -114,13 +114,15 @@ def test_server_broadcast_removes_dead_clients():
     dead_client.close.assert_called_once()
 
 
-def test_client_emit_requires_connect_called():
-    """Test that emit() requires connect() to be called first."""
+def test_client_emit_graceful_when_not_connected_yet():
+    """Test that emit() logs and returns silently if connect() not called yet."""
     client = CallosumConnection()
 
-    # emit() should raise RuntimeError if connect() was never called
-    with pytest.raises(RuntimeError, match="Must call connect\\(\\) before emit\\(\\)"):
+    # emit() should not raise, just log when connection not established yet
+    with patch("think.callosum.logger") as mock_logger:
         client.emit("test", "hello")
+        mock_logger.info.assert_called_once()
+        assert "Not connected to Callosum yet" in mock_logger.info.call_args[0][0]
 
 
 def test_client_emit_graceful_when_disconnected():
