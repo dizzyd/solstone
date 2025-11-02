@@ -91,6 +91,7 @@ def test_single_client_emit_and_listen(callosum_server):
 
     # Create connection and emit
     client = CallosumConnection()
+    client.connect()
     client.emit("test", "hello", data="world")
 
     # Wait for message
@@ -138,6 +139,7 @@ def test_multiple_clients_broadcast(callosum_server):
 
     # Emit message from client
     client = CallosumConnection()
+    client.connect()
     client.emit("cortex", "agent_start", agent_id="123", persona="analyst")
 
     # Wait for broadcast
@@ -187,8 +189,11 @@ def test_multiple_emitters_to_multiple_listeners(callosum_server):
 
     # Create multiple clients and emit
     client1 = CallosumConnection()
+    client1.connect()
     client2 = CallosumConnection()
+    client2.connect()
     client3 = CallosumConnection()
+    client3.connect()
 
     client1.emit("indexer", "scan_start", index_type="transcripts")
     client2.emit("cortex", "agent_finish", agent_id="456")
@@ -201,12 +206,12 @@ def test_multiple_emitters_to_multiple_listeners(callosum_server):
     assert len(received_by_listener1) == 3
     assert len(received_by_listener2) == 3
 
-    # Verify messages (order should be preserved)
-    tracts1 = [msg["tract"] for msg in received_by_listener1]
-    tracts2 = [msg["tract"] for msg in received_by_listener2]
+    # Verify all expected tracts are present (order may vary with concurrent connections)
+    tracts1 = set(msg["tract"] for msg in received_by_listener1)
+    tracts2 = set(msg["tract"] for msg in received_by_listener2)
 
-    assert tracts1 == ["indexer", "cortex", "supervisor"]
-    assert tracts2 == ["indexer", "cortex", "supervisor"]
+    assert tracts1 == {"indexer", "cortex", "supervisor"}
+    assert tracts2 == {"indexer", "cortex", "supervisor"}
 
     # Cleanup
     for client in [client1, client2, client3]:
@@ -216,8 +221,9 @@ def test_multiple_emitters_to_multiple_listeners(callosum_server):
 
 
 def test_client_reconnect_on_failure(callosum_server):
-    """Test that client reconnects after connection failure."""
+    """Test that client can reconnect after connection failure."""
     client = CallosumConnection()
+    client.connect()
 
     # First emit should work
     client.emit("test", "first")
@@ -234,7 +240,8 @@ def test_client_reconnect_on_failure(callosum_server):
 
     time.sleep(0.1)
 
-    # Next emit should reconnect and work
+    # Reconnect and emit again
+    client.connect()
     client.emit("test", "reconnected")
 
     time.sleep(0.1)
@@ -303,15 +310,17 @@ def test_invalid_message_without_event(callosum_server):
 
 
 def test_client_emit_when_server_not_running(journal_path):
-    """Test that client fails gracefully when server is not running."""
+    """Test that emit() requires connect() to be called first."""
     # No server started
     client = CallosumConnection()
 
-    # Should not raise exception, just fail silently
-    client.emit("test", "no_server")
+    # emit() should raise RuntimeError if connect() was never called
+    with pytest.raises(RuntimeError, match="Must call connect\\(\\) before emit\\(\\)"):
+        client.emit("test", "no_server")
 
-    # Connection should be None
-    assert client.sock is None
+    # After calling connect() (which would retry forever), emit just logs and returns
+    # We can't actually test connect() here since it would hang, so we just verify
+    # that the _connect_called flag is checked
 
 
 def test_custom_timestamp_preserved(callosum_server):
@@ -351,6 +360,7 @@ def test_multiple_sequential_messages(callosum_server):
 
     # Send multiple messages
     client = CallosumConnection()
+    client.connect()
     for i in range(10):
         client.emit("test", "message", seq=i)
 
@@ -386,6 +396,7 @@ def test_listener_disconnect_doesnt_affect_others(callosum_server):
 
     # Send first message
     client = CallosumConnection()
+    client.connect()
     client.emit("test", "first")
 
     time.sleep(0.1)
@@ -443,6 +454,7 @@ def test_with_fixtures_journal():
         time.sleep(0.1)
 
         client = CallosumConnection()
+        client.connect()
         client.emit("cortex", "test", message="using fixtures journal")
 
         time.sleep(0.1)

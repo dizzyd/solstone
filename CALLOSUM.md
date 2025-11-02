@@ -38,6 +38,7 @@ All connections can both emit and receive messages. A background receive loop al
 from think.callosum import CallosumConnection
 
 client = CallosumConnection()
+client.connect()  # Retries automatically if callosum is starting up
 client.emit("cortex", "agent_start", agent_id="123", persona="analyst")
 client.close()
 ```
@@ -209,6 +210,7 @@ from think.callosum import CallosumConnection
 # Submit task request
 task_id = str(int(time.time() * 1000))
 client = CallosumConnection()
+client.connect()
 client.emit(
     "task",
     "request",

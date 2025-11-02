@@ -172,28 +172,48 @@ class CallosumConnection:
         self.stop_event = threading.Event()
         self.lock = threading.RLock()
 
-    def connect(self) -> None:
-        """Establish connection and start background receive loop."""
+    def connect(self, retry_delay: float = 1.0) -> None:
+        """Establish connection and start background receive loop.
+
+        Retries indefinitely until successful. Safe to call multiple times.
+
+        Args:
+            retry_delay: Delay in seconds between retries (default: 1.0)
+        """
         with self.lock:
             if self.sock:
                 return  # Already connected
 
-            try:
-                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                self.sock.connect(str(self.socket_path))
-                self.sock.settimeout(1.0)
+            # Retry indefinitely until connected (Unix socket is cheap to retry)
+            attempt = 0
+            while True:
+                try:
+                    self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    self.sock.connect(str(self.socket_path))
+                    self.sock.settimeout(1.0)
 
-                # Always start receive loop to drain socket buffer
-                self.receive_thread = threading.Thread(
-                    target=self._receive_loop, daemon=True
-                )
-                self.receive_thread.start()
+                    # Always start receive loop to drain socket buffer
+                    self.receive_thread = threading.Thread(
+                        target=self._receive_loop, daemon=True
+                    )
+                    self.receive_thread.start()
 
-                logger.debug(f"Connected to Callosum at {self.socket_path}")
-            except Exception as e:
-                logger.debug(f"Failed to connect to Callosum: {e}")
-                self.sock = None
-                raise
+                    logger.info(f"Connected to Callosum at {self.socket_path}")
+                    return
+                except Exception as e:
+                    if self.sock:
+                        try:
+                            self.sock.close()
+                        except Exception:
+                            pass
+                        self.sock = None
+
+                    attempt += 1
+                    logger.info(
+                        f"Callosum connection attempt {attempt} failed, "
+                        f"retrying in {retry_delay}s: {e}"
+                    )
+                    time.sleep(retry_delay)
 
     def _receive_loop(self) -> None:
         """Background thread that continuously drains socket buffer."""
@@ -223,23 +243,30 @@ class CallosumConnection:
                 break
 
     def emit(self, tract: str, event: str, **fields) -> None:
-        """Emit event to Callosum (auto-connects if needed)."""
+        """Emit event to Callosum.
+
+        Requires connect() to be called first. If not currently connected,
+        logs info and returns silently.
+
+        Raises:
+            RuntimeError: If connect() was never called
+        """
+        if self.receive_thread is None:
+            raise RuntimeError("Must call connect() before emit()")
+
+        if not self.sock:
+            logger.info(f"Not connected to Callosum, skipping emit: {tract}/{event}")
+            return
+
         message = {"tract": tract, "event": event, **fields}
 
         with self.lock:
-            # Auto-connect on first emit
-            if not self.sock:
-                try:
-                    self.connect()
-                except Exception:
-                    return  # Silent failure - bus not running
-
             try:
                 line = json.dumps(message) + "\n"
                 self.sock.sendall(line.encode("utf-8"))
             except Exception as e:
-                logger.debug(f"Failed to emit to Callosum: {e}")
-                # Mark connection as dead - will reconnect on next emit
+                logger.info(f"Failed to emit to Callosum: {e}")
+                # Mark connection as dead so caller can reconnect
                 self.sock = None
 
     def close(self) -> None:

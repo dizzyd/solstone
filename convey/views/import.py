@@ -361,6 +361,7 @@ def import_start() -> Any:
     # Emit task request to Callosum
     try:
         client = CallosumConnection()
+        client.connect()
         client.emit("task", "request", task_id=task_id, cmd=cmd)
         client.close()
     except Exception as e:
@@ -451,11 +452,17 @@ def import_rerun(timestamp: str) -> Any:
     # Emit task request to Callosum
     try:
         client = CallosumConnection()
+        client.connect()
         client.emit("task", "request", task_id=task_id, cmd=cmd)
         client.close()
     except Exception as e:
         return jsonify({"error": f"Failed to submit task: {str(e)}"}), 500
 
     return jsonify(
-        {"status": "ok", "domain": new_domain, "setting": new_setting, "task_id": task_id}
+        {
+            "status": "ok",
+            "domain": new_domain,
+            "setting": new_setting,
+            "task_id": task_id,
+        }
     )

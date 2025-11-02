@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from flask_sock import Sock
 from simple_websocket import ConnectionClosed
+
 from think.callosum import CallosumConnection
 
 from . import state
@@ -61,7 +62,9 @@ def start_callosum_bridge() -> None:
 
         # Create Callosum connection with callback
         try:
-            _CALLOSUM_CONNECTION = CallosumConnection(callback=_broadcast_callosum_event)
+            _CALLOSUM_CONNECTION = CallosumConnection(
+                callback=_broadcast_callosum_event
+            )
             _CALLOSUM_CONNECTION.connect()
             logger.info("Callosum bridge connected, forwarding all events to WebSocket")
         except Exception as e:
@@ -86,6 +89,7 @@ def register_websocket(sock: Sock, path: str = "/ws/events") -> None:
         sock: Flask-Sock instance
         path: WebSocket path (default: /ws/events)
     """
+
     @sock.route(path, endpoint="events_ws")
     def _handler(ws) -> None:
         _WEBSOCKET_CLIENTS.append(ws)

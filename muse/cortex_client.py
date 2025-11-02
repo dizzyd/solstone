@@ -79,6 +79,7 @@ def cortex_request(
     # Remove "event" from request dict to avoid conflict
     request_fields = {k: v for k, v in request.items() if k != "event"}
     client = CallosumConnection()
+    client.connect()
     client.emit("cortex", "request", **request_fields)
     client.close()
 

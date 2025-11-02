@@ -472,6 +472,9 @@ def _run_task(task_id: str, cmd: list[str]) -> None:
     managed = None
 
     try:
+        # Connect to Callosum (will retry if needed)
+        callosum.connect()
+
         # Emit start event
         callosum.emit("task", "start", task_id=task_id, cmd=cmd)
         logging.info(f"Starting task {task_id}: {' '.join(cmd)}")
