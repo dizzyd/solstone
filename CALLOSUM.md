@@ -52,12 +52,21 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 **Purpose:** Real-time stdout/stderr streaming and process exit events
 
 ### `observe` - Multimodal capture processing events
-**Source:** `observe/sense.py`, `observe/describe.py`, `observe/transcribe.py`, `observe/reduce.py`
-**Events:** `detected`, `described`, `transcribed`, `reduced`
+**Source:** `observe/gnome/observer.py`, `observe/sense.py`, `observe/describe.py`, `observe/transcribe.py`, `observe/reduce.py`
+**Events:** `status`, `detected`, `described`, `transcribed`, `reduced`
 **Fields:**
+- `status`: `screencast`, `audio`, `activity` - Periodic capture state (every 5s)
+  - `screencast.recording`: boolean, whether screencast is recording
+  - `screencast.file`: relative path to current recording file (if recording)
+  - `screencast.window_elapsed_seconds`: seconds since window started
+  - `audio.threshold_hits`: count of audio chunks above threshold
+  - `audio.will_save`: boolean, whether audio will be saved at boundary
+  - `activity.active`: boolean, whether user is active
+  - `activity.idle_time_ms`: milliseconds since last user activity
+  - `activity.screen_locked`: boolean, whether screen is locked
 - `detected`: `file`, `handler`, `ref` - File detected and handler spawned
 - `described`/`transcribed`/`reduced`: `input`, `output`, `duration_ms` - Processing complete
-**Purpose:** Track observation pipeline from file detection through processing completion
+**Purpose:** Track observation pipeline from live capture state through processing completion
 **Path Format:** Relative to `JOURNAL_PATH` (e.g., `20251102/163045_screen.webm`, `20251102/seen/163045_screen.webm`)
 **Correlation:** `detected.ref` matches `logs.exec.ref` for the same handler process
 

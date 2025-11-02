@@ -28,6 +28,7 @@ from observe.gnome.dbus import (
 )
 from observe.gnome.screencast import Screencaster
 from observe.hear import AudioRecorder
+from think.callosum import CallosumConnection
 from think.utils import day_path, setup_cli, touch_health
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class Observer:
         self.screencaster = Screencaster()
         self.bus: MessageBus | None = None
         self.running = True
+        self.callosum: CallosumConnection | None = None
 
         # State tracking
         self.start_at = time.time()  # Wall-clock for filenames
@@ -58,6 +60,11 @@ class Observer:
         self.current_screencast_path = None
         self.pending_finalization = None  # Path to screencast awaiting finalization
         self.last_screencast_size = 0  # Track file size for health checks
+
+        # Activity status cache (updated each loop)
+        self.cached_is_active = False
+        self.cached_idle_time_ms = 0
+        self.cached_screen_locked = False
 
     async def setup(self):
         """Initialize audio devices and DBus connection."""
@@ -74,11 +81,16 @@ class Observer:
         await self.screencaster.connect()
         logger.info("DBus connection established")
 
+        # Start Callosum connection for status events
+        self.callosum = CallosumConnection()
+        self.callosum.start()
+        logger.info("Callosum connection started")
+
         return True
 
     async def check_activity_status(self) -> bool:
         """
-        Check system activity status.
+        Check system activity status and cache values.
 
         Returns:
             True if user is active (not idle and screen unlocked, OR has audio activity)
@@ -86,9 +98,16 @@ class Observer:
         idle_time = await get_idle_time_ms(self.bus)
         screen_locked = await is_screen_locked(self.bus)
 
+        # Cache values for status events
+        self.cached_idle_time_ms = idle_time
+        self.cached_screen_locked = screen_locked
+
         is_idle = (idle_time > IDLE_THRESHOLD_MS) or screen_locked
         has_audio_activity = self.threshold_hits >= MIN_HITS_FOR_SAVE
         is_active = (not is_idle) or has_audio_activity
+
+        # Cache result
+        self.cached_is_active = is_active
 
         return is_active
 
@@ -195,6 +214,54 @@ class Observer:
         else:
             logger.warning("Failed to start screencast")
             return False
+
+    def emit_status(self):
+        """Emit observe.status event with current state."""
+        if not self.callosum:
+            return
+
+        # Calculate screencast info
+        screencast_info = None
+        if self.screencast_running and self.current_screencast_path:
+            journal_path = os.getenv("JOURNAL_PATH", "")
+            try:
+                rel_file = (
+                    os.path.relpath(self.current_screencast_path, journal_path)
+                    if journal_path
+                    else self.current_screencast_path
+                )
+            except ValueError:
+                rel_file = self.current_screencast_path
+
+            elapsed = int(time.monotonic() - self.start_at_mono)
+            screencast_info = {
+                "recording": True,
+                "file": rel_file,
+                "window_elapsed_seconds": elapsed,
+            }
+        else:
+            screencast_info = {"recording": False}
+
+        # Audio info
+        audio_info = {
+            "threshold_hits": self.threshold_hits,
+            "will_save": self.threshold_hits >= MIN_HITS_FOR_SAVE,
+        }
+
+        # Activity info
+        activity_info = {
+            "active": self.cached_is_active,
+            "idle_time_ms": self.cached_idle_time_ms,
+            "screen_locked": self.cached_screen_locked,
+        }
+
+        self.callosum.emit(
+            "observe",
+            "status",
+            screencast=screencast_info,
+            audio=audio_info,
+            activity=activity_info,
+        )
 
     async def finalize_screencast(self, screencast_path: str):
         """
@@ -331,6 +398,9 @@ class Observer:
                         touch_health("see")
                         self.last_screencast_size = current_size
 
+            # Emit status event
+            self.emit_status()
+
         # Cleanup on exit
         logger.info("Observer loop stopped, cleaning up...")
         await self.shutdown()
@@ -385,6 +455,11 @@ class Observer:
         # Stop audio recorder
         self.audio_recorder.stop_recording()
         logger.info("Audio recording stopped")
+
+        # Stop Callosum connection
+        if self.callosum:
+            self.callosum.stop()
+            logger.info("Callosum connection stopped")
 
 
 async def async_main(args):
