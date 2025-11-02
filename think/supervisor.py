@@ -147,6 +147,7 @@ class ManagedProcess:
     cmd: list[str]
     restart: bool = False
     threads: list[threading.Thread] = field(default_factory=list)
+    process_id: str = ""
 
     def cleanup(self) -> None:
         for thread in self.threads:
@@ -184,6 +185,7 @@ def _launch_process(
         cmd=list(cmd),
         restart=restart,
         threads=managed._threads,
+        process_id=managed.process_id,
     )
 
 
@@ -571,6 +573,87 @@ def list_running_tasks() -> list[str]:
     return [
         task_id for task_id, managed in _active_tasks.items() if managed.is_running()
     ]
+
+
+def collect_status(procs: list[ManagedProcess]) -> dict:
+    """Collect current supervisor status for broadcasting."""
+    now = time.time()
+
+    # Running services
+    services = []
+    running_names = set()
+    for proc in procs:
+        if proc.process.poll() is None:  # Still running
+            policy = _get_restart_policy(proc.name)
+            uptime = int(now - policy.last_start) if policy.last_start else 0
+            services.append(
+                {
+                    "name": proc.name,
+                    "process": proc.process_id,
+                    "pid": proc.process.pid,
+                    "uptime_seconds": uptime,
+                }
+            )
+            running_names.add(proc.name)
+
+    # Crashed services (in restart backoff)
+    crashed = []
+    for name, policy in _RESTART_POLICIES.items():
+        if name not in running_names and policy.attempts > 0:
+            crashed.append(
+                {
+                    "name": name,
+                    "restart_attempts": policy.attempts,
+                }
+            )
+
+    # Running tasks
+    tasks = []
+    for task_id, managed in _active_tasks.items():
+        if managed.is_running():
+            duration = int(now - managed._start_time)
+            # Extract command name (first element of cmd)
+            cmd_name = managed.cmd[0] if managed.cmd else "unknown"
+            tasks.append(
+                {
+                    "task_id": task_id,
+                    "name": cmd_name,
+                    "process": managed.process_id,
+                    "duration_seconds": duration,
+                }
+            )
+
+    # Stale heartbeats
+    stale = check_health()
+
+    return {
+        "services": services,
+        "crashed": crashed,
+        "tasks": tasks,
+        "stale_heartbeats": stale,
+    }
+
+
+async def emit_periodic_status(procs: list[ManagedProcess]) -> None:
+    """Emit task/status events every 5 seconds."""
+    callosum = CallosumConnection()
+
+    while not shutdown_requested:
+        try:
+            # Auto-connect if needed
+            if not callosum.sock:
+                callosum.connect()
+
+            # Collect and emit status
+            status = collect_status(procs)
+            callosum.emit("task", "status", **status)
+
+        except Exception as e:
+            logging.debug(f"Status emission failed: {e}")
+
+        await asyncio.sleep(5)
+
+    callosum.close()
 
 
 def start_observers() -> list[ManagedProcess]:
@@ -969,7 +1052,8 @@ def main() -> None:
                     command=args.notify_cmd,
                     daily=not args.no_daily,
                     procs=procs if procs else None,
-                )
+                ),
+                emit_periodic_status(procs),
             ]
 
             # Enable auto-reload when verbose or debug mode is active
