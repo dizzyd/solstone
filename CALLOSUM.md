@@ -1,315 +1,59 @@
-# Callosum Message Specification
+# Callosum Protocol
 
-Callosum is a Unix domain socket broadcast bus for real-time event distribution across Sunstone services.
+Callosum is a JSON-per-line message bus for real-time event distribution across Sunstone services.
 
-**Socket:** `$JOURNAL_PATH/health/callosum.sock`
+## Protocol
 
-**Protocol:** JSON-per-line broadcast. No routing, no filtering.
+**Transport:** Unix domain socket at `$JOURNAL_PATH/health/callosum.sock`
 
-## Message Format
+**Format:** Newline-delimited JSON. Broadcast to all connected clients.
 
-All messages follow this structure:
-
+**Message Structure:**
 ```json
 {
-  "tract": "string",
-  "event": "string",
+  "tract": "source_subsystem",
+  "event": "event_type",
+  "ts": 1234567890123,
   // ... tract-specific fields
 }
 ```
 
-**Required fields:**
-- `tract` - Source service/subsystem identifier
-- `event` - Event type within the tract
+**Required Fields:**
+- `tract` - Source subsystem identifier (string)
+- `event` - Event type within tract (string)
+- `ts` - Timestamp in milliseconds (auto-added if missing)
 
-**Auto-added fields:**
-- `ts` - Timestamp in milliseconds (added by server if not present)
-
-All other fields are tract-specific and documented below.
-
-## Client Usage
-
-**Unified bidirectional connections:**
-
-All connections can both emit and receive messages. A background receive loop always runs to drain the socket buffer.
-
-**Emit-only usage (no callback):**
-```python
-from think.callosum import CallosumConnection
-
-client = CallosumConnection()
-client.connect()  # Retries automatically if callosum is starting up
-client.emit("cortex", "agent_start", agent_id="123", persona="analyst")
-client.close()
-```
-
-**Listen-only usage (with callback):**
-```python
-from think.callosum import CallosumConnection
-
-def handle_message(msg):
-    print(f"Received: {msg}")
-
-listener = CallosumConnection(callback=handle_message)
-listener.connect()  # Starts background receive loop
-# Messages are now processed in background
-# ...
-listener.close()  # Stops receive loop
-```
-
-**Both emit and receive:**
-```python
-from think.callosum import CallosumConnection
-
-messages_received = []
-conn = CallosumConnection(callback=lambda msg: messages_received.append(msg))
-conn.emit("cortex", "status", message="active")  # Auto-connects
-# Connection drains broadcasts in background
-conn.close()
-```
-
-## Notes
-
-- Messages are JSON objects, one per line
-- All connections are bidirectional (emit + receive)
-- Background receive loop prevents TCP backpressure
-- Clients auto-reconnect on failure
-- Missing `tract` or `event` fields are rejected
+**Behavior:**
+- All connections are bidirectional (can emit and receive)
+- No routing, no filtering - all messages broadcast to all clients
+- Clients should drain socket continuously to prevent backpressure
 
 ---
 
-# Tract Specifications
+## Tract Registry
 
-## `"tract": "cortex"`
+### `cortex` - Agent execution events
+**Source:** `muse/cortex.py`
+**Events:** `request`, `start`, `thinking`, `tool_start`, `tool_end`, `finish`, `error`, `agent_updated`, `info`
+**Details:** See [CORTEX.md](CORTEX.md) for agent lifecycle, personas, and event schemas
 
-Agent execution events from the Muse cortex service.
+### `task` - Generic task execution
+**Source:** `think/supervisor.py`
+**Events:** `request`, `start`, `finish`, `error`
+**Fields:** `task_id`, `cmd` (command array), `exit_code`, `error`
+**Details:** See `think/supervisor.py` implementation
 
-For detailed cortex tract implementation, agent lifecycle management, personas, MCP tools, backends, scheduling, and usage patterns, see [CORTEX.md](CORTEX.md).
+### `logs` - Process output streaming
+**Source:** `think/runner.py`
+**Events:** `exec`, `line`, `exit`
+**Fields:** `process`, `name`, `pid`, `cmd`, `stream`, `line`, `exit_code`, `duration_ms`, `log_path`
+**Details:** See `think/runner.py` `ManagedProcess` class
 
-**Event types:** `request`, `start`, `thinking`, `tool_start`, `tool_end`, `finish`, `error`, `agent_updated`
+---
 
-**Common fields (all events):**
-- `agent_id` - Unique agent identifier (timestamp-based)
-- `ts` - Timestamp in milliseconds
+## Implementation
 
-**Event-specific fields:**
+**Client Library:** `think/callosum.py` `CallosumConnection` class
+**Server:** `think/callosum.py` `CallosumServer` class
 
-### `request`
-Agent request sent by client via `cortex_request()`.
-
-Required:
-- `prompt` - Task prompt for the agent
-- `persona` - Agent persona name (e.g., "default", "analyst")
-- `backend` - AI backend (openai, google, anthropic)
-
-Optional:
-- `handoff_from` - Previous agent ID if this is a handoff
-- `save` - Filename to save result to in day directory
-- `model` - Model name override
-- `max_tokens` - Token limit override
-- `timeout_seconds` - Timeout in seconds (default 600)
-- Additional backend-specific configuration
-
-### `start`
-Agent process has started executing.
-
-- `prompt` - The task prompt
-- `persona` - Agent persona name
-- `model` - Model being used
-- `backend` - AI backend
-
-### `thinking`
-Agent reasoning/thinking summary (for models that support extended thinking).
-
-- `summary` - Thinking summary text
-- `model` - Model name (optional)
-
-### `tool_start`
-Agent is starting a tool call.
-
-- `tool` - Name of the tool being called
-- `call_id` - Unique identifier for this tool call
-- `args` - Tool arguments (optional)
-
-### `tool_end`
-Agent tool call has completed.
-
-- `tool` - Name of the tool
-- `call_id` - Matches the call_id from tool_start
-- `args` - Tool arguments (optional)
-- `result` - Tool result
-
-### `finish`
-Agent has completed successfully.
-
-- `result` - Agent output/result text
-- `usage` - Token usage statistics (optional)
-  - `input_tokens` - Tokens in input
-  - `output_tokens` - Tokens in output
-  - `total_tokens` - Total tokens used
-- `conversation_id` - OpenAI conversation ID (optional, for continuations)
-
-### `error`
-Agent encountered an error.
-
-- `error` - Error message
-- `trace` - Stack trace (optional)
-- `exit_code` - Process exit code (optional)
-
-### `agent_updated`
-Agent context or state has changed.
-
-- `agent` - Agent description or identifier
-
-### `info`
-Non-JSON output from agent process (captured as info event).
-
-- `message` - The info message text
-
-## `"tract": "task"`
-
-Generic task execution events from the think.supervisor service.
-
-Supervisor spawns arbitrary long-running processes and broadcasts their lifecycle events.
-
-**Event types:** `request`, `start`, `finish`, `error`
-
-**Common fields (all events):**
-- `task_id` - Unique task identifier (timestamp-based, milliseconds)
-- `ts` - Timestamp in milliseconds
-
-**Event-specific fields:**
-
-### `request`
-Task request sent by client to initiate a task.
-
-Required:
-- `cmd` - Command and arguments as list (e.g., `["think-importer", "/path/to/file", "20251027_143000", "--domain", "work"]`)
-
-### `start`
-Task process has started executing.
-
-- `cmd` - The command that was executed
-- `pid` - Process ID (optional)
-
-### `finish`
-Task has completed successfully.
-
-- `exit_code` - Process exit code (typically 0)
-
-### `error`
-Task encountered an error or failed.
-
-- `error` - Error message
-- `exit_code` - Process exit code (non-zero)
-
-**Usage Example:**
-```python
-from think.callosum import CallosumConnection
-
-# Submit task request
-task_id = str(int(time.time() * 1000))
-client = CallosumConnection()
-client.connect()
-client.emit(
-    "task",
-    "request",
-    task_id=task_id,
-    cmd=["think-importer", "/path/to/file", "20251027_143000", "--domain", "work"]
-)
-client.close()
-
-# Supervisor picks up request, spawns process, broadcasts start/finish/error events
-```
-
-## `"tract": "logs"`
-
-Process execution and output logging events from think.runner.
-
-All processes spawned via `ManagedProcess` or `run_task()` emit real-time lifecycle and output events.
-
-**Event types:** `exec`, `line`, `exit`
-
-**Common fields (all events):**
-- `process` - Process identifier (task_id if linked, else timestamp-based)
-- `name` - Process name for filtering
-- `pid` - Operating system process ID
-- `ts` - Timestamp in milliseconds (auto-added)
-
-**Event-specific fields:**
-
-### `exec`
-Process started executing.
-
-Required:
-- `cmd` - Command and arguments as list
-- `log_path` - Path to health log file
-
-### `line`
-Real-time output line from process stdout/stderr.
-
-Required:
-- `stream` - Stream identifier ("stdout" or "stderr")
-- `line` - Output line content (newlines stripped)
-
-### `exit`
-Process has exited (success or error).
-
-Required:
-- `exit_code` - Process exit code (0 = success, non-zero = error)
-- `duration_ms` - Time from exec to exit in milliseconds
-- `cmd` - Command and arguments as list
-- `log_path` - Path to health log file
-
-**Usage Example:**
-```python
-from think.runner import ManagedProcess
-
-# Spawn with automatic log emissions
-managed = ManagedProcess.spawn(
-    ["think-indexer", "--full"],
-    name="indexer",
-    task_id="1730476800123",  # Optional: links to task tract
-)
-# Emits: exec, line (streaming), exit
-
-# Or blocking run
-from think.runner import run_task
-success, code = run_task(
-    ["think-summarize", "20241101"],
-    name="summarize",
-)
-# Emits: exec, line (streaming), exit
-```
-
-## `"tract": "indexer"` (future)
-
-Database indexing events from the think.indexer service.
-
-**Event types:** `scan_start`, `scan_progress`, `scan_complete`, `scan_error`
-
-**Example fields:**
-- `index_type` - Type of index (transcripts, events, summaries, entities, news)
-- `changes` - Number of changes detected
-- `day` - Day being indexed (YYYYMMDD format)
-
-## `"tract": "supervisor"` (future)
-
-Process supervision events from think.supervisor.
-
-**Event types:** `process_start`, `process_exit`, `heartbeat_stale`, `heartbeat_ok`
-
-**Example fields:**
-- `process_name` - Name of the managed process
-- `exit_code` - Exit code for process_exit events
-- `pid` - Process ID
-
-## `"tract": "observe"` (future)
-
-Observation events from the observe subsystem.
-
-**Event types:** `capture_start`, `capture_complete`, `vad_activity`, `vad_silence`
-
-**Example fields:**
-- `source` - Capture source (screen, mic, etc.)
-- `file_path` - Path to captured file
+See code documentation for usage patterns and examples.
