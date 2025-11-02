@@ -520,8 +520,6 @@ def _run_task(task_id: str, cmd: list[str]) -> None:
         with _task_state["lock"]:
             _task_state["running_tasks"].discard(task_id)
 
-        # Give time for final message to be sent before stopping
-        time.sleep(0.1)
         callosum.stop()
 
 

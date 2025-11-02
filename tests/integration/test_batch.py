@@ -195,7 +195,7 @@ async def test_gemini_batch_token_logging():
         # Check that token logs were created
         tokens_dir = Path(tmpdir) / "tokens"
         if tokens_dir.exists():
-            log_files = list(tokens_dir.glob("*.json"))
+            log_files = list(tokens_dir.glob("*.jsonl"))
             # Should have at least one log file
             assert len(log_files) >= 1
 

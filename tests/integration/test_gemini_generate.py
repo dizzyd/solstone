@@ -230,12 +230,14 @@ def test_gemini_generate_token_logging():
         tokens_dir = Path(tmpdir) / "tokens"
         assert tokens_dir.exists(), "tokens directory should be created"
 
-        log_files = list(tokens_dir.glob("*.json"))
+        log_files = list(tokens_dir.glob("*.jsonl"))
         assert len(log_files) == 1, f"Expected 1 log file, found {len(log_files)}"
 
-        # Verify log content
+        # Verify log content (JSONL format - read last line)
         with open(log_files[0]) as f:
-            log_data = json.load(f)
+            lines = f.readlines()
+            assert len(lines) >= 1, "Expected at least one log entry"
+            log_data = json.loads(lines[-1])
 
         # Model name may have "models/" prefix
         assert log_data["model"] in [GEMINI_FLASH, f"models/{GEMINI_FLASH}"]
@@ -511,12 +513,14 @@ async def test_gemini_agenerate_token_logging():
         tokens_dir = Path(tmpdir) / "tokens"
         assert tokens_dir.exists(), "tokens directory should be created"
 
-        log_files = list(tokens_dir.glob("*.json"))
+        log_files = list(tokens_dir.glob("*.jsonl"))
         assert len(log_files) == 1, f"Expected 1 log file, found {len(log_files)}"
 
-        # Verify log content
+        # Verify log content (JSONL format - read last line)
         with open(log_files[0]) as f:
-            log_data = json.load(f)
+            lines = f.readlines()
+            assert len(lines) >= 1, "Expected at least one log entry"
+            log_data = json.loads(lines[-1])
 
         # Model name may have "models/" prefix
         assert log_data["model"] in [GEMINI_FLASH, f"models/{GEMINI_FLASH}"]
