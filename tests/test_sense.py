@@ -166,7 +166,7 @@ def test_file_sensor_spawn_handler(mock_popen, mock_day, mock_journal, tmp_path)
     assert log_file.exists()
 
 
-def test_file_sensor_spawn_handler_duplicate(tmp_path):
+def test_file_sensor_spawn_handler_duplicate(tmp_path, mock_callosum):
     """Test that duplicate file processing is prevented."""
     # Create journal/day structure
     day_dir = tmp_path / "20250101"
@@ -194,7 +194,7 @@ def test_file_sensor_spawn_handler_duplicate(tmp_path):
 
 @patch("think.runner._get_journal_path")
 @patch("think.runner._current_day")
-def test_file_sensor_spawn_handler_real_process(mock_day, mock_journal, tmp_path):
+def test_file_sensor_spawn_handler_real_process(mock_day, mock_journal, tmp_path, mock_callosum):
     """Test spawning a real process and monitoring completion."""
     # Mock runner functions to use tmp_path
     mock_journal.return_value = tmp_path

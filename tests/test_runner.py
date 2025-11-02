@@ -89,10 +89,10 @@ def test_logs_tract_exec_event(journal_path, mock_callosum):
 
 def test_logs_tract_line_event(journal_path, mock_callosum):
     """Test that line events are emitted for stdout/stderr."""
-    from think.callosum import CallosumConnection
+    import think.callosum
 
     received = []
-    listener = CallosumConnection(callback=lambda msg: received.append(msg))
+    listener = think.callosum.CallosumConnection(callback=lambda msg: received.append(msg))
     listener.connect()
 
     # Spawn process that outputs text

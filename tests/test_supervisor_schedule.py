@@ -60,7 +60,7 @@ def test_spawn_scheduled_agents(mock_get_agents, mock_cortex_request):
 @patch("think.supervisor.spawn_scheduled_agents")
 @patch("think.supervisor.run_dream")
 def test_supervisor_runs_scheduled_after_dream(
-    mock_run_dream, mock_spawn_scheduled, mock_check_scheduled, tmp_path
+    mock_run_dream, mock_spawn_scheduled, mock_check_scheduled, tmp_path, mock_callosum
 ):
     """Test that scheduled agents run only after successful dream."""
     from think.supervisor import supervise
@@ -100,7 +100,7 @@ def test_supervisor_runs_scheduled_after_dream(
 @patch("think.supervisor.spawn_scheduled_agents")
 @patch("think.supervisor.run_dream")
 def test_supervisor_skips_scheduled_on_dream_failure(
-    mock_run_dream, mock_spawn_scheduled, mock_check_scheduled, tmp_path
+    mock_run_dream, mock_spawn_scheduled, mock_check_scheduled, tmp_path, mock_callosum
 ):
     """Test that scheduled agents don't run if dream fails."""
     from think.supervisor import supervise
