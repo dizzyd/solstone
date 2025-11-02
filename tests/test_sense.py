@@ -194,7 +194,9 @@ def test_file_sensor_spawn_handler_duplicate(tmp_path, mock_callosum):
 
 @patch("think.runner._get_journal_path")
 @patch("think.runner._current_day")
-def test_file_sensor_spawn_handler_real_process(mock_day, mock_journal, tmp_path, mock_callosum):
+def test_file_sensor_spawn_handler_real_process(
+    mock_day, mock_journal, tmp_path, mock_callosum
+):
     """Test spawning a real process and monitoring completion."""
     # Mock runner functions to use tmp_path
     mock_journal.return_value = tmp_path

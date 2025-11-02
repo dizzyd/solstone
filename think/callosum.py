@@ -323,7 +323,7 @@ def callosum_send(
     event: str,
     socket_path: Optional[Path] = None,
     timeout: float = 2.0,
-    **fields
+    **fields,
 ) -> bool:
     """Send single message via ephemeral Callosum connection.
 
