@@ -31,10 +31,15 @@ button:disabled { background:#ccc; color:#666; cursor:not-allowed; opacity:0.6; 
 .import-status.success { background: #d4edda; color: #155724; }
 .import-status.pending { background: #fff3cd; color: #856404; }
 .import-status.failed { background: #f8d7da; color: #721c24; }
+.import-status.running { background: #cfe2ff; color: #084298; display: inline-flex; align-items: center; gap: 6px; }
+.import-status.running::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #084298; animation: pulse 1.5s ease-in-out infinite; }
+.progress-detail { font-size: 0.8em; color: #666; margin-top: 2px; }
 .file-size { color: #666; font-size: 0.9em; }
 .timestamp-link { color: #007bff; text-decoration: none; }
 .timestamp-link:hover { text-decoration: underline; }
 .no-imports { color: #666; font-style: italic; padding: 2em; text-align: center; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 @keyframes spin { to { transform:rotate(360deg); } }
 </style>
@@ -90,13 +95,6 @@ button:disabled { background:#ccc; color:#666; cursor:not-allowed; opacity:0.6; 
     <div class="modal-actions">
       <button id="startBtn">Start Import</button>
     </div>
-  </div>
-</div>
-
-<div id="taskModal" class="modal">
-  <div class="modal-content">
-    <span class="close">&times;</span>
-    <pre id="taskOutput"></pre>
   </div>
 </div>
 
@@ -194,15 +192,31 @@ function formatDuration(minutes) {
   return `${mins}m`;
 }
 
+function formatElapsed(ms) {
+  if (!ms) return '0s';
+  const totalSeconds = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if (mins > 0) {
+    return `${mins}m ${secs}s`;
+  }
+  return `${secs}s`;
+}
+
+function capitalizeStage(stage) {
+  if (!stage) return '';
+  return stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
 function loadImports(){
   fetch('{{ url_for('import_view.import_list') }}').then(r=>r.json()).then(imports=>{
     const container = document.getElementById('importListContent');
-    
+
     if (!imports || imports.length === 0) {
       container.innerHTML = '<div class="no-imports">No imports found</div>';
       return;
     }
-    
+
     let html = '<table class="import-table">';
     html += '<thead><tr>';
     html += '<th>Imported At</th>';
@@ -213,12 +227,12 @@ function loadImports(){
     html += '<th>Files Created</th>';
     html += '<th>Duration</th>';
     html += '</tr></thead><tbody>';
-    
+
     imports.forEach(imp => {
       // Use imported_at timestamp for display
       const importedAt = imp.imported_at ? new Date(imp.imported_at * 1000).toLocaleString() : new Date(imp.created_at * 1000).toLocaleString();
       const targetDay = imp.target_day ? imp.target_day.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '-';
-      
+
       // Determine status class and text based on new status field
       let statusClass, statusText;
       if (imp.status === 'success') {
@@ -228,14 +242,14 @@ function loadImports(){
         statusClass = 'failed';
         statusText = 'Failed';
       } else if (imp.status === 'running') {
-        statusClass = 'pending';
+        statusClass = 'running';
         statusText = 'Running';
       } else {
         statusClass = 'pending';
         statusText = 'Pending';
       }
-      
-      html += `<tr onclick="window.location.href='/import/${imp.timestamp}'">`;
+
+      html += `<tr data-import-id="${imp.timestamp}" onclick="window.location.href='/import/${imp.timestamp}'">`;
       html += `<td>${importedAt}</td>`;
       html += `<td>${imp.original_filename || 'Unknown'}</td>`;
       html += `<td class="file-size">${formatFileSize(imp.file_size || 0)}</td>`;
@@ -246,12 +260,12 @@ function loadImports(){
         html += '-';
       }
       html += `</td>`;
-      html += `<td><span class="import-status ${statusClass}">${statusText}</span></td>`;
-      html += `<td>${imp.total_files_created || 0}</td>`;
-      html += `<td>${formatDuration(imp.duration_minutes)}</td>`;
+      html += `<td class="status-cell"><span class="import-status ${statusClass}">${statusText}</span></td>`;
+      html += `<td class="files-cell">${imp.total_files_created || 0}</td>`;
+      html += `<td class="duration-cell">${formatDuration(imp.duration_minutes)}</td>`;
       html += '</tr>';
     });
-    
+
     html += '</tbody></table>';
     container.innerHTML = html;
   }).catch(err => {
@@ -259,43 +273,52 @@ function loadImports(){
   });
 }
 
-function runTask(taskId){
-  const modal=document.getElementById('taskModal');
-  const out=document.getElementById('taskOutput');
-  const content=document.querySelector('#taskModal .modal-content');
-  out.innerHTML='';
-  modal.style.display='block';
-  const spinner=document.createElement('span');
-  spinner.className='spinner';
-  out.appendChild(spinner);
-  const scroll=()=>{content.scrollTop=content.scrollHeight;};
-  const addLine=html=>{spinner.remove();out.innerHTML+=html+'\n';out.appendChild(spinner);scroll();};
+// Update import row with live progress from importer events
+function updateImportRow(importId, eventData) {
+  const row = document.querySelector(`tr[data-import-id="${importId}"]`);
+  if (!row) return; // Row not in current view
 
-  // Listen for task events from our specific task
-  const handler=msg=>{
-    // Only process events for our task
-    if(msg.task_id!==taskId)return;
+  const statusCell = row.querySelector('.status-cell');
+  const filesCell = row.querySelector('.files-cell');
+  const durationCell = row.querySelector('.duration-cell');
 
-    if(msg.event==='start'){
-      addLine('Task started...');
-    }else if(msg.event==='finish'){
-      spinner.remove();
-      out.innerHTML+='[Task completed successfully]\n';
-      scroll();
-      cleanup();
-    }else if(msg.event==='error'){
-      spinner.remove();
-      out.innerHTML+='<span style="color:red">[Task failed: '+msg.error+']</span>\n';
-      scroll();
-      cleanup();
+  if (eventData.event === 'started') {
+    // Mark as running
+    if (statusCell) {
+      statusCell.innerHTML = `<span class="import-status running">${capitalizeStage(eventData.stage)}</span>`;
     }
-  };
-
-  let cleanup=appEvents.listen('task',handler);
-  // Wrap cleanup to also remove spinner and reload imports
-  const originalCleanup=cleanup;
-  cleanup=()=>{originalCleanup();spinner.remove();loadImports();};
+  } else if (eventData.event === 'status') {
+    // Update with stage and timing
+    if (statusCell) {
+      const stageTime = formatElapsed(eventData.stage_elapsed_ms);
+      const totalTime = formatElapsed(eventData.elapsed_ms);
+      statusCell.innerHTML = `<span class="import-status running">${capitalizeStage(eventData.stage)}</span><div class="progress-detail">${stageTime} (${totalTime} total)</div>`;
+    }
+  } else if (eventData.event === 'completed') {
+    // Mark as completed
+    if (statusCell) {
+      statusCell.innerHTML = '<span class="import-status success">Completed</span>';
+    }
+    if (filesCell && eventData.total_files_created !== undefined) {
+      filesCell.textContent = eventData.total_files_created;
+    }
+    if (durationCell && eventData.duration_ms) {
+      durationCell.textContent = formatElapsed(eventData.duration_ms);
+    }
+    // Reload imports to get full updated data
+    setTimeout(() => loadImports(), 1000);
+  } else if (eventData.event === 'error') {
+    // Mark as failed
+    if (statusCell) {
+      statusCell.innerHTML = `<span class="import-status failed">Failed</span><div class="progress-detail">${eventData.error || 'Unknown error'}</div>`;
+    }
+  }
 }
+
+// Listen for importer events
+appEvents.listen('importer', msg => {
+  updateImportRow(msg.import_id, msg);
+});
 
 startBtn.addEventListener('click', async () => {
   const ts = document.getElementById('timestampInput').value.trim();
@@ -338,12 +361,14 @@ startBtn.addEventListener('click', async () => {
     }
 
     const result = await startResponse.json();
-    const taskId = result.task_id;
 
     startBtn.disabled = false;
     startBtn.textContent = originalText;
     detectModal.style.display = 'none';
-    runTask(taskId);
+
+    // Reload imports to show the new import in the list
+    // Live updates will come via importer events
+    loadImports();
   } catch (err) {
     startBtn.disabled = false;
     startBtn.textContent = originalText;
@@ -352,9 +377,8 @@ startBtn.addEventListener('click', async () => {
   }
 });
 
-document.querySelectorAll('.close')[0].onclick=()=>{document.getElementById('detectModal').style.display='none';};
-document.querySelectorAll('.close')[1].onclick=()=>{document.getElementById('taskModal').style.display='none';};
-window.onclick=e=>{if(e.target==document.getElementById('detectModal'))document.getElementById('detectModal').style.display='none';if(e.target==document.getElementById('taskModal'))document.getElementById('taskModal').style.display='none';};
+document.querySelector('.close').onclick=()=>{document.getElementById('detectModal').style.display='none';};
+window.onclick=e=>{if(e.target==document.getElementById('detectModal'))document.getElementById('detectModal').style.display='none';};
 
 // Load domains for dropdown
 function loadDomains(){

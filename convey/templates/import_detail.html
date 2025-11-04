@@ -82,11 +82,12 @@
 .rerun-controls button:disabled { background: #ccc; cursor: not-allowed; opacity: 0.6; }
 .rerun-note { font-size: 0.9em; color: #666; margin-top: 0.5em; font-style: italic; }
 
-/* Task output modal */
-.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-.modal-content { background: white; margin: 5% auto; padding: 1em; border-radius: 8px; max-width: 800px; max-height: 80vh; overflow: auto; position: relative; }
-.close { position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 24px; }
-#taskOutput { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; background: #f5f5f5; padding: 1em; border-radius: 4px; }
+/* Progress display */
+.progress-banner { display: none; background: #e7f3ff; border: 1px solid #007bff; border-radius: 4px; padding: 1em; margin: 1em 0; }
+.progress-banner.active { display: block; }
+.progress-stage { font-weight: bold; color: #007bff; margin-bottom: 0.5em; }
+.progress-timing { font-size: 0.9em; color: #666; }
+.progress-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #007bff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 6px; }
 </style>
 {% endblock %}
 
@@ -144,6 +145,11 @@
     </div>
   </div>
   
+  <div class="progress-banner" id="progressBanner">
+    <div class="progress-stage" id="progressStage">Processing<span class="progress-spinner"></span></div>
+    <div class="progress-timing" id="progressTiming"></div>
+  </div>
+
   <div class="rerun-section" id="rerunSection" style="display:none;">
     <h3>Re-run Import</h3>
     <div class="rerun-controls">
@@ -158,13 +164,6 @@
     <div class="rerun-note">
       Re-running will overwrite the existing transcription results with new ones using the selected domain for improved entity recognition.
     </div>
-  </div>
-</div>
-
-<div id="taskModal" class="modal">
-  <div class="modal-content">
-    <span class="close">&times;</span>
-    <pre id="taskOutput"></pre>
   </div>
 </div>
 
@@ -236,6 +235,24 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// Format elapsed time
+function formatElapsed(ms) {
+  if (!ms) return '0s';
+  const totalSeconds = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if (mins > 0) {
+    return `${mins}m ${secs}s`;
+  }
+  return `${secs}s`;
+}
+
+// Capitalize stage name
+function capitalizeStage(stage) {
+  if (!stage) return '';
+  return stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
 // Format timestamp
 function formatTimestamp(timestamp) {
   if (!timestamp) return '-';
@@ -271,55 +288,51 @@ function loadDomains() {
     .catch(() => {/* ignore */});
 }
 
-// Run task with event stream output
-function runTask(taskId) {
-  const modal = document.getElementById('taskModal');
-  const out = document.getElementById('taskOutput');
-  const content = document.querySelector('#taskModal .modal-content');
-  out.innerHTML = '';
-  modal.style.display = 'block';
-  const spinner = document.createElement('span');
-  spinner.className = 'spinner';
-  spinner.style.cssText = 'display: inline-block; width: 12px; height: 12px; border: 2px solid #ccc; border-top-color: #333; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 4px;';
-  out.appendChild(spinner);
-  const scroll = () => { content.scrollTop = content.scrollHeight; };
-  const addLine = html => { spinner.remove(); out.innerHTML += html + '\n'; out.appendChild(spinner); scroll(); };
+// Show progress banner and listen for importer events
+function watchImportProgress(importId) {
+  const progressBanner = document.getElementById('progressBanner');
+  const progressStage = document.getElementById('progressStage');
+  const progressTiming = document.getElementById('progressTiming');
 
-  // Listen for task events from our specific task
-  const handler = msg => {
-    // Only process events for our task
-    if (msg.task_id !== taskId) return;
+  progressBanner.classList.add('active');
+  progressStage.innerHTML = 'Starting<span class="progress-spinner"></span>';
+  progressTiming.textContent = '';
 
-    if (msg.event === 'start') {
-      addLine('Task started...');
-    } else if (msg.event === 'finish') {
-      spinner.remove();
-      out.innerHTML += '[Task completed successfully]\n';
-      scroll();
+  // Listen for importer events for this import
+  const cleanup = appEvents.listen('importer', msg => {
+    if (msg.import_id !== importId) return;
+
+    if (msg.event === 'started') {
+      progressStage.innerHTML = `${capitalizeStage(msg.stage)}<span class="progress-spinner"></span>`;
+    } else if (msg.event === 'status') {
+      const stageTime = formatElapsed(msg.stage_elapsed_ms);
+      const totalTime = formatElapsed(msg.elapsed_ms);
+      progressStage.innerHTML = `${capitalizeStage(msg.stage)}<span class="progress-spinner"></span>`;
+      progressTiming.textContent = `${stageTime} (${totalTime} total)`;
+    } else if (msg.event === 'completed') {
+      progressStage.innerHTML = '✓ Completed';
+      progressTiming.textContent = `Total time: ${formatElapsed(msg.duration_ms)}`;
       cleanup();
-      // Reload page after successful re-run
+      // Reload page after successful completion
       setTimeout(() => location.reload(), 2000);
     } else if (msg.event === 'error') {
-      spinner.remove();
-      out.innerHTML += '<span style="color:red">[Task failed: ' + msg.error + ']</span>\n';
-      scroll();
+      progressStage.innerHTML = '✗ Failed';
+      progressTiming.textContent = `Error: ${msg.error || 'Unknown error'}`;
       cleanup();
     }
-  };
-
-  const cleanup = appEvents.listen('task', handler);
+  });
 }
 
 // Handle re-run button click
 document.getElementById('rerunBtn').addEventListener('click', () => {
   const domain = document.getElementById('domainSelect').value;
   const setting = settingInput ? settingInput.value.trim() : '';
-  
+
   if (confirm('This will re-run the import and overwrite existing transcription results. Continue?')) {
     const btn = document.getElementById('rerunBtn');
     btn.disabled = true;
     btn.textContent = 'Starting...';
-    
+
     // Call the re-run endpoint
     fetch('{{ url_for("import_view.import_rerun", timestamp=timestamp) }}', {
       method: 'POST',
@@ -329,8 +342,10 @@ document.getElementById('rerunBtn').addEventListener('click', () => {
     .then(r => r.json())
     .then(result => {
       if (result.status === 'ok') {
-        // Run the task with WebSocket output using task_id
-        runTask(result.task_id);
+        btn.disabled = false;
+        btn.textContent = 'Re-run Import';
+        // Watch progress using importer events with timestamp as import_id
+        watchImportProgress('{{ timestamp }}');
       } else {
         alert('Failed to start re-run: ' + (result.error || 'Unknown error'));
         btn.disabled = false;
@@ -344,16 +359,6 @@ document.getElementById('rerunBtn').addEventListener('click', () => {
     });
   }
 });
-
-// Modal close handlers
-document.querySelector('.close').onclick = () => {
-  document.getElementById('taskModal').style.display = 'none';
-};
-window.onclick = e => {
-  if (e.target == document.getElementById('taskModal')) {
-    document.getElementById('taskModal').style.display = 'none';
-  }
-};
 
 // Load import details
 fetch('{{ url_for("import_view.import_detail_api", timestamp=timestamp) }}')
