@@ -110,17 +110,18 @@ const searchBase = '{{ url_for('search.search_page') }}';
 // Pass persona titles from backend
 const personaTitles = {{ persona_titles | tojson }};
 
+// Deduplication using agent_id:ts as key
 const processedEventIds = new Set();
 
 function shouldSkipEvent(event) {
-  const eventId = event && event.event_id;
-  if (!eventId) {
+  if (!event || !event.agent_id || !event.ts) {
     return false;
   }
-  if (processedEventIds.has(eventId)) {
+  const eventKey = `${event.agent_id}:${event.ts}`;
+  if (processedEventIds.has(eventKey)) {
     return true;
   }
-  processedEventIds.add(eventId);
+  processedEventIds.add(eventKey);
   return false;
 }
 
@@ -157,17 +158,14 @@ function enrichEvent(event) {
   return enriched;
 }
 
-// Parse URL parameters for persona and agent ID
+// Parse URL parameters
 const urlParams = new URLSearchParams(window.location.search);
 let currentPersona = urlParams.get('persona') || 'default';
-let isHistorical = false;
-let historicalAgentId = null;
 
-const agentParam = urlParams.get('agent');
-if (agentParam && /^\d+$/.test(agentParam)) {
-  isHistorical = true;
-  historicalAgentId = agentParam;
-}
+// Unified state management
+let currentAgentId = null;
+let isComplete = false;
+let headerInfo = null; // {persona, startTs, personaTitle, prompt}
 
 // Create persistent activity indicator
 const activityIndicator = document.createElement('div');
@@ -175,13 +173,10 @@ activityIndicator.className = 'activity-indicator';
 activityIndicator.id = 'activityIndicator';
 activityIndicator.innerHTML = '<span></span><span></span><span></span>';
 
-// Track if we're currently processing events
+// Activity indicator state
 let eventProcessingActive = false;
 let eventTimeout = null;
-let responseInProgress = false;
-let nextContinueAgentId = null;
 let chatControlsInitialized = false;
-let activeRunAgentId = null;
 
 function showActivityIndicator() {
   if (!document.getElementById('activityIndicator')) {
@@ -203,8 +198,8 @@ function showActivityIndicator() {
 }
 
 function hideActivityIndicator() {
-  // Only hide if we're not expecting more events
-  if (!responseInProgress) {
+  // Only hide if agent is complete
+  if (isComplete) {
     // Set a small delay before hiding to handle rapid event sequences
     if (eventTimeout) {
       clearTimeout(eventTimeout);
@@ -224,7 +219,6 @@ function forceHideActivityIndicator() {
   }
   activityIndicator.classList.remove('active');
   eventProcessingActive = false;
-  responseInProgress = false;
 }
 
 function ensureActivityIndicatorAtBottom() {
@@ -355,6 +349,100 @@ function addThinkingCard(summary, model){
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
 }
 
+// Header management
+function updateHeader() {
+  if (!headerInfo) return;
+
+  let header = document.getElementById('chatHeader');
+  if (!header) {
+    header = document.createElement('div');
+    header.id = 'chatHeader';
+    header.style.cssText = 'background:#e3f2fd;border-bottom:2px solid #2196f3;padding:0.75rem 1rem;margin:0;color:#1565c0;text-align:center;font-size:0.95em;';
+    const container = document.querySelector('.container');
+    container.insertBefore(header, messagesDiv);
+  }
+
+  const personaTitle = headerInfo.personaTitle || headerInfo.persona || 'Chat';
+  const startDate = new Date(headerInfo.startTs);
+  const timeStr = startDate.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
+  const dateStr = startDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+
+  let headerText = `${personaTitle} • Started ${timeStr} on ${dateStr}`;
+
+  // Add duration if complete
+  if (isComplete && headerInfo.endTs) {
+    const durationMs = headerInfo.endTs - headerInfo.startTs;
+    const seconds = Math.floor(durationMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (minutes > 0) {
+      headerText += ` • Completed in ${minutes}m ${remainingSeconds}s`;
+    } else {
+      headerText += ` • Completed in ${seconds}s`;
+    }
+  }
+
+  header.textContent = headerText;
+}
+
+// Unified agent loading function
+async function loadAgent(agentId) {
+  currentAgentId = agentId;
+  isComplete = false;
+  headerInfo = null;
+  resetEventTracking();
+
+  // Clear messages but keep activity indicator
+  messagesDiv.innerHTML = '';
+  messagesDiv.appendChild(activityIndicator);
+  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
+  previousAgent = null;
+
+  // Fetch existing events from disk
+  const url = agentUrl.replace('AGENT_ID', agentId);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      showError(`Failed to load agent: ${response.statusText}`);
+      return;
+    }
+
+    const data = await response.json();
+    const events = data.events || [];
+    isComplete = data.is_complete || false;
+
+    // Process historical events
+    for (const event of events) {
+      const enriched = enrichEvent(event);
+      if (!shouldSkipEvent(enriched)) {
+        processEvent(enriched);
+      }
+    }
+
+    // Show activity indicator if not complete
+    if (!isComplete) {
+      showActivityIndicator();
+    } else {
+      forceHideActivityIndicator();
+
+      // Check if we can continue the conversation
+      const finishEvent = events.find(e => e.event === 'finish');
+      if (finishEvent && finishEvent.conversation_id) {
+        form.style.display = '';
+        input.disabled = false;
+        input.placeholder = 'Continue conversation...';
+        input.dataset.continueAgent = agentId;
+      } else {
+        form.style.display = 'none';
+      }
+    }
+
+  } catch (error) {
+    showError(`Failed to load agent: ${error.message}`);
+  }
+}
+
 input.focus();
 
 input.addEventListener('keydown', e => {
@@ -478,20 +566,18 @@ function reuseMessage(messageDiv) {
   Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
   messagesDiv.appendChild(activityIndicator);
   previousAgent = null;
-  responseInProgress = false;
-  nextContinueAgentId = null;
-  activeRunAgentId = null;
+  currentAgentId = null;
+  isComplete = false;
+  headerInfo = null;
   forceHideActivityIndicator();
   resetEventTracking();
 
   // Clear backend history
   fetch(clearUrl, {method:'POST'}).catch(err => console.error('Failed to clear history:', err));
 
-  // Remove historical notice if present
-  const historicalNotice = document.getElementById('historicalNotice');
-  if(historicalNotice) {
-    historicalNotice.remove();
-  }
+  // Remove header if it exists
+  const header = document.getElementById('chatHeader');
+  if(header) header.remove();
 
   // Show and enable the form
   form.style.display = '';
@@ -505,59 +591,32 @@ function reuseMessage(messageDiv) {
   // Auto-resize the textarea
   input.style.height = 'auto';
   input.style.height = input.scrollHeight + 'px';
-
-  // Clear historical state
-  isHistorical = false;
-  historicalAgentId = null;
-  window.watchingAgentId = null;
 }
 document.getElementById('inputArea').onsubmit=async e=>{
   e.preventDefault();
   const text=input.value.trim();
   if(!text)return;
-  
-  const continueAgent = nextContinueAgentId;
-  const isContinuing = Boolean(continueAgent);
 
-  // Clear previous messages unless we're continuing from an active conversation
-  if(!isContinuing){
-    messagesDiv.innerHTML='';
-    resetEventTracking();
-  }
-  // Clear tool placard references to prevent memory leaks
-  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
-  
-  // Reset agent tracking when starting new conversation
-  previousAgent = null;
-  
-  // Add the activity indicator to the messages div
-  messagesDiv.appendChild(activityIndicator);
-  
-  addMessage(text,'from-user');
   input.value='';
-  
-  // Show activity indicator and mark response as in progress
-  responseInProgress = true;
-  showActivityIndicator();
-  
+  input.disabled = true;
+
+  // Check if continuing from previous agent
+  const continueAgentId = input.dataset.continueAgent;
+  delete input.dataset.continueAgent;
+
   const payload={message:text,backend:backendSelect.value,persona:currentPersona};
-  if(continueAgent){
-    payload['continue']=continueAgent;
+  if(continueAgentId){
+    payload['continue']=continueAgentId;
   }
-  nextContinueAgentId=null;
-  activeRunAgentId=null;
 
   const r=await fetch(sendUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
 
   if(r.ok){
     const d=await r.json();
-    // Get the agent_id and subscribe to events from shared watcher
-    activeRunAgentId = d.agent_id;
-    // Events will be handled by the global appEvents.listen('chat', ...) handler
-    // The finish event will add the final message and clean up
+    // Load the agent (will fetch initial events and subscribe to WebSocket)
+    await loadAgent(d.agent_id);
   }else{
-    responseInProgress = false;
-    forceHideActivityIndicator();
+    input.disabled = false;
     let err='Error';
     try{const d=await r.json();err=d.error||err;}catch{};
     if(window.showError)showError(err);
@@ -573,155 +632,73 @@ async function loadHistory(){
   }
 }
 
-async function loadHistoricalAgent(agentId){
-  const url = agentUrl.replace('AGENT_ID', agentId);
-  const r = await fetch(url);
-  if(!r.ok){
-    showError('Failed to load historical agent: ' + agentId);
-    return;
-  }
-  const d = await r.json();
-  const events = Array.isArray(d.events) ? d.events : [];
-  const requestEvent = events.find(e => e.event === 'request');
-  const finishEvent = [...events].reverse().find(e => e.event === 'finish');
-  const isLive = d.source === 'cortex' && d.is_running;
-  activeRunAgentId = null;
-  resetEventTracking();
-
-  if(requestEvent){
-    if(requestEvent.persona){
-      currentPersona = requestEvent.persona;
-    }
-    if(requestEvent.backend){
-      backendSelect.value = requestEvent.backend;
-    }
-  }
-
-  // Check if this is a live agent from Cortex vs historical from file
-  if(isLive) {
-    // This is a live agent - hide the historical notice
-    const notice = document.getElementById('historicalNotice');
-    if(notice) {
-      notice.style.display = 'none';
-    }
-    // Show the form for live agents (but keep it disabled since we're observing)
-    form.style.display = '';
-    input.disabled = true;
-    input.placeholder = 'Viewing live agent run (read-only)...';
-    
-    // Subscribe to live updates via SSE for this agent
-    if(d.agent_id) {
-      // Track that we're watching a specific agent
-      window.watchingAgentId = d.agent_id;
-      responseInProgress = true;  // Keep activity indicator visible
-      showActivityIndicator();
-
-      // The global listener will handle events for this agent
-      // No need for a separate listener here
-    }
-  } else {
-    // Update the header with human-friendly info for historical agents
-    updateHistoricalHeader(agentId, events);
-  }
-  
-  // Process events in chronological order
-  // This maintains the proper sequence of messages and tool calls
-  for(const event of events){
-    // Enrich event with client-side rendering
-    const enriched = enrichEvent(event);
-
-    if(enriched.event === 'start'){
-      // User message
-      addMessage(enriched.prompt || '', 'from-user');
-    } else if(enriched.event === 'finish'){
-      // Assistant final response - use enriched HTML for markdown formatting
-      addMessage(enriched.html, 'from-bot', true, enriched.rawMarkdown);
-    } else if(enriched.event === 'error'){
-      // Error event - display as final response
-      addMessage(enriched.html, 'from-bot', true, enriched.rawMarkdown);
-    } else {
-      // All other events (tool calls, thinking, etc.)
-      handleHistoricalEvent(enriched);
-    }
-  }
-
-  if(!isLive && finishEvent){
-    activeRunAgentId = agentId;
-    const enrichedFinish = enrichEvent(finishEvent);
-    processEvent(enrichedFinish);
-  }
-
-  if(!isLive){
-    if(finishEvent && finishEvent.conversation_id){
-      nextContinueAgentId = agentId;
-      isHistorical = false;
-      form.style.display = '';
-      input.disabled = false;
-      input.placeholder = 'Continue conversation...';
-      initChatControls();
-      updatePersonaNotice();
-      input.focus();
-    } else {
-      form.style.display = 'none';
-    }
-  }
-}
 
 // Unified event handler for both live and historical events
 function processEvent(event) {
-  if (shouldSkipEvent(event)) {
-    return;
-  }
-
-  if(event.agent_id && responseInProgress){
-    if(!activeRunAgentId || activeRunAgentId === event.agent_id){
-      activeRunAgentId = event.agent_id;
-    }
-  }
-
   switch(event.event) {
+    case 'start':
+      // Set up header info and show user message
+      headerInfo = {
+        persona: event.persona || 'default',
+        personaTitle: personaTitles[event.persona] || event.persona || 'Chat',
+        startTs: event.ts,
+        prompt: event.prompt
+      };
+      updateHeader();
+      addMessage(event.prompt || '', 'from-user');
+      break;
+
     case 'tool_start':
       handleToolStart(event);
       break;
+
     case 'tool_end':
       completeToolPlacard(event.call_id, event.result);
       break;
+
     case 'thinking':
       addThinkingCard(event.summary, event.model || 'unknown');
       break;
+
     case 'agent_updated':
       addAgentUpdate(event.agent || 'unknown');
       break;
+
     case 'finish':
-      if(event.agent_id){
-        const matchesActive = activeRunAgentId ? event.agent_id === activeRunAgentId : responseInProgress;
-        if(event.source === 'cortex'){
-          // Event is already enriched with html and rawMarkdown
-          if(event.html){
-            addMessage(event.html, 'from-bot', true, event.rawMarkdown);
-          }
-        }
-        if(matchesActive){
-          if(event.conversation_id){
-            nextContinueAgentId = event.agent_id;
-          } else if(nextContinueAgentId === event.agent_id){
-            nextContinueAgentId = null;
-          }
-          activeRunAgentId = null;
-          responseInProgress = false;
-          setTimeout(forceHideActivityIndicator, 1000);
-        }
-      }
-      break;
-    case 'error':
-      // Display the error message to the user
+      // Add final message
       if(event.html){
         addMessage(event.html, 'from-bot', true, event.rawMarkdown);
       }
-      responseInProgress = false;
+
+      // Mark as complete
+      isComplete = true;
+      if (headerInfo) {
+        headerInfo.endTs = event.ts;
+        updateHeader();
+      }
       forceHideActivityIndicator();
-      activeRunAgentId = null;
-      nextContinueAgentId = null;
+
+      // Enable continuation if available
+      if(event.conversation_id){
+        input.disabled = false;
+        input.placeholder = 'Continue conversation...';
+        input.dataset.continueAgent = event.agent_id;
+      }
+      break;
+
+    case 'error':
+      // Display error message
+      if(event.html){
+        addMessage(event.html, 'from-bot', true, event.rawMarkdown);
+      }
+
+      // Mark as complete (failed)
+      isComplete = true;
+      if (headerInfo) {
+        headerInfo.endTs = event.ts;
+        updateHeader();
+      }
+      forceHideActivityIndicator();
       break;
   }
 }
@@ -862,85 +839,9 @@ function createResourceCard(uri) {
   return null;
 }
 
-// Simplified wrapper for historical events
-function handleHistoricalEvent(event) {
-  processEvent(event);
-}
 
-// Function to update historical header with run details
-function updateHistoricalHeader(agentId, events) {
-  const notice = document.getElementById('historicalNotice');
-  if (!notice) return;
-  
-  const requestEvent = events.find(e => e.event === 'request');
-  // Find start and finish events to calculate duration
-  const startEvent = events.find(e => e.event === 'start');
-  const finishEvent = events.find(e => e.event === 'finish' || e.event === 'error');
-  const continueId = requestEvent && requestEvent['continue'] ? String(requestEvent['continue']) : null;
-  
-  if (startEvent && startEvent.ts) {
-    // Format the timestamp as a human-readable date
-    const startDate = new Date(startEvent.ts);
-    const dateStr = startDate.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    
-    // Calculate duration if we have both start and finish
-    let durationStr = '';
-    if (finishEvent && finishEvent.ts) {
-      const durationMs = finishEvent.ts - startEvent.ts;
-      const seconds = Math.floor(durationMs / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      
-      if (minutes > 0) {
-        durationStr = ` • Duration: ${minutes}m ${remainingSeconds}s`;
-      } else {
-        durationStr = ` • Duration: ${seconds}s`;
-      }
-    }
-    
-    // Check if it ended in error
-    const errorStatus = finishEvent && finishEvent.event === 'error' ? ' • Status: Failed' : '';
-    
-    let headerText = `Viewing historical agent run from ${dateStr}${durationStr}${errorStatus} (read-only)`;
-    if (continueId) {
-      headerText += ` • <a id="historicalContinueLink" href="/chat?agent=${continueId}" style="color:#1565c0;text-decoration:underline;">Previous run ${continueId}</a>`;
-    }
-    notice.innerHTML = headerText;
-  } else if (continueId) {
-    notice.innerHTML = `Viewing historical agent run (read-only) • <a id="historicalContinueLink" href="/chat?agent=${continueId}" style="color:#1565c0;text-decoration:underline;">Previous run ${continueId}</a>`;
-  }
-}
-
-function updatePersonaNotice(){
-  const container = document.querySelector('.container');
-  if(!container) return;
-
-  let notice = document.getElementById('personaNotice');
-  if(currentPersona === 'default' || isHistorical){
-    if(notice){
-      notice.remove();
-    }
-    return;
-  }
-
-  const personaTitle = personaTitles[currentPersona] || currentPersona;
-  if(!notice){
-    notice = document.createElement('div');
-    notice.id = 'personaNotice';
-    notice.style.cssText = 'background:#e3f2fd;border:1px solid #2196f3;padding:0.75rem;margin:1rem;border-radius:4px;text-align:center;color:#1565c0;';
-    container.insertBefore(notice, messagesDiv);
-  }
-  notice.innerHTML = `Using <strong>${personaTitle}</strong> persona`;
-}
-
-function initChatControls(){
+// Initialize WebSocket listener and controls
+(function initChatControls(){
   if(chatControlsInitialized) return;
   chatControlsInitialized = true;
 
@@ -952,12 +853,16 @@ function initChatControls(){
       Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
       messagesDiv.appendChild(activityIndicator);
       previousAgent = null;
-      responseInProgress = false;
-      nextContinueAgentId = null;
-      activeRunAgentId = null;
+      currentAgentId = null;
+      isComplete = false;
+      headerInfo = null;
       forceHideActivityIndicator();
       resetEventTracking();
       input.focus();
+
+      // Remove header if it exists
+      const header = document.getElementById('chatHeader');
+      if(header) header.remove();
     };
   }
 
@@ -967,74 +872,44 @@ function initChatControls(){
     Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
     messagesDiv.appendChild(activityIndicator);
     previousAgent = null;
-    responseInProgress = false;
-    nextContinueAgentId = null;
-    activeRunAgentId = null;
+    currentAgentId = null;
+    isComplete = false;
+    headerInfo = null;
     forceHideActivityIndicator();
     resetEventTracking();
     input.focus();
+
+    // Remove header if it exists
+    const header = document.getElementById('chatHeader');
+    if(header) header.remove();
   });
 
-  // Global event listener for all cortex events
-  // Handles both regular chat responses and watched agent events
+  // Global WebSocket listener for cortex events
   appEvents.listen('cortex', e => {
-    // Check if this event is relevant to us:
-    // 1. We're processing a direct response from the active chat agent
-    // 2. We're watching a specific agent and this event is from that agent
-    const eventAgentId = e.agent_id;
-    const eventSource = e.source || 'direct';
-    const isDirectChatEvent = responseInProgress && eventSource === 'direct';
-    const isSameAgent = responseInProgress && eventAgentId && activeRunAgentId === eventAgentId;
-    const isWatchedAgent = Boolean(window.watchingAgentId && eventAgentId === window.watchingAgentId);
-
-    if (!isDirectChatEvent && !isSameAgent && !isWatchedAgent) {
-      return; // Skip irrelevant events
+    // Only process events for our current agent
+    if (!currentAgentId || e.agent_id !== currentAgentId) {
+      return;
     }
 
-    // Enrich event with client-side rendering
+    // Stop listening once complete
+    if (isComplete) {
+      return;
+    }
+
+    // Deduplicate and enrich
+    if (shouldSkipEvent(e)) {
+      return;
+    }
+
     const enriched = enrichEvent(e);
-
-    // Show activity for relevant events
-    showActivityIndicator();
     processEvent(enriched);
-
-    // Handle completion for watched agents
-    if (window.watchingAgentId && e.agent_id === window.watchingAgentId) {
-      if (e.event === 'finish' || e.event === 'error') {
-        responseInProgress = false;
-        window.watchingAgentId = null;
-        // Update UI to show it's completed
-        const input = document.getElementById('messageInput');
-        if (input) {
-          input.placeholder = 'Agent run completed (read-only)';
-        }
-        forceHideActivityIndicator();
-      }
-    }
   });
+})();
 
-  loadHistory();
-
-  updatePersonaNotice();
-}
-
-// Disable input and controls if viewing historical agent
-if(isHistorical){
-  initChatControls();
-  form.style.display = 'none';
-  const notice = document.createElement('div');
-  notice.id = 'historicalNotice';
-  notice.style.cssText = 'background:#fff3cd;border:1px solid #ffeaa7;padding:0.75rem;margin:1rem;border-radius:4px;text-align:center;color:#856404;';
-  notice.textContent = `Loading historical agent run...`;
-  document.querySelector('.container').insertBefore(notice, messagesDiv);
-
-  messagesDiv.appendChild(activityIndicator);
-
-  if(historicalAgentId){
-    loadHistoricalAgent(historicalAgentId);
-  }
-} else {
-  initChatControls();
+// Load agent from URL parameter if present
+const agentParam = urlParams.get('agent');
+if (agentParam && /^\d+$/.test(agentParam)) {
+  loadAgent(agentParam);
 }
 </script>
 {% endblock %}

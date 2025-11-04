@@ -83,114 +83,30 @@ def chat_history() -> Any:
 
 @bp.route("/chat/api/agent/<agent_id>")
 def agent_events(agent_id: str) -> Any:
-    """Return events from an agent run - either from Cortex if running, or from log file."""
+    """Return events from an agent run.
 
+    Returns all events written to disk so far. For active agents, client
+    should subscribe to WebSocket for real-time updates.
+    """
     if not state.journal_root:
         return jsonify({"error": "Journal root not configured"}), 500
 
-    # First, try to check if the agent is still running in Cortex
-    from muse.cortex_client import cortex_agents
+    from muse.cortex_client import read_agent_events
 
     try:
-        # Get list of running agents from Cortex
-        agent_list = cortex_agents(limit=100, offset=0)
-        if agent_list and "agents" in agent_list:
-            # Check if our agent is in the running list
-            for agent in agent_list["agents"]:
-                if agent.get("id") == agent_id and agent.get("status") == "running":
-                    # Agent is still running - watcher will automatically pick it up
+        events = read_agent_events(agent_id)
 
-                    # First check if there's a log file with historical events
-                    agents_dir = os.path.join(state.journal_root, "agents")
-                    agent_file = os.path.join(agents_dir, f"{agent_id}.jsonl")
+        # Check if agent is complete (last event is finish or error)
+        is_complete = False
+        if events:
+            last_event = events[-1]
+            is_complete = last_event.get("event") in ("finish", "error")
 
-                    events = []
-                    history = []
+        return jsonify(events=events, is_complete=is_complete)
 
-                    # Read any events that have already been written to disk
-                    if os.path.isfile(agent_file):
-                        try:
-                            with open(agent_file, "r", encoding="utf-8") as f:
-                                for line in f:
-                                    event = json.loads(line.strip())
-                                    if not event:
-                                        continue
-
-                                    events.append(event)
-
-                                    # Build chat history for display (raw data only)
-                                    if event.get("event") == "start":
-                                        history.append(
-                                            {
-                                                "role": "user",
-                                                "text": event.get("prompt", ""),
-                                            }
-                                        )
-                                    elif event.get("event") == "finish":
-                                        history.append(
-                                            {
-                                                "role": "assistant",
-                                                "text": event.get("result", ""),
-                                            }
-                                        )
-                                    elif event.get("event") == "error":
-                                        error_msg = event.get("error", "Unknown error")
-                                        history.append(
-                                            {
-                                                "role": "assistant",
-                                                "text": error_msg,
-                                            }
-                                        )
-                        except Exception:
-                            pass
-
-                    # Return with source='cortex' to indicate it's live
-                    # Include the agent_id so client can subscribe to updates
-                    return jsonify(
-                        events=events,
-                        history=history,
-                        source="cortex",
-                        agent_id=agent_id,
-                        is_running=True,
-                    )
-    except Exception:
-        # If Cortex connection fails, fall through to file-based loading
-        pass
-
-    # Fall back to reading from the log file
-    agents_dir = os.path.join(state.journal_root, "agents")
-    agent_file = os.path.join(agents_dir, f"{agent_id}.jsonl")
-
-    if not os.path.isfile(agent_file):
-        return jsonify({"error": "Agent not found"}), 404
-
-    events = []
-    history = []
-
-    try:
-        with open(agent_file, "r", encoding="utf-8") as f:
-            for line in f:
-                event = json.loads(line.strip())
-                if not event:
-                    continue
-
-                events.append(event)
-
-                # Build chat history for display (raw data only)
-                if event.get("event") == "start":
-                    history.append({"role": "user", "text": event.get("prompt", "")})
-                elif event.get("event") == "finish":
-                    history.append(
-                        {"role": "assistant", "text": event.get("result", "")}
-                    )
-                elif event.get("event") == "error":
-                    error_msg = event.get("error", "Unknown error")
-                    history.append({"role": "assistant", "text": error_msg})
-
-    except Exception as e:
-        return jsonify({"error": f"Failed to read agent file: {str(e)}"}), 500
-
-    return jsonify(events=events, history=history, source="file")
+    except FileNotFoundError:
+        # Agent file doesn't exist yet - return empty
+        return jsonify(events=[], is_complete=False)
 
 
 @bp.route("/chat/api/clear", methods=["POST"])
