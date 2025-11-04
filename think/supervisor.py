@@ -1076,7 +1076,8 @@ def main() -> None:
         print(
             "\nShutting down gracefully (this may take up to 15 seconds)...", flush=True
         )
-        for managed in procs:
+        # Shut down in reverse order to respect dependencies
+        for managed in reversed(procs):
             name = managed.name
             proc = managed.process
             logging.info(f"Stopping {name}...")
