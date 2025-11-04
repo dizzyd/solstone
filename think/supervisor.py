@@ -15,7 +15,7 @@ from pathlib import Path
 from desktop_notifier import DesktopNotifier, Urgency
 
 from muse.cortex_client import cortex_request
-from think.callosum import CallosumConnection
+from think.callosum import CallosumConnection, CallosumServer
 from think.domains import get_domains
 from think.runner import ManagedProcess as RunnerManagedProcess
 from think.utils import get_agents, setup_cli
@@ -95,6 +95,10 @@ _supervisor_callosum: CallosumConnection | None = None
 
 # Global reference to managed processes for restart control
 _managed_procs: list[ManagedProcess] = []
+
+# Global reference to in-process Callosum server
+_callosum_server: CallosumServer | None = None
+_callosum_thread: threading.Thread | None = None
 
 
 def _get_journal_path() -> Path:
@@ -718,10 +722,50 @@ def start_observers() -> list[ManagedProcess]:
     return procs
 
 
-def start_callosum_server() -> ManagedProcess:
-    """Launch the Callosum message bus server."""
-    cmd = ["think-callosum", "-v"]
-    return _launch_process("callosum", cmd, restart=True)
+def start_callosum_in_process() -> CallosumServer:
+    """Start Callosum message bus server in-process.
+
+    Runs the server in a background thread and waits for socket to be ready.
+
+    Returns:
+        CallosumServer instance
+    """
+    global _callosum_server, _callosum_thread
+
+    server = CallosumServer()
+    _callosum_server = server
+
+    # Start server in background thread (server.start() is blocking)
+    thread = threading.Thread(target=server.start, daemon=False, name="callosum-server")
+    thread.start()
+    _callosum_thread = thread
+
+    # Wait for socket to be ready (with timeout)
+    socket_path = server.socket_path
+    for _ in range(50):  # Wait up to 500ms
+        if socket_path.exists():
+            logging.info(f"Callosum server started on {socket_path}")
+            return server
+        time.sleep(0.01)
+
+    raise RuntimeError("Callosum server failed to create socket within 500ms")
+
+
+def stop_callosum_in_process() -> None:
+    """Stop the in-process Callosum server."""
+    global _callosum_server, _callosum_thread
+
+    if _callosum_server:
+        logging.info("Stopping Callosum server...")
+        _callosum_server.stop()
+
+    if _callosum_thread:
+        _callosum_thread.join(timeout=5)
+        if _callosum_thread.is_alive():
+            logging.warning("Callosum server thread did not stop cleanly")
+
+    _callosum_server = None
+    _callosum_thread = None
 
 
 def start_cortex_server() -> ManagedProcess:
@@ -907,23 +951,11 @@ async def supervise(
     Subsystems manage their own timing (health checks every interval seconds,
     scheduled agents check continuously but only advance when ready).
     """
-    global shutdown_requested, _supervisor_callosum
+    global shutdown_requested
     alert_mgr = AlertManager()
     last_day = datetime.now().date()
     last_health_check = 0.0
     prev_stale: set[str] = set()
-
-    # Connect to Callosum to receive task and supervisor requests
-    callosum = None
-    try:
-        callosum = CallosumConnection()
-        callosum.start(callback=_handle_callosum_message)
-        _supervisor_callosum = callosum
-        logging.info(
-            "Supervisor connected to Callosum for task and supervisor requests"
-        )
-    except Exception as e:
-        logging.warning(f"Failed to start Callosum connection: {e}")
 
     try:
         while (
@@ -948,11 +980,7 @@ async def supervise(
             # Sleep 1 second before next iteration (responsive to shutdown)
             await asyncio.sleep(1)
     finally:
-        # Clean up Callosum connection
-        if callosum:
-            callosum.stop()
-            _supervisor_callosum = None
-            logging.info("Supervisor disconnected from Callosum")
+        pass  # Callosum cleanup happens in main()
 
 
 def parse_args() -> argparse.ArgumentParser:
@@ -1036,11 +1064,26 @@ def main() -> None:
 
     logging.info("Supervisor starting...")
 
-    global _managed_procs
+    global _managed_procs, _supervisor_callosum
     procs: list[ManagedProcess] = []
-    # Start Callosum first - it's the message bus that other services depend on
-    procs.append(start_callosum_server())
-    time.sleep(1)  # Give Callosum time to start listening
+
+    # Start Callosum in-process first - it's the message bus that other services depend on
+    try:
+        start_callosum_in_process()
+    except RuntimeError as e:
+        logging.error(f"Failed to start Callosum server: {e}")
+        parser.error(f"Failed to start Callosum server: {e}")
+        return
+
+    # Connect supervisor's Callosum client to capture startup events from other services
+    try:
+        _supervisor_callosum = CallosumConnection()
+        _supervisor_callosum.start(callback=_handle_callosum_message)
+        logging.info("Supervisor connected to Callosum")
+    except Exception as e:
+        logging.warning(f"Failed to start Callosum connection: {e}")
+
+    # Now start other services (their startup events will be captured)
     if not args.no_observers:
         procs.extend(start_observers())
     if not args.no_cortex:
@@ -1052,6 +1095,7 @@ def main() -> None:
     _managed_procs = procs
 
     logging.info(f"Started {len(procs)} processes, entering supervision loop")
+
     try:
 
         async def run_supervisor():
@@ -1077,7 +1121,7 @@ def main() -> None:
         print(
             "\nShutting down gracefully (this may take up to 15 seconds)...", flush=True
         )
-        # Shut down in reverse order to respect dependencies
+        # Shut down managed processes in reverse order to respect dependencies
         for managed in reversed(procs):
             name = managed.name
             proc = managed.process
@@ -1099,6 +1143,15 @@ def main() -> None:
                 except Exception:
                     pass
             managed.cleanup()
+
+        # Disconnect supervisor's Callosum connection
+        if _supervisor_callosum:
+            _supervisor_callosum.stop()
+            logging.info("Supervisor disconnected from Callosum")
+
+        # Stop in-process Callosum server last
+        stop_callosum_in_process()
+
         logging.info("Supervisor shutdown complete.")
         print("Shutdown complete.", flush=True)
 
