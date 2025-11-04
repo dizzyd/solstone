@@ -196,7 +196,7 @@ screenshot:
 	@if [ -z "$(VIEW)" ]; then \
 		echo "Usage: make screenshot VIEW=<route> [OUTPUT=path]"; \
 		echo "Example: make screenshot VIEW=/"; \
-		echo "Example: make screenshot VIEW=/domains OUTPUT=logs/domains.png"; \
+		echo "Example: make screenshot VIEW=/facets OUTPUT=logs/facets.png"; \
 		exit 1; \
 	fi
 	convey-screenshot $(VIEW) $(if $(OUTPUT),-o $(OUTPUT))
