@@ -3,8 +3,61 @@
 {% set active = 'calendar' %}
 {% block head %}
 <style>
+body { margin-top: 60px; }
 .container { padding: 0 1em; }
 h1 { margin-bottom: 0.5em; }
+
+/* Facet Chooser */
+#facetChooser {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  z-index: 1000;
+  padding: 12px 16px;
+  padding-left: 70px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  text-align: center;
+  transition: background-color 0.3s ease;
+}
+#facetChooser::-webkit-scrollbar {
+  height: 6px;
+}
+#facetChooser::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+.facet-pill {
+  display: inline-block;
+  padding: 8px 16px;
+  margin-right: 8px;
+  border-radius: 20px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.facet-pill:hover {
+  border-color: #999;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.facet-pill.selected {
+  border-color: #007bff;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(0,123,255,0.2);
+}
+.facet-pill .emoji {
+  margin-right: 6px;
+}
+
 #controls { display: flex; align-items: center; margin-bottom: 1em; gap: 6px; }
 #controls button { background:#007bff; color:white; border:none; padding:6px 12px; margin:0 6px; border-radius:4px; cursor:pointer; }
 #controls span { font-size:1.2em; font-weight:bold; }
@@ -41,6 +94,7 @@ h1 { margin-bottom: 0.5em; }
 </style>
 {% endblock %}
 {% block body %}
+<div id="facetChooser"></div>
 <div class="container">
   <div id="controls">
     <button id="prevMonth">&#8592;</button>
@@ -67,8 +121,127 @@ const now = new Date();
 const CURRENT_YEAR_MONTH = generateYearMonth(now.getFullYear(), now.getMonth());
 const TODAY_DATE_STRING = CURRENT_YEAR_MONTH + String(now.getDate()).padStart(2,'0');
 
+// Facet filtering state
+let activeFacets = [];
+let selectedFacet = null; // null means "All"
+
+// Parse URL fragment to get initial facet selection
+function getSelectedFacetFromHash() {
+  const hash = window.location.hash;
+  if (hash.startsWith('#facet-')) {
+    return hash.substring(7); // Remove '#facet-' prefix
+  }
+  return null;
+}
+
+// Update URL hash when facet selection changes
+function updateFacetHash(facet) {
+  if (facet) {
+    window.location.hash = `facet-${facet}`;
+  } else {
+    window.location.hash = '';
+  }
+}
+
+// Convert hex color to rgba with opacity
+function hexToRgba(hex, alpha) {
+  if (!hex || hex.length < 6) return `rgba(128,128,128,${alpha})`;
+  const r = parseInt(hex.substring(1,3), 16);
+  const g = parseInt(hex.substring(3,5), 16);
+  const b = parseInt(hex.substring(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Load facets and render chooser
+function loadFacetChooser() {
+  fetch('{{ url_for("calendar.calendar_active_facets") }}')
+    .then(r => r.json())
+    .then(facets => {
+      activeFacets = facets;
+      renderFacetChooser();
+    })
+    .catch(err => {
+      console.error('Failed to load facets:', err);
+    });
+}
+
+// Render facet pills
+function renderFacetChooser() {
+  const chooser = document.getElementById('facetChooser');
+  chooser.innerHTML = '';
+
+  // Find selected facet data
+  const selectedFacetData = selectedFacet ? activeFacets.find(f => f.name === selectedFacet) : null;
+
+  // Apply tray background color based on selected facet
+  if (selectedFacetData && selectedFacetData.color) {
+    chooser.style.background = hexToRgba(selectedFacetData.color, 0.1);
+    chooser.style.borderBottomColor = selectedFacetData.color;
+  } else {
+    chooser.style.background = 'white';
+    chooser.style.borderBottomColor = '#e0e0e0';
+  }
+
+  // "All" pill
+  const allPill = document.createElement('div');
+  allPill.className = 'facet-pill' + (selectedFacet === null ? ' selected' : '');
+  allPill.textContent = 'All';
+  allPill.onclick = () => selectFacet(null);
+  chooser.appendChild(allPill);
+
+  // Facet pills
+  activeFacets.forEach(facet => {
+    const pill = document.createElement('div');
+    pill.className = 'facet-pill' + (selectedFacet === facet.name ? ' selected' : '');
+
+    if (facet.emoji) {
+      const emoji = document.createElement('span');
+      emoji.className = 'emoji';
+      emoji.textContent = facet.emoji;
+      pill.appendChild(emoji);
+    }
+
+    const title = document.createElement('span');
+    title.textContent = facet.title;
+    pill.appendChild(title);
+
+    // Apply color with opacity if facet is selected and has a color
+    if (selectedFacet === facet.name && facet.color) {
+      pill.style.background = hexToRgba(facet.color, 0.2);
+      pill.style.borderColor = facet.color;
+    }
+
+    pill.onclick = () => selectFacet(facet.name);
+    chooser.appendChild(pill);
+  });
+}
+
+// Handle facet selection
+function selectFacet(facet) {
+  selectedFacet = facet;
+  updateFacetHash(facet);
+  renderFacetChooser();
+  loadData();
+}
+
+// Listen for hash changes (browser back/forward)
+window.addEventListener('hashchange', () => {
+  const facet = getSelectedFacetFromHash();
+  if (facet !== selectedFacet) {
+    selectedFacet = facet;
+    renderFacetChooser();
+    loadData();
+  }
+});
+
 function loadData() {
-  const statsReq = fetch('{{ url_for("calendar.calendar_stats") }}').then(r => {
+  // Build stats URL with facet filter if selected
+  let statsUrl = '{{ url_for("calendar.calendar_stats") }}';
+  if (selectedFacet) {
+    statsUrl += `?facet=${encodeURIComponent(selectedFacet)}`;
+  }
+
+  const statsReq = fetch(statsUrl).then(r => {
     if (!r.ok) throw new Error('Failed to fetch stats');
     return r.json();
   });
@@ -243,6 +416,11 @@ document.getElementById('todayBtn').onclick = () => {
   showMonth(CURRENT_YEAR_MONTH);
 };
 
+// Initialize facet selection from URL hash
+selectedFacet = getSelectedFacetFromHash();
+
+// Load facet chooser and calendar data
+loadFacetChooser();
 loadData();
 </script>
 {% endblock %}

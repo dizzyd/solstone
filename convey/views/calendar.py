@@ -564,6 +564,28 @@ def calendar_days() -> Any:
     return jsonify(days)
 
 
+@bp.route("/calendar/api/facets/active")
+def calendar_active_facets() -> Any:
+    """Return list of active (non-disabled) facets for calendar filtering."""
+    from think.facets import get_facets
+
+    all_facets = get_facets()
+    active_facets = []
+
+    for name, data in all_facets.items():
+        if not data.get("disabled", False):
+            active_facets.append(
+                {
+                    "name": name,
+                    "title": data.get("title", name),
+                    "color": data.get("color", ""),
+                    "emoji": data.get("emoji", ""),
+                }
+            )
+
+    return jsonify(active_facets)
+
+
 @bp.route("/calendar/api/stats")
 def calendar_stats() -> Any:
     """Return lightweight stats for calendar display."""
@@ -572,6 +594,9 @@ def calendar_stats() -> Any:
 
     if not state.journal_root:
         return jsonify({})
+
+    # Get optional facet filter from query params
+    facet_filter = request.args.get("facet", "")
 
     today = datetime.now().strftime("%Y%m%d")
     stats = {}
@@ -593,12 +618,18 @@ def calendar_stats() -> Any:
                 day_stats["has_transcripts"] = True
                 break
 
-        # Check for todos in any facet
+        # Check for todos - filter by facet if specified
         from think.todo import get_facets_with_todos
 
         facets_with_todos = get_facets_with_todos(name)
-        if facets_with_todos:
-            day_stats["has_todos"] = True
+        if facet_filter:
+            # Filter to specific facet
+            if facet_filter in facets_with_todos:
+                day_stats["has_todos"] = True
+        else:
+            # Show if any facet has todos
+            if facets_with_todos:
+                day_stats["has_todos"] = True
 
         # Check for topics and count occurrences
         topics_dir = os.path.join(path, "topics")
