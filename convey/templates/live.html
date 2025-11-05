@@ -145,7 +145,7 @@
 
 .observe-content {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(5, 1fr);
   gap: 1em;
 }
 
@@ -468,9 +468,14 @@
         <div class="observe-section-detail" id="activityDetail"></div>
       </div>
       <div class="observe-section">
-        <div class="observe-section-title">📂 Detections</div>
-        <div class="observe-section-value" id="detectionsCount">0</div>
-        <div class="observe-section-detail" id="detectionsDetail"></div>
+        <div class="observe-section-title">🎬 Describe</div>
+        <div class="observe-section-value" id="describeStatus">Idle</div>
+        <div class="observe-section-detail" id="describeDetail"></div>
+      </div>
+      <div class="observe-section">
+        <div class="observe-section-title">🎙️ Transcribe</div>
+        <div class="observe-section-value" id="transcribeStatus">Idle</div>
+        <div class="observe-section-detail" id="transcribeDetail"></div>
       </div>
     </div>
   </div>
@@ -523,7 +528,8 @@
       screencast: null,
       audio: null,
       activity: null,
-      detections: []
+      describe: null,
+      transcribe: null
     },
     eventsPaused: false,
     missedEvents: 0
@@ -541,8 +547,10 @@
     audioDetail: document.getElementById('audioDetail'),
     activityStatus: document.getElementById('activityStatus'),
     activityDetail: document.getElementById('activityDetail'),
-    detectionsCount: document.getElementById('detectionsCount'),
-    detectionsDetail: document.getElementById('detectionsDetail'),
+    describeStatus: document.getElementById('describeStatus'),
+    describeDetail: document.getElementById('describeDetail'),
+    transcribeStatus: document.getElementById('transcribeStatus'),
+    transcribeDetail: document.getElementById('transcribeDetail'),
     cortexSection: document.getElementById('cortexSection'),
     cortexGrid: document.getElementById('cortexGrid'),
     importerSection: document.getElementById('importerSection'),
@@ -638,38 +646,54 @@
     // Screencast
     if (obs.screencast) {
       const recording = obs.screencast.recording;
-      elements.screencastStatus.textContent = recording ? 'Recording' : 'Idle';
       if (recording && obs.screencast.file) {
         const elapsed = obs.screencast.window_elapsed_seconds || 0;
-        elements.screencastDetail.textContent = `${truncate(obs.screencast.file, 40)} (${elapsed}s)`;
+        elements.screencastStatus.textContent = `${elapsed}s`;
       } else {
-        elements.screencastDetail.textContent = '';
+        elements.screencastStatus.textContent = 'Idle';
       }
+      elements.screencastDetail.textContent = '';
     }
 
     // Audio
     if (obs.audio) {
       const hits = obs.audio.threshold_hits || 0;
-      const willSave = obs.audio.will_save;
-      elements.audioStatus.textContent = willSave ? 'Active (will save)' : 'Listening';
-      elements.audioDetail.textContent = `${hits} threshold hits`;
+      elements.audioStatus.textContent = `${hits} threshold hits`;
+      elements.audioDetail.textContent = '';
     }
 
     // Activity
     if (obs.activity) {
-      const active = obs.activity.active;
       const idleMs = obs.activity.idle_time_ms || 0;
-      const locked = obs.activity.screen_locked;
-      elements.activityStatus.textContent = locked ? 'Locked' : (active ? 'Active' : 'Idle');
-      elements.activityDetail.textContent = `Idle: ${Math.floor(idleMs/1000)}s`;
+      elements.activityStatus.textContent = `Idle: ${Math.floor(idleMs/1000)}s`;
+      elements.activityDetail.textContent = '';
     }
 
-    // Detections
-    const recentDetections = obs.detections.slice(-5);
-    elements.detectionsCount.textContent = obs.detections.length;
-    if (recentDetections.length > 0) {
-      const latest = recentDetections[recentDetections.length - 1];
-      elements.detectionsDetail.textContent = `Latest: ${truncate(latest.file, 30)}`;
+    // Describe
+    if (obs.describe) {
+      const running = obs.describe.running ? 1 : 0;
+      const queued = obs.describe.queued ? obs.describe.queued.length : 0;
+
+      if (queued > 0) {
+        elements.describeStatus.textContent = `Queued: ${queued}`;
+      } else if (running > 0) {
+        elements.describeStatus.textContent = 'Running';
+      } else {
+        elements.describeStatus.textContent = 'Idle';
+      }
+      elements.describeDetail.textContent = '';
+    }
+
+    // Transcribe
+    if (obs.transcribe) {
+      const running = obs.transcribe.running ? obs.transcribe.running.length : 0;
+
+      if (running > 0) {
+        elements.transcribeStatus.textContent = `Running: ${running}`;
+      } else {
+        elements.transcribeStatus.textContent = 'Idle';
+      }
+      elements.transcribeDetail.textContent = '';
     }
   }
 
@@ -854,16 +878,8 @@
       state.observe.screencast = msg.screencast;
       state.observe.audio = msg.audio;
       state.observe.activity = msg.activity;
-      updateObserve();
-    } else if (msg.event === 'detected') {
-      state.observe.detections.push({
-        file: msg.file,
-        ts: msg.ts
-      });
-      // Keep only last 50 detections
-      if (state.observe.detections.length > 50) {
-        state.observe.detections.shift();
-      }
+      state.observe.describe = msg.describe;
+      state.observe.transcribe = msg.transcribe;
       updateObserve();
     }
   }
