@@ -13,13 +13,13 @@ from fastmcp.resources import FileResource, TextResource
 
 from think import todo
 from think.cluster import cluster_range
-from think.facets import facet_summary, log_action
 from think.entities import (
     is_valid_entity_type,
     load_entities,
     save_entities,
     update_entity,
 )
+from think.facets import facet_summary, log_action
 from think.indexer import search_events as search_events_impl
 from think.indexer import search_news as search_news_impl
 from think.indexer import search_summaries as search_summaries_impl

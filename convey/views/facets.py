@@ -10,12 +10,12 @@ from typing import Any
 from dotenv import load_dotenv
 from flask import Blueprint, jsonify, render_template, request
 
-from think.facets import get_facet_news, get_facets, set_facet_disabled
 from think.entities import (
     load_detected_entities_recent,
     load_entities,
     save_entities,
 )
+from think.facets import get_facet_news, get_facets, set_facet_disabled
 from think.indexer import search_entities, search_events
 from think.utils import get_topics
 

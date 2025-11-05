@@ -450,9 +450,7 @@ def upcoming(
         # Get facet title for better display
         try:
             facets = get_facets()
-            facet_title = facets.get(facet_name, {}).get(
-                "title", facet_name.title()
-            )
+            facet_title = facets.get(facet_name, {}).get("title", facet_name.title())
         except (RuntimeError, KeyError):
             facet_title = facet_name.title()
 

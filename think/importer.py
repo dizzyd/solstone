@@ -371,9 +371,7 @@ def audio_transcribe(
                         f"Using {len(entities)} entities from facet '{facet}' for transcription"
                     )
                 else:
-                    logger.info(
-                        f"Facet '{facet}' entities removed after sanitization"
-                    )
+                    logger.info(f"Facet '{facet}' entities removed after sanitization")
             else:
                 logger.info(f"No entities found for facet '{facet}'")
         except FileNotFoundError:

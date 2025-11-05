@@ -95,9 +95,7 @@ def main() -> None:
         and not args.index
         and (args.rescan or args.reset or args.query is not None)
     ):
-        parser.error(
-            "--index is required unless using --rescan-all or --rescan-facets"
-        )
+        parser.error("--index is required unless using --rescan-all or --rescan-facets")
 
     journal = os.getenv("JOURNAL_PATH")
 
