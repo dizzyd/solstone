@@ -57,7 +57,8 @@ class FileSensor:
         self.lock = threading.RLock()
 
         # Queue for describe requests (only one describe runs at a time)
-        self.describe_queue: List[Path] = []
+        # Each entry is (file_path, queued_at_timestamp)
+        self.describe_queue: List[tuple[Path, float]] = []
         self.describe_running = False
 
         self.observer: Optional[Observer] = None
@@ -66,6 +67,9 @@ class FileSensor:
 
         # Callosum connection for emitting detected events
         self.callosum: Optional[CallosumConnection] = None
+
+        # Track last status emission time
+        self.last_status_emit = 0.0
 
     def register(self, pattern: str, handler_name: str, command: List[str]):
         """
@@ -108,8 +112,10 @@ class FileSensor:
             # Queue describe requests to ensure only one runs at a time
             if handler_name == "describe":
                 if self.describe_running:
-                    if file_path not in self.describe_queue:
-                        self.describe_queue.append(file_path)
+                    # Check if file already queued (compare just paths)
+                    queued_paths = [p for p, _ in self.describe_queue]
+                    if file_path not in queued_paths:
+                        self.describe_queue.append((file_path, time.time()))
                         logger.info(
                             f"Queueing {file_path.name} for describe (queue size: {len(self.describe_queue)})"
                         )
@@ -197,7 +203,7 @@ class FileSensor:
             with self.lock:
                 self.describe_running = False
                 if self.describe_queue:
-                    next_file = self.describe_queue.pop(0)
+                    next_file, queued_at = self.describe_queue.pop(0)
                     logger.info(
                         f"Starting queued describe for {next_file.name} ({len(self.describe_queue)} remaining)"
                     )
@@ -244,6 +250,92 @@ class FileSensor:
             handler_name, command = handler_info
             self._spawn_handler(file_path, handler_name, command)
 
+    def _emit_status(self):
+        """Emit observe.status event with current processing state (only when active)."""
+        if not self.callosum:
+            return
+
+        with self.lock:
+            # Check if there's any activity to report
+            if not self.running and not self.describe_queue:
+                return  # Nothing active, don't emit
+
+            # Build status object
+            status = {}
+
+            # Get journal path for relative paths
+            journal_path = os.getenv("JOURNAL_PATH", "")
+
+            # Collect describe info
+            describe_running = None
+            describe_queued = []
+
+            for file_path, handler_proc in self.running.items():
+                if handler_proc.handler_name == "describe":
+                    try:
+                        rel_file = (
+                            str(file_path.relative_to(journal_path))
+                            if journal_path
+                            else str(file_path)
+                        )
+                    except ValueError:
+                        rel_file = str(file_path)
+
+                    describe_running = {
+                        "file": rel_file,
+                        "ref": handler_proc.managed.ref,
+                    }
+                    break
+
+            # Get queued describes with age
+            now = time.time()
+            for file_path, queued_at in self.describe_queue:
+                try:
+                    rel_file = (
+                        str(file_path.relative_to(journal_path))
+                        if journal_path
+                        else str(file_path)
+                    )
+                except ValueError:
+                    rel_file = str(file_path)
+
+                describe_queued.append(
+                    {"file": rel_file, "age_seconds": int(now - queued_at)}
+                )
+
+            # Add describe section if any activity
+            if describe_running or describe_queued:
+                status["describe"] = {}
+                if describe_running:
+                    status["describe"]["running"] = describe_running
+                if describe_queued:
+                    status["describe"]["queued"] = describe_queued
+
+            # Collect transcribe info
+            transcribe_running = []
+            for file_path, handler_proc in self.running.items():
+                if handler_proc.handler_name == "transcribe":
+                    try:
+                        rel_file = (
+                            str(file_path.relative_to(journal_path))
+                            if journal_path
+                            else str(file_path)
+                        )
+                    except ValueError:
+                        rel_file = str(file_path)
+
+                    transcribe_running.append(
+                        {"file": rel_file, "ref": handler_proc.managed.ref}
+                    )
+
+            # Add transcribe section if any activity
+            if transcribe_running:
+                status["transcribe"] = {"running": transcribe_running}
+
+            # Only emit if we have something to report
+            if status:
+                self.callosum.emit("observe", "status", **status)
+
     def start(self):
         """Start watching for new files with day rollover."""
 
@@ -280,6 +372,12 @@ class FileSensor:
                 self.observer.start()
                 self.current_day = today_str
                 logger.info(f"Watching {day_dir}")
+
+            # Emit status every 5 seconds if there's activity
+            now = time.time()
+            if now - self.last_status_emit >= 5:
+                self._emit_status()
+                self.last_status_emit = now
 
             time.sleep(1)
 
