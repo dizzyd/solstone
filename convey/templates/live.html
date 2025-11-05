@@ -1,57 +1,927 @@
 {% extends 'base.html' %}
-{% set title = 'Live Events' %}
+{% set title = 'Live Dashboard' %}
 {% set active = 'live' %}
 {% block head %}
 <style>
-.container { padding: 0 1em; }
+/* Live Dashboard Layout */
+.live-dashboard {
+  padding: 1em;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+/* Vitals Bar (Full Width) */
+.vitals-bar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.vitals-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5em;
+}
+
+.vitals-title {
+  font-size: 1.2em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.vitals-status {
+  background: rgba(255,255,255,0.2);
+  padding: 0.4em 0.8em;
+  border-radius: 20px;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.vitals-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5em;
+  font-size: 0.95em;
+}
+
+.vitals-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.vitals-label {
+  opacity: 0.8;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vitals-value {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.service-dots {
+  display: flex;
+  gap: 0.4em;
+  flex-wrap: wrap;
+}
+
+.service-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  background: rgba(255,255,255,0.15);
+  padding: 0.2em 0.6em;
+  border-radius: 12px;
+  font-size: 0.85em;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-indicator.active { background: #4ade80; }
+.status-indicator.crashed { background: #f87171; }
+.status-indicator.restarting { background: #fbbf24; }
+.status-indicator.inactive { background: #9ca3af; }
+
+/* Observe Card (Prominent) */
+.observe-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-left: 4px solid #10b981;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+}
+
+.card-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.live-badge {
+  background: #dc2626;
+  color: white;
+  padding: 0.2em 0.6em;
+  border-radius: 12px;
+  font-size: 0.75em;
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.observe-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1em;
+}
+
+.observe-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+
+.observe-section-title {
+  font-size: 0.85em;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.observe-section-value {
+  font-size: 1em;
+  color: #111827;
+  font-weight: 500;
+}
+
+.observe-section-detail {
+  font-size: 0.85em;
+  color: #6b7280;
+  padding-left: 1em;
+}
+
+/* Activity Grids Container */
+.activity-grids {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+.activity-section {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.activity-section.hidden {
+  display: none;
+}
+
+.activity-section-header {
+  font-size: 1em;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 1em;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1em;
+}
+
+/* Agent/Import Cards (Square) */
+.activity-card {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-radius: 8px;
+  padding: 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-height: 140px;
+}
+
+.activity-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.activity-card.agent-active {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+}
+
+.activity-card.agent-finished {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #10b981;
+}
+
+.activity-card.agent-error {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: #ef4444;
+}
+
+.activity-card.import-active {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+}
+
+.activity-card-id {
+  font-size: 0.75em;
+  color: #6b7280;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.activity-card-name {
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-card-state {
+  font-size: 0.85em;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.activity-card-elapsed {
+  font-size: 0.8em;
+  color: #6b7280;
+  margin-top: auto;
+}
+
+.activity-card-backend {
+  font-size: 0.75em;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.activity-card-progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(0,0,0,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.activity-card-progress-bar {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+/* Events Card */
+.events-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.events-card.paused {
+  border-left: 4px solid #f59e0b;
+}
+
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+}
+
+.events-title {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.events-controls {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+.pause-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.5em 1em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  transition: background 0.2s;
+}
+
+.pause-btn:hover {
+  background: #2563eb;
+}
+
+.pause-btn.paused {
+  background: #f59e0b;
+}
+
+.pause-btn.paused:hover {
+  background: #d97706;
+}
+
+.missed-count {
+  font-size: 0.85em;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
 .event-log {
-  height: calc(100vh - 150px);
+  height: 400px;
   overflow-y: auto;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 13px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
   padding: 0.5em;
-  background: #fafafa;
-  margin-top: 1em;
+  background: #f9fafb;
 }
+
 .event-line {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 3px 0;
-  border-bottom: 1px solid #eee;
-  color: #333;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
 }
+
 .event-line:last-child {
   border-bottom: none;
 }
+
 .event-log:empty::before {
   content: 'Waiting for events...';
-  color: #999;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Empty States */
+.empty-state {
+  text-align: center;
+  padding: 2em;
+  color: #9ca3af;
   font-style: italic;
 }
 </style>
 {% endblock %}
 {% block body %}
-<div class="container">
-  <h2>Live Events</h2>
-  <p>Real-time Callosum event stream (raw JSON, resets on navigation)</p>
-  <div id="eventLog" class="event-log"></div>
+<div class="live-dashboard">
+  <!-- Vitals Bar -->
+  <div class="vitals-bar">
+    <div class="vitals-header">
+      <div class="vitals-title">
+        ⚡ SYSTEM VITALS
+      </div>
+      <div class="vitals-status" id="vitalsStatus">
+        <span class="status-indicator active"></span>
+        <span>All Systems Go</span>
+      </div>
+    </div>
+    <div class="vitals-content">
+      <div class="vitals-section">
+        <div class="vitals-label">Services</div>
+        <div class="vitals-value">
+          <div class="service-dots" id="serviceDots">
+            <div class="service-dot">
+              <span class="status-indicator inactive"></span>
+              <span>Waiting...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="vitals-section">
+        <div class="vitals-label">Tasks</div>
+        <div class="vitals-value" id="tasksValue">
+          <span>0 active</span>
+        </div>
+      </div>
+      <div class="vitals-section">
+        <div class="vitals-label">Health</div>
+        <div class="vitals-value" id="healthValue">
+          <span>Waiting for status...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Observe Card -->
+  <div class="observe-card">
+    <div class="card-header">
+      <div class="card-title">
+        👁️ OBSERVATION STATUS
+      </div>
+      <div class="live-badge">
+        <span class="status-indicator active"></span>
+        <span>Live</span>
+      </div>
+    </div>
+    <div class="observe-content">
+      <div class="observe-section">
+        <div class="observe-section-title">🎥 Screencast</div>
+        <div class="observe-section-value" id="screencastStatus">Waiting...</div>
+        <div class="observe-section-detail" id="screencastDetail"></div>
+      </div>
+      <div class="observe-section">
+        <div class="observe-section-title">🎤 Audio</div>
+        <div class="observe-section-value" id="audioStatus">Waiting...</div>
+        <div class="observe-section-detail" id="audioDetail"></div>
+      </div>
+      <div class="observe-section">
+        <div class="observe-section-title">💻 Activity</div>
+        <div class="observe-section-value" id="activityStatus">Waiting...</div>
+        <div class="observe-section-detail" id="activityDetail"></div>
+      </div>
+      <div class="observe-section">
+        <div class="observe-section-title">📂 Detections</div>
+        <div class="observe-section-value" id="detectionsCount">0</div>
+        <div class="observe-section-detail" id="detectionsDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Grids -->
+  <div class="activity-grids">
+    <!-- Cortex Agents -->
+    <div class="activity-section hidden" id="cortexSection">
+      <div class="activity-section-header">
+        🤖 AGENTS
+      </div>
+      <div class="activity-grid" id="cortexGrid"></div>
+    </div>
+
+    <!-- Importers -->
+    <div class="activity-section hidden" id="importerSection">
+      <div class="activity-section-header">
+        📥 IMPORTS
+      </div>
+      <div class="activity-grid" id="importerGrid"></div>
+    </div>
+  </div>
+
+  <!-- Events Card -->
+  <div class="events-card" id="eventsCard">
+    <div class="events-header">
+      <div class="events-title">📜 EVENTS</div>
+      <div class="events-controls">
+        <span class="missed-count" id="missedCount" style="display: none;"></span>
+        <button class="pause-btn" id="pauseBtn">
+          <span>⏸</span>
+          <span>Pause</span>
+        </button>
+      </div>
+    </div>
+    <div id="eventLog" class="event-log"></div>
+  </div>
 </div>
+
 <script>
 (function(){
-  const logContainer = document.getElementById('eventLog');
+  // State management
+  const state = {
+    services: new Map(),
+    tasks: [],
+    health: null,
+    agents: new Map(),
+    imports: new Map(),
+    observe: {
+      screencast: null,
+      audio: null,
+      activity: null,
+      detections: []
+    },
+    eventsPaused: false,
+    missedEvents: 0
+  };
 
+  // DOM elements
+  const elements = {
+    serviceDots: document.getElementById('serviceDots'),
+    tasksValue: document.getElementById('tasksValue'),
+    healthValue: document.getElementById('healthValue'),
+    vitalsStatus: document.getElementById('vitalsStatus'),
+    screencastStatus: document.getElementById('screencastStatus'),
+    screencastDetail: document.getElementById('screencastDetail'),
+    audioStatus: document.getElementById('audioStatus'),
+    audioDetail: document.getElementById('audioDetail'),
+    activityStatus: document.getElementById('activityStatus'),
+    activityDetail: document.getElementById('activityDetail'),
+    detectionsCount: document.getElementById('detectionsCount'),
+    detectionsDetail: document.getElementById('detectionsDetail'),
+    cortexSection: document.getElementById('cortexSection'),
+    cortexGrid: document.getElementById('cortexGrid'),
+    importerSection: document.getElementById('importerSection'),
+    importerGrid: document.getElementById('importerGrid'),
+    eventLog: document.getElementById('eventLog'),
+    eventsCard: document.getElementById('eventsCard'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    missedCount: document.getElementById('missedCount')
+  };
+
+  // Utility functions
+  function formatDuration(ms) {
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}m ${secs}s`;
+  }
+
+  function formatElapsed(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}m ${secs}s`;
+  }
+
+  function truncate(str, len) {
+    if (!str) return '';
+    return str.length > len ? str.substring(0, len) + '...' : str;
+  }
+
+  function getAgentId(id) {
+    return String(id).slice(-4);
+  }
+
+  // Update vitals bar
+  function updateVitals() {
+    // Services
+    if (state.services.size > 0) {
+      const servicesHtml = Array.from(state.services.entries()).map(([name, info]) => {
+        const statusClass = info.crashed ? 'crashed' : 'active';
+        return `
+          <div class="service-dot">
+            <span class="status-indicator ${statusClass}"></span>
+            <span>${name}</span>
+          </div>
+        `;
+      }).join('');
+      elements.serviceDots.innerHTML = servicesHtml;
+    }
+
+    // Tasks
+    const taskCount = state.tasks.length;
+    elements.tasksValue.innerHTML = `<span>${taskCount} active</span>`;
+
+    // Health
+    if (state.health) {
+      const staleCount = state.health.stale_heartbeats?.length || 0;
+      if (staleCount > 0) {
+        elements.healthValue.innerHTML = `<span style="color: #f59e0b;">⚠️ ${staleCount} stale</span>`;
+        updateVitalsStatus('warning');
+      } else {
+        elements.healthValue.innerHTML = `<span>✓ All heartbeats OK</span>`;
+        updateVitalsStatus('ok');
+      }
+    }
+  }
+
+  function updateVitalsStatus(status) {
+    const vitalsStatus = elements.vitalsStatus;
+    if (status === 'ok') {
+      vitalsStatus.innerHTML = `
+        <span class="status-indicator active"></span>
+        <span>All Systems Go</span>
+      `;
+    } else if (status === 'warning') {
+      vitalsStatus.innerHTML = `
+        <span class="status-indicator restarting"></span>
+        <span>Warnings</span>
+      `;
+    } else if (status === 'error') {
+      vitalsStatus.innerHTML = `
+        <span class="status-indicator crashed"></span>
+        <span>Issues Detected</span>
+      `;
+    }
+  }
+
+  // Update observe card
+  function updateObserve() {
+    const obs = state.observe;
+
+    // Screencast
+    if (obs.screencast) {
+      const recording = obs.screencast.recording;
+      elements.screencastStatus.textContent = recording ? 'Recording' : 'Idle';
+      if (recording && obs.screencast.file) {
+        const elapsed = obs.screencast.window_elapsed_seconds || 0;
+        elements.screencastDetail.textContent = `${truncate(obs.screencast.file, 40)} (${elapsed}s)`;
+      } else {
+        elements.screencastDetail.textContent = '';
+      }
+    }
+
+    // Audio
+    if (obs.audio) {
+      const hits = obs.audio.threshold_hits || 0;
+      const willSave = obs.audio.will_save;
+      elements.audioStatus.textContent = willSave ? 'Active (will save)' : 'Listening';
+      elements.audioDetail.textContent = `${hits} threshold hits`;
+    }
+
+    // Activity
+    if (obs.activity) {
+      const active = obs.activity.active;
+      const idleMs = obs.activity.idle_time_ms || 0;
+      const locked = obs.activity.screen_locked;
+      elements.activityStatus.textContent = locked ? 'Locked' : (active ? 'Active' : 'Idle');
+      elements.activityDetail.textContent = `Idle: ${Math.floor(idleMs/1000)}s`;
+    }
+
+    // Detections
+    const recentDetections = obs.detections.slice(-5);
+    elements.detectionsCount.textContent = obs.detections.length;
+    if (recentDetections.length > 0) {
+      const latest = recentDetections[recentDetections.length - 1];
+      elements.detectionsDetail.textContent = `Latest: ${truncate(latest.file, 30)}`;
+    }
+  }
+
+  // Update cortex grid
+  function updateCortexGrid() {
+    const activeAgents = Array.from(state.agents.values()).filter(a => a.event !== 'finish' && a.event !== 'error');
+
+    if (activeAgents.length === 0) {
+      elements.cortexSection.classList.add('hidden');
+      return;
+    }
+
+    elements.cortexSection.classList.remove('hidden');
+
+    const html = activeAgents.map(agent => {
+      const cardClass = agent.event === 'error' ? 'agent-error' :
+                       agent.event === 'finish' ? 'agent-finished' : 'agent-active';
+      const stateIcon = agent.event === 'thinking' ? '⟳' :
+                       agent.event === 'tool_start' || agent.event === 'tool_end' ? '🛠️' :
+                       agent.event === 'finish' ? '✓' :
+                       agent.event === 'error' ? '❌' : '○';
+      const elapsed = agent.elapsed_seconds ? formatElapsed(agent.elapsed_seconds) : '0s';
+
+      return `
+        <div class="activity-card ${cardClass}" data-agent-id="${agent.agent_id}">
+          <div class="activity-card-id">...${getAgentId(agent.agent_id)}</div>
+          <div class="activity-card-name">${agent.persona || 'default'}</div>
+          <div class="activity-card-state">${stateIcon} ${agent.event || 'unknown'}</div>
+          <div class="activity-card-elapsed">⏱️ ${elapsed}</div>
+          <div class="activity-card-backend">${agent.backend || 'unknown'}</div>
+        </div>
+      `;
+    }).join('');
+
+    elements.cortexGrid.innerHTML = html;
+  }
+
+  // Update importer grid
+  function updateImporterGrid() {
+    const activeImports = Array.from(state.imports.values()).filter(i => i.event !== 'completed' && i.event !== 'error');
+
+    if (activeImports.length === 0) {
+      elements.importerSection.classList.add('hidden');
+      return;
+    }
+
+    elements.importerSection.classList.remove('hidden');
+
+    const html = activeImports.map(imp => {
+      const progress = imp.stage === 'initialization' ? 25 :
+                      imp.stage === 'transcribing' ? 50 :
+                      imp.stage === 'segmenting' ? 75 : 90;
+      const elapsed = imp.elapsed_ms ? formatDuration(imp.elapsed_ms) : '0s';
+
+      return `
+        <div class="activity-card import-active" data-import-id="${imp.import_id}">
+          <div class="activity-card-id">...${getAgentId(imp.import_id)}</div>
+          <div class="activity-card-name">${truncate(imp.input_file || 'import', 20)}</div>
+          <div class="activity-card-state">${imp.stage || 'processing'}</div>
+          <div class="activity-card-progress">
+            <div class="activity-card-progress-bar" style="width: ${progress}%"></div>
+          </div>
+          <div class="activity-card-elapsed">⏱️ ${elapsed}</div>
+          <div class="activity-card-backend">${imp.file_type || 'unknown'}</div>
+        </div>
+      `;
+    }).join('');
+
+    elements.importerGrid.innerHTML = html;
+  }
+
+  // Pause/resume event stream
+  function togglePause() {
+    state.eventsPaused = !state.eventsPaused;
+
+    if (state.eventsPaused) {
+      // Paused
+      elements.pauseBtn.classList.add('paused');
+      elements.pauseBtn.innerHTML = '<span>▶</span><span>Resume</span>';
+      elements.eventsCard.classList.add('paused');
+      state.missedEvents = 0;
+      elements.missedCount.style.display = 'none';
+    } else {
+      // Resumed
+      elements.pauseBtn.classList.remove('paused');
+      elements.pauseBtn.innerHTML = '<span>⏸</span><span>Pause</span>';
+      elements.eventsCard.classList.remove('paused');
+      state.missedEvents = 0;
+      elements.missedCount.style.display = 'none';
+    }
+  }
+
+  // Append to event log
   function appendEvent(msg) {
+    if (state.eventsPaused) {
+      state.missedEvents++;
+      elements.missedCount.textContent = `${state.missedEvents} missed`;
+      elements.missedCount.style.display = 'inline';
+      return;
+    }
+
     const line = document.createElement('div');
     line.className = 'event-line';
     line.textContent = JSON.stringify(msg);
-    logContainer.appendChild(line);
+    elements.eventLog.appendChild(line);
+
+    // Auto-scroll to bottom
+    elements.eventLog.scrollTop = elements.eventLog.scrollHeight;
+
+    // Limit to last 100 events
+    while (elements.eventLog.children.length > 100) {
+      elements.eventLog.removeChild(elements.eventLog.firstChild);
+    }
   }
 
+  // Event handlers by tract
+  function handleSupervisorEvent(msg) {
+    if (msg.event === 'status') {
+      // Update services
+      if (msg.services) {
+        state.services.clear();
+        msg.services.forEach(svc => {
+          state.services.set(svc.name, svc);
+        });
+      }
+
+      // Update tasks
+      state.tasks = msg.tasks || [];
+
+      // Update health
+      state.health = {
+        stale_heartbeats: msg.stale_heartbeats || []
+      };
+
+      updateVitals();
+    }
+  }
+
+  function handleCortexEvent(msg) {
+    const agentId = msg.agent_id;
+    if (!agentId) return;
+
+    if (msg.event === 'status') {
+      // Status event contains array of agents
+      if (msg.agents) {
+        msg.agents.forEach(agent => {
+          state.agents.set(agent.agent_id, {
+            agent_id: agent.agent_id,
+            persona: agent.persona,
+            backend: agent.backend,
+            elapsed_seconds: agent.elapsed_seconds,
+            event: 'thinking' // Assume thinking if in status
+          });
+        });
+      }
+    } else {
+      // Individual agent event
+      const existing = state.agents.get(agentId) || {};
+      state.agents.set(agentId, {
+        ...existing,
+        agent_id: agentId,
+        persona: msg.persona || existing.persona,
+        backend: msg.backend || existing.backend,
+        event: msg.event,
+        ts: msg.ts
+      });
+
+      // Remove finished/error agents after delay
+      if (msg.event === 'finish' || msg.event === 'error') {
+        setTimeout(() => {
+          state.agents.delete(agentId);
+          updateCortexGrid();
+        }, 5000);
+      }
+    }
+
+    updateCortexGrid();
+  }
+
+  function handleObserveEvent(msg) {
+    if (msg.event === 'status') {
+      state.observe.screencast = msg.screencast;
+      state.observe.audio = msg.audio;
+      state.observe.activity = msg.activity;
+      updateObserve();
+    } else if (msg.event === 'detected') {
+      state.observe.detections.push({
+        file: msg.file,
+        ts: msg.ts
+      });
+      // Keep only last 50 detections
+      if (state.observe.detections.length > 50) {
+        state.observe.detections.shift();
+      }
+      updateObserve();
+    }
+  }
+
+  function handleImporterEvent(msg) {
+    const importId = msg.import_id;
+    if (!importId) return;
+
+    if (msg.event === 'started') {
+      state.imports.set(importId, {
+        import_id: importId,
+        input_file: msg.input_file,
+        file_type: msg.file_type,
+        stage: msg.stage,
+        event: 'started',
+        elapsed_ms: 0
+      });
+    } else if (msg.event === 'status') {
+      const existing = state.imports.get(importId) || {};
+      state.imports.set(importId, {
+        ...existing,
+        stage: msg.stage,
+        elapsed_ms: msg.elapsed_ms,
+        event: 'status'
+      });
+    } else if (msg.event === 'completed' || msg.event === 'error') {
+      const existing = state.imports.get(importId) || {};
+      state.imports.set(importId, {
+        ...existing,
+        event: msg.event
+      });
+
+      // Remove after delay
+      setTimeout(() => {
+        state.imports.delete(importId);
+        updateImporterGrid();
+      }, 5000);
+    }
+
+    updateImporterGrid();
+  }
+
+  // Main event handler
+  function handleEvent(msg) {
+    appendEvent(msg);
+
+    const tract = msg.tract;
+    if (tract === 'supervisor') handleSupervisorEvent(msg);
+    else if (tract === 'cortex') handleCortexEvent(msg);
+    else if (tract === 'observe') handleObserveEvent(msg);
+    else if (tract === 'importer') handleImporterEvent(msg);
+  }
+
+  // Event listeners
+  elements.pauseBtn.addEventListener('click', togglePause);
+
   // Listen to all Callosum events
-  window.appEvents.listen('*', appendEvent);
+  window.appEvents.listen('*', handleEvent);
 })();
 </script>
 {% endblock %}
