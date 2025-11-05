@@ -590,7 +590,6 @@ def calendar_active_facets() -> Any:
 def calendar_stats() -> Any:
     """Return lightweight stats for calendar display."""
     import os
-    from datetime import datetime
 
     if not state.journal_root:
         return jsonify({})
@@ -598,11 +597,8 @@ def calendar_stats() -> Any:
     # Get optional facet filter from query params
     facet_filter = request.args.get("facet", "")
 
-    today = datetime.now().strftime("%Y%m%d")
     stats = {}
 
-    # Get all days and their occurrence counts
-    all_days = []
     for name, path in day_dirs().items():
         day_stats = {
             "day": name,
@@ -612,11 +608,33 @@ def calendar_stats() -> Any:
             "occurrence_count": 0,
         }
 
-        # Check for transcripts (audio jsonl files)
-        for fname in os.listdir(path):
-            if fname.endswith("_audio.jsonl"):
-                day_stats["has_transcripts"] = True
-                break
+        # Try to load stats.json from day directory
+        stats_file = os.path.join(path, "stats.json")
+        if os.path.isfile(stats_file):
+            try:
+                with open(stats_file, "r", encoding="utf-8") as f:
+                    day_data = json.load(f)
+
+                # Extract stats
+                stats_obj = day_data.get("stats", {})
+                topic_data = day_data.get("topic_data", {})
+
+                # has_transcripts: check if any audio sessions exist
+                day_stats["has_transcripts"] = stats_obj.get("audio_sessions", 0) > 0
+
+                # has_topics: check if topics were processed or topic_data exists
+                day_stats["has_topics"] = (
+                    stats_obj.get("topics_processed", 0) > 0 or len(topic_data) > 0
+                )
+
+                # occurrence_count: sum all topic occurrence counts
+                day_stats["occurrence_count"] = sum(
+                    topic.get("count", 0) for topic in topic_data.values()
+                )
+
+            except Exception:
+                # If stats.json can't be read, leave defaults (all False/0)
+                pass
 
         # Check for todos - filter by facet if specified
         from think.todo import get_facets_with_todos
@@ -631,67 +649,7 @@ def calendar_stats() -> Any:
             if facets_with_todos:
                 day_stats["has_todos"] = True
 
-        # Check for topics and count occurrences
-        topics_dir = os.path.join(path, "topics")
-        if os.path.isdir(topics_dir):
-            # Check if any topic files exist (json or md)
-            topic_files = [
-                f
-                for f in os.listdir(topics_dir)
-                if (f.endswith(".json") or f.endswith(".md"))
-                and not f.endswith(".crumb")
-            ]
-            if topic_files:
-                day_stats["has_topics"] = True
-
-            # Count occurrences from JSON files
-            for fname in os.listdir(topics_dir):
-                if fname.endswith(".json") and not fname.endswith(".crumb"):
-                    try:
-                        file_path = os.path.join(topics_dir, fname)
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                        items = (
-                            data.get("occurrences", [])
-                            if isinstance(data, dict)
-                            else data if isinstance(data, list) else []
-                        )
-                        day_stats["occurrence_count"] += len(items)
-                    except Exception:
-                        continue
-
-        all_days.append(day_stats)
         stats[name] = day_stats
-
-    # Calculate percentiles for past days only
-    past_days_with_data = [
-        d for d in all_days if d["day"] < today and d["occurrence_count"] > 0
-    ]
-
-    if past_days_with_data:
-        # Sort by occurrence count
-        sorted_days = sorted(past_days_with_data, key=lambda x: x["occurrence_count"])
-        total = len(sorted_days)
-
-        # Calculate thresholds
-        bottom_20_idx = int(total * 0.2)
-        top_20_idx = int(total * 0.8)
-
-        for day in sorted_days[:bottom_20_idx]:
-            stats[day["day"]]["activity_level"] = "low"
-
-        for day in sorted_days[bottom_20_idx:top_20_idx]:
-            stats[day["day"]]["activity_level"] = "medium"
-
-        for day in sorted_days[top_20_idx:]:
-            stats[day["day"]]["activity_level"] = "high"
-
-    # Mark days with no data as "none" (but only past days)
-    for day_name, day_stats in stats.items():
-        if day_name < today:
-            if day_stats["occurrence_count"] == 0:
-                day_stats["activity_level"] = "none"
-        # Today and future days get no activity_level
 
     return jsonify(stats)
 

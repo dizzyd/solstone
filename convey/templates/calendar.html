@@ -67,11 +67,6 @@ h1 { margin-bottom: 0.5em; }
 #calendar td.today { background:rgba(0,123,255,0.12); box-shadow:inset 0 0 0 2px #007bff; }
 .day-number { font-weight:bold; text-decoration:none; color:inherit; display:inline-block; }
 .missing { color:#ccc; }
-/* Activity level backgrounds for past days */
-.activity-high { background:rgba(0,123,255,0.08); }  /* Light blue */
-.activity-medium { background:rgba(40,167,69,0.08); }  /* Light green */
-.activity-low { background:rgba(255,193,7,0.08); }  /* Light yellow */
-.activity-none { background:rgba(220,53,69,0.08); }  /* Light red */
 .day-actions {
   position:absolute;
   bottom:4px;
@@ -341,20 +336,8 @@ function showMonth(ym) {
     }
     const td = document.createElement('td');
     const dateStr = ym + String(day).padStart(2,'0');
-    const isPastDay = dateStr < TODAY_DATE_STRING;
 
     td.innerHTML = createDayContent(dateStr, day);
-
-    // Apply activity level background for past days
-    if (isPastDay) {
-      const stats = dayStats[dateStr];
-      const exists = availableDays.has(dateStr);
-      if (!exists) {
-        td.classList.add('activity-none');
-      } else if (stats && stats.activity_level) {
-        td.classList.add('activity-' + stats.activity_level);
-      }
-    }
 
     if (dateStr === TODAY_DATE_STRING) {
       td.classList.add('today');
