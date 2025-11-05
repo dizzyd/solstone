@@ -34,7 +34,6 @@ class HandlerProcess:
     def __init__(self, file_path: Path, managed: RunnerManagedProcess):
         self.file_path = file_path
         self.managed = managed
-        self.handler_name = managed.name
         self.process = managed.process
 
     def cleanup(self):
@@ -59,7 +58,7 @@ class FileSensor:
         # Queue for describe requests (only one describe runs at a time)
         # Each entry is (file_path, queued_at_timestamp)
         self.describe_queue: List[tuple[Path, float]] = []
-        self.describe_running = False
+        self.current_describe_process: Optional[HandlerProcess] = None
 
         self.observer: Optional[Observer] = None
         self.current_day: Optional[str] = None
@@ -111,7 +110,7 @@ class FileSensor:
 
             # Queue describe requests to ensure only one runs at a time
             if handler_name == "describe":
-                if self.describe_running:
+                if self.current_describe_process is not None:
                     # Check if file already queued (compare just paths)
                     queued_paths = [p for p, _ in self.describe_queue]
                     if file_path not in queued_paths:
@@ -120,7 +119,6 @@ class FileSensor:
                             f"Queueing {file_path.name} for describe (queue size: {len(self.describe_queue)})"
                         )
                     return
-                self.describe_running = True
 
         # Generate correlation ID for this handler run
         ref = str(int(time.time() * 1000))
@@ -159,13 +157,15 @@ class FileSensor:
             # Release describe lock if this was a describe handler
             if handler_name == "describe":
                 with self.lock:
-                    self.describe_running = False
+                    self.current_describe_process = None
             return
 
         handler_proc = HandlerProcess(file_path, managed)
 
         with self.lock:
             self.running[file_path] = handler_proc
+            if handler_name == "describe":
+                self.current_describe_process = handler_proc
 
         # Monitor process completion in background
         threading.Thread(
@@ -181,11 +181,11 @@ class FileSensor:
 
             if exit_code == 0:
                 logger.info(
-                    f"{handler_proc.handler_name} completed successfully for {handler_proc.file_path.name}"
+                    f"Handler completed successfully for {handler_proc.file_path.name}"
                 )
 
                 # If describe completed successfully, run reduce
-                if handler_proc.handler_name == "describe":
+                if handler_proc is self.current_describe_process:
                     try:
                         self._run_reduce(handler_proc.file_path)
                     except Exception as exc:
@@ -195,7 +195,7 @@ class FileSensor:
                         )
             else:
                 logger.error(
-                    f"{handler_proc.handler_name} failed with exit code {exit_code} for {handler_proc.file_path.name}"
+                    f"Handler failed with exit code {exit_code} for {handler_proc.file_path.name}"
                 )
 
             handler_proc.cleanup()
@@ -204,40 +204,29 @@ class FileSensor:
                 if handler_proc.file_path in self.running:
                     del self.running[handler_proc.file_path]
 
-            # Process next queued describe if this was a describe handler
-            if handler_proc.handler_name == "describe":
-                next_file = None
-                with self.lock:
-                    self.describe_running = False
-                    if self.describe_queue:
-                        next_file, queued_at = self.describe_queue.pop(0)
-                        logger.info(
-                            f"Starting queued describe for {next_file.name} ({len(self.describe_queue)} remaining)"
-                        )
-
-                if next_file:
-                    handler_info = self._match_pattern(next_file)
-                    if handler_info:
-                        handler_name, command = handler_info
-                        self._spawn_handler(next_file, handler_name, command)
         except Exception as exc:
             logger.error(
                 f"Unexpected error in monitor thread for {handler_proc.file_path.name}: {exc}",
                 exc_info=True,
             )
-            # Ensure we always reset describe_running flag even on error
-            if handler_proc.handler_name == "describe":
-                with self.lock:
-                    self.describe_running = False
-                    if self.describe_queue:
-                        logger.warning(
-                            f"Handler crashed but {len(self.describe_queue)} items remain queued - will attempt to process"
-                        )
-                        next_file, queued_at = self.describe_queue.pop(0)
-                        handler_info = self._match_pattern(next_file)
-                        if handler_info:
-                            handler_name, command = handler_info
-                            self._spawn_handler(next_file, handler_name, command)
+        finally:
+            # Always process next queued describe if this was a describe handler
+            if handler_proc is self.current_describe_process:
+                self._process_next_describe()
+
+    def _process_next_describe(self):
+        """Process next queued describe task."""
+        with self.lock:
+            self.current_describe_process = None
+            if self.describe_queue:
+                next_file, queued_at = self.describe_queue.pop(0)
+                logger.info(
+                    f"Starting queued describe for {next_file.name} ({len(self.describe_queue)} remaining)"
+                )
+                handler_info = self._match_pattern(next_file)
+                if handler_info:
+                    handler_name, command = handler_info
+                    self._spawn_handler(next_file, handler_name, command)
 
     def _run_reduce(self, video_path: Path):
         """Run reduce on the video file after describe completes."""
@@ -295,22 +284,21 @@ class FileSensor:
             describe_running = None
             describe_queued = []
 
-            for file_path, handler_proc in self.running.items():
-                if handler_proc.handler_name == "describe":
-                    try:
-                        rel_file = (
-                            str(file_path.relative_to(journal_path))
-                            if journal_path
-                            else str(file_path)
-                        )
-                    except ValueError:
-                        rel_file = str(file_path)
+            if self.current_describe_process is not None:
+                handler_proc = self.current_describe_process
+                try:
+                    rel_file = (
+                        str(handler_proc.file_path.relative_to(journal_path))
+                        if journal_path
+                        else str(handler_proc.file_path)
+                    )
+                except ValueError:
+                    rel_file = str(handler_proc.file_path)
 
-                    describe_running = {
-                        "file": rel_file,
-                        "ref": handler_proc.managed.ref,
-                    }
-                    break
+                describe_running = {
+                    "file": rel_file,
+                    "ref": handler_proc.managed.ref,
+                }
 
             # Get queued describes with age
             now = time.time()
@@ -336,10 +324,10 @@ class FileSensor:
                 if describe_queued:
                     status["describe"]["queued"] = describe_queued
 
-            # Collect transcribe info
+            # Collect transcribe info (any running handler that's not describe)
             transcribe_running = []
             for file_path, handler_proc in self.running.items():
-                if handler_proc.handler_name == "transcribe":
+                if handler_proc is not self.current_describe_process:
                     try:
                         rel_file = (
                             str(file_path.relative_to(journal_path))
