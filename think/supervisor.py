@@ -276,8 +276,10 @@ async def clear_notification(alert_key: tuple) -> None:
         logging.error("Failed to clear notification: %s", exc)
 
 
-def run_subprocess_task(name: str, cmd: list[str]) -> bool:
+async def run_subprocess_task(name: str, cmd: list[str]) -> bool:
     """Run a subprocess task while mirroring output to a dedicated log.
+
+    Runs the subprocess in a thread to avoid blocking the async event loop.
 
     Args:
         name: Display name for the task
@@ -286,26 +288,29 @@ def run_subprocess_task(name: str, cmd: list[str]) -> bool:
     Returns:
         True when the subprocess exits successfully.
     """
-    start = time.time()
-    try:
-        managed = RunnerManagedProcess.spawn(cmd)
-        return_code = managed.wait()
-    finally:
-        managed.cleanup()
+    def _blocking_run():
+        start = time.time()
+        try:
+            managed = RunnerManagedProcess.spawn(cmd)
+            return_code = managed.wait()
+        finally:
+            managed.cleanup()
 
-    duration = int(time.time() - start)
-    logging.info(f"{name} finished in {duration} seconds")
-    return return_code == 0
+        duration = int(time.time() - start)
+        logging.info(f"{name} finished in {duration} seconds")
+        return return_code == 0
+
+    return await asyncio.to_thread(_blocking_run)
 
 
-def run_dream() -> bool:
+async def run_dream() -> bool:
     """Run ``think.dream`` while mirroring output to a dedicated log."""
-    return run_subprocess_task("dream", ["think-dream", "-v"])
+    return await run_subprocess_task("dream", ["think-dream", "-v"])
 
 
-def run_facet_rescan() -> bool:
+async def run_facet_rescan() -> bool:
     """Run ``think-indexer --rescan-facets`` while mirroring output to a dedicated log."""
-    return run_subprocess_task("facet_rescan", ["think-indexer", "--rescan-facets"])
+    return await run_subprocess_task("facet_rescan", ["think-indexer", "--rescan-facets"])
 
 
 def spawn_scheduled_agents() -> None:
@@ -346,7 +351,7 @@ def spawn_scheduled_agents() -> None:
         logging.error(f"Failed to prepare scheduled agents: {e}")
 
 
-def check_scheduled_agents() -> None:
+async def check_scheduled_agents() -> None:
     """Check and advance scheduled agent execution (non-blocking).
 
     Called from the main supervise loop to incrementally process priority groups.
@@ -360,7 +365,7 @@ def check_scheduled_agents() -> None:
         if state["rescan_pending"]:
             logging.info("All agent groups completed, running facet rescan...")
             state["rescan_pending"] = False
-            if run_facet_rescan():
+            if await run_facet_rescan():
                 logging.info("Facet rescan completed successfully")
             else:
                 logging.warning("Facet rescan failed or exited with error")
@@ -846,7 +851,7 @@ async def handle_runner_exits(
                 for _ in range(delay):
                     if shutdown_requested:
                         break
-                    time.sleep(1)
+                    await asyncio.sleep(1)
             if shutdown_requested:
                 continue
             logging.info("Restarting %s...", managed.name)
@@ -922,7 +927,7 @@ async def handle_daily_tasks(last_day: datetime.date) -> datetime.date:
     """Run daily processing (dream + scheduled agents). Returns new last_day."""
     today = datetime.now().date()
     if today != last_day:
-        if run_dream():
+        if await run_dream():
             spawn_scheduled_agents()
         return today
     return last_day
@@ -998,7 +1003,7 @@ async def supervise(
                 last_day = await handle_daily_tasks(last_day)
 
             # Advance scheduled agent execution (non-blocking)
-            check_scheduled_agents()
+            await check_scheduled_agents()
 
             # Sleep 1 second before next iteration (responsive to shutdown)
             await asyncio.sleep(1)

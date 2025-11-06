@@ -121,7 +121,8 @@ def test_start_runners(tmp_path, mock_callosum, monkeypatch):
         assert stderr == subprocess.PIPE
 
 
-def test_run_dream(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_run_dream(tmp_path, monkeypatch):
     mod = importlib.import_module("think.supervisor")
     runner_mod = importlib.import_module("think.runner")
 
@@ -174,7 +175,7 @@ def test_run_dream(tmp_path, monkeypatch):
         mod.logging, "info", lambda msg, *a: messages.append(msg % a if a else msg)
     )
 
-    assert mod.run_dream() is True
+    assert await mod.run_dream() is True
 
     assert spawn_calls["name"] == "think-dream"  # Derived from cmd[0]
     assert spawn_calls["cmd"] == ["think-dream", "-v"]
@@ -188,9 +189,13 @@ async def test_supervise_logs_recovery(mock_callosum, monkeypatch, caplog):
     mod.shutdown_requested = False
 
     health_states = [["hear"], []]
-    time_counter = iter(
-        [0.0, 1.0, 2.0, 3.0, 4.0]
-    )  # Incrementing time for health check timing
+    time_counter = {"value": 0.0}  # Use dict to allow mutation in closure
+
+    def fake_time():
+        """Auto-incrementing time mock that won't run out of values."""
+        current = time_counter["value"]
+        time_counter["value"] += 1.0
+        return current
 
     def fake_check_health(threshold):
         state = health_states.pop(0)
@@ -207,14 +212,15 @@ async def test_supervise_logs_recovery(mock_callosum, monkeypatch, caplog):
     async def fake_sleep(_):
         pass
 
+    async def fake_check_scheduled_agents():
+        pass
+
     monkeypatch.setattr(mod, "check_runner_exits", lambda procs: [])
     monkeypatch.setattr(mod, "check_health", fake_check_health)
     monkeypatch.setattr(mod, "send_notification", fake_send_notification)
     monkeypatch.setattr(mod, "clear_notification", fake_clear_notification)
-    monkeypatch.setattr(
-        mod, "check_scheduled_agents", lambda: None
-    )  # Mock scheduled agents
-    monkeypatch.setattr(mod.time, "time", lambda: next(time_counter))
+    monkeypatch.setattr(mod, "check_scheduled_agents", fake_check_scheduled_agents)
+    monkeypatch.setattr(mod.time, "time", fake_time)
     monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
 
     monkeypatch.setenv("JOURNAL_PATH", "/test/journal")
