@@ -438,3 +438,36 @@ def todo_generation_status(day: str):  # type: ignore[override]
         pass
 
     return jsonify({"status": "unknown", "agent_id": agent_id})
+
+
+@bp.route("/todos/<day>/generate-weekly/<facet>", methods=["POST"])
+def generate_weekly_todos(day: str, facet: str):  # type: ignore[override]
+    """Spawn todo_weekly agent for a specific facet."""
+    if not DATE_RE.fullmatch(day):
+        return "", 404
+
+    from muse.cortex_client import cortex_request
+
+    day_date = datetime.strptime(day, "%Y%m%d")
+
+    prompt = f"""Review the past week and generate high-impact todos for {facet} facet.
+
+Current date/time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Target day: {day_date.strftime('%Y-%m-%d')}
+Target facet: {facet}
+Target file: facets/{facet}/todos/{day}.md
+
+Focus on surfacing the most important unfinished work from the past 7 days."""
+
+    try:
+        active_file = cortex_request(
+            prompt=prompt,
+            persona="todo_weekly",
+            backend="openai",
+            config={},
+        )
+        agent_id = Path(active_file).stem.replace("_active", "")
+    except Exception as exc:  # pragma: no cover - network/agent failure
+        return jsonify({"error": f"Failed to spawn agent: {exc}"}), 500
+
+    return jsonify({"agent_id": agent_id, "status": "started"})

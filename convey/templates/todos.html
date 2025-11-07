@@ -127,7 +127,6 @@
 }
 
 .facet-count {
-  margin-left: auto;
   font-size: 1.1rem;
 }
 
@@ -272,6 +271,33 @@
   border: 1px solid #fecaca;
 }
 
+.facet-generate-btn {
+  text-decoration: none;
+  font-size: 1.1rem;
+  margin-left: auto;
+  margin-right: 0.5rem;
+  transition: transform 0.2s;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.facet-generate-btn:hover {
+  transform: scale(1.2);
+}
+
+.facet-generate-btn.generating {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.facet-generate-btn.completed {
+  animation: none;
+}
+
 @media (hover: none), (pointer: coarse) {
   .todo-actions {
     opacity: 1;
@@ -340,6 +366,11 @@
       <div class="facet-section" data-facet="{{ facet_name }}">
         <div class="facet-header" style="border-color: {{ facet_color }};">
           <h2 class="facet-title">{{ facet_title }}</h2>
+          <a href="#"
+             class="facet-generate-btn"
+             data-facet="{{ facet_name }}"
+             data-day="{{ day }}"
+             title="Generate weekly todos with AI">✨</a>
           <span class="facet-count">{{ count_emoji }}</span>
         </div>
 
@@ -945,6 +976,68 @@ document.addEventListener('DOMContentLoaded', function() {
   // Auto-focus add input
   const addInput = document.querySelector('.add-form input[name="text"]');
   addInput?.focus();
+
+  // Listen for cortex events (agent completion)
+  appEvents.listen('cortex', msg => {
+    // Find button by agent_id
+    const btn = document.querySelector(`.facet-generate-btn[data-agent-id="${msg.agent_id}"]`);
+    if (!btn) return;
+
+    if (msg.event === 'finish') {
+      // Agent completed successfully
+      btn.textContent = '✅';
+      btn.classList.remove('generating');
+      btn.classList.add('completed');
+    } else if (msg.event === 'error') {
+      // Agent failed
+      btn.textContent = '✨';
+      btn.classList.remove('generating');
+      delete btn.dataset.agentId;
+      alert('Todo generation failed: ' + (msg.error || 'Unknown error'));
+    }
+  });
+
+  // Handle weekly todo generation buttons
+  document.querySelectorAll('.facet-generate-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const day = btn.dataset.day;
+      const facet = btn.dataset.facet;
+
+      // If already has agent_id, navigate to agents page
+      if (btn.dataset.agentId) {
+        window.location.href = btn.href;
+        return;
+      }
+
+      // Start generation
+      btn.textContent = '⏳';
+      btn.classList.add('generating');
+
+      try {
+        const response = await fetch(`/todos/${day}/generate-weekly/${facet}`, {
+          method: 'POST'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to start generation');
+        }
+
+        const data = await response.json();
+
+        // Store agent_id for event matching and navigation
+        btn.dataset.agentId = data.agent_id;
+        btn.href = `/agents#${data.agent_id}`;
+
+      } catch (error) {
+        alert('Failed to start todo generation');
+        btn.textContent = '✨';
+        btn.classList.remove('generating');
+      }
+    });
+  });
 });
 </script>
 {% endblock %}
