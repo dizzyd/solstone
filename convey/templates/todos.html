@@ -355,7 +355,9 @@
       {% set facet_color = facet_info.get('color', '#6b7280') %}
       {% set incomplete_count = facet_todos | selectattr('completed', 'equalto', false) | list | length %}
       {% set total_count = facet_todos | length %}
-      {% if incomplete_count == 0 %}
+      {% if total_count == 0 %}
+        {% set count_emoji = '0️⃣' %}
+      {% elif incomplete_count == 0 %}
         {% set count_emoji = '✅' %}
       {% elif incomplete_count < 10 %}
         {% set count_emoji = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'][incomplete_count] %}
@@ -495,14 +497,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!countSpan) return;
 
     const todoRows = Array.from(facetSection.querySelectorAll('[data-todo-row]'));
+    const totalCount = todoRows.length;
     const incompleteCount = todoRows.filter(row => !row.classList.contains('completed')).length;
 
     const emojis = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
 
     const wasAllComplete = countSpan.textContent === '✅';
-    const isAllComplete = incompleteCount === 0;
+    const isEmpty = totalCount === 0;
+    const isAllComplete = incompleteCount === 0 && totalCount > 0;
 
-    if (isAllComplete) {
+    if (isEmpty) {
+      countSpan.textContent = '0️⃣';
+    } else if (isAllComplete) {
       countSpan.textContent = '✅';
       // Auto-collapse when all items are done
       if (!wasAllComplete) {
@@ -520,14 +526,15 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.facet-section').forEach(section => {
     const facet = section.dataset.facet;
 
-    // Check if all items in this facet are completed
+    // Check if all items in this facet are completed or if facet is empty
     const countSpan = section.querySelector('.facet-count');
     const isAllComplete = countSpan && countSpan.textContent === '✅';
+    const isEmpty = countSpan && countSpan.textContent === '0️⃣';
 
-    // Collapse if: (1) stored as collapsed, OR (2) all items are complete
-    if (collapsedState[facet] || isAllComplete) {
+    // Collapse if: (1) stored as collapsed, OR (2) all items are complete, OR (3) facet is empty
+    if (collapsedState[facet] || isAllComplete || isEmpty) {
       section.classList.add('collapsed');
-      if (isAllComplete && !collapsedState[facet]) {
+      if ((isAllComplete || isEmpty) && !collapsedState[facet]) {
         // Save the auto-collapsed state
         collapsedState[facet] = true;
         saveCollapsedState(collapsedState);
@@ -610,14 +617,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const facetSection = todoRow.closest('.facet-section');
         todoRow.remove();
 
-        // Check if facet section is now empty and remove it if so
-        const todoList = facetSection?.querySelector('.todo-list');
-        if (todoList && todoList.children.length === 0) {
-          if (facetSection) {
-            facetSection.remove();
-          }
-        } else if (facetSection) {
-          // Update the count emoji
+        // Update the count emoji (facet will now show ➕ if empty)
+        if (facetSection) {
           updateFacetCount(facetSection);
         }
       }, 200);
@@ -742,14 +743,8 @@ document.addEventListener('DOMContentLoaded', function() {
               });
             }
 
-            // Check if facet section is now empty and remove it if so
-            const todoList = facetSection?.querySelector('.todo-list');
-            if (todoList && todoList.children.length === 0) {
-              if (facetSection) {
-                facetSection.remove();
-              }
-            } else if (facetSection) {
-              // Update the count emoji
+            // Update the count emoji (facet will now show ➕ if empty)
+            if (facetSection) {
               updateFacetCount(facetSection);
             }
           }, 200);

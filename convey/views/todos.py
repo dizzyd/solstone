@@ -199,7 +199,7 @@ def todos_day(day: str):  # type: ignore[override]
         current_app.logger.debug("Failed to load facet metadata: %s", exc)
         facet_map = {}
 
-    # Collect todos from each facet
+    # Collect todos from each facet (including empty facets)
     todos_by_facet = {}
     for facet_name in facet_map.keys():
         facet_todos = get_todos(day, facet_name)
@@ -207,20 +207,25 @@ def todos_day(day: str):  # type: ignore[override]
             # Add facet info to each todo
             for todo in facet_todos:
                 todo["facet"] = facet_name
-            todos_by_facet[facet_name] = facet_todos
+        else:
+            facet_todos = []
+        todos_by_facet[facet_name] = facet_todos
 
     # Sort facets for initial page load:
     # 1. Facets with incomplete items first, sorted by incomplete count (descending)
-    # 2. Fully completed facets last, sorted alphabetically
+    # 2. Fully completed facets next, sorted alphabetically
+    # 3. Empty facets last, sorted alphabetically
     def facet_sort_key(item):
         facet_name, facet_todos = item
         incomplete_count = sum(1 for todo in facet_todos if not todo.get("completed"))
-        all_complete = incomplete_count == 0
-        # Return tuple: (all_complete, -incomplete_count, facet_name)
-        # all_complete=False sorts before all_complete=True
+        has_no_todos = len(facet_todos) == 0
+        all_complete = incomplete_count == 0 and len(facet_todos) > 0
+        # Return tuple: (has_no_todos, all_complete, -incomplete_count, facet_name)
+        # has_no_todos=False sorts before has_no_todos=True (empty facets last)
+        # all_complete=False sorts before all_complete=True (incomplete before complete)
         # -incomplete_count sorts higher counts first
         # facet_name for alphabetical tie-breaking
-        return (all_complete, -incomplete_count, facet_name)
+        return (has_no_todos, all_complete, -incomplete_count, facet_name)
 
     sorted_todos_by_facet = dict(sorted(todos_by_facet.items(), key=facet_sort_key))
 
