@@ -478,8 +478,10 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
             day_str = part
             # Check if previous part (parent dir) is HHMMSS period
             if i > 0:
+                from think.utils import period_name
+
                 prev_part = list(reversed(parts))[i - 1]
-                if re.match(r"^\d{6}$", prev_part):
+                if period_name(prev_part):
                     time_str = prev_part
             break
 
