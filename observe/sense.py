@@ -84,6 +84,10 @@ class FileSensor:
 
     def _match_pattern(self, file_path: Path) -> Optional[tuple[str, List[str]]]:
         """Check if file matches any registered pattern."""
+        # Ignore hidden files (temp recordings with dot prefix)
+        if file_path.name.startswith('.'):
+            return None
+
         # Ignore files in subdirectories (periods, trash/)
         # Expected structure: journal_dir/YYYYMMDD/file.ext (2 parts from journal_dir)
         # Reject: journal_dir/YYYYMMDD/HHMMSS/file.ext (3+ parts from journal_dir)
@@ -362,11 +366,17 @@ class FileSensor:
 
             def on_created(self, event):
                 if not event.is_directory:
-                    self.sensor._handle_file(Path(event.src_path))
+                    path = Path(event.src_path)
+                    # Ignore hidden files (temp recordings)
+                    if not path.name.startswith('.'):
+                        self.sensor._handle_file(path)
 
             def on_moved(self, event):
                 if not event.is_directory:
-                    self.sensor._handle_file(Path(event.dest_path))
+                    path = Path(event.dest_path)
+                    # Ignore hidden files (temp recordings)
+                    if not path.name.startswith('.'):
+                        self.sensor._handle_file(path)
 
         event_handler = SensorEventHandler(self)
 

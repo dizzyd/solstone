@@ -57,8 +57,8 @@ class Observer:
         self.threshold_hits = 0
         self.accumulated_audio_buffer = np.array([], dtype=np.float32).reshape(0, 2)
         self.screencast_running = False
-        self.current_screencast_path = None  # Live path (_live.webm) of current screencast
-        self.pending_finalization = None  # Tuple of (live_path, final_path) awaiting finalization
+        self.current_screencast_path = None  # Temp path (.HHMMSS.webm) of current screencast
+        self.pending_finalization = None  # Tuple of (temp_path, final_path) awaiting finalization
         self.last_screencast_size = 0  # Track file size for health checks
 
         # Activity status cache (updated each loop)
@@ -170,13 +170,13 @@ class Observer:
 
         # Handle screencast rollover
         did_stop = False
-        previous_live_path = None
+        previous_temp_path = None
         previous_final_path = None
 
         if self.screencast_running:
             logger.info("Stopping previous screencast")
             await self.screencaster.stop()
-            previous_live_path = self.current_screencast_path
+            previous_temp_path = self.current_screencast_path
             # Calculate final path with duration
             previous_final_path = str(day_dir / f"{time_part}_{duration}_screen.webm")
             self.screencast_running = False
@@ -194,8 +194,8 @@ class Observer:
             await self.initialize_screencast()
 
         # Queue previous screencast for finalization (file may not exist yet)
-        if did_stop and previous_live_path and previous_final_path:
-            self.pending_finalization = (previous_live_path, previous_final_path)
+        if did_stop and previous_temp_path and previous_final_path:
+            self.pending_finalization = (previous_temp_path, previous_final_path)
 
         # Emit window_complete with what we saved this boundary
         files = []
@@ -226,16 +226,16 @@ class Observer:
         date_part, time_part = self.get_timestamp_parts(self.start_at)
         day_dir = day_path(date_part)
 
-        # Use _live.webm name temporarily - will be renamed with duration at boundary
-        live_path = str(day_dir / f"{time_part}_live.webm")
+        # Use hidden file (.HHMMSS.webm) to avoid triggering file watchers until complete
+        temp_path = str(day_dir / f".{time_part}.webm")
 
-        ok, _ = await self.screencaster.start(live_path, framerate=1, draw_cursor=True)
+        ok, _ = await self.screencaster.start(temp_path, framerate=1, draw_cursor=True)
         if ok:
             self.screencast_running = True
-            # Store the live path (duration unknown until boundary)
-            self.current_screencast_path = live_path
+            # Store the temp path (duration unknown until boundary)
+            self.current_screencast_path = temp_path
             self.last_screencast_size = 0
-            logger.info(f"Started new screencast: {live_path}")
+            logger.info(f"Started new screencast: {temp_path}")
             return True
         else:
             logger.warning("Failed to start screencast")
@@ -286,17 +286,17 @@ class Observer:
             activity=activity_info,
         )
 
-    async def finalize_screencast(self, live_path: str, final_path: str):
+    async def finalize_screencast(self, temp_path: str, final_path: str):
         """
-        Add monitor metadata to screencast and rename from _live.webm to final name.
+        Add monitor metadata to screencast and rename from hidden file to final name.
 
         Args:
-            live_path: Temporary live path (_live.webm)
+            temp_path: Temporary hidden path (.HHMMSS.webm)
             final_path: Final destination path with duration (HHMMSS_LEN_screen.webm)
         """
 
-        if not os.path.exists(live_path):
-            logger.warning(f"Screencast file not found: {live_path}")
+        if not os.path.exists(temp_path):
+            logger.warning(f"Screencast file not found: {temp_path}")
             return
 
         # Build monitor geometry metadata
@@ -314,7 +314,7 @@ class Observer:
             subprocess.run(
                 [
                     "mkvpropedit",
-                    live_path,
+                    temp_path,
                     "--edit",
                     "info",
                     "--set",
@@ -324,7 +324,7 @@ class Observer:
                 capture_output=True,
                 text=True,
             )
-            logger.debug(f"Added monitor metadata to {live_path}")
+            logger.debug(f"Added monitor metadata to {temp_path}")
         except subprocess.CalledProcessError as e:
             logger.warning(f"Failed to update video title: {e.stderr}")
         except FileNotFoundError:
@@ -334,10 +334,10 @@ class Observer:
 
         # Atomically rename to final destination
         try:
-            os.replace(live_path, final_path)
+            os.replace(temp_path, final_path)
             logger.info(f"Finalized screencast: {final_path}")
         except OSError as e:
-            logger.error(f"Failed to rename {live_path} to {final_path}: {e}")
+            logger.error(f"Failed to rename {temp_path} to {final_path}: {e}")
 
     async def main_loop(self):
         """Run the main observer loop."""
@@ -354,12 +354,12 @@ class Observer:
 
             # Process pending screencast finalization
             if self.pending_finalization:
-                live_path, final_path = self.pending_finalization
-                if os.path.exists(live_path):
-                    await self.finalize_screencast(live_path, final_path)
+                temp_path, final_path = self.pending_finalization
+                if os.path.exists(temp_path):
+                    await self.finalize_screencast(temp_path, final_path)
                     self.pending_finalization = None
                 else:
-                    logger.warning(f"Pending screencast not found: {live_path}")
+                    logger.warning(f"Pending screencast not found: {temp_path}")
                     self.pending_finalization = None
 
             # Check activity status
@@ -410,11 +410,8 @@ class Observer:
                 touch_health("see")
             elif self.screencast_running and self.current_screencast_path:
                 # Check if recording file exists and is growing
-                live_path = self.current_screencast_path.replace(
-                    "_screen.webm", "_live.webm"
-                )
-                if os.path.exists(live_path):
-                    current_size = os.path.getsize(live_path)
+                if os.path.exists(self.current_screencast_path):
+                    current_size = os.path.getsize(self.current_screencast_path)
                     if current_size > self.last_screencast_size:
                         touch_health("see")
                         self.last_screencast_size = current_size
@@ -451,29 +448,29 @@ class Observer:
             if self.current_screencast_path:
                 # Wait 1s for GNOME Shell to create the file
                 await asyncio.sleep(1.0)
-                live_path = self.current_screencast_path
+                temp_path = self.current_screencast_path
                 # Calculate final path with duration
                 duration = int(time.time() - self.start_at)
                 date_part, time_part = self.get_timestamp_parts(self.start_at)
                 day_dir = day_path(date_part)
                 final_path = str(day_dir / f"{time_part}_{duration}_screen.webm")
-                if os.path.exists(live_path):
-                    await self.finalize_screencast(live_path, final_path)
+                if os.path.exists(temp_path):
+                    await self.finalize_screencast(temp_path, final_path)
                 else:
                     logger.warning(
-                        f"Screencast file not found after shutdown: {live_path}"
+                        f"Screencast file not found after shutdown: {temp_path}"
                     )
             self.screencast_running = False
 
         # Process any remaining pending finalization
         if self.pending_finalization:
             await asyncio.sleep(1.0)
-            live_path, final_path = self.pending_finalization
-            if os.path.exists(live_path):
-                await self.finalize_screencast(live_path, final_path)
+            temp_path, final_path = self.pending_finalization
+            if os.path.exists(temp_path):
+                await self.finalize_screencast(temp_path, final_path)
             else:
                 logger.warning(
-                    f"Pending screencast not found after shutdown: {live_path}"
+                    f"Pending screencast not found after shutdown: {temp_path}"
                 )
 
         # Stop audio recorder
