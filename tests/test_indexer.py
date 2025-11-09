@@ -77,8 +77,10 @@ def test_raw_index(tmp_path):
     os.environ["JOURNAL_PATH"] = str(journal)
     day = journal / "20240103"
     day.mkdir()
-    # Write JSONL format: metadata first, then entries
-    (day / "123000_audio.jsonl").write_text(
+    # Write JSONL format: metadata first, then entries in timestamp directory
+    ts_dir = day / "123000"
+    ts_dir.mkdir()
+    (ts_dir / "audio.jsonl").write_text(
         json.dumps({"topics": ["hi"], "setting": "personal"})
         + "\n"
         + json.dumps(
@@ -86,13 +88,18 @@ def test_raw_index(tmp_path):
         )
         + "\n"
     )
-    (day / "123000_monitor_1_diff.json").write_text(
-        json.dumps(
+    # Write screen.jsonl instead of legacy format
+    (ts_dir / "screen.jsonl").write_text(
+        '{"raw": "screen.webm"}\n'
+        + json.dumps(
             {
-                "visual_description": "screen",
-                "full_ocr": "some ocr",
+                "frame_id": 1,
+                "timestamp": 1.0,
+                "analysis": {"visual_description": "screen"},
+                "extracted_text": "some ocr",
             }
         )
+        + "\n"
     )
     mod.scan_transcripts(str(journal), verbose=True)
     total, results = mod.search_transcripts("hello")
@@ -133,8 +140,10 @@ def test_search_raws_day(tmp_path):
 
     day1 = journal / "20240105"
     day1.mkdir()
-    # Write JSONL format: metadata first, then entries
-    (day1 / "123000_audio.jsonl").write_text(
+    # Write JSONL format: metadata first, then entries in timestamp directory
+    ts_dir1 = day1 / "123000"
+    ts_dir1.mkdir()
+    (ts_dir1 / "audio.jsonl").write_text(
         json.dumps({"topics": ["hi"], "setting": "personal"})
         + "\n"
         + json.dumps(
@@ -145,8 +154,10 @@ def test_search_raws_day(tmp_path):
 
     day2 = journal / "20240106"
     day2.mkdir()
-    # Write JSONL format: metadata first, then entries
-    (day2 / "090000_audio.jsonl").write_text(
+    # Write JSONL format: metadata first, then entries in timestamp directory
+    ts_dir2 = day2 / "090000"
+    ts_dir2.mkdir()
+    (ts_dir2 / "audio.jsonl").write_text(
         json.dumps({"topics": ["hi"], "setting": "personal"})
         + "\n"
         + json.dumps(
@@ -172,8 +183,10 @@ def test_search_raws_time_order(tmp_path):
 
     day = journal / "20240107"
     day.mkdir()
-    # Write JSONL format: metadata first, then entries
-    (day / "090000_audio.jsonl").write_text(
+    # Write JSONL format: metadata first, then entries in timestamp directories
+    ts_dir1 = day / "090000"
+    ts_dir1.mkdir()
+    (ts_dir1 / "audio.jsonl").write_text(
         json.dumps({"topics": ["hi"], "setting": "personal"})
         + "\n"
         + json.dumps(
@@ -182,7 +195,9 @@ def test_search_raws_time_order(tmp_path):
         + "\n"
     )
     # Write JSONL format: metadata first, then entries
-    (day / "123000_audio.jsonl").write_text(
+    ts_dir2 = day / "123000"
+    ts_dir2.mkdir()
+    (ts_dir2 / "audio.jsonl").write_text(
         json.dumps({"topics": ["hi"], "setting": "personal"})
         + "\n"
         + json.dumps(

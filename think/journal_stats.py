@@ -36,8 +36,13 @@ class JournalStats:
     def _get_day_mtime(self, day_dir: Path) -> float:
         """Get latest modification time of files we scan."""
         files = []
-        files.extend(day_dir.glob("*_audio.jsonl"))
-        files.extend(day_dir.glob("*_screen.jsonl"))
+        # Check timestamp subdirectories for processed files
+        files.extend(day_dir.glob("*/audio.jsonl"))
+        files.extend(day_dir.glob("*/*_audio.jsonl"))  # Split audio files
+        files.extend(day_dir.glob("*/screen.jsonl"))
+        files.extend(day_dir.glob("*/raw.flac"))
+        files.extend(day_dir.glob("*/screen.webm"))
+        # Check day root for unprocessed files
         files.extend(day_dir.glob("*_raw.flac"))
         files.extend(day_dir.glob("*_raw.m4a"))
         files.extend(day_dir.glob("*_screen.webm"))
@@ -162,7 +167,10 @@ class JournalStats:
         heatmap_hours = {}
 
         # --- Audio sessions ---
-        for jsonl_file in sorted(day_dir.glob("*_audio.jsonl")):
+        # Check timestamp subdirectories for audio files
+        audio_files = list(day_dir.glob("*/audio.jsonl"))
+        audio_files.extend(day_dir.glob("*/*_audio.jsonl"))  # Split audio files
+        for jsonl_file in sorted(audio_files):
             stats["audio_sessions"] += 1
 
             try:
@@ -195,7 +203,8 @@ class JournalStats:
                 logger.warning(f"Unexpected error processing {jsonl_file}: {e}")
 
         # --- Screen sessions ---
-        for jsonl_file in sorted(day_dir.glob("*_screen.jsonl")):
+        # Check timestamp subdirectories for screen files
+        for jsonl_file in sorted(day_dir.glob("*/screen.jsonl")):
             stats["screen_sessions"] += 1
 
             try:

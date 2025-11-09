@@ -84,9 +84,9 @@ class FileSensor:
 
     def _match_pattern(self, file_path: Path) -> Optional[tuple[str, List[str]]]:
         """Check if file matches any registered pattern."""
-        # Ignore files in subdirectories (heard/, trash/)
+        # Ignore files in subdirectories (timestamp dirs, trash/)
         # Expected structure: journal_dir/YYYYMMDD/file.ext (2 parts from journal_dir)
-        # Reject: journal_dir/YYYYMMDD/heard/file.ext (3+ parts from journal_dir)
+        # Reject: journal_dir/YYYYMMDD/HHMMSS/file.ext (3+ parts from journal_dir)
         try:
             rel_path = file_path.relative_to(self.journal_dir)
             if len(rel_path.parts) != 2:
@@ -451,7 +451,7 @@ class FileSensor:
         """Process all matching unprocessed files from a specific day directory.
 
         Files are considered unprocessed if the source media file has not been
-        moved to seen/ or heard/ subdirectories. This approach handles incomplete
+        moved to timestamp subdirectories (HHMMSS/). This approach handles incomplete
         processing gracefully by re-running even if output files exist.
 
         Also finds JSONL files without corresponding MD files and runs reduce on them.
@@ -465,7 +465,7 @@ class FileSensor:
             logger.error(f"Day directory not found: {day_dir}")
             return
 
-        # Find all matching unprocessed files (not yet moved to seen/heard)
+        # Find all matching unprocessed files (not yet moved to timestamp dirs)
         to_process = []
         for file_path in day_dir.iterdir():
             if file_path.is_file():

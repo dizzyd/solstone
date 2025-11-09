@@ -344,9 +344,9 @@ Common actions include:
 
 Audio capture tools write FLAC files and transcripts:
 
-- `HHMMSS_raw.flac` – mixed audio file, moved to `heard/` after transcription.
-- `heard/HHMMSS_raw.flac` – audio files moved here after processing.
-- `HHMMSS_audio.jsonl` – transcript JSONL produced by transcription.
+- `HHMMSS_raw.flac` – mixed audio file in day root, moved to `HHMMSS/` after transcription.
+- `HHMMSS/raw.flac` – audio files moved here after processing.
+- `HHMMSS/audio.jsonl` – transcript JSONL produced by transcription.
 
 ### Audio transcript output
 
@@ -355,7 +355,7 @@ The transcript file (`*_audio.jsonl`) contains a metadata line followed by one J
 Example transcript file:
 
 ```jsonl
-{"raw": "heard/123456_audio.flac", "topics": ["authentication", "testing", "planning"], "setting": "workplace"}
+{"raw": "raw.flac", "topics": ["authentication", "testing", "planning"], "setting": "workplace"}
 {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "So we need to finalize the authentication module today.", "description": "professional tone"}
 {"start": "00:00:15", "source": "sys", "speaker": "Alice", "text": "I agree. [clears throat] Let's make sure we have proper unit tests.", "description": "thoughtful, slightly hesitant"}
 ```
@@ -378,10 +378,10 @@ Example transcript file:
 
 Screen capture produces screencast videos with multi-monitor metadata:
 
-- `HHMMSS_screen.webm` – screencast video file, moved to `seen/` after processing.
-- `seen/HHMMSS_screen.webm` – video files moved here after analysis.
-- `HHMMSS_screen.jsonl` – vision analysis results in JSON Lines format.
-- `HHMMSS_screen.md` – human-readable markdown summary of the video.
+- `HHMMSS_screen.webm` – screencast video file in day root, moved to `HHMMSS/` after processing.
+- `HHMMSS/screen.webm` – video files moved here after analysis.
+- `HHMMSS/screen.jsonl` – vision analysis results in JSON Lines format.
+- `HHMMSS/screen.md` – human-readable markdown summary of the video.
 
 ### Screencast video format
 

@@ -510,17 +510,18 @@ class VideoProcessor:
         contents.append(image)
         return contents
 
-    def _move_to_seen(self, media_path: Path) -> Path:
-        """Move processed media file to seen/ subdirectory."""
-        seen_dir = media_path.parent / "seen"
+    def _move_to_timestamp_dir(self, media_path: Path) -> Path:
+        """Move media file to timestamp directory and return new path."""
+        time_part = media_path.stem.split("_")[0]  # Extract HHMMSS
+        ts_dir = media_path.parent / time_part
         try:
-            seen_dir.mkdir(exist_ok=True)
-            new_path = seen_dir / media_path.name
+            ts_dir.mkdir(exist_ok=True)
+            new_path = ts_dir / "screen.webm"
             media_path.rename(new_path)
-            logger.info(f"Moved {media_path} to {seen_dir}")
+            logger.info(f"Moved {media_path} to {ts_dir}")
             return new_path
         except Exception as exc:
-            logger.error(f"Failed to move {media_path} to seen: {exc}")
+            logger.error(f"Failed to move {media_path} to timestamp dir: {exc}")
             return media_path
 
     def _create_crumb(
@@ -605,7 +606,7 @@ class VideoProcessor:
 
         # Write metadata header to JSONL file
         if output_file:
-            metadata = {"raw": f"seen/{self.video_path.name}"}
+            metadata = {"raw": "screen.webm"}
             output_file.write(json.dumps(metadata) + "\n")
             output_file.flush()
 
@@ -835,7 +836,7 @@ class VideoProcessor:
         all_failed = total_frames > 0 and failed_frames == total_frames
 
         if all_failed:
-            # Don't move video to seen/ - leave for retry
+            # Don't move video to timestamp dir - leave for retry
             error_detail = (
                 f"Error details in {output_path}" if output_path else "No output file"
             )
@@ -850,14 +851,14 @@ class VideoProcessor:
                 f"All {total_frames} frame(s) failed vision analysis after retries"
             )
         else:
-            # At least some frames succeeded - move to seen/ and create crumb
+            # At least some frames succeeded - move to timestamp dir and create crumb
             if failed_frames > 0:
                 logger.warning(
                     f"{failed_frames}/{total_frames} frame(s) failed processing. "
-                    f"Moving video to seen/ anyway."
+                    f"Moving video to timestamp dir anyway."
                 )
             if output_path:
-                moved_path = self._move_to_seen(self.video_path)
+                moved_path = self._move_to_timestamp_dir(self.video_path)
                 self._create_crumb(output_path, moved_path, used_prompts, used_models)
 
         # Clear qualified_frames to free memory
@@ -939,7 +940,11 @@ async def async_main():
     # Determine output path and warn if overwriting
     output_path = None
     if not args.frames_only:
-        output_path = video_path.parent / f"{video_path.stem}.jsonl"
+        # Extract timestamp and create output in timestamp directory
+        time_part = video_path.stem.split("_")[0]  # Extract HHMMSS
+        ts_dir = video_path.parent / time_part
+        ts_dir.mkdir(exist_ok=True)
+        output_path = ts_dir / "screen.jsonl"
         if output_path.exists():
             logger.warning(f"Overwriting existing analysis file: {output_path}")
 
@@ -966,13 +971,15 @@ async def async_main():
             # Emit completion event
             if output_path and output_path.exists():
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
-                seen_path = video_path.parent / "seen" / video_path.name
+                # Moved path is in timestamp directory: YYYYMMDD/HHMMSS/screen.webm
+                time_part = video_path.stem.split("_")[0]
+                moved_path = video_path.parent / time_part / "screen.webm"
 
                 try:
-                    rel_input = seen_path.relative_to(journal_path)
+                    rel_input = moved_path.relative_to(journal_path)
                     rel_output = output_path.relative_to(journal_path)
                 except ValueError:
-                    rel_input = seen_path
+                    rel_input = moved_path
                     rel_output = output_path
 
                 duration_ms = int((time.time() - start_time) * 1000)

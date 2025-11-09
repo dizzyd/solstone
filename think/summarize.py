@@ -281,8 +281,9 @@ def main() -> None:
             crumb_builder = (
                 CrumbBuilder()
                 .add_file(str(topic_prompt.path))
-                .add_glob(os.path.join(day_dir, "*_audio.jsonl"))
-                .add_glob(os.path.join(day_dir, "*_screen.md"))
+                .add_glob(os.path.join(day_dir, "*/audio.jsonl"))
+                .add_glob(os.path.join(day_dir, "*/*_audio.jsonl"))  # Split audio
+                .add_glob(os.path.join(day_dir, "*/screen.md"))
                 .add_model(model)
             )
             crumb_path = crumb_builder.commit(str(md_path))

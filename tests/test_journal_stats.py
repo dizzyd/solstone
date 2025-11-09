@@ -8,14 +8,16 @@ def test_scan_day(tmp_path, monkeypatch):
     day = journal / "20240101"
     day.mkdir()
 
-    # Create an audio jsonl file
-    (day / "123456_audio.jsonl").write_text(
-        '{"raw": "heard/123456_audio.flac"}\n'
+    # Create an audio jsonl file in timestamp directory
+    ts_dir = day / "123456"
+    ts_dir.mkdir()
+    (ts_dir / "audio.jsonl").write_text(
+        '{"raw": "raw.flac"}\n'
         '{"start": "10:00:00", "text": "hello"}\n'
         '{"start": "10:01:00", "text": "world"}\n'
     )
 
-    # Create an unprocessed file
+    # Create an unprocessed file (remains in day root)
     (day / "123456_raw.flac").write_bytes(b"RIFF")
 
     (day / "entities.md").write_text("")
@@ -172,9 +174,11 @@ def test_caching(tmp_path, monkeypatch):
     day = journal / "20240101"
     day.mkdir()
 
-    # Create an audio jsonl file
-    (day / "123456_audio.jsonl").write_text(
-        '{"raw": "heard/123456_audio.flac"}\n'
+    # Create an audio jsonl file in timestamp directory
+    ts_dir = day / "123456"
+    ts_dir.mkdir()
+    (ts_dir / "audio.jsonl").write_text(
+        '{"raw": "raw.flac"}\n'
         '{"start": "10:00:00", "text": "hello"}\n'
         '{"start": "10:01:00", "text": "world"}\n'
     )

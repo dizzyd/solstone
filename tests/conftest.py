@@ -183,9 +183,9 @@ def add_module_stubs(request, monkeypatch):
 
         def scan_day(day_dir):
             # Stub matching real scan_day behavior:
-            # - "raw": processed files in heard/ and seen/ subdirs
-            # - "processed": output JSON files in day root
-            # - "repairable": source media files in day root without matching JSON
+            # - "raw": processed files in timestamp subdirectories
+            # - "processed": output JSON files in timestamp subdirectories
+            # - "repairable": source media files in day root without matching timestamp dir
             from pathlib import Path
 
             day_path = Path(day_dir)
@@ -194,39 +194,43 @@ def add_module_stubs(request, monkeypatch):
             repairable_files = []
 
             if day_path.is_dir():
-                # Find raw (processed) files in heard/ and seen/ subdirectories
-                heard_dir = day_path / "heard"
-                if heard_dir.is_dir():
-                    for p in heard_dir.glob("*.flac"):
-                        raw_files.append(f"heard/{p.name}")
-                    for p in heard_dir.glob("*.m4a"):
-                        raw_files.append(f"heard/{p.name}")
+                # Find raw (processed) files in timestamp subdirectories (HHMMSS/)
+                for item in day_path.iterdir():
+                    if item.is_dir() and item.name.isdigit() and len(item.name) == 6:
+                        # Found timestamp directory
+                        for p in item.glob("*.flac"):
+                            raw_files.append(f"{item.name}/{p.name}")
+                        for p in item.glob("*.m4a"):
+                            raw_files.append(f"{item.name}/{p.name}")
+                        for p in item.glob("*.webm"):
+                            raw_files.append(f"{item.name}/{p.name}")
+                        for p in item.glob("*.mp4"):
+                            raw_files.append(f"{item.name}/{p.name}")
 
-                seen_dir = day_path / "seen"
-                if seen_dir.is_dir():
-                    for p in seen_dir.glob("*.webm"):
-                        raw_files.append(f"seen/{p.name}")
-                    for p in seen_dir.glob("*.mp4"):
-                        raw_files.append(f"seen/{p.name}")
+                # Find processed output files in timestamp subdirectories
+                for item in day_path.iterdir():
+                    if item.is_dir() and item.name.isdigit() and len(item.name) == 6:
+                        for p in item.glob("*audio.jsonl"):
+                            processed_files.append(f"{item.name}/{p.name}")
+                        for p in item.glob("*screen.jsonl"):
+                            processed_files.append(f"{item.name}/{p.name}")
 
-                # Find processed output files in day root
-                for p in day_path.glob("*_audio.jsonl"):
-                    processed_files.append(p.name)
-                for p in day_path.glob("*_screen.jsonl"):
-                    processed_files.append(p.name)
-
-                # Find repairable files (source media in root without matching JSONL)
+                # Find repairable files (source media in root without matching timestamp dir)
                 for audio_ext in ["*.flac", "*.m4a"]:
                     for p in day_path.glob(audio_ext):
-                        json_file = p.with_name(p.stem + "_audio.jsonl")
-                        if not json_file.exists():
-                            repairable_files.append(p.name)
+                        if "_" in p.stem:
+                            time_part = p.stem.split("_")[0]
+                            ts_dir = day_path / time_part
+                            if not ts_dir.exists():
+                                repairable_files.append(p.name)
 
                 for video_ext in ["*.webm", "*.mp4"]:
                     for p in day_path.glob(video_ext):
-                        jsonl_file = p.with_name(p.stem + "_screen.jsonl")
-                        if not jsonl_file.exists():
-                            repairable_files.append(p.name)
+                        if "_" in p.stem:
+                            time_part = p.stem.split("_")[0]
+                            ts_dir = day_path / time_part
+                            if not ts_dir.exists():
+                                repairable_files.append(p.name)
 
             return {
                 "raw": raw_files,

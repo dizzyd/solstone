@@ -31,119 +31,98 @@ def _load_entries(
 ) -> List[Dict[str, str]]:
     date_str = _date_str(day_dir)
     entries: List[Dict[str, str]] = []
-    for filename in os.listdir(day_dir):
-        match = None
-        prefix = None
-        monitor: Optional[str] = None
-        source: Optional[str] = None
-        ident: Optional[str] = None
+    day_path_obj = Path(day_dir)
 
-        if audio and (match := AUDIO_PATTERN.match(filename)):
-            time_part = match.group(1)
-            prefix = "audio"
-            path = os.path.join(day_dir, filename)
-
-            # Load JSONL format using shared utility
-            from observe.hear import load_transcript
-
-            metadata, transcript_entries, formatted_text = load_transcript(path)
-            if transcript_entries is None:
-                print(
-                    f"Warning: Could not load transcript {filename}: {metadata.get('error')}",
-                    file=sys.stderr,
-                )
-                continue
-
-            # Use formatted text for human-readable display
-            timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
-            entries.append(
-                {
-                    "timestamp": timestamp,
-                    "prefix": prefix,
-                    "content": formatted_text,
-                    "monitor": None,
-                    "source": None,
-                    "id": None,
-                    "name": filename,
-                }
-            )
+    # Check timestamp subdirectories for transcript files
+    for item in day_path_obj.iterdir():
+        if not (item.is_dir() and item.name.isdigit() and len(item.name) == 6):
             continue
-        elif screen_mode == "summary" and (
-            match := SCREEN_SUMMARY_PATTERN.match(filename)
-        ):
-            time_part = match.group(1)
-            prefix = "screen"
-        elif screen_mode == "raw" and (match := SCREEN_JSONL_PATTERN.match(filename)):
-            # New JSONL format - parse and create entries per frame
-            time_part = match.group(1)
-            path = os.path.join(day_dir, filename)
-            try:
-                # Use shared loading logic from observe module
-                frames = load_analysis_frames(Path(path))
 
-                # Sort frames by timestamp
-                frames.sort(key=lambda f: f.get("timestamp", 0))
+        time_part = item.name  # HHMMSS
 
-                # Create one entry with all frames as JSON content
-                if frames:
-                    base_timestamp = datetime.strptime(
-                        date_str + time_part, "%Y%m%d%H%M%S"
+        # Process audio transcripts
+        if audio:
+            # Check for audio.jsonl or split audio files
+            audio_files = [f for f in item.glob("*audio.jsonl") if f.is_file()]
+            for audio_file in audio_files:
+                # Load JSONL format using shared utility
+                from observe.hear import load_transcript
+
+                metadata, transcript_entries, formatted_text = load_transcript(str(audio_file))
+                if transcript_entries is None:
+                    print(
+                        f"Warning: Could not load transcript {audio_file.name}: {metadata.get('error')}",
+                        file=sys.stderr,
                     )
+                    continue
+
+                # Use formatted text for human-readable display
+                timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
+                entries.append(
+                    {
+                        "timestamp": timestamp,
+                        "prefix": "audio",
+                        "content": formatted_text,
+                        "monitor": None,
+                        "source": None,
+                        "id": None,
+                        "name": f"{time_part}/{audio_file.name}",
+                    }
+                )
+
+        # Process screen summaries or transcripts
+        if screen_mode == "summary":
+            screen_md = item / "screen.md"
+            if screen_md.exists():
+                try:
+                    content = screen_md.read_text()
+                    timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
                     entries.append(
                         {
-                            "timestamp": base_timestamp,
-                            "prefix": "screen_jsonl",
-                            "content": json.dumps(frames, indent=2),
+                            "timestamp": timestamp,
+                            "prefix": "screen",
+                            "content": content,
                             "monitor": None,
                             "source": None,
                             "id": None,
-                            "name": filename,
+                            "name": f"{time_part}/screen.md",
                         }
                     )
-            except Exception as e:  # pragma: no cover - warning only
-                print(
-                    f"Warning: Could not read JSONL file {filename}: {e}",
-                    file=sys.stderr,
-                )
-            continue
-        elif screen_mode == "raw" and (match := SCREEN_DIFF_PATTERN.match(filename)):
-            # Legacy diff.json format
-            time_part = match.group(1)
-            source = match.group(2)
-            ident = match.group(3)
-            monitor = ident if source == "monitor" else None
-            prefix = source
-        else:
-            continue
+                except Exception as e:
+                    print(f"Warning: Could not read file screen.md: {e}", file=sys.stderr)
 
-        timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
-        path = os.path.join(day_dir, filename)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception as e:  # pragma: no cover - warning only
-            print(f"Warning: Could not read file {filename}: {e}", file=sys.stderr)
-            continue
+        elif screen_mode == "raw":
+            # Check for screen.jsonl
+            screen_jsonl = item / "screen.jsonl"
+            if screen_jsonl.exists():
+                try:
+                    # Use shared loading logic from observe module
+                    frames = load_analysis_frames(screen_jsonl)
 
-        entries.append(
-            {
-                "timestamp": timestamp,
-                "prefix": prefix,
-                "content": content,
-                "monitor": monitor,
-                "source": (
-                    source
-                    if match and prefix != "audio" and prefix != "screen"
-                    else None
-                ),
-                "id": (
-                    ident
-                    if match and prefix != "audio" and prefix != "screen"
-                    else None
-                ),
-                "name": filename,
-            }
-        )
+                    # Sort frames by timestamp
+                    frames.sort(key=lambda f: f.get("timestamp", 0))
+
+                    # Create one entry with all frames as JSON content
+                    if frames:
+                        base_timestamp = datetime.strptime(
+                            date_str + time_part, "%Y%m%d%H%M%S"
+                        )
+                        entries.append(
+                            {
+                                "timestamp": base_timestamp,
+                                "prefix": "screen_jsonl",
+                                "content": json.dumps(frames, indent=2),
+                                "monitor": None,
+                                "source": None,
+                                "id": None,
+                                "name": f"{time_part}/screen.jsonl",
+                            }
+                        )
+                except Exception as e:  # pragma: no cover - warning only
+                    print(
+                        f"Warning: Could not read JSONL file screen.jsonl: {e}",
+                        file=sys.stderr,
+                    )
 
     entries.sort(key=lambda e: e["timestamp"])
     return entries
@@ -256,30 +235,25 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
     date_str = _date_str(day_dir)
     audio_slots: Set[datetime] = set()
     screen_slots: Set[datetime] = set()
+    day_path_obj = Path(day_dir)
 
-    for filename in os.listdir(day_dir):
-        match = None
-        if match := AUDIO_PATTERN.match(filename):
-            time_part = match.group(1)
+    # Check timestamp subdirectories for transcript files
+    for item in day_path_obj.iterdir():
+        if item.is_dir() and item.name.isdigit() and len(item.name) == 6:
+            # Found timestamp directory (HHMMSS)
+            time_part = item.name
             dt = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
             slot = dt.replace(
                 minute=dt.minute - (dt.minute % 15), second=0, microsecond=0
             )
-            audio_slots.add(slot)
-        elif match := SCREEN_SUMMARY_PATTERN.match(filename):
-            time_part = match.group(1)
-            dt = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
-            slot = dt.replace(
-                minute=dt.minute - (dt.minute % 15), second=0, microsecond=0
-            )
-            screen_slots.add(slot)
-        elif match := SCREEN_JSONL_PATTERN.match(filename):
-            time_part = match.group(1)
-            dt = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
-            slot = dt.replace(
-                minute=dt.minute - (dt.minute % 15), second=0, microsecond=0
-            )
-            screen_slots.add(slot)
+
+            # Check for audio transcripts
+            if (item / "audio.jsonl").exists() or any(item.glob("*_audio.jsonl")):
+                audio_slots.add(slot)
+
+            # Check for screen summaries or transcripts
+            if (item / "screen.md").exists() or (item / "screen.jsonl").exists():
+                screen_slots.add(slot)
 
     audio_ranges = _slots_to_ranges(sorted(audio_slots))
     screen_ranges = _slots_to_ranges(sorted(screen_slots))

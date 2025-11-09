@@ -161,15 +161,19 @@ class Transcriber:
 
         self.vad_model = load_silero_vad()
 
-    def _move_to_heard(self, audio_path: Path) -> None:
-        """Move processed audio_path into the day 'heard' directory."""
-        heard_dir = audio_path.parent / "heard"
+    def _move_to_timestamp_dir(self, audio_path: Path) -> Path:
+        """Move audio file to timestamp directory and return new path."""
+        time_part = audio_path.stem.split("_")[0]  # Extract HHMMSS
+        ts_dir = audio_path.parent / time_part
         try:
-            heard_dir.mkdir(exist_ok=True)
-            audio_path.rename(heard_dir / audio_path.name)
-            logging.info("Moved %s to %s", audio_path, heard_dir)
+            ts_dir.mkdir(exist_ok=True)
+            new_path = ts_dir / "raw.flac"
+            audio_path.rename(new_path)
+            logging.info("Moved %s to %s", audio_path, ts_dir)
+            return new_path
         except Exception as exc:
-            logging.error("Failed to move %s to heard: %s", audio_path, exc)
+            logging.error("Failed to move %s to timestamp dir: %s", audio_path, exc)
+            return audio_path
 
     def _process_audio(
         self, raw_path: Path, split: bool = False
@@ -415,29 +419,24 @@ class Transcriber:
             return None
 
     def _get_json_path(self, audio_path: Path, stream: str | None = None) -> Path:
-        """Generate the corresponding JSONL path for an audio file.
+        """Generate the corresponding JSONL path in timestamp directory.
 
         Args:
-            audio_path: Path to the audio file
+            audio_path: Path to the audio file (in day root)
             stream: Optional stream identifier ('mic' or 'sys') for split processing
         """
-        # Support both .flac and .m4a extensions
-        if audio_path.name.endswith("_raw.flac"):
-            json_name = audio_path.name.replace("_raw.flac", "_audio.jsonl")
-        elif audio_path.name.endswith("_audio.flac"):
-            json_name = audio_path.name.replace("_audio.flac", "_audio.jsonl")
-        elif audio_path.name.endswith("_raw.m4a"):
-            json_name = audio_path.name.replace("_raw.m4a", "_audio.jsonl")
-        elif audio_path.name.endswith("_audio.m4a"):
-            json_name = audio_path.name.replace("_audio.m4a", "_audio.jsonl")
-        else:
-            json_name = audio_path.stem + "_audio.jsonl"
+        # Extract timestamp from filename
+        time_part = audio_path.stem.split("_")[0]  # Extract HHMMSS
+        ts_dir = audio_path.parent / time_part
+        ts_dir.mkdir(exist_ok=True)
 
-        # Add stream prefix if provided (e.g., "123456_audio.jsonl" -> "123456_mic_audio.jsonl")
+        # Generate simple filename within timestamp directory
         if stream:
-            json_name = json_name.replace("_audio.jsonl", f"_{stream}_audio.jsonl")
+            json_name = f"{stream}_audio.jsonl"
+        else:
+            json_name = "audio.jsonl"
 
-        return audio_path.with_name(json_name)
+        return ts_dir / json_name
 
     def _transcribe(
         self,
@@ -493,8 +492,8 @@ class Transcriber:
                     transcript_items = result[:-1]
 
             # Add audio file reference to metadata
-            # Path is relative to the JSONL file, pointing to the heard/ subdirectory
-            metadata["raw"] = f"heard/{raw_path.name}"
+            # Path is relative to the JSONL file (both in same timestamp directory)
+            metadata["raw"] = "raw.flac"
 
             # Write JSONL format: metadata first, then transcript items
             jsonl_lines = [json.dumps(metadata)]
@@ -528,8 +527,8 @@ class Transcriber:
 
             # Check if already processed
             if mic_json_path.exists() and sys_json_path.exists():
-                logging.info(f"Already processed (split), moving to heard: {raw_path}")
-                self._move_to_heard(raw_path)
+                logging.info(f"Already processed (split), moving to timestamp dir: {raw_path}")
+                self._move_to_timestamp_dir(raw_path)
                 return
 
             # Process audio in split mode
@@ -560,11 +559,10 @@ class Transcriber:
                 return
 
             if success:
-                self._move_to_heard(raw_path)
+                moved_path = self._move_to_timestamp_dir(raw_path)
 
                 # Emit completion events for split mode
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
-                heard_path = raw_path.parent / "heard" / raw_path.name
                 duration_ms = int((time.time() - start_time) * 1000)
 
                 # Emit event for each stream that was processed
@@ -572,10 +570,10 @@ class Transcriber:
                     json_path = self._get_json_path(raw_path, stream=stream)
                     if json_path.exists():
                         try:
-                            rel_input = heard_path.relative_to(journal_path)
+                            rel_input = moved_path.relative_to(journal_path)
                             rel_output = json_path.relative_to(journal_path)
                         except ValueError:
-                            rel_input = heard_path
+                            rel_input = moved_path
                             rel_output = json_path
 
                         callosum_send(
@@ -590,8 +588,8 @@ class Transcriber:
             # Skip if already processed
             json_path = self._get_json_path(raw_path)
             if json_path.exists():
-                logging.info(f"Already processed, moving to heard: {raw_path}")
-                self._move_to_heard(raw_path)
+                logging.info(f"Already processed, moving to timestamp dir: {raw_path}")
+                self._move_to_timestamp_dir(raw_path)
                 return
 
             # Process audio
@@ -610,18 +608,17 @@ class Transcriber:
             # Transcribe
             success = self._transcribe(raw_path, segments)
             if success:
-                self._move_to_heard(raw_path)
+                moved_path = self._move_to_timestamp_dir(raw_path)
 
                 # Emit completion event for standard mode
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
-                heard_path = raw_path.parent / "heard" / raw_path.name
                 duration_ms = int((time.time() - start_time) * 1000)
 
                 try:
-                    rel_input = heard_path.relative_to(journal_path)
+                    rel_input = moved_path.relative_to(journal_path)
                     rel_output = json_path.relative_to(journal_path)
                 except ValueError:
-                    rel_input = heard_path
+                    rel_input = moved_path
                     rel_output = json_path
 
                 callosum_send(

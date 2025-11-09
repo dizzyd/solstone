@@ -14,24 +14,33 @@ from think.utils import day_dirs
 
 from .core import _scan_files, get_index
 
-# Transcript file helpers
+# Transcript file helpers (legacy patterns - now checking in timestamp directories)
 AUDIO_RE = re.compile(r"^(?P<time>\d{6}).*_audio\.jsonl$")
 SCREEN_RE = re.compile(r"^(?P<time>\d{6})_[a-z]+_\d+_diff\.json$")
 SCREEN_JSONL_RE = re.compile(r"^(?P<time>\d{6})_screen\.jsonl$")
 
 
 def find_transcript_files(journal: str) -> Dict[str, str]:
-    """Return mapping of transcript JSON file paths relative to ``journal``."""
+    """Return mapping of transcript JSON file paths relative to ``journal``.
+
+    Looks for transcript files in timestamp subdirectories (YYYYMMDD/HHMMSS/*.jsonl).
+    """
     files: Dict[str, str] = {}
     for day, day_path in day_dirs().items():
-        for name in os.listdir(day_path):
-            if (
-                AUDIO_RE.match(name)
-                or SCREEN_RE.match(name)
-                or SCREEN_JSONL_RE.match(name)
-            ):
-                rel = os.path.join(day, name)
-                files[rel] = os.path.join(day_path, name)
+        # Check timestamp subdirectories
+        day_path_obj = Path(day_path)
+        for item in day_path_obj.iterdir():
+            if item.is_dir() and item.name.isdigit() and len(item.name) == 6:
+                # Found a timestamp directory (HHMMSS)
+                for result_file in item.glob("*.jsonl"):
+                    # Look for audio.jsonl, screen.jsonl, or split audio files
+                    if result_file.name in ("audio.jsonl", "screen.jsonl"):
+                        rel = os.path.join(day, item.name, result_file.name)
+                        files[rel] = str(result_file)
+                    elif result_file.name.endswith("_audio.jsonl"):
+                        # Handle split audio files: mic_audio.jsonl, sys_audio.jsonl
+                        rel = os.path.join(day, item.name, result_file.name)
+                        files[rel] = str(result_file)
     return files
 
 
@@ -142,40 +151,27 @@ def _index_transcripts(
     """Index text from transcript audio, screen diff JSON, or screen JSONL files."""
     logger = logging.getLogger(__name__)
 
-    name = os.path.basename(path)
-    m = AUDIO_RE.match(name)
-    if m:
-        rtype = "audio"
-        texts = _parse_audio_json(path)
-    else:
-        # Try new JSONL format first
-        m = SCREEN_JSONL_RE.match(name)
-        if m:
-            rtype = "screen"
-            texts = _parse_screen_jsonl(path)
-        else:
-            # Fall back to legacy diff.json format
-            m = SCREEN_RE.match(name)
-            if not m:
-                return
-            rtype = "screen"
-            # Extract source from filename: <time>_<name>_<id>_diff.json
-            # Example: 123456_monitor_1_diff.json -> source is "monitor_1"
-            # Remove .json extension first
-            name_no_ext = name.replace(".json", "")
-            parts = name_no_ext.split("_")
-            if len(parts) >= 4 and parts[-1] == "diff":
-                # Join the parts between time and _diff to get source
-                source = "_".join(parts[1:-1])
-            else:
-                source = "unknown"
-            texts = _parse_screen_diff(path, source)
-
-    if not m:
+    # Extract time from path structure: YYYYMMDD/HHMMSS/file.jsonl
+    path_parts = rel.split(os.sep)
+    if len(path_parts) != 3:
+        # Invalid path structure, skip
         return
 
-    time_part = m.group("time")
-    day = rel.split(os.sep, 1)[0]
+    day = path_parts[0]
+    time_part = path_parts[1]  # HHMMSS from directory name
+    filename = path_parts[2]
+
+    # Determine file type and parse accordingly
+    if filename == "audio.jsonl" or filename.endswith("_audio.jsonl"):
+        rtype = "audio"
+        texts = _parse_audio_json(path)
+    elif filename == "screen.jsonl":
+        rtype = "screen"
+        texts = _parse_screen_jsonl(path)
+    else:
+        # Unknown file type
+        return
+
     for text, source in texts:
         conn.execute(
             (

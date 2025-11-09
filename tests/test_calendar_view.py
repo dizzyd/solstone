@@ -21,9 +21,11 @@ def test_transcript_ranges_api(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     review = importlib.import_module("convey")
-    # Write JSONL format with empty metadata
-    (day_dir / "090101_audio.jsonl").write_text("{}\n")
-    (day_dir / "100101_screen.md").write_text("screen")
+    # Write JSONL format with empty metadata in timestamp directories
+    (day_dir / "090101").mkdir()
+    (day_dir / "090101" / "audio.jsonl").write_text("{}\n")
+    (day_dir / "100101").mkdir()
+    (day_dir / "100101" / "screen.md").write_text("screen")
     review.journal_root = str(tmp_path)
     with review.app.test_request_context("/calendar/api/transcript_ranges/20240101"):
         resp = review.calendar_transcript_ranges("20240101")
@@ -36,9 +38,10 @@ def test_transcript_range_api(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     review = importlib.import_module("convey")
-    # Write JSONL format: metadata first, then entry
-    (day_dir / "120000_audio.jsonl").write_text('{}\n{"text": "hi"}\n')
-    (day_dir / "120000_screen.md").write_text("screen summary")
+    # Write JSONL format: metadata first, then entry in timestamp directory
+    (day_dir / "120000").mkdir()
+    (day_dir / "120000" / "audio.jsonl").write_text('{}\n{"text": "hi"}\n')
+    (day_dir / "120000" / "screen.md").write_text("screen summary")
     review.journal_root = str(tmp_path)
     with review.app.test_request_context(
         "/calendar/api/transcript/20240101?start=120000&end=120100"

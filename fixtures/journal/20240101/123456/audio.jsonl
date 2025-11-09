@@ -1,4 +1,4 @@
-{"raw": "heard/123456_audio.flac", "model": "whisper-1", "duration": 45}
+{"raw": "raw.flac", "model": "whisper-1", "duration": 45}
 {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "So we need to finalize the authentication module today. John mentioned that we should use JWT tokens for the session management.", "description": "discussion"}
 {"start": "00:00:15", "source": "mic", "speaker": 1, "text": "The client, Acme Corp, wants to ensure that the security is top-notch.", "description": "requirement"}
 {"start": "00:00:25", "source": "mic", "speaker": 1, "text": "Let's make sure we have proper unit tests for all the authentication endpoints.", "description": "testing"}
