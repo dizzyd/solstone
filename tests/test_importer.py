@@ -31,8 +31,8 @@ def test_importer_text(tmp_path, monkeypatch):
     mod.main()
 
     day_dir = day_path("20240101")
-    f1 = day_dir / "120000" / "imported_audio.jsonl"
-    f2 = day_dir / "120500" / "imported_audio.jsonl"
+    f1 = day_dir / "120000_300" / "imported_audio.jsonl"
+    f2 = day_dir / "120500_300" / "imported_audio.jsonl"
 
     # Read JSONL format: first line is metadata, subsequent lines are entries
     lines1 = f1.read_text().strip().split("\n")
@@ -127,8 +127,8 @@ def test_importer_audio_transcribe(tmp_path, monkeypatch):
 
     # Check that the files were created correctly
     day_dir = day_path("20240101")
-    f1 = day_dir / "120000" / "imported_audio.jsonl"
-    f2 = day_dir / "120500" / "imported_audio.jsonl"
+    f1 = day_dir / "120000_300" / "imported_audio.jsonl"
+    f2 = day_dir / "120500_300" / "imported_audio.jsonl"
 
     assert f1.exists()
     assert f2.exists()

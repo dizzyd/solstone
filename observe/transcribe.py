@@ -163,11 +163,14 @@ class Transcriber:
 
     def _move_to_period(self, audio_path: Path) -> Path:
         """Move audio file to its period and return new path."""
-        period_name = audio_path.stem.split("_")[0]  # Extract HHMMSS
-        period_dir = audio_path.parent / period_name
+        from observe.utils import extract_period_from_filename, extract_descriptive_suffix
+
+        period = extract_period_from_filename(audio_path.stem)
+        suffix = extract_descriptive_suffix(audio_path.stem)
+        period_dir = audio_path.parent / period
         try:
             period_dir.mkdir(exist_ok=True)
-            new_path = period_dir / "raw.flac"
+            new_path = period_dir / f"{suffix}.flac"
             audio_path.rename(new_path)
             logging.info("Moved %s to %s", audio_path, period_dir)
             return new_path
@@ -425,9 +428,10 @@ class Transcriber:
             audio_path: Path to the audio file (in day root)
             stream: Optional stream identifier ('mic' or 'sys') for split processing
         """
-        # Extract period from filename
-        period_name = audio_path.stem.split("_")[0]  # Extract HHMMSS
-        period_dir = audio_path.parent / period_name
+        from observe.utils import extract_period_from_filename
+
+        period = extract_period_from_filename(audio_path.stem)
+        period_dir = audio_path.parent / period
         period_dir.mkdir(exist_ok=True)
 
         # Generate simple filename within period
@@ -492,8 +496,10 @@ class Transcriber:
                     transcript_items = result[:-1]
 
             # Add audio file reference to metadata
-            # Path is relative to the JSONL file (both in same timestamp directory)
-            metadata["raw"] = "raw.flac"
+            # Path is relative to the JSONL file (both in same period directory)
+            from observe.utils import extract_descriptive_suffix
+            suffix = extract_descriptive_suffix(raw_path.stem)
+            metadata["raw"] = f"{suffix}.flac"
 
             # Write JSONL format: metadata first, then transcript items
             jsonl_lines = [json.dumps(metadata)]

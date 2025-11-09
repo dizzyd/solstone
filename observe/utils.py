@@ -15,6 +15,109 @@ from skimage.metrics import structural_similarity as ssim
 logger = logging.getLogger(__name__)
 
 
+def extract_period_from_filename(filename: str) -> str:
+    """
+    Extract period name from media filename.
+
+    Extracts HHMMSS or HHMMSS_LEN prefix from any filename, ignoring
+    descriptive suffixes. Works with any suffix after the period portion.
+
+    Parameters
+    ----------
+    filename : str
+        Filename stem (without extension), e.g., "143022_300_audio", "143022_screen",
+        or any variant with descriptive text after the period
+
+    Returns
+    -------
+    str
+        Period name in format "HHMMSS_LEN" or "HHMMSS"
+
+    Examples
+    --------
+    >>> extract_period_from_filename("143022_300_audio")
+    "143022_300"
+    >>> extract_period_from_filename("143022_300_screen")
+    "143022_300"
+    >>> extract_period_from_filename("143022_300_recording_mic")
+    "143022_300"
+    >>> extract_period_from_filename("143022_audio")
+    "143022"
+    >>> extract_period_from_filename("143022_screen")
+    "143022"
+    >>> extract_period_from_filename("143022_anything_else")
+    "143022"
+    """
+    parts = filename.split("_")
+
+    # Filename format: HHMMSS[_LEN][_descriptive_text...]
+    # First part must be 6-digit timestamp
+    if not parts or not parts[0].isdigit() or len(parts[0]) != 6:
+        raise ValueError(f"Invalid filename format: {filename} (must start with HHMMSS)")
+
+    # Check if second part is numeric duration suffix
+    if len(parts) >= 2 and parts[1].isdigit():
+        # Has duration suffix: HHMMSS_LEN[_...]
+        return f"{parts[0]}_{parts[1]}"
+    else:
+        # No duration suffix: HHMMSS[_...]
+        return parts[0]
+
+
+def extract_descriptive_suffix(filename: str) -> str:
+    """
+    Extract descriptive suffix from media filename.
+
+    Returns the portion after the period (HHMMSS or HHMMSS_LEN), preserving
+    the descriptive information for the final filename in the period directory.
+
+    Parameters
+    ----------
+    filename : str
+        Filename stem (without extension), e.g., "143022_300_audio", "143022_screen"
+
+    Returns
+    -------
+    str
+        Descriptive suffix (e.g., "audio", "screen", "mic_sys"), or "raw" if none
+
+    Examples
+    --------
+    >>> extract_descriptive_suffix("143022_300_audio")
+    "audio"
+    >>> extract_descriptive_suffix("143022_300_screen")
+    "screen"
+    >>> extract_descriptive_suffix("143022_300_mic_sys")
+    "mic_sys"
+    >>> extract_descriptive_suffix("143022_audio")
+    "audio"
+    >>> extract_descriptive_suffix("143022")
+    "raw"
+    """
+    parts = filename.split("_")
+
+    # Filename format: HHMMSS[_LEN][_descriptive_text...]
+    # First part must be 6-digit timestamp
+    if not parts or not parts[0].isdigit() or len(parts[0]) != 6:
+        raise ValueError(f"Invalid filename format: {filename} (must start with HHMMSS)")
+
+    # Check if second part is numeric duration suffix
+    if len(parts) >= 2 and parts[1].isdigit():
+        # Has duration suffix: HHMMSS_LEN_suffix...
+        # Join remaining parts as descriptive suffix
+        if len(parts) > 2:
+            return "_".join(parts[2:])
+        else:
+            return "raw"
+    else:
+        # No duration suffix: HHMMSS_suffix...
+        # Join remaining parts as descriptive suffix
+        if len(parts) > 1:
+            return "_".join(parts[1:])
+        else:
+            return "raw"
+
+
 def parse_monitor_metadata(
     title: str, video_width: int, video_height: int
 ) -> Dict[str, dict]:

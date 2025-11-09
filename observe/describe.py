@@ -512,11 +512,16 @@ class VideoProcessor:
 
     def _move_to_period(self, media_path: Path) -> Path:
         """Move media file to its period and return new path."""
-        period_name = media_path.stem.split("_")[0]  # Extract HHMMSS
-        period_dir = media_path.parent / period_name
+        from observe.utils import extract_period_from_filename, extract_descriptive_suffix
+
+        period = extract_period_from_filename(media_path.stem)
+        suffix = extract_descriptive_suffix(media_path.stem)
+        period_dir = media_path.parent / period
         try:
             period_dir.mkdir(exist_ok=True)
-            new_path = period_dir / "screen.webm"
+            # Preserve the original extension
+            ext = media_path.suffix
+            new_path = period_dir / f"{suffix}{ext}"
             media_path.rename(new_path)
             logger.info(f"Moved {media_path} to {period_dir}")
             return new_path
@@ -941,8 +946,10 @@ async def async_main():
     output_path = None
     if not args.frames_only:
         # Extract period and create output in period
-        period_name = video_path.stem.split("_")[0]  # Extract HHMMSS
-        period_dir = video_path.parent / period_name
+        from observe.utils import extract_period_from_filename
+
+        period = extract_period_from_filename(video_path.stem)
+        period_dir = video_path.parent / period
         period_dir.mkdir(exist_ok=True)
         output_path = period_dir / "screen.jsonl"
         if output_path.exists():

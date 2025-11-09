@@ -75,7 +75,7 @@ class FileSensor:
         Register a handler for a file pattern.
 
         Args:
-            pattern: Glob pattern (e.g., "*.webm", "*_raw.flac")
+            pattern: Glob pattern (e.g., "*.webm", "*.flac")
             handler_name: Name for logging (e.g., "describe", "transcribe")
             command: Command list where "{file}" will be replaced with file path
         """
@@ -476,7 +476,9 @@ class FileSensor:
 
         # Find incomplete reduces (screen.jsonl files in periods without corresponding screen.md)
         for period in day_dir.iterdir():
-            if period.is_dir() and period.name.isdigit() and len(period.name) == 6:
+            from think.utils import period_name
+
+            if period.is_dir() and period_name(period.name):
                 screen_jsonl = period / "screen.jsonl"
                 screen_md = period / "screen.md"
                 if screen_jsonl.exists() and not screen_md.exists():
@@ -546,9 +548,11 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
         - "unprocessed": List of unprocessed source media files in day root
     """
     # Find processed output files in periods (HHMMSS/)
+    from think.utils import period_name
+
     processed = []
     for period in day_dir.iterdir():
-        if period.is_dir() and period.name.isdigit() and len(period.name) == 6:
+        if period.is_dir() and period_name(period.name):
             # Check for audio.jsonl and split audio files
             for audio_file in period.glob("*audio.jsonl"):
                 processed.append(f"{period.name}/{audio_file.name}")
@@ -560,12 +564,13 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
     processed.sort()
 
     # Find unprocessed source media (still in day root, not yet moved to periods)
+    # Match by extension only - any descriptive suffix is allowed
     unprocessed = []
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*_raw.flac")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*_raw.m4a")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*_screen.webm")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*_screen.mp4")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*_screen.mov")))
+    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.flac")))
+    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.m4a")))
+    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.webm")))
+    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.mp4")))
+    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.mov")))
 
     return {"processed": processed, "unprocessed": unprocessed}
 
@@ -593,12 +598,15 @@ def main():
 
     sensor = FileSensor(journal, verbose=args.verbose, debug=args.debug)
 
-    # Register handlers
-    sensor.register("*_screen.webm", "describe", ["observe-describe", "{file}"])
-    sensor.register("*_screen.mp4", "describe", ["observe-describe", "{file}"])
-    sensor.register("*_screen.mov", "describe", ["observe-describe", "{file}"])
-    sensor.register("*_raw.flac", "transcribe", ["observe-transcribe", "{file}"])
-    sensor.register("*_raw.m4a", "transcribe", ["observe-transcribe", "{file}"])
+    # Register handlers - match by extension, ignore descriptive suffix
+    # Audio files: any HHMMSS_*.flac or HHMMSS_*.m4a in day root
+    sensor.register("*.flac", "transcribe", ["observe-transcribe", "{file}"])
+    sensor.register("*.m4a", "transcribe", ["observe-transcribe", "{file}"])
+
+    # Video files: any HHMMSS_*.webm, HHMMSS_*.mp4, HHMMSS_*.mov in day root
+    sensor.register("*.webm", "describe", ["observe-describe", "{file}"])
+    sensor.register("*.mp4", "describe", ["observe-describe", "{file}"])
+    sensor.register("*.mov", "describe", ["observe-describe", "{file}"])
 
     if args.day:
         # Batch mode: process specific day

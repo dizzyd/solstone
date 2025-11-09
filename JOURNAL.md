@@ -342,13 +342,20 @@ Common actions include:
 
 ## Day folder contents
 
-Within each day, captured content is organized into **periods** (timestamped `HHMMSS/` folders):
+Within each day, captured content is organized into **periods** (timestamped folders):
+
+- `HHMMSS/` – Simple period format (e.g., `143022/`)
+- `HHMMSS_LEN/` – Period with duration suffix in seconds (e.g., `143022_300/` for 5 minutes)
+
+Both formats are supported throughout the system and are treated identically by analysis tools.
 
 Audio capture tools write FLAC files and transcripts:
 
-- `HHMMSS_raw.flac` – mixed audio file in day root, moved to `HHMMSS/` after transcription.
-- `HHMMSS/raw.flac` – audio files moved here after processing.
-- `HHMMSS/audio.jsonl` – transcript JSONL produced by transcription.
+- `HHMMSS_LEN_*.flac` – audio files in day root (e.g., `143022_300_audio.flac`), moved to period after transcription.
+- `HHMMSS_LEN/*.flac` – audio files moved here after processing, preserving descriptive suffix (e.g., `audio.flac`, `mic.flac`).
+- `HHMMSS_LEN/audio.jsonl` – transcript JSONL produced by transcription.
+
+Note: The descriptive portion after the period (e.g., `_audio`, `_recording`) is preserved when files are moved into period directories. Processing tools match files by extension only, ignoring the descriptive suffix.
 
 ### Audio transcript output
 
@@ -357,7 +364,7 @@ The transcript file (`*_audio.jsonl`) contains a metadata line followed by one J
 Example transcript file:
 
 ```jsonl
-{"raw": "raw.flac", "topics": ["authentication", "testing", "planning"], "setting": "workplace"}
+{"raw": "audio.flac", "topics": ["authentication", "testing", "planning"], "setting": "workplace"}
 {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "So we need to finalize the authentication module today.", "description": "professional tone"}
 {"start": "00:00:15", "source": "sys", "speaker": "Alice", "text": "I agree. [clears throat] Let's make sure we have proper unit tests.", "description": "thoughtful, slightly hesitant"}
 ```
@@ -380,10 +387,12 @@ Example transcript file:
 
 Screen capture produces screencast videos with multi-monitor metadata:
 
-- `HHMMSS_screen.webm` – screencast video file in day root, moved to `HHMMSS/` after processing.
-- `HHMMSS/screen.webm` – video files moved here after analysis.
-- `HHMMSS/screen.jsonl` – vision analysis results in JSON Lines format.
-- `HHMMSS/screen.md` – human-readable markdown summary of the video.
+- `HHMMSS_LEN_*.webm` – screencast video files in day root (e.g., `143022_300_screen.webm`), moved to period after analysis.
+- `HHMMSS_LEN/*.webm` – video files moved here after analysis, preserving descriptive suffix (e.g., `screen.webm`, `monitor1.webm`).
+- `HHMMSS_LEN/screen.jsonl` – vision analysis results in JSON Lines format.
+- `HHMMSS_LEN/screen.md` – human-readable markdown summary of the video.
+
+Note: Like audio files, the descriptive portion is preserved when files are moved into period directories.
 
 ### Screencast video format
 
