@@ -510,18 +510,18 @@ class VideoProcessor:
         contents.append(image)
         return contents
 
-    def _move_to_timestamp_dir(self, media_path: Path) -> Path:
-        """Move media file to timestamp directory and return new path."""
-        time_part = media_path.stem.split("_")[0]  # Extract HHMMSS
-        ts_dir = media_path.parent / time_part
+    def _move_to_period(self, media_path: Path) -> Path:
+        """Move media file to its period and return new path."""
+        period_name = media_path.stem.split("_")[0]  # Extract HHMMSS
+        period_dir = media_path.parent / period_name
         try:
-            ts_dir.mkdir(exist_ok=True)
-            new_path = ts_dir / "screen.webm"
+            period_dir.mkdir(exist_ok=True)
+            new_path = period_dir / "screen.webm"
             media_path.rename(new_path)
-            logger.info(f"Moved {media_path} to {ts_dir}")
+            logger.info(f"Moved {media_path} to {period_dir}")
             return new_path
         except Exception as exc:
-            logger.error(f"Failed to move {media_path} to timestamp dir: {exc}")
+            logger.error(f"Failed to move {media_path} to period: {exc}")
             return media_path
 
     def _create_crumb(
@@ -836,7 +836,7 @@ class VideoProcessor:
         all_failed = total_frames > 0 and failed_frames == total_frames
 
         if all_failed:
-            # Don't move video to timestamp dir - leave for retry
+            # Don't move video to period - leave for retry
             error_detail = (
                 f"Error details in {output_path}" if output_path else "No output file"
             )
@@ -851,14 +851,14 @@ class VideoProcessor:
                 f"All {total_frames} frame(s) failed vision analysis after retries"
             )
         else:
-            # At least some frames succeeded - move to timestamp dir and create crumb
+            # At least some frames succeeded - move to period and create crumb
             if failed_frames > 0:
                 logger.warning(
                     f"{failed_frames}/{total_frames} frame(s) failed processing. "
-                    f"Moving video to timestamp dir anyway."
+                    f"Moving video to period anyway."
                 )
             if output_path:
-                moved_path = self._move_to_timestamp_dir(self.video_path)
+                moved_path = self._move_to_period(self.video_path)
                 self._create_crumb(output_path, moved_path, used_prompts, used_models)
 
         # Clear qualified_frames to free memory
@@ -940,11 +940,11 @@ async def async_main():
     # Determine output path and warn if overwriting
     output_path = None
     if not args.frames_only:
-        # Extract timestamp and create output in timestamp directory
-        time_part = video_path.stem.split("_")[0]  # Extract HHMMSS
-        ts_dir = video_path.parent / time_part
-        ts_dir.mkdir(exist_ok=True)
-        output_path = ts_dir / "screen.jsonl"
+        # Extract period and create output in period
+        period_name = video_path.stem.split("_")[0]  # Extract HHMMSS
+        period_dir = video_path.parent / period_name
+        period_dir.mkdir(exist_ok=True)
+        output_path = period_dir / "screen.jsonl"
         if output_path.exists():
             logger.warning(f"Overwriting existing analysis file: {output_path}")
 
@@ -971,7 +971,7 @@ async def async_main():
             # Emit completion event
             if output_path and output_path.exists():
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
-                # Moved path is in timestamp directory: YYYYMMDD/HHMMSS/screen.webm
+                # Moved path is in period: YYYYMMDD/HHMMSS/screen.webm
                 time_part = video_path.stem.split("_")[0]
                 moved_path = video_path.parent / time_part / "screen.webm"
 

@@ -50,11 +50,11 @@ def recent_audio_activity(window: int = 120) -> bool:
     if not day_dir.exists():
         return False
     cutoff = time.time() - window
-    # Check timestamp subdirectories (HHMMSS/)
+    # Check periods (HHMMSS/)
     for item in os.listdir(day_dir):
         item_path = day_dir / item
         if item_path.is_dir() and item.isdigit() and len(item) == 6:
-            # Found timestamp directory, check for audio files
+            # Found period, check for audio files
             for audio_file in item_path.glob("*audio.jsonl"):
                 try:
                     if os.path.getmtime(audio_file) >= cutoff:

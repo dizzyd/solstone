@@ -84,7 +84,7 @@ class FileSensor:
 
     def _match_pattern(self, file_path: Path) -> Optional[tuple[str, List[str]]]:
         """Check if file matches any registered pattern."""
-        # Ignore files in subdirectories (timestamp dirs, trash/)
+        # Ignore files in subdirectories (periods, trash/)
         # Expected structure: journal_dir/YYYYMMDD/file.ext (2 parts from journal_dir)
         # Reject: journal_dir/YYYYMMDD/HHMMSS/file.ext (3+ parts from journal_dir)
         try:
@@ -451,7 +451,7 @@ class FileSensor:
         """Process all matching unprocessed files from a specific day directory.
 
         Files are considered unprocessed if the source media file has not been
-        moved to timestamp subdirectories (HHMMSS/). This approach handles incomplete
+        moved to periods (HHMMSS/). This approach handles incomplete
         processing gracefully by re-running even if output files exist.
 
         Also finds JSONL files without corresponding MD files and runs reduce on them.
@@ -465,7 +465,7 @@ class FileSensor:
             logger.error(f"Day directory not found: {day_dir}")
             return
 
-        # Find all matching unprocessed files (not yet moved to timestamp dirs)
+        # Find all matching unprocessed files (not yet moved to periods)
         to_process = []
         for file_path in day_dir.iterdir():
             if file_path.is_file():
@@ -474,11 +474,11 @@ class FileSensor:
                     handler_name, command = handler_info
                     to_process.append((file_path, handler_name, command))
 
-        # Find incomplete reduces (screen.jsonl files in timestamp subdirs without corresponding screen.md)
-        for ts_subdir in day_dir.iterdir():
-            if ts_subdir.is_dir() and ts_subdir.name.isdigit() and len(ts_subdir.name) == 6:
-                screen_jsonl = ts_subdir / "screen.jsonl"
-                screen_md = ts_subdir / "screen.md"
+        # Find incomplete reduces (screen.jsonl files in periods without corresponding screen.md)
+        for period in day_dir.iterdir():
+            if period.is_dir() and period.name.isdigit() and len(period.name) == 6:
+                screen_jsonl = period / "screen.jsonl"
+                screen_md = period / "screen.md"
                 if screen_jsonl.exists() and not screen_md.exists():
                     # Register reduce as a handler task
                     to_process.append((screen_jsonl, "reduce", ["observe-reduce", "{file}"]))
@@ -542,24 +542,24 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
 
     Returns:
         Dictionary with:
-        - "processed": List of JSONL output files in timestamp subdirs (HHMMSS/audio.jsonl, HHMMSS/screen.jsonl)
+        - "processed": List of JSONL output files in periods (HHMMSS/audio.jsonl, HHMMSS/screen.jsonl)
         - "unprocessed": List of unprocessed source media files in day root
     """
-    # Find processed output files in timestamp subdirectories (HHMMSS/)
+    # Find processed output files in periods (HHMMSS/)
     processed = []
-    for ts_subdir in day_dir.iterdir():
-        if ts_subdir.is_dir() and ts_subdir.name.isdigit() and len(ts_subdir.name) == 6:
+    for period in day_dir.iterdir():
+        if period.is_dir() and period.name.isdigit() and len(period.name) == 6:
             # Check for audio.jsonl and split audio files
-            for audio_file in ts_subdir.glob("*audio.jsonl"):
-                processed.append(f"{ts_subdir.name}/{audio_file.name}")
+            for audio_file in period.glob("*audio.jsonl"):
+                processed.append(f"{period.name}/{audio_file.name}")
             # Check for screen.jsonl
-            screen_jsonl = ts_subdir / "screen.jsonl"
+            screen_jsonl = period / "screen.jsonl"
             if screen_jsonl.exists():
-                processed.append(f"{ts_subdir.name}/screen.jsonl")
+                processed.append(f"{period.name}/screen.jsonl")
 
     processed.sort()
 
-    # Find unprocessed source media (still in day root, not yet moved to timestamp subdirs)
+    # Find unprocessed source media (still in day root, not yet moved to periods)
     unprocessed = []
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*_raw.flac")))
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*_raw.m4a")))

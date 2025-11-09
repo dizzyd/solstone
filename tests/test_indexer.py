@@ -77,7 +77,7 @@ def test_raw_index(tmp_path):
     os.environ["JOURNAL_PATH"] = str(journal)
     day = journal / "20240103"
     day.mkdir()
-    # Write JSONL format: metadata first, then entries in timestamp directory
+    # Write JSONL format: metadata first, then entries in periody
     ts_dir = day / "123000"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(
@@ -140,7 +140,7 @@ def test_search_raws_day(tmp_path):
 
     day1 = journal / "20240105"
     day1.mkdir()
-    # Write JSONL format: metadata first, then entries in timestamp directory
+    # Write JSONL format: metadata first, then entries in periody
     ts_dir1 = day1 / "123000"
     ts_dir1.mkdir()
     (ts_dir1 / "audio.jsonl").write_text(
@@ -154,7 +154,7 @@ def test_search_raws_day(tmp_path):
 
     day2 = journal / "20240106"
     day2.mkdir()
-    # Write JSONL format: metadata first, then entries in timestamp directory
+    # Write JSONL format: metadata first, then entries in periody
     ts_dir2 = day2 / "090000"
     ts_dir2.mkdir()
     (ts_dir2 / "audio.jsonl").write_text(
@@ -183,7 +183,7 @@ def test_search_raws_time_order(tmp_path):
 
     day = journal / "20240107"
     day.mkdir()
-    # Write JSONL format: metadata first, then entries in timestamp directories
+    # Write JSONL format: metadata first, then entries in periodies
     ts_dir1 = day / "090000"
     ts_dir1.mkdir()
     (ts_dir1 / "audio.jsonl").write_text(

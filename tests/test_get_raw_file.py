@@ -8,20 +8,20 @@ def test_get_raw_file(tmp_path, monkeypatch):
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     day_dir = day_path("20240101")
 
-    # Create timestamp directories
-    ts_123000 = day_dir / "123000"
-    ts_123000.mkdir()
-    ts_090000 = day_dir / "090000"
-    ts_090000.mkdir()
+    # Create periods
+    period_123000 = day_dir / "123000"
+    period_123000.mkdir()
+    period_090000 = day_dir / "090000"
+    period_090000.mkdir()
 
-    (ts_123000 / "monitor_1_diff.png").write_bytes(b"data")
-    (ts_123000 / "monitor_1_diff.json").write_text(
+    (period_123000 / "monitor_1_diff.png").write_bytes(b"data")
+    (period_123000 / "monitor_1_diff.json").write_text(
         '{"visual_description": "screen", "raw": "monitor_1_diff.png"}'
     )
 
-    (ts_090000 / "raw.flac").write_bytes(b"data")
+    (period_090000 / "raw.flac").write_bytes(b"data")
     # Write JSONL format: metadata first, then entry
-    (ts_090000 / "audio.jsonl").write_text(
+    (period_090000 / "audio.jsonl").write_text(
         '{"raw": "raw.flac"}\n{"text": "hello"}\n'
     )
 

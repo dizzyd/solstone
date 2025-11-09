@@ -8,7 +8,7 @@ def test_scan_day(tmp_path, monkeypatch):
     day = journal / "20240101"
     day.mkdir()
 
-    # Create an audio jsonl file in timestamp directory
+    # Create an audio jsonl file in periody
     ts_dir = day / "123456"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(
@@ -174,7 +174,7 @@ def test_caching(tmp_path, monkeypatch):
     day = journal / "20240101"
     day.mkdir()
 
-    # Create an audio jsonl file in timestamp directory
+    # Create an audio jsonl file in periody
     ts_dir = day / "123456"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(

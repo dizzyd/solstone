@@ -8,7 +8,7 @@ def test_cluster(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     mod = importlib.import_module("think.cluster")
-    # Write JSONL format: metadata first, then entry in timestamp directories
+    # Write JSONL format: metadata first, then entry in periodies
     (day_dir / "120000").mkdir()
     (day_dir / "120000" / "audio.jsonl").write_text('{}\n{"text": "hi"}\n')
     (day_dir / "120500").mkdir()
@@ -24,7 +24,7 @@ def test_cluster_range(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     mod = importlib.import_module("think.cluster")
-    # Write JSONL format: metadata first, then entry with proper start time and source in timestamp directory
+    # Write JSONL format: metadata first, then entry with proper start time and source in periody
     (day_dir / "120000").mkdir()
     (day_dir / "120000" / "audio.jsonl").write_text(
         '{"raw": "raw.flac", "model": "whisper-1"}\n'

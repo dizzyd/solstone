@@ -21,7 +21,7 @@ def test_transcript_ranges_api(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     review = importlib.import_module("convey")
-    # Write JSONL format with empty metadata in timestamp directories
+    # Write JSONL format with empty metadata in periodies
     (day_dir / "090101").mkdir()
     (day_dir / "090101" / "audio.jsonl").write_text("{}\n")
     (day_dir / "100101").mkdir()
@@ -38,7 +38,7 @@ def test_transcript_range_api(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     review = importlib.import_module("convey")
-    # Write JSONL format: metadata first, then entry in timestamp directory
+    # Write JSONL format: metadata first, then entry in periody
     (day_dir / "120000").mkdir()
     (day_dir / "120000" / "audio.jsonl").write_text('{}\n{"text": "hi"}\n')
     (day_dir / "120000" / "screen.md").write_text("screen summary")

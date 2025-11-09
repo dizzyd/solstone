@@ -699,9 +699,9 @@ def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
     if not os.path.isdir(day_dir):
         return "", 404
 
-    # Check if the screen.jsonl file exists in timestamp subdirectory
-    ts_dir = os.path.join(day_dir, timestamp)
-    jsonl_path = os.path.join(ts_dir, "screen.jsonl")
+    # Check if the screen.jsonl file exists in period
+    period_dir = os.path.join(day_dir, timestamp)
+    jsonl_path = os.path.join(period_dir, "screen.jsonl")
     if not os.path.isfile(jsonl_path):
         return "", 404
 
@@ -730,11 +730,11 @@ def _dev_screen_files(day: str) -> Any:
         return jsonify({"files": []})
 
     files = []
-    # Look for timestamp subdirectories (HHMMSS/)
+    # Look for periods (HHMMSS/)
     for item in sorted(os.listdir(day_dir)):
         item_path = os.path.join(day_dir, item)
         if os.path.isdir(item_path) and item.isdigit() and len(item) == 6:
-            # Found timestamp directory, check for screen.jsonl
+            # Found period, check for screen.jsonl
             jsonl_path = os.path.join(item_path, "screen.jsonl")
             if os.path.isfile(jsonl_path):
                 timestamp = item
@@ -781,8 +781,8 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
         return "", 404
 
     day_dir = str(day_path(day))
-    ts_dir = os.path.join(day_dir, timestamp)
-    jsonl_path = os.path.join(ts_dir, "screen.jsonl")
+    period_dir = os.path.join(day_dir, timestamp)
+    jsonl_path = os.path.join(period_dir, "screen.jsonl")
 
     if not os.path.isfile(jsonl_path):
         return "", 404

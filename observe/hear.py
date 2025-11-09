@@ -344,7 +344,7 @@ def load_transcript(
 
     The JSONL format has metadata as the first line (may be empty {})
     and transcript entries as subsequent lines. Handles both native
-    transcripts (HHMMSS/audio.jsonl) and imported transcripts (HHMMSS/imported_audio.jsonl).
+    transcripts (period/audio.jsonl) and imported transcripts (period/imported_audio.jsonl).
 
     Args:
         file_path: Path to the JSONL transcript file
@@ -476,7 +476,7 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
     for i, part in enumerate(reversed(parts)):
         if re.match(r"^\d{8}$", part):
             day_str = part
-            # Check if previous part (parent dir) is HHMMSS timestamp
+            # Check if previous part (parent dir) is HHMMSS period
             if i > 0:
                 prev_part = list(reversed(parts))[i - 1]
                 if re.match(r"^\d{6}$", prev_part):

@@ -1,6 +1,6 @@
 # Sunstone Journal Guide
 
-This document describes the layout of a **journal** directory where all audio, screen and analysis artifacts are stored. Each dated `YYYYMMDD` folder is referred to as a **day**.
+This document describes the layout of a **journal** directory where all audio, screen and analysis artifacts are stored. Each dated `YYYYMMDD` folder is referred to as a **day**, and within each day captured content is organized into **periods** (`HHMMSS/` timestamp folders).
 
 ## Top level files
 
@@ -341,6 +341,8 @@ Common actions include:
 - `deleted` – message removed
 
 ## Day folder contents
+
+Within each day, captured content is organized into **periods** (timestamped `HHMMSS/` folders):
 
 Audio capture tools write FLAC files and transcripts:
 

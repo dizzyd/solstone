@@ -161,18 +161,18 @@ class Transcriber:
 
         self.vad_model = load_silero_vad()
 
-    def _move_to_timestamp_dir(self, audio_path: Path) -> Path:
-        """Move audio file to timestamp directory and return new path."""
-        time_part = audio_path.stem.split("_")[0]  # Extract HHMMSS
-        ts_dir = audio_path.parent / time_part
+    def _move_to_period(self, audio_path: Path) -> Path:
+        """Move audio file to its period and return new path."""
+        period_name = audio_path.stem.split("_")[0]  # Extract HHMMSS
+        period_dir = audio_path.parent / period_name
         try:
-            ts_dir.mkdir(exist_ok=True)
-            new_path = ts_dir / "raw.flac"
+            period_dir.mkdir(exist_ok=True)
+            new_path = period_dir / "raw.flac"
             audio_path.rename(new_path)
-            logging.info("Moved %s to %s", audio_path, ts_dir)
+            logging.info("Moved %s to %s", audio_path, period_dir)
             return new_path
         except Exception as exc:
-            logging.error("Failed to move %s to timestamp dir: %s", audio_path, exc)
+            logging.error("Failed to move %s to period: %s", audio_path, exc)
             return audio_path
 
     def _process_audio(
@@ -425,18 +425,18 @@ class Transcriber:
             audio_path: Path to the audio file (in day root)
             stream: Optional stream identifier ('mic' or 'sys') for split processing
         """
-        # Extract timestamp from filename
-        time_part = audio_path.stem.split("_")[0]  # Extract HHMMSS
-        ts_dir = audio_path.parent / time_part
-        ts_dir.mkdir(exist_ok=True)
+        # Extract period from filename
+        period_name = audio_path.stem.split("_")[0]  # Extract HHMMSS
+        period_dir = audio_path.parent / period_name
+        period_dir.mkdir(exist_ok=True)
 
-        # Generate simple filename within timestamp directory
+        # Generate simple filename within period
         if stream:
             json_name = f"{stream}_audio.jsonl"
         else:
             json_name = "audio.jsonl"
 
-        return ts_dir / json_name
+        return period_dir / json_name
 
     def _transcribe(
         self,
@@ -528,7 +528,7 @@ class Transcriber:
             # Check if already processed
             if mic_json_path.exists() and sys_json_path.exists():
                 logging.info(f"Already processed (split), moving to timestamp dir: {raw_path}")
-                self._move_to_timestamp_dir(raw_path)
+                self._move_to_period(raw_path)
                 return
 
             # Process audio in split mode
@@ -559,7 +559,7 @@ class Transcriber:
                 return
 
             if success:
-                moved_path = self._move_to_timestamp_dir(raw_path)
+                moved_path = self._move_to_period(raw_path)
 
                 # Emit completion events for split mode
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
@@ -589,7 +589,7 @@ class Transcriber:
             json_path = self._get_json_path(raw_path)
             if json_path.exists():
                 logging.info(f"Already processed, moving to timestamp dir: {raw_path}")
-                self._move_to_timestamp_dir(raw_path)
+                self._move_to_period(raw_path)
                 return
 
             # Process audio
@@ -608,7 +608,7 @@ class Transcriber:
             # Transcribe
             success = self._transcribe(raw_path, segments)
             if success:
-                moved_path = self._move_to_timestamp_dir(raw_path)
+                moved_path = self._move_to_period(raw_path)
 
                 # Emit completion event for standard mode
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))

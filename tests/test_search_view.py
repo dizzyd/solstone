@@ -105,7 +105,7 @@ def test_search_transcripts_api(tmp_path):
 
     day_dir = journal / "20240103"
     day_dir.mkdir()
-    # Write JSONL format: metadata first, then entries in timestamp directory
+    # Write JSONL format: metadata first, then entries in periody
     ts_dir = day_dir / "123000"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(
