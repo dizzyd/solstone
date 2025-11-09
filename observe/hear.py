@@ -344,7 +344,7 @@ def load_transcript(
 
     The JSONL format has metadata as the first line (may be empty {})
     and transcript entries as subsequent lines. Handles both native
-    transcripts (*_audio.jsonl) and imported transcripts (*_imported_audio.jsonl).
+    transcripts (HHMMSS/audio.jsonl) and imported transcripts (HHMMSS/imported_audio.jsonl).
 
     Args:
         file_path: Path to the JSONL transcript file
@@ -362,7 +362,7 @@ def load_transcript(
 
     Examples:
         # Load a native transcript
-        metadata, entries, formatted_text = load_transcript("20250101/120000_audio.jsonl")
+        metadata, entries, formatted_text = load_transcript("20250101/120000/audio.jsonl")
         if entries is None:
             print(f"Error: {metadata.get('error')}")
             return
@@ -371,7 +371,7 @@ def load_transcript(
             print(f"{entry['start']}: {entry['text']}")
 
         # Load an imported transcript
-        metadata, entries, formatted_text = load_transcript("20250101/120000_imported_audio.jsonl")
+        metadata, entries, formatted_text = load_transcript("20250101/120000/imported_audio.jsonl")
         if entries is not None:
             import_id = metadata.get("imported", {}).get("id")
             facet = metadata.get("imported", {}).get("facet")
@@ -466,23 +466,22 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
     import re
     from datetime import datetime
 
-    # Parse day and time from filename
-    # Expected format: YYYYMMDD/HHMMSS_audio.jsonl or YYYYMMDD/HHMMSS_imported_audio.jsonl
+    # Parse day and time from path structure
+    # Expected format: YYYYMMDD/HHMMSS/audio.jsonl or YYYYMMDD/HHMMSS/imported_audio.jsonl
     parts = path.parts
     day_str = None
     time_str = None
 
-    # Try to find YYYYMMDD in path
-    for part in reversed(parts):
+    # Try to find YYYYMMDD and HHMMSS in path
+    for i, part in enumerate(reversed(parts)):
         if re.match(r"^\d{8}$", part):
             day_str = part
+            # Check if previous part (parent dir) is HHMMSS timestamp
+            if i > 0:
+                prev_part = list(reversed(parts))[i - 1]
+                if re.match(r"^\d{6}$", prev_part):
+                    time_str = prev_part
             break
-
-    # Parse time from filename
-    filename = path.name
-    time_match = re.match(r"^(\d{6}).*_audio\.jsonl$", filename)
-    if time_match:
-        time_str = time_match.group(1)
 
     # Build header line
     header_parts = []

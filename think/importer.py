@@ -126,9 +126,9 @@ def _write_import_jsonl(
     metadata: dict[str, object] = {"imported": imported_meta}
 
     # Add raw audio file reference if provided
-    # Path is relative from day directory to imports directory
+    # Path is relative from timestamp directory (YYYYMMDD/HHMMSS/) to imports directory
     if raw_filename:
-        metadata["raw"] = f"../imports/{import_id}/{raw_filename}"
+        metadata["raw"] = f"../../imports/{import_id}/{raw_filename}"
 
     # Write JSONL: metadata first, then entries
     jsonl_lines = [json.dumps(metadata)]
@@ -294,9 +294,12 @@ def process_transcript(
         if not json_data:
             continue
         ts = base_dt + timedelta(minutes=idx * 5)
-        json_path = os.path.join(
-            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.jsonl"
-        )
+        time_part = ts.strftime("%H%M%S")
+
+        # Create timestamp directory and place file inside it
+        ts_dir = os.path.join(day_dir, time_part)
+        os.makedirs(ts_dir, exist_ok=True)
+        json_path = os.path.join(ts_dir, "imported_audio.jsonl")
 
         # Ensure timestamps are absolute
         # Text transcripts might have relative timestamps (00:00:00, 00:01:23)
@@ -429,9 +432,12 @@ def audio_transcribe(
     for chunk_index, chunk_entries in chunks:
         # Calculate timestamp for this chunk
         ts = base_dt + timedelta(minutes=chunk_index * 5)
-        json_path = os.path.join(
-            day_dir, f"{ts.strftime('%H%M%S')}_imported_audio.jsonl"
-        )
+        time_part = ts.strftime("%H%M%S")
+
+        # Create timestamp directory and place file inside it
+        ts_dir = os.path.join(day_dir, time_part)
+        os.makedirs(ts_dir, exist_ok=True)
+        json_path = os.path.join(ts_dir, "imported_audio.jsonl")
 
         # Convert relative timestamps to absolute timestamps
         # Rev AI returns timestamps relative to start of file (00:00:00, 00:00:06, etc.)

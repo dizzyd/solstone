@@ -169,11 +169,11 @@ def decode_frames(
     Example:
         >>> from observe.utils import load_analysis_frames
         >>> from observe.see import decode_frames
-        >>> all_frames = load_analysis_frames("092152_screen.jsonl")
+        >>> all_frames = load_analysis_frames("20250101/092152/screen.jsonl")
         >>> # Filter to actual frames (skip header)
         >>> frames = [f for f in all_frames if "frame_id" in f]
         >>> # Get first 10 frames
-        >>> images = decode_frames("raw/092152_screen.mp4", frames[:10])
+        >>> images = decode_frames("20250101/092152/screen.webm", frames[:10])
         >>> images[0].show()  # Display first frame
     """
     # Early validation before imports

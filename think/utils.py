@@ -524,8 +524,8 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
     day:
         Day folder in ``YYYYMMDD`` format.
     name:
-        Transcript filename such as ``HHMMSS_audio.jsonl``,
-        ``HHMMSS_monitor_1_diff.json``, or ``HHMMSS_screen.jsonl``.
+        Transcript filename such as ``HHMMSS/audio.jsonl``,
+        ``HHMMSS/monitor_1_diff.json``, or ``HHMMSS/screen.jsonl``.
 
     Returns
     -------

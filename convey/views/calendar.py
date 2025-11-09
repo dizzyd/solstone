@@ -699,8 +699,9 @@ def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
     if not os.path.isdir(day_dir):
         return "", 404
 
-    # Check if the screen.jsonl file exists
-    jsonl_path = os.path.join(day_dir, f"{timestamp}_screen.jsonl")
+    # Check if the screen.jsonl file exists in timestamp subdirectory
+    ts_dir = os.path.join(day_dir, timestamp)
+    jsonl_path = os.path.join(ts_dir, "screen.jsonl")
     if not os.path.isfile(jsonl_path):
         return "", 404
 
@@ -729,40 +730,44 @@ def _dev_screen_files(day: str) -> Any:
         return jsonify({"files": []})
 
     files = []
-    for fname in sorted(os.listdir(day_dir)):
-        if fname.endswith("_screen.jsonl"):
-            jsonl_path = os.path.join(day_dir, fname)
-            timestamp = fname.replace("_screen.jsonl", "")
+    # Look for timestamp subdirectories (HHMMSS/)
+    for item in sorted(os.listdir(day_dir)):
+        item_path = os.path.join(day_dir, item)
+        if os.path.isdir(item_path) and item.isdigit() and len(item) == 6:
+            # Found timestamp directory, check for screen.jsonl
+            jsonl_path = os.path.join(item_path, "screen.jsonl")
+            if os.path.isfile(jsonl_path):
+                timestamp = item
 
-            # Count frames (excluding header line)
-            frame_count = 0
-            file_size = 0
-            try:
-                file_size = os.path.getsize(jsonl_path)
-                with open(jsonl_path, "r", encoding="utf-8") as f:
-                    for line_num, line in enumerate(f, 1):
-                        if line_num > 1:  # Skip header
-                            frame_count += 1
-            except Exception:
-                continue
+                # Count frames (excluding header line)
+                frame_count = 0
+                file_size = 0
+                try:
+                    file_size = os.path.getsize(jsonl_path)
+                    with open(jsonl_path, "r", encoding="utf-8") as f:
+                        for line_num, line in enumerate(f, 1):
+                            if line_num > 1:  # Skip header
+                                frame_count += 1
+                except Exception:
+                    continue
 
-            # Format timestamp as human-readable time
-            from datetime import datetime
+                # Format timestamp as human-readable time
+                from datetime import datetime
 
-            try:
-                time_obj = datetime.strptime(timestamp, "%H%M%S")
-                human_time = time_obj.strftime("%I:%M:%S %p").lstrip("0")
-            except Exception:
-                human_time = timestamp
+                try:
+                    time_obj = datetime.strptime(timestamp, "%H%M%S")
+                    human_time = time_obj.strftime("%I:%M:%S %p").lstrip("0")
+                except Exception:
+                    human_time = timestamp
 
-            files.append(
-                {
-                    "timestamp": timestamp,
-                    "human_time": human_time,
-                    "frame_count": frame_count,
-                    "file_size": file_size,
-                }
-            )
+                files.append(
+                    {
+                        "timestamp": timestamp,
+                        "human_time": human_time,
+                        "frame_count": frame_count,
+                        "file_size": file_size,
+                    }
+                )
 
     return jsonify({"files": files})
 
@@ -776,7 +781,8 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
         return "", 404
 
     day_dir = str(day_path(day))
-    jsonl_path = os.path.join(day_dir, f"{timestamp}_screen.jsonl")
+    ts_dir = os.path.join(day_dir, timestamp)
+    jsonl_path = os.path.join(ts_dir, "screen.jsonl")
 
     if not os.path.isfile(jsonl_path):
         return "", 404

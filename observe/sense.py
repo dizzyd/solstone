@@ -474,12 +474,14 @@ class FileSensor:
                     handler_name, command = handler_info
                     to_process.append((file_path, handler_name, command))
 
-        # Find incomplete reduces (JSONL files without corresponding MD)
-        for file_path in day_dir.glob("*_screen.jsonl"):
-            md_path = file_path.parent / f"{file_path.stem}.md"
-            if not md_path.exists():
-                # Register reduce as a handler task
-                to_process.append((file_path, "reduce", ["observe-reduce", "{file}"]))
+        # Find incomplete reduces (screen.jsonl files in timestamp subdirs without corresponding screen.md)
+        for ts_subdir in day_dir.iterdir():
+            if ts_subdir.is_dir() and ts_subdir.name.isdigit() and len(ts_subdir.name) == 6:
+                screen_jsonl = ts_subdir / "screen.jsonl"
+                screen_md = ts_subdir / "screen.md"
+                if screen_jsonl.exists() and not screen_md.exists():
+                    # Register reduce as a handler task
+                    to_process.append((screen_jsonl, "reduce", ["observe-reduce", "{file}"]))
 
         if not to_process:
             logger.info(f"No unprocessed files found in {day_dir}")
@@ -540,14 +542,24 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
 
     Returns:
         Dictionary with:
-        - "processed": List of JSONL output files (*_audio.jsonl, *_screen.jsonl)
-        - "unprocessed": List of unprocessed source media files
+        - "processed": List of JSONL output files in timestamp subdirs (HHMMSS/audio.jsonl, HHMMSS/screen.jsonl)
+        - "unprocessed": List of unprocessed source media files in day root
     """
-    # Find processed output files
-    processed = sorted(p.name for p in day_dir.glob("*_audio.jsonl"))
-    processed.extend(sorted(p.name for p in day_dir.glob("*_screen.jsonl")))
+    # Find processed output files in timestamp subdirectories (HHMMSS/)
+    processed = []
+    for ts_subdir in day_dir.iterdir():
+        if ts_subdir.is_dir() and ts_subdir.name.isdigit() and len(ts_subdir.name) == 6:
+            # Check for audio.jsonl and split audio files
+            for audio_file in ts_subdir.glob("*audio.jsonl"):
+                processed.append(f"{ts_subdir.name}/{audio_file.name}")
+            # Check for screen.jsonl
+            screen_jsonl = ts_subdir / "screen.jsonl"
+            if screen_jsonl.exists():
+                processed.append(f"{ts_subdir.name}/screen.jsonl")
 
-    # Find unprocessed source media (still in day root)
+    processed.sort()
+
+    # Find unprocessed source media (still in day root, not yet moved to timestamp subdirs)
     unprocessed = []
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*_raw.flac")))
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*_raw.m4a")))

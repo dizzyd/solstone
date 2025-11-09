@@ -136,11 +136,11 @@ def test_file_sensor_match_pattern():
         txt_file = day_dir / "test.txt"
         assert sensor._match_pattern(txt_file) is None
 
-        # Should not match - in subdirectory
-        heard_dir = day_dir / "heard"
-        heard_dir.mkdir()
-        heard_file = heard_dir / "test.flac"
-        assert sensor._match_pattern(heard_file) is None
+        # Should not match - in timestamp subdirectory
+        ts_dir = day_dir / "123456"
+        ts_dir.mkdir()
+        ts_file = ts_dir / "audio.jsonl"
+        assert sensor._match_pattern(ts_file) is None
 
 
 @patch("think.runner._get_journal_path")
