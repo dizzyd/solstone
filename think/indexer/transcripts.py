@@ -20,13 +20,17 @@ SCREEN_RE = re.compile(r"^(?P<time>\d{6})_[a-z]+_\d+_diff\.json$")
 SCREEN_JSONL_RE = re.compile(r"^(?P<time>\d{6})_screen\.jsonl$")
 
 
-def find_transcript_files(journal: str) -> Dict[str, str]:
+def find_transcript_files(journal: str, day: str | None = None) -> Dict[str, str]:
     """Return mapping of transcript JSON file paths relative to ``journal``.
 
     Looks for transcript files in timestamp subdirectories (YYYYMMDD/HHMMSS/*.jsonl).
+
+    If ``day`` is provided (YYYYMMDD format), only scan that specific day.
+    Otherwise scan all days.
     """
     files: Dict[str, str] = {}
-    for day, day_path in day_dirs().items():
+    days = {day: day_dirs()[day]} if day and day in day_dirs() else day_dirs()
+    for day_key, day_path in days.items():
         # Check timestamp subdirectories
         from think.utils import period_name
 
@@ -37,11 +41,11 @@ def find_transcript_files(journal: str) -> Dict[str, str]:
                 for result_file in item.glob("*.jsonl"):
                     # Look for audio.jsonl, screen.jsonl, or split audio files
                     if result_file.name in ("audio.jsonl", "screen.jsonl"):
-                        rel = os.path.join(day, item.name, result_file.name)
+                        rel = os.path.join(day_key, item.name, result_file.name)
                         files[rel] = str(result_file)
                     elif result_file.name.endswith("_audio.jsonl"):
                         # Handle split audio files: mic_audio.jsonl, sys_audio.jsonl
-                        rel = os.path.join(day, item.name, result_file.name)
+                        rel = os.path.join(day_key, item.name, result_file.name)
                         files[rel] = str(result_file)
     return files
 
@@ -185,10 +189,14 @@ def _index_transcripts(
         logger.info("  indexed transcript %s entries", len(texts))
 
 
-def scan_transcripts(journal: str, verbose: bool = False) -> bool:
-    """Index transcript audio, screen diff JSON, and screen JSONL files on a per-day basis."""
+def scan_transcripts(journal: str, verbose: bool = False, day: str | None = None) -> bool:
+    """Index transcript audio, screen diff JSON, and screen JSONL files on a per-day basis.
+
+    If ``day`` is provided (YYYYMMDD format), only scan that specific day.
+    Otherwise scan all days.
+    """
     logger = logging.getLogger(__name__)
-    files = find_transcript_files(journal)
+    files = find_transcript_files(journal, day=day)
     if not files:
         return False
 

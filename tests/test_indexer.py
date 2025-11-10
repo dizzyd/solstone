@@ -215,3 +215,68 @@ def test_search_raws_time_order(tmp_path):
 
 # test_entities_index removed - tested old behavior where top-level and day-level
 # entities were indexed. Now only facet-scoped entities are indexed.
+
+
+def test_scan_transcripts_single_day(tmp_path):
+    """Test scanning transcripts for a single day only."""
+    mod = importlib.import_module("think.indexer")
+    journal = tmp_path
+    os.environ["JOURNAL_PATH"] = str(journal)
+
+    # Create two days with transcripts
+    day1 = journal / "20240108"
+    day1.mkdir()
+    ts_dir1 = day1 / "100000"
+    ts_dir1.mkdir()
+    (ts_dir1 / "audio.jsonl").write_text(
+        json.dumps({"topics": ["test"], "setting": "personal"})
+        + "\n"
+        + json.dumps(
+            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "day one"}
+        )
+        + "\n"
+    )
+
+    day2 = journal / "20240109"
+    day2.mkdir()
+    ts_dir2 = day2 / "110000"
+    ts_dir2.mkdir()
+    (ts_dir2 / "audio.jsonl").write_text(
+        json.dumps({"topics": ["test"], "setting": "personal"})
+        + "\n"
+        + json.dumps(
+            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "day two"}
+        )
+        + "\n"
+    )
+
+    # Scan only day 1
+    changed = mod.scan_transcripts(str(journal), verbose=True, day="20240108")
+    assert changed is True
+
+    # Day 1 should have index
+    assert (day1 / "indexer" / "transcripts.sqlite").exists()
+
+    # Day 2 should NOT have index yet
+    assert not (day2 / "indexer" / "transcripts.sqlite").exists()
+
+    # Search day 1 should find result
+    total, results = mod.search_transcripts("day", limit=10, day="20240108")
+    assert total == 1
+    assert results[0]["metadata"]["day"] == "20240108"
+
+    # Now scan only day 2
+    changed = mod.scan_transcripts(str(journal), verbose=True, day="20240109")
+    assert changed is True
+
+    # Day 2 should now have index
+    assert (day2 / "indexer" / "transcripts.sqlite").exists()
+
+    # Search day 2 should find result
+    total, results = mod.search_transcripts("day", limit=10, day="20240109")
+    assert total == 1
+    assert results[0]["metadata"]["day"] == "20240109"
+
+    # Full scan should find both
+    total, _ = mod.search_transcripts("day", limit=10)
+    assert total == 2

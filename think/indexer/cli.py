@@ -144,7 +144,7 @@ def main() -> None:
 
     if args.rescan:
         if args.index == "transcripts":
-            changed = scan_transcripts(journal, verbose=args.verbose)
+            changed = scan_transcripts(journal, verbose=args.verbose, day=args.day)
             if changed:
                 journal_log("indexer transcripts rescan ok")
         elif args.index == "events":
