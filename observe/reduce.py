@@ -70,15 +70,15 @@ def assemble_markdown(
     base_hour = base_minute = base_second = 0
     if video_path:
         try:
-            from think.utils import period_name
+            from think.utils import period_parse
 
-            # Get period name from parent directory
-            period = period_name(video_path.parent.name)
-            if period:
-                base_hour = int(period[0:2])
-                base_minute = int(period[2:4])
-                base_second = int(period[4:6])
-        except (ValueError, IndexError, AttributeError):
+            # Get period start time from parent directory
+            start_time, _ = period_parse(video_path.parent.name)
+            if start_time:
+                base_hour = start_time.hour
+                base_minute = start_time.minute
+                base_second = start_time.second
+        except (ValueError, AttributeError):
             pass
 
     # Check if multiple monitors present

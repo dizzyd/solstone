@@ -204,77 +204,6 @@ def day_dirs() -> dict[str, str]:
     return days
 
 
-def period_name(name_or_path: str) -> str | None:
-    """Extract and validate period start time from a period name or path.
-
-    Periods can be in two formats:
-    - HHMMSS: Simple 6-digit timestamp (e.g., "143022")
-    - HHMMSS_LEN: Timestamp with duration suffix (e.g., "143022_300" for 5 minutes)
-
-    Parameters
-    ----------
-    name_or_path : str
-        Period name (e.g., "143022" or "143022_300") or full path containing period.
-
-    Returns
-    -------
-    str or None
-        HHMMSS string (6 digits) if valid period format, None otherwise.
-
-    Examples
-    --------
-    >>> period_name("143022")
-    "143022"
-    >>> period_name("143022_300")
-    "143022"
-    >>> period_name("/journal/20250109/143022_300/audio.jsonl")
-    "143022"
-    >>> period_name("invalid")
-    None
-
-    Usage
-    -----
-    # Validation (truthy check)
-    if period_name(item.name):
-        process(item)
-
-    # Extraction
-    time_part = period_name(item.name)
-    path = day_dir / time_part / "audio.jsonl"
-    """
-    # Extract just the period name if it's a path
-    if "/" in name_or_path or "\\" in name_or_path:
-        path_parts = Path(name_or_path).parts
-        # Look for YYYYMMDD/HHMMSS* pattern
-        for i, part in enumerate(path_parts):
-            if part.isdigit() and len(part) == 8 and i + 1 < len(path_parts):
-                name = path_parts[i + 1]
-                break
-        else:
-            return None
-    else:
-        name = name_or_path
-
-    # Simple format: HHMMSS (6 digits)
-    if name.isdigit() and len(name) == 6:
-        return name
-
-    # Extended format: HHMMSS_LEN
-    if "_" not in name:
-        return None
-
-    parts = name.split("_", 1)  # Split on first underscore only
-    if (
-        len(parts) == 2
-        and parts[0].isdigit()
-        and len(parts[0]) == 6
-        and parts[1].isdigit()
-    ):
-        return parts[0]
-
-    return None
-
-
 def period_key(name_or_path: str) -> str | None:
     """Extract full period key (HHMMSS or HHMMSS_LEN) from any path/filename.
 
@@ -310,7 +239,9 @@ def period_key(name_or_path: str) -> str | None:
     return None
 
 
-def period_parse(name_or_path: str) -> tuple[datetime.time | None, datetime.time | None]:
+def period_parse(
+    name_or_path: str,
+) -> tuple[datetime.time | None, datetime.time | None]:
     """Parse period to extract start and end times as datetime objects.
 
     Parameters
@@ -337,7 +268,7 @@ def period_parse(name_or_path: str) -> tuple[datetime.time | None, datetime.time
     >>> period_parse("invalid")
     (None, None)
     """
-    from datetime import timedelta
+    from datetime import time, timedelta
 
     # Extract just the period name if it's a path
     if "/" in name_or_path or "\\" in name_or_path:
@@ -352,9 +283,23 @@ def period_parse(name_or_path: str) -> tuple[datetime.time | None, datetime.time
     else:
         name = name_or_path
 
-    # Validate and extract HHMMSS
-    time_str = period_name(name)
-    if time_str is None:
+    # Validate and extract HHMMSS from period name
+    # Simple format: HHMMSS (6 digits)
+    if name.isdigit() and len(name) == 6:
+        time_str = name
+    # Extended format: HHMMSS_LEN
+    elif "_" in name:
+        parts = name.split("_", 1)  # Split on first underscore only
+        if (
+            len(parts) == 2
+            and parts[0].isdigit()
+            and len(parts[0]) == 6
+            and parts[1].isdigit()
+        ):
+            time_str = parts[0]
+        else:
+            return (None, None)
+    else:
         return (None, None)
 
     # Parse HHMMSS to datetime.time
@@ -367,7 +312,7 @@ def period_parse(name_or_path: str) -> tuple[datetime.time | None, datetime.time
         if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
             return (None, None)
 
-        start_time = datetime.time(hour, minute, second)
+        start_time = time(hour, minute, second)
     except (ValueError, IndexError):
         return (None, None)
 

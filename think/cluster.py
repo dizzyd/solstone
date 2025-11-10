@@ -28,11 +28,11 @@ def _load_entries(
     day_path_obj = Path(day_dir)
 
     # Check timestamp subdirectories for transcript files
-    from think.utils import period_name
+    from think.utils import period_parse
 
     for item in day_path_obj.iterdir():
-        time_part = period_name(item.name)
-        if not (item.is_dir() and time_part):
+        start_time, _ = period_parse(item.name)
+        if not (item.is_dir() and start_time):
             continue
 
         # Process audio transcripts
@@ -43,7 +43,9 @@ def _load_entries(
                 # Load JSONL format using shared utility
                 from observe.hear import load_transcript
 
-                metadata, transcript_entries, formatted_text = load_transcript(str(audio_file))
+                metadata, transcript_entries, formatted_text = load_transcript(
+                    str(audio_file)
+                )
                 if transcript_entries is None:
                     print(
                         f"Warning: Could not load transcript {audio_file.name}: {metadata.get('error')}",
@@ -52,7 +54,8 @@ def _load_entries(
                     continue
 
                 # Use formatted text for human-readable display
-                timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
+                day_date = datetime.strptime(date_str, "%Y%m%d").date()
+                timestamp = datetime.combine(day_date, start_time)
                 entries.append(
                     {
                         "timestamp": timestamp,
@@ -61,7 +64,7 @@ def _load_entries(
                         "monitor": None,
                         "source": None,
                         "id": None,
-                        "name": f"{time_part}/{audio_file.name}",
+                        "name": f"{item.name}/{audio_file.name}",
                     }
                 )
 
@@ -71,7 +74,8 @@ def _load_entries(
             if screen_md.exists():
                 try:
                     content = screen_md.read_text()
-                    timestamp = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
+                    day_date = datetime.strptime(date_str, "%Y%m%d").date()
+                    timestamp = datetime.combine(day_date, start_time)
                     entries.append(
                         {
                             "timestamp": timestamp,
@@ -80,11 +84,13 @@ def _load_entries(
                             "monitor": None,
                             "source": None,
                             "id": None,
-                            "name": f"{time_part}/screen.md",
+                            "name": f"{item.name}/screen.md",
                         }
                     )
                 except Exception as e:
-                    print(f"Warning: Could not read file screen.md: {e}", file=sys.stderr)
+                    print(
+                        f"Warning: Could not read file screen.md: {e}", file=sys.stderr
+                    )
 
         elif screen_mode == "raw":
             # Check for screen.jsonl
@@ -99,9 +105,8 @@ def _load_entries(
 
                     # Create one entry with all frames as JSON content
                     if frames:
-                        base_timestamp = datetime.strptime(
-                            date_str + time_part, "%Y%m%d%H%M%S"
-                        )
+                        day_date = datetime.strptime(date_str, "%Y%m%d").date()
+                        base_timestamp = datetime.combine(day_date, start_time)
                         entries.append(
                             {
                                 "timestamp": base_timestamp,
@@ -233,13 +238,14 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
     day_path_obj = Path(day_dir)
 
     # Check timestamp subdirectories for transcript files
-    from think.utils import period_name
+    from think.utils import period_parse
 
     for item in day_path_obj.iterdir():
-        time_part = period_name(item.name)
-        if item.is_dir() and time_part:
-            # Found period (HHMMSS)
-            dt = datetime.strptime(date_str + time_part, "%Y%m%d%H%M%S")
+        start_time, _ = period_parse(item.name)
+        if item.is_dir() and start_time:
+            # Found period - combine with date to get datetime
+            day_date = datetime.strptime(date_str, "%Y%m%d").date()
+            dt = datetime.combine(day_date, start_time)
             slot = dt.replace(
                 minute=dt.minute - (dt.minute % 15), second=0, microsecond=0
             )

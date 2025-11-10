@@ -534,9 +534,9 @@ class FileSensor:
 
         # Find incomplete reduces (screen.jsonl files in periods without corresponding screen.md)
         for period in day_dir.iterdir():
-            from think.utils import period_name
+            from think.utils import period_key
 
-            if period.is_dir() and period_name(period.name):
+            if period.is_dir() and period_key(period.name):
                 screen_jsonl = period / "screen.jsonl"
                 screen_md = period / "screen.md"
                 if screen_jsonl.exists() and not screen_md.exists():
@@ -608,11 +608,11 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
         - "unprocessed": List of unprocessed source media files in day root
     """
     # Find processed output files in periods (HHMMSS/)
-    from think.utils import period_name
+    from think.utils import period_key
 
     processed = []
     for period in day_dir.iterdir():
-        if period.is_dir() and period_name(period.name):
+        if period.is_dir() and period_key(period.name):
             # Check for audio.jsonl and split audio files
             for audio_file in period.glob("*audio.jsonl"):
                 processed.append(f"{period.name}/{audio_file.name}")

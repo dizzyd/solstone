@@ -112,11 +112,11 @@ def calendar_transcript_range(day: str) -> Any:
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_name
+    from think.utils import period_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_name(start) or not period_name(end):
+    if not period_key(start) or not period_key(end):
         return "", 400
 
     # Get checkbox states from query params
@@ -184,11 +184,11 @@ def calendar_raw_files(day: str) -> Any:
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_name
+    from think.utils import period_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_name(start) or not period_name(end):
+    if not period_key(start) or not period_key(end):
         return "", 400
 
     file_type = request.args.get("type", None)  # 'audio', 'screen', or None for both
@@ -240,11 +240,11 @@ def calendar_media_files(day: str) -> Any:
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_name
+    from think.utils import period_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_name(start) or not period_name(end):
+    if not period_key(start) or not period_key(end):
         return "", 400
 
     file_type = request.args.get("type", None)  # 'audio', 'screen', or None for both
@@ -347,11 +347,11 @@ def download_audio(day: str) -> Any:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    from think.utils import period_name
+    from think.utils import period_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_name(start) or not period_name(end):
+    if not period_key(start) or not period_key(end):
         return "", 400
 
     import subprocess
@@ -700,9 +700,9 @@ def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
     """Render detail view for a specific screen.jsonl file."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_name
+    from think.utils import period_key
 
-    if not period_name(timestamp):
+    if not period_key(timestamp):
         return "", 404
 
     day_dir = str(day_path(day))
@@ -739,13 +739,13 @@ def _dev_screen_files(day: str) -> Any:
     if not os.path.isdir(day_dir):
         return jsonify({"files": []})
 
-    from think.utils import period_name
+    from think.utils import period_key
 
     files = []
     # Look for periods (HHMMSS/)
     for item in sorted(os.listdir(day_dir)):
         item_path = os.path.join(day_dir, item)
-        if os.path.isdir(item_path) and period_name(item):
+        if os.path.isdir(item_path) and period_key(item):
             # Found period, check for screen.jsonl
             jsonl_path = os.path.join(item_path, "screen.jsonl")
             if os.path.isfile(jsonl_path):
@@ -789,9 +789,9 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
     """Return all frame records and pre-cache decoded frames from video."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_name
+    from think.utils import period_key
 
-    if not period_name(timestamp):
+    if not period_key(timestamp):
         return "", 404
 
     day_dir = str(day_path(day))
@@ -844,9 +844,9 @@ def _dev_screen_frame_image(day: str, timestamp: str, frame_id: int) -> Any:
     """Serve a cached frame image as JPEG."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_name
+    from think.utils import period_key
 
-    if not period_name(timestamp):
+    if not period_key(timestamp):
         return "", 404
 
     try:

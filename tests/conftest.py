@@ -196,9 +196,9 @@ def add_module_stubs(request, monkeypatch):
             if day_path.is_dir():
                 # Find raw (processed) files in periods (HHMMSS/)
                 for item in day_path.iterdir():
-                    from think.utils import period_name
+                    from think.utils import period_key
 
-                    if item.is_dir() and period_name(item.name):
+                    if item.is_dir() and period_key(item.name):
                         # Found period
                         for p in item.glob("*.flac"):
                             raw_files.append(f"{item.name}/{p.name}")
@@ -211,9 +211,9 @@ def add_module_stubs(request, monkeypatch):
 
                 # Find processed output files in periods
                 for item in day_path.iterdir():
-                    from think.utils import period_name
+                    from think.utils import period_key
 
-                    if item.is_dir() and period_name(item.name):
+                    if item.is_dir() and period_key(item.name):
                         for p in item.glob("*audio.jsonl"):
                             processed_files.append(f"{item.name}/{p.name}")
                         for p in item.glob("*screen.jsonl"):

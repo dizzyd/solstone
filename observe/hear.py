@@ -470,7 +470,7 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
     # Expected format: YYYYMMDD/HHMMSS/audio.jsonl or YYYYMMDD/HHMMSS/imported_audio.jsonl
     parts = path.parts
     day_str = None
-    time_str = None
+    start_time = None
 
     # Try to find YYYYMMDD and HHMMSS in path
     for i, part in enumerate(reversed(parts)):
@@ -478,20 +478,20 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
             day_str = part
             # Check if previous part (parent dir) is HHMMSS period
             if i > 0:
-                from think.utils import period_name
+                from think.utils import period_parse
 
                 prev_part = list(reversed(parts))[i - 1]
-                if period_name(prev_part):
-                    time_str = prev_part
+                start_time, _ = period_parse(prev_part)
             break
 
     # Build header line
     header_parts = []
 
     # Add start time if we could parse it
-    if day_str and time_str:
+    if day_str and start_time:
         try:
-            dt = datetime.strptime(f"{day_str}{time_str}", "%Y%m%d%H%M%S")
+            day_date = datetime.strptime(day_str, "%Y%m%d").date()
+            dt = datetime.combine(day_date, start_time)
             # Format as "2024-06-15 10:05a"
             time_formatted = dt.strftime("%Y-%m-%d %I:%M%p").lower()
             header_parts.append(f"Start: {time_formatted}")

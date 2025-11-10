@@ -32,11 +32,11 @@ def find_transcript_files(journal: str, day: str | None = None) -> Dict[str, str
     days = {day: day_dirs()[day]} if day and day in day_dirs() else day_dirs()
     for day_key, day_path in days.items():
         # Check timestamp subdirectories
-        from think.utils import period_name
+        from think.utils import period_key
 
         day_path_obj = Path(day_path)
         for item in day_path_obj.iterdir():
-            if item.is_dir() and period_name(item.name):
+            if item.is_dir() and period_key(item.name):
                 # Found a timestamp directory (HHMMSS)
                 for result_file in item.glob("*.jsonl"):
                     # Look for audio.jsonl, screen.jsonl, or split audio files

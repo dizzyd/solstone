@@ -1,6 +1,6 @@
 # Sunstone Journal Guide
 
-This document describes the layout of a **journal** directory where all audio, screen and analysis artifacts are stored. Each dated `YYYYMMDD` folder is referred to as a **day**, and within each day captured content is organized into **periods** (`HHMMSS/` timestamp folders).
+This document describes the layout of a **journal** directory where all audio, screen and analysis artifacts are stored. Each dated `YYYYMMDD` folder is referred to as a **day**, and within each day captured content is organized into **periods** (timestamped duration folders). Each period folder uses the format `HHMMSS_LEN/` where `HHMMSS` is the start time and `LEN` is the duration in seconds. This folder name serves as the **period key**, uniquely identifying the period within a given day.
 
 ## Top level files
 
@@ -342,12 +342,9 @@ Common actions include:
 
 ## Day folder contents
 
-Within each day, captured content is organized into **periods** (timestamped folders):
+Within each day, captured content is organized into **periods** (timestamped duration folders). The folder name is the **period key**, which uniquely identifies the period within the day and follows this format:
 
-- `HHMMSS/` – Simple period format (e.g., `143022/`)
-- `HHMMSS_LEN/` – Period with duration suffix in seconds (e.g., `143022_300/` for 5 minutes)
-
-Both formats are supported throughout the system and are treated identically by analysis tools.
+- `HHMMSS_LEN/` – Start time and duration in seconds (e.g., `143022_300/` for a 5-minute period starting at 14:30:22)
 
 Audio capture tools write FLAC files and transcripts:
 

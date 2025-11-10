@@ -49,13 +49,13 @@ def recent_audio_activity(window: int = 120) -> bool:
     day_dir = day_path()  # Uses today by default, creates if needed, returns Path
     if not day_dir.exists():
         return False
-    from think.utils import period_name
+    from think.utils import period_key
 
     cutoff = time.time() - window
     # Check periods (HHMMSS/)
     for item in os.listdir(day_dir):
         item_path = day_dir / item
-        if item_path.is_dir() and period_name(item):
+        if item_path.is_dir() and period_key(item):
             # Found period, check for audio files
             for audio_file in item_path.glob("*audio.jsonl"):
                 try:
