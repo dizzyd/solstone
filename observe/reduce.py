@@ -303,15 +303,38 @@ def main():
         description="Reduce screencast analysis to markdown summary"
     )
     parser.add_argument(
-        "jsonl_path",
+        "--day",
         type=str,
-        help="Path to analysis JSONL file",
+        required=True,
+        help="Day in YYYYMMDD format",
+    )
+    parser.add_argument(
+        "--period",
+        type=str,
+        required=True,
+        help="Period key (HHMMSS or HHMMSS_LEN)",
     )
     args = setup_cli(parser)
 
-    jsonl_path = Path(args.jsonl_path)
+    # Construct path from semantic arguments
+    journal_path = Path(os.getenv("JOURNAL_PATH", ""))
+    if not journal_path.is_dir():
+        logger.error("JOURNAL_PATH not set or invalid")
+        sys.exit(1)
+
+    day_dir = journal_path / args.day
+    if not day_dir.exists():
+        logger.error(f"Day directory not found: {day_dir}")
+        sys.exit(1)
+
+    period_dir = day_dir / args.period
+    if not period_dir.exists():
+        logger.error(f"Period directory not found: {period_dir}")
+        sys.exit(1)
+
+    jsonl_path = period_dir / "screen.jsonl"
     if not jsonl_path.exists():
-        logger.error(f"JSONL file not found: {jsonl_path}")
+        logger.error(f"Analysis file not found: {jsonl_path}")
         sys.exit(1)
 
     exit_code = reduce_analysis(jsonl_path)

@@ -90,7 +90,7 @@ def test_handler_process_cleanup():
     mock_managed.name = "transcribe"
     mock_managed.process = MagicMock()
 
-    handler = HandlerProcess(Path("/tmp/test.flac"), mock_managed)
+    handler = HandlerProcess(Path("/tmp/test.flac"), mock_managed, "transcribe")
 
     handler.cleanup()
 

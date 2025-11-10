@@ -286,8 +286,18 @@ class FileSensor:
 
     def _run_reduce(self, video_path: Path):
         """Run reduce on the video file after describe completes."""
-        jsonl_path = video_path.parent / f"{video_path.stem}.jsonl"
-        cmd = ["observe-reduce", str(jsonl_path)]
+        from think.utils import period_key
+
+        # Extract day and period from video path
+        # Expected structure: journal_dir/YYYYMMDD/HHMMSS_LEN_suffix.webm
+        day = video_path.parent.name  # YYYYMMDD
+        period = period_key(video_path.stem)  # HHMMSS or HHMMSS_LEN
+
+        if not period:
+            logger.error(f"Cannot extract period from {video_path.stem}")
+            return
+
+        cmd = ["observe-reduce", "--day", day, "--period", period]
 
         # Add verbose/debug flags if set
         if self.debug:
@@ -295,17 +305,15 @@ class FileSensor:
         elif self.verbose:
             cmd.append("-v")
 
-        logger.info(f"Running reduce for {video_path.name}")
+        logger.info(f"Running reduce for {day}/{period}")
 
         # Use unified runner with automatic logging and timeout
         success, exit_code = run_task(cmd, timeout=300)  # 5 minute timeout
 
         if success:
-            logger.info(f"Reduce completed successfully for {video_path.name}")
+            logger.info(f"Reduce completed successfully for {day}/{period}")
         else:
-            logger.warning(
-                f"Reduce failed for {video_path.name} (exit code {exit_code})"
-            )
+            logger.warning(f"Reduce failed for {day}/{period} (exit code {exit_code})")
 
     def _handle_file(self, file_path: Path):
         """Route file to appropriate handler."""
@@ -544,9 +552,13 @@ class FileSensor:
                 screen_jsonl = period / "screen.jsonl"
                 screen_md = period / "screen.md"
                 if screen_jsonl.exists() and not screen_md.exists():
-                    # Register reduce as a handler task
+                    # Register reduce as a handler task with semantic args
                     to_process.append(
-                        (screen_jsonl, "reduce", ["observe-reduce", "{file}"])
+                        (
+                            screen_jsonl,
+                            "reduce",
+                            ["observe-reduce", "--day", day, "--period", period.name],
+                        )
                     )
 
         if not to_process:
