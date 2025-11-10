@@ -20,13 +20,18 @@ SCREEN_RE = re.compile(r"^(?P<time>\d{6})_[a-z]+_\d+_diff\.json$")
 SCREEN_JSONL_RE = re.compile(r"^(?P<time>\d{6})_screen\.jsonl$")
 
 
-def find_transcript_files(journal: str, day: str | None = None) -> Dict[str, str]:
+def find_transcript_files(
+    journal: str, day: str | None = None, period: str | None = None
+) -> Dict[str, str]:
     """Return mapping of transcript JSON file paths relative to ``journal``.
 
     Looks for transcript files in timestamp subdirectories (YYYYMMDD/HHMMSS/*.jsonl).
 
     If ``day`` is provided (YYYYMMDD format), only scan that specific day.
     Otherwise scan all days.
+
+    If ``period`` is provided (HHMMSS or HHMMSS_LEN format), only scan that
+    specific period within the day. Requires ``day`` to be specified.
     """
     files: Dict[str, str] = {}
     days = {day: day_dirs()[day]} if day and day in day_dirs() else day_dirs()
@@ -37,7 +42,13 @@ def find_transcript_files(journal: str, day: str | None = None) -> Dict[str, str
         day_path_obj = Path(day_path)
         for item in day_path_obj.iterdir():
             if item.is_dir() and period_key(item.name):
-                # Found a timestamp directory (HHMMSS)
+                # Found a timestamp directory (HHMMSS or HHMMSS_LEN)
+                # If period filter specified, check if this matches
+                if period:
+                    item_period_key = period_key(item.name)
+                    if item_period_key != period:
+                        continue
+
                 for result_file in item.glob("*.jsonl"):
                     # Look for audio.jsonl, screen.jsonl, or split audio files
                     if result_file.name in ("audio.jsonl", "screen.jsonl"):
@@ -189,14 +200,19 @@ def _index_transcripts(
         logger.info("  indexed transcript %s entries", len(texts))
 
 
-def scan_transcripts(journal: str, verbose: bool = False, day: str | None = None) -> bool:
+def scan_transcripts(
+    journal: str, verbose: bool = False, day: str | None = None, period: str | None = None
+) -> bool:
     """Index transcript audio, screen diff JSON, and screen JSONL files on a per-day basis.
 
     If ``day`` is provided (YYYYMMDD format), only scan that specific day.
     Otherwise scan all days.
+
+    If ``period`` is provided (HHMMSS or HHMMSS_LEN format), only scan that
+    specific period within the day. Requires ``day`` to be specified.
     """
     logger = logging.getLogger(__name__)
-    files = find_transcript_files(journal, day=day)
+    files = find_transcript_files(journal, day=day, period=period)
     if not files:
         return False
 
