@@ -19,3 +19,6 @@ class HomeApp(BaseApp):
 
     def get_workspace_template(self):
         return "workspace.html"
+
+    def get_service_template(self):
+        return "service.html"

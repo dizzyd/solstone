@@ -36,11 +36,61 @@ apps/{name}/
 - `get_app_bar_template()` - Optional bottom bar template (return None to hide app-bar)
 - `get_submenu_items()` - Optional submenu with custom logic per app
 - `get_facet_counts()` - Optional badge counts for facet pills
+- `get_service_template()` - Optional background service for global event handling
 
 **Submenu Integration**
 - Submenu items can include `data-facet` attribute for facet-based navigation
 - Clicking submenu items with facets uses same selection mechanism as facet pills
 - Non-facet submenu items navigate directly (e.g., date ranges, search scopes)
+
+---
+
+## App Services (Background Services)
+
+Apps can register background services that run globally, even when the app is not active. This is similar to iOS background notification handlers.
+
+**Service File Structure**
+```
+apps/{name}/templates/
+└── service.html       # Background service template (JavaScript)
+```
+
+**Service Capabilities**
+- Listen to WebSocket events (Callosum tracts)
+- Update badge counts dynamically
+- Show browser or in-app notifications
+- Update submenu items in real-time
+- Run custom background logic
+
+**AppServices API**
+- `AppServices.register(appName, service)` - Register background service
+- `AppServices.updateBadge(appName, facetName, count)` - Update badge counts
+- `AppServices.updateSubmenu(appName, items)` - Update submenu items
+- `AppServices.notify(title, body, options)` - Show notification
+- `AppServices.requestNotificationPermission()` - Request browser notifications
+
+**Service Registration**
+Services are automatically loaded and executed on page load. Each service runs in an isolated function scope and can listen to WebSocket events via `window.appEvents`.
+
+**Example Service** (apps/home/templates/service.html)
+```javascript
+window.AppServices.register('home', {
+  initialize() {
+    if (!window.appEvents) return;
+    window.appEvents.listen('cortex', this.handleCortexEvent.bind(this));
+  },
+
+  handleCortexEvent(msg) {
+    if (msg.event === 'agent_complete') {
+      window.AppServices.notify(
+        'Agent Complete',
+        `${msg.agent} finished processing`,
+        { icon: '🤖', duration: 4000 }
+      );
+    }
+  }
+});
+```
 
 ---
 

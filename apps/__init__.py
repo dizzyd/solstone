@@ -119,6 +119,29 @@ class BaseApp(ABC):
         """
         return {}
 
+    def get_service_template(self) -> Optional[str]:
+        """Return path to background service template, or None.
+
+        Background services run globally (even when app is not active) and can:
+        - Listen to WebSocket events
+        - Update badge counts dynamically
+        - Show notifications
+        - Update submenu items
+        - Run custom background logic
+
+        Services are loaded once on page load and persist across navigation.
+        This is similar to iOS background notification handlers.
+
+        Returns:
+            Template path relative to app's blueprint template folder, or None
+            Default: None (no background service)
+
+        Example:
+            def get_service_template(self):
+                return "service.html"  # apps/{name}/templates/service.html
+        """
+        return None
+
 
 class AppRegistry:
     """Registry for discovering and managing Sunstone apps."""

@@ -1,0 +1,93 @@
+{# Home app background service - example implementation #}
+window.AppServices.register('home', {
+
+  initialize() {
+    console.log('[Home Service] Initialized');
+
+    // Check if WebSocket events are available
+    if (!window.appEvents) {
+      console.warn('[Home Service] WebSocket events not available');
+      return;
+    }
+
+    // Listen to all events for demonstration
+    window.appEvents.listen('*', this.handleEvent.bind(this));
+  },
+
+  handleEvent(msg) {
+    // Log all events for debugging
+    console.log('[Home Service] Event:', msg.tract, msg);
+
+    // Example: Show notification for specific events
+    if (msg.tract === 'cortex' && msg.event === 'agent_complete') {
+      this.notifyAgentComplete(msg);
+    }
+
+    if (msg.tract === 'indexer' && msg.event === 'day_indexed') {
+      this.notifyDayIndexed(msg);
+    }
+
+    if (msg.tract === 'task' && msg.event === 'task_complete') {
+      this.notifyTaskComplete(msg);
+    }
+  },
+
+  notifyAgentComplete(msg) {
+    // Only notify if not currently viewing the home app
+    if (this.isCurrentApp()) {
+      return; // User is already in the app, no need to notify
+    }
+
+    const agentName = msg.agent || 'Agent';
+    window.AppServices.notify(
+      'Agent Complete',
+      `${agentName} finished processing`,
+      {
+        icon: '🤖',
+        tag: 'agent-complete',
+        duration: 4000
+      }
+    );
+  },
+
+  notifyDayIndexed(msg) {
+    if (this.isCurrentApp()) {
+      return;
+    }
+
+    const day = msg.day || 'today';
+    window.AppServices.notify(
+      'Indexing Complete',
+      `${day} has been indexed`,
+      {
+        icon: '📇',
+        tag: 'day-indexed',
+        duration: 3000
+      }
+    );
+  },
+
+  notifyTaskComplete(msg) {
+    if (this.isCurrentApp()) {
+      return;
+    }
+
+    const taskName = msg.task || 'Task';
+    window.AppServices.notify(
+      'Task Complete',
+      `${taskName} finished`,
+      {
+        icon: '✅',
+        tag: 'task-complete',
+        duration: 4000
+      }
+    );
+  },
+
+  isCurrentApp() {
+    // Check if home app is currently active
+    const menuItem = document.querySelector('.menu-item[data-app="home"]');
+    return menuItem && menuItem.classList.contains('current');
+  }
+
+});
