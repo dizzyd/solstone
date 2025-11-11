@@ -13,30 +13,75 @@ This document defines the standardized design language and terminology for the C
 
 ## App System
 
-Apps are dynamically discovered from the top-level `apps/` directory. Each app is a Python module implementing the `BaseApp` interface.
+Apps are dynamically discovered from the `apps/` directory using **convention over configuration**. Each app is a directory with required and optional files—no base class needed.
 
-**App File Structure**
+**App Directory Structure**
 ```
 apps/{name}/
-├── __init__.py              # App class with metadata
-├── routes.py                # Flask blueprint and route handlers
-└── templates/
-    ├── workspace.html       # Main content (required)
-    └── app_bar.html         # Bottom bar controls (optional)
+├── routes.py            # Required: Flask blueprint
+├── workspace.html       # Required: Main content template
+├── app.json            # Optional: Metadata (icon, label)
+├── hooks.py            # Optional: Dynamic logic (submenu, badges)
+├── app_bar.html        # Optional: Bottom bar controls
+└── service.html        # Optional: Background service (JavaScript)
 ```
 
-**App Metadata**
-- Each app provides an icon, label, Flask blueprint, and workspace template
-- Apps optionally define submenu items, facet counts, and custom app-bar template
-- Apps automatically receive facet integration (facet pills and selection state)
+**Naming Conventions**
+- App directory: `snake_case` (e.g., `my_app`, not `my-app`)
+- Blueprint variable: `{name}_bp` (e.g., `home_bp`, `inbox_bp`)
+- Blueprint name: Should match app name for `url_for()` consistency
+- URL prefix: `/app/{name}` (e.g., `/app/home`, `/app/inbox`)
 
-**App Methods**
-- `get_blueprint()` - Flask routes for the app (from routes.py)
-- `get_workspace_template()` - Main content template path (default: relative to blueprint template_folder)
-- `get_app_bar_template()` - Optional bottom bar template (return None to hide app-bar)
-- `get_submenu_items()` - Optional submenu with custom logic per app
-- `get_facet_counts()` - Optional badge counts for facet pills
-- `get_service_template()` - Optional background service for global event handling
+**Required Files**
+
+1. **`routes.py`** - Flask blueprint with app routes:
+   ```python
+   from flask import Blueprint, render_template
+
+   home_bp = Blueprint(
+       "home",                    # Blueprint name (matches app name)
+       __name__,
+       url_prefix="/app/home",    # URL prefix
+   )
+
+   @home_bp.route("/")
+   def index():
+       return render_template("app.html", app="home")
+   ```
+
+2. **`workspace.html`** - Main content template (included in `app.html` container)
+
+**Optional Files**
+
+3. **`app.json`** - Metadata overrides (defaults: icon="📦", label=title-cased name):
+   ```json
+   {
+     "icon": "🏠",
+     "label": "Home"
+   }
+   ```
+
+4. **`hooks.py`** - Dynamic behavior for submenu and badges:
+   ```python
+   def get_submenu_items(facets, selected_facet):
+       """Return list of submenu items."""
+       return [
+           {"label": "Item", "path": "/app/home", "count": 5, "facet": "work"}
+       ]
+
+   def get_facet_counts(facets, selected_facet):
+       """Return dict of badge counts per facet."""
+       return {"work": 3, "personal": 7}
+   ```
+
+5. **`app_bar.html`** - Bottom bar controls (forms, buttons, search)
+
+6. **`service.html`** - Background JavaScript service for WebSocket events
+
+**App Discovery**
+- Apps are automatically discovered on startup
+- Each app is registered as an `App` dataclass in the `AppRegistry`
+- Apps automatically receive facet integration (pills, theme, selection state)
 
 **Submenu Integration**
 - Submenu items can include `data-facet` attribute for facet-based navigation
@@ -239,15 +284,17 @@ window.AppServices.register('home', {
 ### Phase 0: Foundation (Complete)
 
 **Infrastructure Created:**
-- `apps/__init__.py` - BaseApp class and AppRegistry for plugin discovery
+- `apps/__init__.py` - `App` dataclass and `AppRegistry` for convention-based discovery
 - `convey/templates/app.html` - Main app container template with all UI components
 - Context processors for facet data and app registry injection
 - Package configuration in `pyproject.toml` to include apps package
+- `convey/static/app.js` - AppServices framework for badges, notifications, and services
 
-**Example App:**
-- `apps/home/` - Reference implementation demonstrating the pattern
-- Routes at `/app/home/` (new system) vs `/` (legacy system)
-- Both systems coexist during migration
+**Reference Apps:**
+- `apps/home/` - Minimal app with background service example
+- `apps/dev/` - Developer utilities app
+- Both demonstrate the convention-based pattern
+- Both systems (legacy + new) coexist during migration
 
 **Routes:**
 - Legacy views: `/`, `/facets`, `/calendar`, etc. (existing `convey/views/`)
