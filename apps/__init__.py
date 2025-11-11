@@ -3,13 +3,20 @@
 Convention-based app discovery with minimal configuration:
 
 Directory Structure:
-    apps/myapp/
-      routes.py          # Required: Flask blueprint
-      workspace.html     # Required: Main template
-      service.html       # Optional: Background service
-      app_bar.html       # Optional: Bottom bar
-      app.json           # Optional: Metadata overrides
-      hooks.py           # Optional: Dynamic logic
+    apps/my_app/           # Use underscores, not hyphens!
+      routes.py            # Required: Flask blueprint
+      workspace.html       # Required: Main template
+      service.html         # Optional: Background service
+      app_bar.html         # Optional: Bottom bar
+      app.json             # Optional: Metadata overrides
+      hooks.py             # Optional: Dynamic logic
+
+Naming Rules:
+    - App directory names must use underscores (my_app), not hyphens (my-app)
+    - App name = directory name (e.g., "my_app")
+    - Blueprint variable must be named {app_name}_bp (e.g., my_app_bp)
+    - Blueprint name should match app name for url_for() consistency
+    - URL prefix convention: /app/{app_name}
 
 app.json format (all optional):
     {
@@ -173,6 +180,12 @@ class AppRegistry:
         Raises:
             Exception: If app cannot be loaded
         """
+        # Validate app name
+        if "-" in app_name:
+            logger.warning(
+                f"App '{app_name}' uses hyphens. Use underscores instead (e.g., 'my_app')"
+            )
+
         # Load metadata from app.json (optional)
         metadata = self._load_metadata(app_path)
 
@@ -185,14 +198,34 @@ class AppRegistry:
 
         # Find blueprint - look for *_bp attribute
         blueprint = None
+        expected_bp_var = f"{app_name}_bp"
+
         for attr_name in dir(routes_module):
             if attr_name.endswith("_bp"):
-                blueprint = getattr(routes_module, attr_name)
-                if isinstance(blueprint, Blueprint):
+                bp = getattr(routes_module, attr_name)
+                if isinstance(bp, Blueprint):
+                    blueprint = bp
+
+                    # Warn if variable name doesn't match convention
+                    if attr_name != expected_bp_var:
+                        logger.warning(
+                            f"App '{app_name}': Blueprint variable '{attr_name}' should be '{expected_bp_var}'"
+                        )
+
+                    # Warn if blueprint name doesn't match app name
+                    if blueprint.name != app_name:
+                        logger.warning(
+                            f"App '{app_name}': Blueprint name '{blueprint.name}' should match app name '{app_name}' "
+                            f"for url_for() consistency"
+                        )
+
                     break
 
         if not blueprint:
-            raise ValueError(f"No blueprint found in apps.{app_name}.routes")
+            raise ValueError(
+                f"No blueprint found in apps.{app_name}.routes - "
+                f"expected variable named '{expected_bp_var}'"
+            )
 
         # Resolve template paths (relative to apps/ directory since that's in the loader)
         workspace_template = f"{app_name}/workspace.html"
