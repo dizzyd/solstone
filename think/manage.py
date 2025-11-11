@@ -6,7 +6,7 @@ and provides keyboard controls for restarting services.
 
 import argparse
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import psutil
 from blessed import Terminal
@@ -27,7 +27,7 @@ class ServiceManager:
         self.running = True
         self.term = Terminal()
         self.status_message = ""
-        self.last_log_lines = {}  # Maps ref -> (stream, line) for most recent log
+        self.last_log_lines = {}  # Maps ref -> (timestamp, stream, line) for most recent log
         self.cpu_cache = {}  # Maps pid -> last cpu_percent value
         self.cpu_procs = {}  # Maps pid -> Process object for cpu tracking
 
@@ -89,7 +89,7 @@ class ServiceManager:
                 line = message.get("line", "")
                 stream = message.get("stream", "stdout")
                 if ref:
-                    self.last_log_lines[ref] = (stream, line)
+                    self.last_log_lines[ref] = (datetime.now(), stream, line)
 
             elif event == "exit":
                 # Clean up log lines for exited processes
@@ -119,6 +119,27 @@ class ServiceManager:
         if mins:
             parts.append(f"{mins}m")
         return " ".join(parts)
+
+    def format_log_age(self, timestamp: datetime) -> str:
+        """Format log timestamp age in human-readable format.
+
+        Args:
+            timestamp: When the log line was received
+
+        Returns:
+            Formatted string like "0m", "35m", "2h", "3d" (never seconds)
+        """
+        delta = datetime.now() - timestamp
+        total_seconds = int(delta.total_seconds())
+
+        if total_seconds < 60:
+            return "0m"
+        elif total_seconds < 3600:  # Less than 1 hour
+            return f"{total_seconds // 60}m"
+        elif total_seconds < 86400:  # Less than 1 day
+            return f"{total_seconds // 3600}h"
+        else:
+            return f"{total_seconds // 86400}d"
 
     def get_memory_mb(self, pid: int) -> str:
         """Get process memory in MB, or '-' if unavailable.
@@ -168,7 +189,7 @@ class ServiceManager:
         output.append("")
 
         # Table header
-        header = f"  {'Service':<15} {'PID':<8} {'Uptime':<12} {'MB':<8} {'%':<6} {'Last Log'}"
+        header = f"  {'Service':<15} {'PID':<8} {'Uptime':<12} {'MB':<8} {'%':<6} {'Last':<6} {'Log'}"
         output.append(t.bold + header + t.normal)
         output.append("─" * min(80, t.width))
 
@@ -185,11 +206,13 @@ class ServiceManager:
                 # Get log line for this service
                 log_display = ""
                 log_color = ""
+                log_age = ""
                 if svc["ref"] in self.last_log_lines:
-                    stream, log_line = self.last_log_lines[svc["ref"]]
+                    timestamp, stream, log_line = self.last_log_lines[svc["ref"]]
+                    log_age = self.format_log_age(timestamp)
                     # Calculate available width: total - (fixed columns)
-                    # Fixed: "→ " (2) + name (15) + pid (8) + uptime (12) + memory (8) + cpu (6) + spaces (5)
-                    fixed_width = 56
+                    # Fixed: "→ " (2) + name (15) + pid (8) + uptime (12) + memory (8) + cpu (6) + age (6) + spaces (6)
+                    fixed_width = 63
                     available = max(0, t.width - fixed_width)
 
                     # Truncate log line if needed
@@ -205,7 +228,7 @@ class ServiceManager:
                         else:
                             log_color = t.normal
 
-                line = f"{indicator} {name:<15} {pid:<8} {uptime:<12} {memory:>7}  {cpu:>5} "
+                line = f"{indicator} {name:<15} {pid:<8} {uptime:<12} {memory:>7}  {cpu:>5} {log_age:>5} "
 
                 if i == self.selected:
                     output.append(t.black_on_white(line + log_display))
