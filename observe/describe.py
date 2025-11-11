@@ -654,6 +654,12 @@ class VideoProcessor:
 
                 batch.add(req)
 
+        # Clear qualified_frames now that all requests are created
+        # Bytes are already referenced in request objects, so this allows them
+        # to be freed incrementally as requests complete rather than all at the end
+        for monitor_id in self.qualified_frames:
+            self.qualified_frames[monitor_id].clear()
+
         # Track success/failure for all frames
         total_frames = 0
         failed_frames = 0
@@ -742,6 +748,11 @@ class VideoProcessor:
                     # Store reference for cleanup later
                     req.meeting_image = full_image
 
+                    # Close initial image since DESCRIBE_JSON is complete
+                    if hasattr(req, "initial_image") and req.initial_image:
+                        req.initial_image.close()
+                        req.initial_image = None
+
                     req.request_type = RequestType.DESCRIBE_MEETING
                     req.retry_count = 0
                     continue  # Don't output yet, wait for meeting analysis
@@ -773,6 +784,11 @@ class VideoProcessor:
                     # Don't close yet - batch needs it for encoding
                     # Store reference for cleanup later
                     req.text_image = crop_img
+
+                    # Close initial image since DESCRIBE_JSON is complete
+                    if hasattr(req, "initial_image") and req.initial_image:
+                        req.initial_image.close()
+                        req.initial_image = None
 
                     req.request_type = RequestType.DESCRIBE_TEXT
                     req.retry_count = 0
