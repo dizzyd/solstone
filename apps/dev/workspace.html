@@ -158,6 +158,7 @@
       <button class="dev-button" onclick="testNonDismissible()">Non-Dismissible</button>
       <button class="dev-button" onclick="testLongMessage()">Long Message</button>
       <button class="dev-button" onclick="testNoAction()">No Click Action</button>
+      <button class="dev-button" onclick="testWithFacet()">With Facet (work)</button>
     </div>
   </div>
 
@@ -185,6 +186,10 @@
       <div class="dev-form-row">
         <label>Action URL</label>
         <input type="text" id="custom-action" value="/app/dev" />
+      </div>
+      <div class="dev-form-row">
+        <label>Facet (optional)</label>
+        <input type="text" id="custom-facet" value="" placeholder="e.g., work" />
       </div>
       <div class="dev-form-row">
         <label>Badge Count (0 = none)</label>
@@ -322,6 +327,19 @@ function testNoAction() {
   log(`Created no-action notification (ID: ${id})`);
 }
 
+function testWithFacet() {
+  const id = window.AppServices.notifications.show({
+    app: 'dev',
+    icon: '🎯',
+    title: 'Facet Navigation Test',
+    message: 'Clicking this will navigate to /app/home and select "work" facet',
+    action: '/app/home',
+    facet: 'work'
+  });
+  lastNotificationId = id;
+  log(`Created facet notification (ID: ${id})`);
+}
+
 // Custom Notification
 function testCustom() {
   const app = document.getElementById('custom-app').value;
@@ -329,6 +347,7 @@ function testCustom() {
   const title = document.getElementById('custom-title').value;
   const message = document.getElementById('custom-message').value;
   const action = document.getElementById('custom-action').value || null;
+  const facet = document.getElementById('custom-facet').value || null;
   const badge = parseInt(document.getElementById('custom-badge').value) || null;
   const autoDismiss = parseInt(document.getElementById('custom-autodismiss').value) || null;
   const dismissible = document.getElementById('custom-dismissible').checked;
@@ -339,6 +358,7 @@ function testCustom() {
     title,
     message,
     action,
+    facet,
     badge: badge > 0 ? badge : null,
     autoDismiss: autoDismiss > 0 ? autoDismiss : null,
     dismissible

@@ -13,6 +13,7 @@ from typing import Callable
 
 from flask import Flask, request
 from flask_sock import Sock
+from jinja2 import ChoiceLoader, FileSystemLoader
 
 from apps import AppRegistry
 from think import messages as message_store
@@ -143,6 +144,16 @@ def create_app(journal: str = "") -> Flask:
         template_folder=os.path.join(os.path.dirname(__file__), "templates"),
         static_folder=os.path.join(os.path.dirname(__file__), "static"),
     )
+
+    # Add apps directory to template search path so apps can have their templates
+    # in apps/{name}/workspace.html instead of needing a templates/ subfolder
+    convey_templates = os.path.join(os.path.dirname(__file__), "templates")
+    apps_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "apps")
+    app.jinja_loader = ChoiceLoader([
+        FileSystemLoader(convey_templates),
+        FileSystemLoader(apps_root),
+    ])
+
     app.secret_key = os.getenv("CONVEY_SECRET", "sunstone-secret")
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 

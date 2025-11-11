@@ -7,7 +7,6 @@ from flask import Blueprint, render_template
 dev_bp = Blueprint(
     "dev_app",
     __name__,
-    template_folder="templates",
     url_prefix="/app/dev",
 )
 

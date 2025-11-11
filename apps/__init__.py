@@ -1,86 +1,85 @@
 """App plugin system for Sunstone.
 
-Apps are self-contained modules that can extend any part of the system:
-- routes.py: Convey web routes and handlers
-- templates/: Jinja2 templates for web views
-- agents/: Muse agent prompts (future)
-- topics/: Think topic templates (future)
-- tasks/: Background task definitions (future)
+Convention-based app discovery with minimal configuration:
 
-Each app provides a Flask blueprint for web routes and metadata for
-navigation. Apps are automatically discovered and registered.
+Directory Structure:
+    apps/myapp/
+      routes.py          # Required: Flask blueprint
+      workspace.html     # Required: Main template
+      service.html       # Optional: Background service
+      app_bar.html       # Optional: Bottom bar
+      app.json           # Optional: Metadata overrides
+      hooks.py           # Optional: Dynamic logic
+
+app.json format (all optional):
+    {
+      "icon": "🏠",
+      "label": "Custom Label"
+    }
+
+hooks.py format (all functions optional):
+    def get_submenu_items(facets, selected_facet):
+        return [{"label": "...", "path": "...", "count": 0, "facet": "..."}]
+
+    def get_facet_counts(facets, selected_facet):
+        return {"facet_name": count}
+
+Apps are automatically discovered and registered.
 """
 
 from __future__ import annotations
 
 import importlib
+import json
 import logging
-from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from flask import Blueprint
 
 logger = logging.getLogger(__name__)
 
 
-class BaseApp(ABC):
-    """Base class for all Sunstone apps.
+@dataclass
+class App:
+    """Convention-based app configuration."""
 
-    Apps must inherit from this class and implement the required methods.
-    All apps automatically get facet integration (facet pills, selected_facet
-    context, and facet cookie handling).
-    """
-
-    # Required metadata - subclasses must set these
     name: str
     icon: str
     label: str
+    blueprint: Blueprint
 
-    @abstractmethod
+    # Template paths (relative to Flask template root)
+    workspace_template: str
+    app_bar_template: Optional[str] = None
+    service_template: Optional[str] = None
+
+    # Dynamic hooks (optional)
+    hooks: dict[str, Callable] = field(default_factory=dict)
+
     def get_blueprint(self) -> Blueprint:
-        """Return Flask Blueprint with app routes.
-
-        The blueprint should handle all routing for the app. Typically,
-        it will have at least one route that renders app.html with
-        app=self.name.
-
-        Returns:
-            Flask Blueprint instance with routes registered
-        """
-        pass
+        """Return Flask Blueprint with app routes."""
+        return self.blueprint
 
     def get_workspace_template(self) -> str:
-        """Return path to workspace template.
-
-        This template is included in the main content area and should
-        contain the primary UI for the app.
-
-        Returns:
-            Template path relative to Flask template directory
-            Default: apps/{name}/templates/workspace.html
-        """
-        return f"apps/{self.name}/templates/workspace.html"
+        """Return path to workspace template."""
+        return self.workspace_template
 
     def get_app_bar_template(self) -> Optional[str]:
-        """Return path to custom app-bar template, or None for empty.
+        """Return path to custom app-bar template, or None."""
+        return self.app_bar_template
 
-        The app-bar is the bottom fixed bar where apps can place actions,
-        inputs, controls, etc. Return None to leave it empty.
-
-        Returns:
-            Template path or None for no app-bar
-            Default: None (empty app-bar)
-        """
-        return None
+    def get_service_template(self) -> Optional[str]:
+        """Return path to background service template, or None."""
+        return self.service_template
 
     def get_submenu_items(
         self, facets: list[dict], selected_facet: Optional[str] = None
     ) -> list[dict]:
         """Return submenu items for the menu-bar.
 
-        Fully custom implementation per app. Apps can create submenu items
-        based on facets, dates, static lists, or any other pattern.
+        Calls hooks.get_submenu_items() if defined, otherwise returns empty list.
 
         Args:
             facets: List of active facet dicts with name, title, color, emoji
@@ -92,22 +91,18 @@ class BaseApp(ABC):
                 - path: URL path
                 - count: Optional badge count (int)
                 - facet: Optional facet name for data-facet attribute
-
-        Example:
-            [
-                {"label": "Personal", "path": "/app/todos", "facet": "personal", "count": 7},
-                {"label": "Work", "path": "/app/todos", "facet": "work", "count": 5},
-            ]
         """
+        hook = self.hooks.get("get_submenu_items")
+        if hook:
+            return hook(facets, selected_facet)
         return []
 
     def get_facet_counts(
         self, facets: list[dict], selected_facet: Optional[str] = None
     ) -> dict[str, int]:
-        """Optional: Return badge counts for facet pills.
+        """Return badge counts for facet pills.
 
-        Only implement if app wants to show counts on facet pills.
-        Leave unimplemented or return empty dict to show no counts.
+        Calls hooks.get_facet_counts() if defined, otherwise returns empty dict.
 
         Args:
             facets: List of active facet dicts
@@ -117,47 +112,27 @@ class BaseApp(ABC):
             Dict mapping facet name to count, e.g.:
             {"work": 5, "personal": 3, "acme": 12}
         """
+        hook = self.hooks.get("get_facet_counts")
+        if hook:
+            return hook(facets, selected_facet)
         return {}
-
-    def get_service_template(self) -> Optional[str]:
-        """Return path to background service template, or None.
-
-        Background services run globally (even when app is not active) and can:
-        - Listen to WebSocket events
-        - Update badge counts dynamically
-        - Show notifications
-        - Update submenu items
-        - Run custom background logic
-
-        Services are loaded once on page load and persist across navigation.
-        This is similar to iOS background notification handlers.
-
-        Returns:
-            Template path relative to app's blueprint template folder, or None
-            Default: None (no background service)
-
-        Example:
-            def get_service_template(self):
-                return "service.html"  # apps/{name}/templates/service.html
-        """
-        return None
 
 
 class AppRegistry:
     """Registry for discovering and managing Sunstone apps."""
 
     def __init__(self):
-        self.apps: dict[str, BaseApp] = {}
+        self.apps: dict[str, App] = {}
 
     def discover(self) -> None:
-        """Auto-discover apps in apps/ directory.
+        """Auto-discover apps using convention over configuration.
 
-        Scans the apps/ directory for subdirectories and attempts to import
-        and instantiate an App class from each one. Apps must follow the
-        naming convention: {name}App (e.g., TodosApp, InboxApp, HomeApp).
-
-        The app module should be at apps/{name}/__init__.py and contain
-        a class named {Name}App that inherits from BaseApp.
+        For each directory in apps/:
+        1. Load app.json if present (for icon, label overrides)
+        2. Import routes.py and get blueprint
+        3. Check for workspace.html (required)
+        4. Check for service.html, app_bar.html (optional)
+        5. Import hooks.py if present (for dynamic logic)
         """
         apps_dir = Path(__file__).parent
 
@@ -168,39 +143,127 @@ class AppRegistry:
 
             app_name = app_path.name
 
-            # Skip if __init__.py doesn't exist
-            if not (app_path / "__init__.py").exists():
+            # Skip if routes.py doesn't exist (required)
+            if not (app_path / "routes.py").exists():
+                logger.debug(f"Skipping {app_name}/ - no routes.py found")
+                continue
+
+            # Skip if workspace.html doesn't exist (required)
+            if not (app_path / "workspace.html").exists():
+                logger.debug(f"Skipping {app_name}/ - no workspace.html found")
                 continue
 
             try:
-                # Import app module
-                module = importlib.import_module(f"apps.{app_name}")
-
-                # Find App class (e.g., TodosApp, InboxApp, HomeApp)
-                # Convert kebab-case or snake_case to PascalCase
-                app_class_name = f"{app_name.title().replace('_', '')}App"
-
-                if hasattr(module, app_class_name):
-                    app_class = getattr(module, app_class_name)
-                    app_instance = app_class()
-
-                    # Validate it's a BaseApp subclass
-                    if not isinstance(app_instance, BaseApp):
-                        logger.warning(
-                            f"App {app_class_name} is not a BaseApp subclass, skipping"
-                        )
-                        continue
-
-                    # Register the app
-                    self.apps[app_instance.name] = app_instance
-                    logger.info(f"Discovered app: {app_instance.name}")
-                else:
-                    logger.debug(
-                        f"App directory {app_name}/ missing {app_class_name} class, skipping"
-                    )
-
+                app = self._load_app(app_name, app_path)
+                self.apps[app_name] = app
+                logger.info(f"Discovered app: {app_name}")
             except Exception as e:
                 logger.error(f"Failed to load app {app_name}: {e}", exc_info=True)
+
+    def _load_app(self, app_name: str, app_path: Path) -> App:
+        """Load a single app from its directory.
+
+        Args:
+            app_name: Name of the app (directory name)
+            app_path: Path to app directory
+
+        Returns:
+            App instance
+
+        Raises:
+            Exception: If app cannot be loaded
+        """
+        # Load metadata from app.json (optional)
+        metadata = self._load_metadata(app_path)
+
+        # Get icon and label (with defaults)
+        icon = metadata.get("icon", "📦")
+        label = metadata.get("label", app_name.replace("_", " ").title())
+
+        # Import routes module and get blueprint
+        routes_module = importlib.import_module(f"apps.{app_name}.routes")
+
+        # Find blueprint - look for *_bp attribute
+        blueprint = None
+        for attr_name in dir(routes_module):
+            if attr_name.endswith("_bp"):
+                blueprint = getattr(routes_module, attr_name)
+                if isinstance(blueprint, Blueprint):
+                    break
+
+        if not blueprint:
+            raise ValueError(f"No blueprint found in apps.{app_name}.routes")
+
+        # Resolve template paths (relative to apps/ directory since that's in the loader)
+        workspace_template = f"{app_name}/workspace.html"
+
+        service_template = None
+        if (app_path / "service.html").exists():
+            service_template = f"{app_name}/service.html"
+
+        app_bar_template = None
+        if (app_path / "app_bar.html").exists():
+            app_bar_template = f"{app_name}/app_bar.html"
+
+        # Load hooks (optional)
+        hooks = self._load_hooks(app_name, app_path)
+
+        return App(
+            name=app_name,
+            icon=icon,
+            label=label,
+            blueprint=blueprint,
+            workspace_template=workspace_template,
+            app_bar_template=app_bar_template,
+            service_template=service_template,
+            hooks=hooks,
+        )
+
+    def _load_metadata(self, app_path: Path) -> dict[str, Any]:
+        """Load app.json metadata file if it exists.
+
+        Args:
+            app_path: Path to app directory
+
+        Returns:
+            Dict with metadata, or empty dict if no app.json
+        """
+        metadata_file = app_path / "app.json"
+        if metadata_file.exists():
+            try:
+                with open(metadata_file) as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load {metadata_file}: {e}")
+        return {}
+
+    def _load_hooks(self, app_name: str, app_path: Path) -> dict[str, Callable]:
+        """Load hooks.py module if it exists.
+
+        Args:
+            app_name: Name of the app
+            app_path: Path to app directory
+
+        Returns:
+            Dict mapping hook name to callable
+        """
+        hooks_file = app_path / "hooks.py"
+        if not hooks_file.exists():
+            return {}
+
+        try:
+            hooks_module = importlib.import_module(f"apps.{app_name}.hooks")
+            hooks = {}
+
+            # Look for known hook functions
+            for hook_name in ["get_submenu_items", "get_facet_counts"]:
+                if hasattr(hooks_module, hook_name):
+                    hooks[hook_name] = getattr(hooks_module, hook_name)
+
+            return hooks
+        except Exception as e:
+            logger.warning(f"Failed to load hooks for {app_name}: {e}")
+            return {}
 
     def register_blueprints(self, flask_app) -> None:
         """Register all app blueprints with Flask.
@@ -210,9 +273,8 @@ class AppRegistry:
         """
         for app in self.apps.values():
             try:
-                blueprint = app.get_blueprint()
-                flask_app.register_blueprint(blueprint)
-                logger.info(f"Registered blueprint: {blueprint.name}")
+                flask_app.register_blueprint(app.blueprint)
+                logger.info(f"Registered blueprint: {app.blueprint.name}")
             except Exception as e:
                 logger.error(
                     f"Failed to register blueprint for app {app.name}: {e}",
