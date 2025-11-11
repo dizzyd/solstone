@@ -97,6 +97,11 @@ body.has-app-bar .container {
   background: rgba(0,0,0,0.05);
 }
 
+.facet-bar .status-icon.error {
+  box-shadow: 0 0 4px 2px red;
+  border-radius: 4px;
+}
+
 /* Status Pane */
 .status-pane {
   position: fixed;
@@ -365,4 +370,22 @@ body.sidebar-open .menu-bar {
   justify-content: center;
   gap: 12px;
   overflow: hidden;
+}
+
+/* Error log display */
+#error-log {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #111;
+  color: #eee;
+  padding: 1em;
+  font: 12px monospace;
+  max-height: 30vh;
+  overflow-y: auto;
+  border-top: 2px solid #ff3b30;
+  z-index: 9998;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
 }

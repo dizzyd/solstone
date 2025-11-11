@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="{{ url_for('review.static', filename='review.css') }}">
   <link rel="stylesheet" href="{{ url_for('review.static', filename='app.css') }}">
 
+  <!-- Error handling FIRST - catches all subsequent errors -->
+  <script src="{{ url_for('review.static', filename='error-handler.js') }}"></script>
+
   <!-- Embed facets data for immediate client-side access -->
   <script>
     window.facetsData = {{ facets|tojson|safe }};
@@ -313,6 +316,17 @@ window.AppServices = {
   margin-right: 0;
 }
 </style>
+
+<!-- Error Modal -->
+<div id="errorModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <pre id="errorMessage"></pre>
+  </div>
+</div>
+
+<!-- Error Log Display -->
+<div id="error-log"></div>
 
 </body>
 </html>
