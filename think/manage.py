@@ -308,8 +308,20 @@ class ServiceManager:
         t = self.term
         output = []
 
+        # Get PIDs of supervised services to exclude from tasks
+        service_pids = {svc["pid"] for svc in self.services}
+
+        # Filter out tasks that are actually supervised services
+        tasks_only = [
+            task for task in self.running_tasks.values()
+            if task["pid"] not in service_pids
+        ]
+
+        if not tasks_only:
+            return []
+
         # Section header
-        count = len(self.running_tasks)
+        count = len(tasks_only)
         output.append("")
         output.append(t.bold + f"Running Tasks ({count})" + t.normal)
         output.append("─" * min(80, t.width))
@@ -319,9 +331,7 @@ class ServiceManager:
         output.append(t.bold + header + t.normal)
 
         # Task rows (sorted by start time, oldest first)
-        tasks_sorted = sorted(
-            self.running_tasks.values(), key=lambda x: x["start_time"]
-        )
+        tasks_sorted = sorted(tasks_only, key=lambda x: x["start_time"])
 
         for task in tasks_sorted:
             name = task["name"][:14]
