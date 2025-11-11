@@ -40,7 +40,7 @@ class AlertManager:
         self._max_backoff = max_backoff
 
     async def alert_if_ready(
-        self, key: tuple, message: str, command: str = "notify-send"
+        self, key: tuple, message: str
     ) -> bool:
         """Send alert with exponential backoff. Returns True if sent."""
         now = time.time()
@@ -48,7 +48,7 @@ class AlertManager:
         if key in self._state:
             last_time, backoff = self._state[key]
             if now - last_time >= backoff:
-                await send_notification(message, command, alert_key=key)
+                await send_notification(message, alert_key=key)
                 new_backoff = min(backoff * 2, self._max_backoff)
                 self._state[key] = (now, new_backoff)
                 logging.info(f"Alert sent, next backoff: {new_backoff}s")
@@ -58,7 +58,7 @@ class AlertManager:
                 logging.info(f"Suppressing alert, next in {remaining}s")
                 return False
         else:
-            await send_notification(message, command, alert_key=key)
+            await send_notification(message, alert_key=key)
             self._state[key] = (now, self._initial_backoff)
             return True
 
@@ -230,13 +230,12 @@ def _get_notifier() -> DesktopNotifier:
 
 
 async def send_notification(
-    message: str, command: str = "notify-send", alert_key: tuple | None = None
+    message: str, alert_key: tuple | None = None
 ) -> None:
     """Send a desktop notification with ``message``.
 
     Args:
         message: The notification message to display
-        command: Legacy parameter for backwards compatibility (ignored)
         alert_key: Optional key to track this notification for later clearing
     """
     try:
@@ -792,7 +791,6 @@ def check_runner_exits(procs: list[ManagedProcess]) -> list[ManagedProcess]:
 async def handle_runner_exits(
     procs: list[ManagedProcess],
     alert_mgr: AlertManager,
-    command: str,
 ) -> None:
     """Check for and handle exited processes with restart policy."""
     exited = check_runner_exits(procs)
@@ -804,7 +802,7 @@ async def handle_runner_exits(
     logging.error(msg)
     exit_key = ("runner_exit", tuple(sorted(exited_names)))
 
-    await alert_mgr.alert_if_ready(exit_key, msg, command)
+    await alert_mgr.alert_if_ready(exit_key, msg)
 
     for managed in exited:
         # Clear any pending restart request for this service
@@ -880,7 +878,6 @@ async def handle_health_checks(
     interval: int,
     threshold: int,
     alert_mgr: AlertManager,
-    command: str,
     prev_stale: set[str],
 ) -> tuple[float, set[str]]:
     """Perform periodic health checks. Returns (new_last_check, new_prev_stale)."""
@@ -909,7 +906,7 @@ async def handle_health_checks(
             if key[0] == "stale" and key != stale_key:
                 await clear_notification(key)
 
-        await alert_mgr.alert_if_ready(stale_key, msg, command)
+        await alert_mgr.alert_if_ready(stale_key, msg)
 
         # Retain only alert state entries still relevant
         alert_mgr.clear_matching(
@@ -996,7 +993,6 @@ async def supervise(
     *,
     threshold: int = DEFAULT_THRESHOLD,
     interval: int = CHECK_INTERVAL,
-    command: str = "notify-send",
     daily: bool = True,
     procs: list[ManagedProcess] | None = None,
 ) -> None:
@@ -1033,11 +1029,11 @@ async def supervise(
 
             # Check for runner exits first (immediate alert)
             if procs:
-                await handle_runner_exits(procs, alert_mgr, command)
+                await handle_runner_exits(procs, alert_mgr)
 
             # Check health periodically (interval-based timing)
             last_health_check, prev_stale = await handle_health_checks(
-                last_health_check, interval, threshold, alert_mgr, command, prev_stale
+                last_health_check, interval, threshold, alert_mgr, prev_stale
             )
 
             # Emit status every 5 seconds
@@ -1074,11 +1070,6 @@ def parse_args() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--interval", type=int, default=CHECK_INTERVAL, help="Polling interval seconds"
-    )
-    parser.add_argument(
-        "--notify-cmd",
-        default="notify-send",
-        help="Command used to send desktop notification",
     )
     parser.add_argument(
         "--no-observers",
@@ -1182,7 +1173,6 @@ def main() -> None:
             supervise(
                 threshold=args.threshold,
                 interval=args.interval,
-                command=args.notify_cmd,
                 daily=not args.no_daily,
                 procs=procs if procs else None,
             )

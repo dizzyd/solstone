@@ -113,7 +113,3 @@ def build_occurrence_index(journal: str) -> Dict[str, List[Dict[str, Any]]]:
             index[name] = occs
 
     return index
-
-
-# Backwards compatibility
-build_index = build_occurrence_index

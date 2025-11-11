@@ -279,8 +279,7 @@ def load_entity_names(
 
     Args:
         facet: Optional facet name. If provided, loads from facets/{facet}/entities.jsonl
-                If None, loads from ALL facets using load_all_attached_entities(),
-                with fallback to top-level entities.jsonl for backward compatibility.
+                If None, loads from ALL facets using load_all_attached_entities().
         spoken: If True, returns list of shortened forms for speech recognition.
                 If False, returns semicolon-delimited string of full names.
 
@@ -295,19 +294,6 @@ def load_entity_names(
         if facet is None:
             # Load from ALL facets with deduplication
             entities = load_all_attached_entities()
-
-            # Fallback to top-level entities.jsonl if no facet entities found
-            if not entities:
-                from dotenv import load_dotenv
-
-                load_dotenv()
-                journal = os.getenv("JOURNAL_PATH")
-                if journal:
-                    from pathlib import Path
-
-                    entities_path = Path(journal) / "entities.jsonl"
-                    if entities_path.is_file():
-                        entities = parse_entity_file(str(entities_path))
         else:
             # Load from specific facet
             entities = load_entities(facet)

@@ -14,7 +14,7 @@ from think.utils import day_dirs
 
 from .core import _scan_files, get_index
 
-# Transcript file helpers (legacy patterns - now checking in timestamp directories)
+# Transcript file pattern matchers
 AUDIO_RE = re.compile(r"^(?P<time>\d{6}).*_audio\.jsonl$")
 SCREEN_RE = re.compile(r"^(?P<time>\d{6})_[a-z]+_\d+_diff\.json$")
 SCREEN_JSONL_RE = re.compile(r"^(?P<time>\d{6})_screen\.jsonl$")

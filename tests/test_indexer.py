@@ -21,9 +21,6 @@ def test_parse_entities(tmp_path):
     assert result[0]["description"] == "info"
 
 
-# These tests are deprecated since entities.json caching and Entities class are removed
-
-
 def test_occurrence_index(tmp_path):
     mod = importlib.import_module("think.indexer")
     journal = tmp_path

@@ -122,19 +122,6 @@ class JSONEventWriter:
                 pass
 
 
-class JournalEventWriter(JSONEventWriter):
-    """Deprecated - journal logging now handled by cortex."""
-
-    def __init__(self) -> None:
-        # Don't create journal files - cortex handles journal logging
-        # Only stdout output is used
-        super().__init__(path=None)
-
-    def emit(self, data: Event) -> None:
-        # Just emit to stdout, cortex will handle journal logging
-        super().emit(data)
-
-
 def _journal_emit(event: Event) -> None:
     """Emit event to stdout for cortex to capture."""
     # No longer manages files - just ensure event goes to stdout

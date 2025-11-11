@@ -115,13 +115,9 @@ def read_import_metadata(
     import_dir = journal_root / "imports" / timestamp
     metadata_path = import_dir / "import.json"
 
-    # Try new location first
     if metadata_path.exists():
         return json.loads(metadata_path.read_text(encoding="utf-8"))
 
-    # Try legacy location (file_path.json)
-    # This requires reading the import to find the file path
-    # For now, just raise if not found
     raise FileNotFoundError(f"Import metadata not found for {timestamp}")
 
 
@@ -147,7 +143,6 @@ def update_import_metadata_fields(
     metadata_path = import_dir / "import.json"
 
     if not metadata_path.exists():
-        # Check for legacy path
         raise FileNotFoundError(f"Import metadata not found for {timestamp}")
 
     # Read current metadata
