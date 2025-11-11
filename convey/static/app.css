@@ -414,6 +414,13 @@ body.sidebar-open .menu-bar {
   animation: slideIn 0.3s ease;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: default;
+  display: block;
+}
+
+/* Reset anchor tag styles when used as notification card */
+a.notification-card {
+  color: inherit;
+  text-decoration: none;
 }
 
 .notification-card[data-action]:not([data-action=""]) {

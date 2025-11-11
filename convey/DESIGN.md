@@ -86,6 +86,7 @@ Notification System:
   title: 'New Message',   // Title (required)
   message: 'You have...', // Message body (optional)
   action: '/app/inbox',   // Click action URL (optional)
+  facet: 'work',          // Auto-select facet on click (optional)
   badge: 5,               // Badge count (optional)
   dismissible: true,      // Show X button (default: true)
   autoDismiss: 10000      // Auto-dismiss ms (optional)
@@ -95,11 +96,12 @@ Notification System:
 **Notification Cards**
 - Persistent until dismissed or clicked
 - Stack vertically in top-right (max 5 visible)
-- Click card → navigate to action URL
+- Click card → auto-select facet (if specified) + navigate to action URL
 - Click X → dismiss immediately
 - Auto-dismiss optional per notification
 - Relative timestamps (e.g., "5m ago")
 - Also triggers browser notification if permitted
+- Facet selection works like submenu navigation (updates cookie, applies theme)
 
 **Service Registration**
 Services are automatically loaded and executed on page load. Each service runs in an isolated function scope and can listen to WebSocket events via `window.appEvents`.

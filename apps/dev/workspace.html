@@ -189,7 +189,9 @@
       </div>
       <div class="dev-form-row">
         <label>Facet (optional)</label>
-        <input type="text" id="custom-facet" value="" placeholder="e.g., work" />
+        <select id="custom-facet">
+          <option value="">None</option>
+        </select>
       </div>
       <div class="dev-form-row">
         <label>Badge Count (0 = none)</label>
@@ -479,6 +481,24 @@ function spawnSequential() {
   log('Started sequential spawn (10 notifications, 5s intervals)');
 }
 
-// Initial log
+// Populate facet dropdown from window.facetsData
+function populateFacetDropdown() {
+  const facetSelect = document.getElementById('custom-facet');
+  if (!facetSelect || !window.facetsData) return;
+
+  // Clear existing options except "None"
+  facetSelect.innerHTML = '<option value="">None</option>';
+
+  // Add facet options
+  window.facetsData.forEach(facet => {
+    const option = document.createElement('option');
+    option.value = facet.name;
+    option.textContent = `${facet.emoji} ${facet.title}`;
+    facetSelect.appendChild(option);
+  });
+}
+
+// Initial log and setup
+populateFacetDropdown();
 log('Dev Tools loaded - ready to test notifications');
 </script>

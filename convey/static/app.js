@@ -283,6 +283,9 @@
     });
   }
 
+  // Expose selectFacet globally for notifications and other services
+  window.selectFacet = selectFacet;
+
   // Run initialization when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -396,7 +399,7 @@ window.AppServices = {
 
     /**
      * Show a persistent notification card
-     * @param {object} options - {app, icon, title, message, action, dismissible, badge, autoDismiss}
+     * @param {object} options - {app, icon, title, message, action, facet, dismissible, badge, autoDismiss}
      * @returns {number} Notification ID
      */
     show(options) {
@@ -407,6 +410,7 @@ window.AppServices = {
         title: options.title || 'Notification',
         message: options.message || '',
         action: options.action || null,
+        facet: options.facet || null,
         dismissible: options.dismissible !== false,
         badge: options.badge || null,
         timestamp: Date.now(),
@@ -530,15 +534,51 @@ window.AppServices = {
     },
 
     /**
+     * Attach click handler to notification card
+     * @private
+     */
+    _attachClickHandler(card, n) {
+      if (!n.action) return;
+
+      card.onclick = (e) => {
+        // Ignore clicks on close button
+        if (e.target.closest('.notification-close')) {
+          return;
+        }
+
+        // Prevent default for anchor tags
+        if (card.tagName === 'A') {
+          e.preventDefault();
+        }
+
+        // Select facet if specified (like submenu navigation)
+        if (n.facet && window.selectFacet) {
+          window.selectFacet(n.facet);
+        }
+
+        // Navigate to the path
+        window.location.href = n.action;
+      };
+    },
+
+    /**
      * Create a new notification card element
      * @private
      */
     _createCard(n) {
-      const card = document.createElement('div');
+      // Use anchor tag for semantic HTML when action exists
+      const card = document.createElement(n.action ? 'a' : 'div');
       card.className = 'notification-card';
       card.setAttribute('data-id', n.id);
-      card.setAttribute('data-action', n.action || '');
       card.setAttribute('data-app', n.app);
+
+      if (n.action) {
+        card.href = n.action;
+        card.style.cursor = 'pointer';
+        if (n.facet) {
+          card.setAttribute('data-facet', n.facet);
+        }
+      }
 
       const relativeTime = this._getRelativeTime(n.timestamp);
       card.innerHTML = `
@@ -557,15 +597,8 @@ window.AppServices = {
         </div>
       `;
 
-      // Add click handler if action exists
-      if (n.action) {
-        card.style.cursor = 'pointer';
-        card.onclick = (e) => {
-          if (!e.target.classList.contains('notification-close')) {
-            window.location.href = n.action;
-          }
-        };
-      }
+      // Attach click handler
+      this._attachClickHandler(card, n);
 
       return card;
     },
@@ -619,12 +652,24 @@ window.AppServices = {
         timeEl.textContent = this._getRelativeTime(n.timestamp);
       }
 
-      // Update action
-      card.setAttribute('data-action', n.action || '');
+      // Update action and facet
       if (n.action) {
+        if (card.tagName === 'A') {
+          card.href = n.action;
+        }
         card.style.cursor = 'pointer';
+
+        if (n.facet) {
+          card.setAttribute('data-facet', n.facet);
+        } else {
+          card.removeAttribute('data-facet');
+        }
+
+        // Recreate click handler with new action/facet values
+        this._attachClickHandler(card, n);
       } else {
         card.style.cursor = 'default';
+        card.onclick = null;
       }
     },
 
