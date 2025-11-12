@@ -39,7 +39,8 @@ def test_todo_generation_endpoint(client, monkeypatch, tmp_path):
     monkeypatch.setattr(convey_state, "todo_generation_agents", {}, raising=False)
 
     with patch("muse.cortex_client.cortex_request") as mock_request:
-        mock_request.return_value = str(agents_dir / "agent_1_active.jsonl")
+        # Return agent_id directly (as the real cortex_request does)
+        mock_request.return_value = "agent_1"
 
         resp = client.post("/todos/20240101/generate")
         assert resp.status_code == 200

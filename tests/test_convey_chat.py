@@ -34,10 +34,8 @@ def test_send_message_success(monkeypatch, tmp_path):
 
     def dummy_cortex_request(prompt, persona="default", backend="openai", config=None):
         dummy_cortex_request.called = (prompt, persona, backend, config)
-        # Return a fake agent file path
-        agent_file = agents_dir / "test_agent_123.jsonl"
-        agent_file.touch()
-        return str(agent_file)
+        # Return agent_id directly (as the real cortex_request does)
+        return "test_agent_123"
 
     monkeypatch.setattr("muse.cortex_client.cortex_request", dummy_cortex_request)
 
@@ -66,10 +64,8 @@ def test_send_message_openai(monkeypatch, tmp_path):
         called["backend"] = backend
         called["persona"] = persona
         called["config"] = config
-        # Return a fake agent file path
-        agent_file = agents_dir / "test_agent_456.jsonl"
-        agent_file.touch()
-        return str(agent_file)
+        # Return agent_id directly (as the real cortex_request does)
+        return "test_agent_456"
 
     monkeypatch.setattr("muse.cortex_client.cortex_request", dummy_cortex_request)
 
@@ -96,10 +92,8 @@ def test_send_message_anthropic(monkeypatch, tmp_path):
         called["backend"] = backend
         called["persona"] = persona
         called["config"] = config
-        # Return a fake agent file path
-        agent_file = agents_dir / "test_agent_789.jsonl"
-        agent_file.touch()
-        return str(agent_file)
+        # Return agent_id directly (as the real cortex_request does)
+        return "test_agent_789"
 
     monkeypatch.setattr("muse.cortex_client.cortex_request", dummy_cortex_request)
 

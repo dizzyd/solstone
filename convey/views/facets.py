@@ -7,7 +7,6 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from flask import Blueprint, jsonify, render_template, request
 
 from think.entities import (
@@ -58,12 +57,7 @@ def create_facet() -> Any:
             400,
         )
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-    facet_path = Path(journal) / "facets" / facet_name
+    facet_path = Path(state.journal_root) / "facets" / facet_name
 
     # Check if facet already exists
     if facet_path.exists():
@@ -123,12 +117,7 @@ def update_facet(facet_name: str) -> Any:
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-    facet_path = Path(journal) / "facets" / facet_name
+    facet_path = Path(state.journal_root) / "facets" / facet_name
     facet_json = facet_path / "facet.json"
 
     if not facet_json.exists():
@@ -333,12 +322,7 @@ def generate_facet_description(facet_name: str) -> Any:
     if not api_key:
         return jsonify({"error": "GOOGLE_API_KEY not set"}), 500
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-    facet_path = Path(journal) / "facets" / facet_name
+    facet_path = Path(state.journal_root) / "facets" / facet_name
     if not facet_path.exists():
         return jsonify({"error": "Facet not found"}), 404
 
@@ -377,18 +361,13 @@ def generate_facet_description(facet_name: str) -> Any:
 Generate a clear, engaging 1-2 sentence description that captures the essence and purpose of this facet. The description should help users understand what they'll find in this facet and be appropriate for a personal knowledge management system."""
 
         # Create agent request - events will be broadcast by shared watcher
-        from pathlib import Path
+        from ..utils import spawn_agent
 
-        from muse.cortex_client import cortex_request
-
-        agent_file = cortex_request(
+        agent_id = spawn_agent(
             prompt=prompt,
             persona="facet_describe",
             backend="google",
         )
-
-        # Extract agent_id from the filename
-        agent_id = Path(agent_file).stem.replace("_active", "")
 
         return jsonify({"success": True, "agent_id": agent_id})
 
@@ -475,18 +454,13 @@ def generate_entity_description(facet_name: str) -> Any:
 Generate a clear, concise description (1-2 sentences) that captures what this {entity_type.lower()} is and why it's relevant. The description should be appropriate for a personal knowledge management system and help users understand the entity's significance or role."""
 
         # Create agent request - events will be broadcast by shared watcher
-        from pathlib import Path
+        from ..utils import spawn_agent
 
-        from muse.cortex_client import cortex_request
-
-        agent_file = cortex_request(
+        agent_id = spawn_agent(
             prompt=prompt,
             persona="facet_describe",
             backend="google",
         )
-
-        # Extract agent_id from the filename
-        agent_id = Path(agent_file).stem.replace("_active", "")
 
         return jsonify({"success": True, "agent_id": agent_id})
 
@@ -509,20 +483,16 @@ def assist_entity_add(facet_name: str) -> Any:
         return jsonify({"error": "Entity name is required"}), 400
 
     try:
-        # Import cortex request function
-        from muse.cortex_client import cortex_request
+        from ..utils import spawn_agent
 
         # Format prompt as specified by entity_assist agent
         prompt = f"For the '{facet_name}' facet, this is the user's request to attach a new entity: {name}"
 
         # Create agent request - entity_assist persona already has backend configured
-        agent_file = cortex_request(
+        agent_id = spawn_agent(
             prompt=prompt,
             persona="entity_assist",
         )
-
-        # Extract agent_id from the filename
-        agent_id = Path(agent_file).stem.replace("_active", "")
 
         return jsonify({"success": True, "agent_id": agent_id})
 
@@ -814,12 +784,7 @@ def preview_detected_entity_delete(facet_name: str) -> Any:
         return jsonify({"error": "Entity name is required"}), 400
 
     try:
-        load_dotenv()
-        journal = os.getenv("JOURNAL_PATH")
-        if not journal:
-            return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-        entities_dir = Path(journal) / "facets" / facet_name / "entities"
+        entities_dir = Path(state.journal_root) / "facets" / facet_name / "entities"
         if not entities_dir.exists():
             return jsonify({"success": True, "days": []})
 
@@ -858,12 +823,7 @@ def delete_detected_entity(facet_name: str) -> Any:
         return jsonify({"error": "Entity name is required"}), 400
 
     try:
-        load_dotenv()
-        journal = os.getenv("JOURNAL_PATH")
-        if not journal:
-            return jsonify({"error": "JOURNAL_PATH not set"}), 500
-
-        entities_dir = Path(journal) / "facets" / facet_name / "entities"
+        entities_dir = Path(state.journal_root) / "facets" / facet_name / "entities"
         if not entities_dir.exists():
             return jsonify({"success": True, "days_modified": []})
 

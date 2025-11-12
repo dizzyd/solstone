@@ -448,21 +448,15 @@ def start_agent() -> object:
     config = data.get("config", {})
 
     try:
-        # Use cortex_client to spawn agent
-        from muse.cortex_client import cortex_request
+        from ..utils import spawn_agent
 
         # Create the agent request
-        request_file = cortex_request(
+        agent_id = spawn_agent(
             prompt=prompt_value,
             persona=persona,
             backend=backend,
             config=config,
         )
-
-        # Extract agent_id from the filename
-        from pathlib import Path
-
-        agent_id = Path(request_file).stem.replace("_active", "")
 
         return jsonify({"success": True, "agent_id": agent_id})
     except Exception as e:

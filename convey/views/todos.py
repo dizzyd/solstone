@@ -354,8 +354,6 @@ def generate_todos(day: str):  # type: ignore[override]
     payload = request.get_json(silent=True) or {}
     facet = (payload.get("facet") or "personal").strip()
 
-    from muse.cortex_client import cortex_request
-
     day_date = datetime.strptime(day, "%Y%m%d")
     yesterday = (day_date - timedelta(days=1)).strftime("%Y%m%d")
     yesterday_path = _todo_path(yesterday, facet)
@@ -380,13 +378,14 @@ Yesterday's todos content:
 Write the generated checklist to facets/{facet}/todos/{day}.md"""
 
     try:
-        active_file = cortex_request(
+        from ..utils import spawn_agent
+
+        agent_id = spawn_agent(
             prompt=prompt,
             persona="todo",
             backend="openai",
             config={},
         )
-        agent_id = Path(active_file).stem.replace("_active", "")
     except Exception as exc:  # pragma: no cover - network/agent failure
         return jsonify({"error": f"Failed to spawn agent: {exc}"}), 500
 
@@ -451,8 +450,6 @@ def generate_weekly_todos(day: str, facet: str):  # type: ignore[override]
     if not DATE_RE.fullmatch(day):
         return "", 404
 
-    from muse.cortex_client import cortex_request
-
     day_date = datetime.strptime(day, "%Y%m%d")
 
     prompt = f"""Review the past week and generate high-impact todos for {facet} facet.
@@ -465,13 +462,14 @@ Target file: facets/{facet}/todos/{day}.md
 Focus on surfacing the most important unfinished work from the past 7 days."""
 
     try:
-        active_file = cortex_request(
+        from ..utils import spawn_agent
+
+        agent_id = spawn_agent(
             prompt=prompt,
             persona="todo_weekly",
             backend="openai",
             config={},
         )
-        agent_id = Path(active_file).stem.replace("_active", "")
     except Exception as exc:  # pragma: no cover - network/agent failure
         return jsonify({"error": f"Failed to spawn agent: {exc}"}), 500
 

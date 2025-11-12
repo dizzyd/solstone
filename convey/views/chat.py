@@ -46,9 +46,7 @@ def send_message() -> Any:
         return resp
 
     try:
-        from pathlib import Path
-
-        from muse.cortex_client import cortex_request
+        from ..utils import spawn_agent
 
         # Prepare the full prompt with attachments
         if attachments:
@@ -57,15 +55,12 @@ def send_message() -> Any:
             full_prompt = message
 
         # Create agent request - events will be broadcast by shared watcher
-        agent_file = cortex_request(
+        agent_id = spawn_agent(
             prompt=full_prompt,
             persona=persona,
             backend=backend,
             config=config,
         )
-
-        # Extract agent_id from the filename
-        agent_id = Path(agent_file).stem.replace("_active", "")
 
         return jsonify(agent_id=agent_id)
     except Exception as e:
@@ -88,9 +83,6 @@ def agent_events(agent_id: str) -> Any:
     Returns all events written to disk so far. For active agents, client
     should subscribe to WebSocket for real-time updates.
     """
-    if not state.journal_root:
-        return jsonify({"error": "Journal root not configured"}), 500
-
     from muse.cortex_client import read_agent_events
 
     try:

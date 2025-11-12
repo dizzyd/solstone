@@ -2,7 +2,7 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from think.utils import day_dirs
 
@@ -52,3 +52,37 @@ def time_since(epoch: int) -> str:
         return f"{days} day{'s' if days != 1 else ''} ago"
     weeks = days // 7
     return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+
+
+def spawn_agent(
+    prompt: str,
+    persona: str,
+    backend: Optional[str] = None,
+    config: Optional[dict[str, Any]] = None,
+) -> str:
+    """Spawn a Cortex agent and return the agent_id.
+
+    Thin wrapper around cortex_request that ensures imports are handled
+    and returns the agent_id directly.
+
+    Args:
+        prompt: The task or question for the agent
+        persona: Agent persona from muse/agents/*.txt
+        backend: AI backend - openai, google, anthropic, or claude
+        config: Backend-specific configuration (model, max_tokens, facet, continue, etc.)
+
+    Returns:
+        agent_id string (timestamp-based)
+
+    Raises:
+        ValueError: If JOURNAL_PATH not set or config invalid
+        Exception: On agent spawn failure
+    """
+    from muse.cortex_client import cortex_request
+
+    return cortex_request(
+        prompt=prompt,
+        persona=persona,
+        backend=backend,
+        config=config,
+    )
