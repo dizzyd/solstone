@@ -279,6 +279,49 @@ window.AppServices.register('home', {
 
 ---
 
+## Shared Resources
+
+### Vendor Libraries
+
+Third-party JavaScript libraries are organized in `convey/static/vendor/` for centralized access across all apps.
+
+**Directory Structure**:
+```
+convey/static/vendor/
+├── marked/
+│   └── marked.min.js         # v15.0.12 - Markdown parser
+└── VENDOR.md                 # Library manifest and documentation
+```
+
+**Template Helper**:
+
+The `vendor_lib()` helper function provides convenient access to vendor libraries:
+
+```html
+<!-- Recommended: Using helper function -->
+<script src="{{ vendor_lib('marked') }}"></script>
+
+<!-- Alternative: Explicit path -->
+<script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+```
+
+**Available Libraries**:
+
+1. **marked (v15.0.12)** - Markdown parsing and rendering
+   - Source: https://github.com/markedjs/marked
+   - License: MIT
+   - Usage: `{{ vendor_lib('marked') }}`
+
+**Adding New Libraries**:
+1. Create subdirectory in `convey/static/vendor/{library_name}/`
+2. Add minified `.min.js` file
+3. Update `vendor/VENDOR.md` with version and usage documentation
+4. Use `{{ vendor_lib('library_name') }}` in templates
+
+See `convey/static/vendor/VENDOR.md` for detailed documentation.
+
+---
+
 ## Implementation Status
 
 ### Phase 0: Foundation (Complete)
