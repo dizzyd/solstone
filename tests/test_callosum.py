@@ -215,7 +215,7 @@ def test_client_stop_stops_thread():
 
     # Should set stop event and join thread
     assert client.stop_event.is_set()
-    mock_thread.join.assert_called_once_with(timeout=2)
+    mock_thread.join.assert_called_once_with(timeout=0.5)
 
 
 def test_server_socket_path_from_env(journal_path):

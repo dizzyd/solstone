@@ -11,18 +11,30 @@ from think.entities import load_entity_names
 from think.utils import period_key
 
 
-def write_entities_jsonl(path: Path, entities: list[tuple[str, str, str]]):
-    """Helper to write entities in JSONL format for tests."""
+def write_entities_jsonl(
+    path: Path, entities: list[tuple[str, str, str]] | list[dict]
+):
+    """Helper to write entities in JSONL format for tests.
+
+    Args:
+        path: Path to entities.jsonl file to write
+        entities: Either list of (type, name, desc) tuples or list of entity dicts
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        for etype, name, desc in entities:
-            entity = {"type": etype, "name": name, "description": desc}
+        for item in entities:
+            if isinstance(item, dict):
+                entity = item
+            else:
+                etype, name, desc = item
+                entity = {"type": etype, "name": name, "description": desc}
             f.write(json.dumps(entity, ensure_ascii=False) + "\n")
 
 
 def test_load_entity_names_with_valid_file(monkeypatch):
     """Test loading entity names from a valid entities.jsonl file."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -63,7 +75,8 @@ def test_load_entity_names_missing_file(monkeypatch):
 def test_load_entity_names_empty_file(monkeypatch):
     """Test that empty file returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
+        entities_path.parent.mkdir(parents=True, exist_ok=True)
         entities_path.write_text("")
 
         monkeypatch.setenv("JOURNAL_PATH", tmpdir)
@@ -74,7 +87,8 @@ def test_load_entity_names_empty_file(monkeypatch):
 def test_load_entity_names_no_valid_entries(monkeypatch):
     """Test file with no parseable entity lines returns None."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
+        entities_path.parent.mkdir(parents=True, exist_ok=True)
         # Write malformed JSON
         entities_path.write_text(
             """
@@ -92,7 +106,7 @@ Not valid JSON
 def test_load_entity_names_with_duplicates(monkeypatch):
     """Test that duplicate names are filtered out."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -114,7 +128,7 @@ def test_load_entity_names_with_duplicates(monkeypatch):
 def test_load_entity_names_handles_special_characters(monkeypatch):
     """Test that names with special characters are handled correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -136,7 +150,7 @@ def test_load_entity_names_handles_special_characters(monkeypatch):
 def test_load_entity_names_with_env_var(monkeypatch):
     """Test loading using JOURNAL_PATH environment variable."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [("Person", "Test User", "A test person")],
@@ -163,7 +177,7 @@ def test_load_entity_names_missing_env_var(monkeypatch):
 def test_load_entity_names_spoken_mode(monkeypatch):
     """Test spoken mode returns shortened forms with uniform processing for all types."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -220,7 +234,7 @@ def test_load_entity_names_spoken_mode(monkeypatch):
 def test_load_entity_names_spoken_mode_with_tools(monkeypatch):
     """Test spoken mode includes tools with uniform processing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -240,7 +254,7 @@ def test_load_entity_names_spoken_mode_with_tools(monkeypatch):
 def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
     """Test spoken mode filters out duplicate shortened forms."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -262,7 +276,7 @@ def test_load_entity_names_spoken_mode_duplicates(monkeypatch):
 def test_load_entity_names_uniform_processing(monkeypatch):
     """Test that uniform processing works correctly for all entity types."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
         write_entities_jsonl(
             entities_path,
             [
@@ -311,7 +325,8 @@ def test_load_entity_names_uniform_processing(monkeypatch):
 def test_load_entity_names_with_aka_field(monkeypatch):
     """Test that aka field values are included in spoken mode."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
+        entities_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write entities with aka fields using manual JSON
         with open(entities_path, "w", encoding="utf-8") as f:
@@ -377,7 +392,8 @@ def test_load_entity_names_with_aka_field(monkeypatch):
 def test_load_entity_names_aka_with_parens(monkeypatch):
     """Test that aka entries with parentheses are processed correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
+        entities_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(entities_path, "w", encoding="utf-8") as f:
             f.write(
@@ -411,7 +427,8 @@ def test_load_entity_names_aka_with_parens(monkeypatch):
 def test_load_entity_names_aka_deduplication(monkeypatch):
     """Test that aka values are deduplicated with main names."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
+        entities_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(entities_path, "w", encoding="utf-8") as f:
             # First entity has "John" in aka
@@ -445,7 +462,8 @@ def test_load_entity_names_aka_deduplication(monkeypatch):
 def test_load_entity_names_non_spoken_with_aka(monkeypatch):
     """Test non-spoken mode includes aka values in parentheses."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        entities_path = Path(tmpdir) / "entities.jsonl"
+        entities_path = Path(tmpdir) / "facets" / "test" / "entities.jsonl"
+        entities_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(entities_path, "w", encoding="utf-8") as f:
             # Entity with aka values
