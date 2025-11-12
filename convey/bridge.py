@@ -50,7 +50,7 @@ def _broadcast_callosum_event(message: Dict[str, Any]) -> None:
         logger.exception("Failed to broadcast %s event", message.get("tract"))
 
 
-def start_callosum_bridge() -> None:
+def start_bridge() -> None:
     """Start listening for Callosum events and forwarding to WebSocket clients."""
     global _CALLOSUM_CONNECTION
     with _WATCH_LOCK:
@@ -70,7 +70,7 @@ def start_callosum_bridge() -> None:
             _CALLOSUM_CONNECTION = None
 
 
-def stop_callosum_bridge(timeout: float = 5.0) -> None:
+def stop_bridge(timeout: float = 5.0) -> None:
     """Stop listening for Callosum events."""
     global _CALLOSUM_CONNECTION
     with _WATCH_LOCK:

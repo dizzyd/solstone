@@ -21,7 +21,7 @@ from think import todo as todo_store
 from think.utils import setup_cli
 
 from . import state
-from .callosum_bridge import register_websocket, start_callosum_bridge
+from .bridge import register_websocket, start_bridge
 from .views import admin as admin_view
 from .views import agents as agents_view
 from .views import calendar as calendar_view
@@ -322,7 +322,7 @@ def run_service(
         should_start = not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
         if should_start:
             logger.info("Starting Callosum bridge")
-            start_callosum_bridge()
+            start_bridge()
         else:
             logger.debug("Skipping bridge start in reloader parent process")
     app.run(host=host, port=port, debug=debug)
