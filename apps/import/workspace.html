@@ -1,7 +1,3 @@
-{% extends 'base.html' %}
-{% set title = 'Import' %}
-{% set active = 'import' %}
-{% block head %}
 <style>
 .container { padding:0 1em; }
 #dropArea { border:2px dashed #999; padding:2em; text-align:center; margin-bottom:1em; cursor:pointer; }
@@ -43,8 +39,6 @@ button:disabled { background:#ccc; color:#666; cursor:not-allowed; opacity:0.6; 
 
 @keyframes spin { to { transform:rotate(360deg); } }
 </style>
-{% endblock %}
-{% block body %}
 <div class="container">
   <div class="tabs">
     <div class="tab active" data-target="media">Upload File</div>
@@ -63,7 +57,7 @@ button:disabled { background:#ccc; color:#666; cursor:not-allowed; opacity:0.6; 
     </div>
     <button type="submit" id="submitBtn">Submit</button>
   </form>
-  
+
   <div class="import-list">
     <h2>Import History</h2>
     <div id="importListContent">
@@ -127,11 +121,11 @@ document.getElementById('importForm').onsubmit=e=>{
   e.preventDefault();
   const submitBtn = document.getElementById('submitBtn');
   const originalText = submitBtn.textContent;
-  
+
   // Disable button and show processing state
   submitBtn.disabled = true;
   submitBtn.innerHTML = 'Processing<span class="spinner"></span>';
-  
+
   const fd=new FormData();
   if(activeTab==='media'){
     if(currentFile) fd.append('file', currentFile);
@@ -143,13 +137,13 @@ document.getElementById('importForm').onsubmit=e=>{
   if(facet) fd.append('facet', facet);
   const settingValue = settingInput.value.trim();
   if(settingValue) fd.append('setting', settingValue);
-  fetch('{{ url_for('import_view.import_save') }}', {method:'POST', body:fd})
+  fetch('/app/import/api/save', {method:'POST', body:fd})
     .then(async r=>{
       const d=await r.json();
       // Re-enable button
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
-      
+
       if(!r.ok){
         if(window.showError)showError(d.error||'Upload failed');
         return;
@@ -209,7 +203,7 @@ function capitalizeStage(stage) {
 }
 
 function loadImports(){
-  fetch('{{ url_for('import_view.import_list') }}').then(r=>r.json()).then(imports=>{
+  fetch('/app/import/api/list').then(r=>r.json()).then(imports=>{
     const container = document.getElementById('importListContent');
 
     if (!imports || imports.length === 0) {
@@ -254,7 +248,7 @@ function loadImports(){
         statusText = 'Pending';
       }
 
-      html += `<tr data-import-id="${imp.timestamp}" onclick="window.location.href='/import/${imp.timestamp}'">`;
+      html += `<tr data-import-id="${imp.timestamp}" onclick="window.location.href='/app/import/${imp.timestamp}'">`;
       html += `<td>${importedAt}</td>`;
       html += `<td>${imp.original_filename || 'Unknown'}</td>`;
       html += `<td class="file-size">${formatFileSize(imp.file_size || 0)}</td>`;
@@ -342,7 +336,7 @@ startBtn.addEventListener('click', async () => {
   startBtn.innerHTML = 'Starting<span class="spinner"></span>';
 
   try {
-    const response = await fetch('{{ url_for('import_view.import_update_metadata') }}', {
+    const response = await fetch('/app/import/api/facet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, facet, setting })
@@ -354,7 +348,7 @@ startBtn.addEventListener('click', async () => {
     }
 
     // Start the import task
-    const startResponse = await fetch('{{ url_for('import_view.import_start') }}', {
+    const startResponse = await fetch('/app/import/api/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, timestamp: ts })
@@ -387,7 +381,7 @@ window.onclick=e=>{if(e.target==document.getElementById('detectModal'))document.
 
 // Load facets for dropdown
 function loadFacets(){
-  fetch('{{ url_for('facets.facets_list') }}').then(r=>r.json()).then(facets=>{
+  fetch('/facets/api/list').then(r=>r.json()).then(facets=>{
     const select=document.getElementById('facetSelect');
     const current=select.value; // Preserve current selection
     select.innerHTML='<option value="">None</option>';
@@ -419,4 +413,3 @@ loadImports();
 loadFacets();
 setTimeout(checkUrlFragment, 100); // Wait for facets to load
 </script>
-{% endblock %}

@@ -33,9 +33,6 @@ from .views import search as search_view
 
 # Old task system removed - now using Callosum for task execution
 
-import_page_view = import_module(".import", "convey.views")
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -238,7 +235,6 @@ send_message = chat_view.send_message
 chat_history = chat_view.chat_history
 clear_history = chat_view.clear_history
 search_page = search_view.search_page
-import_page = import_page_view.import_page
 calendar_days = calendar_view.calendar_days
 calendar_stats = calendar_view.calendar_stats
 calendar_transcript_page = calendar_view.calendar_transcript_page
@@ -265,7 +261,6 @@ __all__ = [
     "chat_history",
     "clear_history",
     "search_page",
-    "import_page",
     "calendar_days",
     "calendar_stats",
     "calendar_transcript_page",

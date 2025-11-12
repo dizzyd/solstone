@@ -16,8 +16,6 @@ from . import (
 
 chat_view = import_module(".chat", __name__)
 
-import_view = import_module(".import", __name__)
-
 
 def register_views(app: Flask) -> None:
     for bp in [
@@ -29,6 +27,5 @@ def register_views(app: Flask) -> None:
         todos.bp,
         chat_view.bp,
         agents.bp,
-        import_view.bp,
     ]:
         app.register_blueprint(bp)

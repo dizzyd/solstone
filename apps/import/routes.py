@@ -22,17 +22,22 @@ from think.importer_utils import (
     write_import_metadata,
 )
 
-from .. import state
+from convey import state
 
-bp = Blueprint("import_view", __name__, template_folder="../templates")
+import_bp = Blueprint(
+    "import",
+    __name__,
+    url_prefix="/app/import",
+)
 
 
-@bp.route("/import")
-def import_page() -> str:
-    return render_template("import.html", active="import")
+@import_bp.route("/")
+def index() -> str:
+    """Render the import page."""
+    return render_template("app.html", app="import")
 
 
-@bp.route("/import/api/save", methods=["POST"])
+@import_bp.route("/api/save", methods=["POST"])
 def import_save() -> Any:
     from datetime import datetime
 
@@ -158,7 +163,7 @@ def import_save() -> Any:
     )
 
 
-@bp.route("/import/api/facet", methods=["POST"])
+@import_bp.route("/api/facet", methods=["POST"])
 def import_update_metadata() -> Any:
     """Update stored metadata (facet/setting) for a saved import."""
     data = request.get_json(force=True)
@@ -196,7 +201,7 @@ def import_update_metadata() -> Any:
     )
 
 
-@bp.route("/import/api/list")
+@import_bp.route("/api/list")
 def import_list() -> Any:
     """Get list of all imports with their metadata."""
     # Get all import timestamps using utility function
@@ -243,17 +248,17 @@ def import_list() -> Any:
     return jsonify(imports)
 
 
-@bp.route("/import/<timestamp>")
+@import_bp.route("/<timestamp>")
 def import_detail(timestamp: str) -> str:
     """Show detailed view of a specific import."""
     import_dir = Path(state.journal_root) / "imports" / timestamp
     if not import_dir.exists():
         return render_template("error.html", error="Import not found"), 404
 
-    return render_template("import_detail.html", timestamp=timestamp, active="import")
+    return render_template("apps/import/detail.html", timestamp=timestamp, active="import")
 
 
-@bp.route("/import/api/<timestamp>")
+@import_bp.route("/api/<timestamp>")
 def import_detail_api(timestamp: str) -> Any:
     """Get detailed data for a specific import."""
     try:
@@ -267,7 +272,7 @@ def import_detail_api(timestamp: str) -> Any:
         return jsonify({"error": "Import not found"}), 404
 
 
-@bp.route("/import/api/<timestamp>/summary")
+@import_bp.route("/api/<timestamp>/summary")
 def import_summary_api(timestamp: str) -> Any:
     """Get the summary HTML for a specific import."""
     import_dir = Path(state.journal_root) / "imports" / timestamp
@@ -305,7 +310,7 @@ def import_summary_api(timestamp: str) -> Any:
         )
 
 
-@bp.route("/import/api/start", methods=["POST"])
+@import_bp.route("/api/start", methods=["POST"])
 def import_start() -> Any:
     data = request.get_json(force=True)
     path = data.get("path")
@@ -403,7 +408,7 @@ def import_start() -> Any:
     return jsonify({"status": "ok", "task_id": task_id})
 
 
-@bp.route("/import/api/<timestamp>/rerun", methods=["POST"])
+@import_bp.route("/api/<timestamp>/rerun", methods=["POST"])
 def import_rerun(timestamp: str) -> Any:
     """Re-run an import with optionally updated facet."""
     journal_root = Path(state.journal_root)
