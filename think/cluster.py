@@ -328,6 +328,7 @@ def _load_entries_from_period(
     period_name = period_path.name
 
     from think.utils import period_parse
+
     start_time, _ = period_parse(period_name)
     if not start_time:
         return entries

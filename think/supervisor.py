@@ -39,9 +39,7 @@ class AlertManager:
         self._initial_backoff = initial_backoff
         self._max_backoff = max_backoff
 
-    async def alert_if_ready(
-        self, key: tuple, message: str
-    ) -> bool:
+    async def alert_if_ready(self, key: tuple, message: str) -> bool:
         """Send alert with exponential backoff. Returns True if sent."""
         now = time.time()
 
@@ -229,9 +227,7 @@ def _get_notifier() -> DesktopNotifier:
     return _notifier
 
 
-async def send_notification(
-    message: str, alert_key: tuple | None = None
-) -> None:
+async def send_notification(message: str, alert_key: tuple | None = None) -> None:
     """Send a desktop notification with ``message``.
 
     Args:
@@ -977,9 +973,7 @@ def _run_period_dream(day: str, period: str) -> None:
     if success:
         logging.info(f"Period dream completed: {day}/{period}")
     else:
-        logging.error(
-            f"Period dream failed with exit code {exit_code}: {day}/{period}"
-        )
+        logging.error(f"Period dream failed with exit code {exit_code}: {day}/{period}")
 
 
 def _handle_callosum_message(message: dict) -> None:

@@ -201,7 +201,10 @@ def _index_transcripts(
 
 
 def scan_transcripts(
-    journal: str, verbose: bool = False, day: str | None = None, period: str | None = None
+    journal: str,
+    verbose: bool = False,
+    day: str | None = None,
+    period: str | None = None,
 ) -> bool:
     """Index transcript audio, screen diff JSON, and screen JSONL files on a per-day basis.
 

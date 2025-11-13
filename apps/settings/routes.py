@@ -6,9 +6,8 @@ from typing import Any
 
 from flask import Blueprint, jsonify, render_template, request
 
-from think.utils import get_config as get_journal_config
-
 from convey import state
+from think.utils import get_config as get_journal_config
 
 settings_bp = Blueprint(
     "settings",

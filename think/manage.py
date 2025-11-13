@@ -28,7 +28,9 @@ class ServiceManager:
         self.running = True
         self.term = Terminal()
         self.status_message = ""
-        self.last_log_lines = {}  # Maps ref -> (timestamp, stream, line) for most recent log
+        self.last_log_lines = (
+            {}
+        )  # Maps ref -> (timestamp, stream, line) for most recent log
         self.cpu_cache = {}  # Maps pid -> last cpu_percent value
         self.cpu_procs = {}  # Maps pid -> Process object for cpu tracking
         self.running_tasks = {}  # Maps ref -> task info from logs tract
@@ -313,7 +315,8 @@ class ServiceManager:
 
         # Filter out tasks that are actually supervised services
         tasks_only = [
-            task for task in self.running_tasks.values()
+            task
+            for task in self.running_tasks.values()
             if task["pid"] not in service_pids
         ]
 

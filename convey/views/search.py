@@ -32,8 +32,9 @@ def search_summaries_api() -> Any:
     if not query:
         return jsonify({"total": 0, "results": []})
 
-    from ..utils import parse_pagination_params
     from think.utils import get_topics
+
+    from ..utils import parse_pagination_params
 
     limit, offset = parse_pagination_params(default_limit=20)
 
@@ -73,8 +74,9 @@ def search_events_api() -> Any:
     if not query:
         return jsonify({"total": 0, "results": []})
 
-    from ..utils import parse_pagination_params
     from think.utils import get_topics
+
+    from ..utils import parse_pagination_params
 
     limit, offset = parse_pagination_params(default_limit=10)
 

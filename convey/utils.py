@@ -204,7 +204,9 @@ def error_response(message: str, code: int = 400) -> tuple[Any, int]:
     return jsonify({"error": message}), code
 
 
-def success_response(data: dict[str, Any] | None = None, code: int = 200) -> tuple[Any, int]:
+def success_response(
+    data: dict[str, Any] | None = None, code: int = 200
+) -> tuple[Any, int]:
     """Create a standard JSON success response.
 
     Provides consistent success response format across all API endpoints.

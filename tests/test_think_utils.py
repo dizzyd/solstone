@@ -11,9 +11,7 @@ from think.entities import load_entity_names
 from think.utils import period_key
 
 
-def write_entities_jsonl(
-    path: Path, entities: list[tuple[str, str, str]] | list[dict]
-):
+def write_entities_jsonl(path: Path, entities: list[tuple[str, str, str]] | list[dict]):
     """Helper to write entities in JSONL format for tests.
 
     Args:

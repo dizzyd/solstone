@@ -8,6 +8,7 @@ from typing import Any
 from flask import Blueprint, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
+from convey import state
 from think.callosum import callosum_send
 from think.detect_created import detect_created
 from think.importer_utils import (
@@ -21,8 +22,6 @@ from think.importer_utils import (
     update_import_metadata_fields,
     write_import_metadata,
 )
-
-from convey import state
 
 import_bp = Blueprint(
     "import",
@@ -255,7 +254,9 @@ def import_detail(timestamp: str) -> str:
     if not import_dir.exists():
         return render_template("error.html", error="Import not found"), 404
 
-    return render_template("apps/import/detail.html", timestamp=timestamp, active="import")
+    return render_template(
+        "apps/import/detail.html", timestamp=timestamp, active="import"
+    )
 
 
 @import_bp.route("/api/<timestamp>")
