@@ -238,6 +238,31 @@ def log_token_usage(
         pass
 
 
+def get_model_provider(model: str) -> str:
+    """Get the provider name from a model identifier.
+
+    Parameters
+    ----------
+    model : str
+        Model name (e.g., "gpt-5", "gemini-2.5-flash", "claude-sonnet-4-5")
+
+    Returns
+    -------
+    str
+        Provider name: "openai", "google", "anthropic", or "unknown"
+    """
+    model_lower = model.lower()
+
+    if model_lower.startswith("gpt"):
+        return "openai"
+    elif model_lower.startswith("gemini"):
+        return "google"
+    elif model_lower.startswith("claude"):
+        return "anthropic"
+    else:
+        return "unknown"
+
+
 def _log_token_usage(response, model: str) -> None:
     """Log Gemini token usage to journal (legacy wrapper)."""
     if hasattr(response, "usage_metadata"):
@@ -409,4 +434,5 @@ __all__ = [
     "gemini_generate",
     "gemini_agenerate",
     "log_token_usage",
+    "get_model_provider",
 ]
