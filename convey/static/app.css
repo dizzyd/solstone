@@ -38,11 +38,9 @@ body.has-app-bar .container {
   left: 0;
   right: 0;
   background: white;
-  border-bottom: 1px solid var(--facet-border, #e0e0e0);
   z-index: 1000;
   height: 60px;
   padding: 12px 16px;
-  transition: border-bottom-color 0.3s ease;
   overflow: visible;
   white-space: nowrap;
   display: flex;
@@ -61,6 +59,24 @@ body.has-app-bar .container {
   transition: background-color 0.3s ease;
   pointer-events: none;
   z-index: -1;
+}
+
+/* Border as pseudo-element for selective positioning */
+.facet-bar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--facet-border, #e0e0e0);
+  transition: left 0.3s ease, background-color 0.3s ease;
+  pointer-events: none;
+}
+
+/* When sidebar open, border only where workspace is visible */
+body.sidebar-open .facet-bar::after {
+  left: 240px;
 }
 
 .facet-bar #hamburger {
@@ -175,12 +191,17 @@ body.has-app-bar .container {
   top: 60px;
   left: -240px;
   width: 240px;
-  bottom: 60px;
+  bottom: 0;
   background: white;
   border-right: 1px solid var(--facet-border, #e0e0e0);
   z-index: 999;
   transition: left 0.3s ease, border-right-color 0.3s ease;
   overflow-y: auto;
+}
+
+/* When app bar is present, menu needs to stay above it */
+body.has-app-bar .menu-bar {
+  bottom: 60px;
 }
 
 .menu-bar::before {
@@ -353,6 +374,16 @@ body.sidebar-open .menu-bar {
   box-shadow: none;
 }
 
+/* Disable app-icon interaction when facets are disabled */
+.facet-bar.facets-disabled .app-icon {
+  cursor: default;
+  pointer-events: none;
+}
+
+.facet-bar.facets-disabled .app-icon:hover {
+  background: none;
+}
+
 /* App Bar (bottom) */
 .app-bar {
   position: fixed;
@@ -360,14 +391,12 @@ body.sidebar-open .menu-bar {
   left: 0;
   right: 0;
   background: white;
-  border-top: 1px solid var(--facet-border, #e0e0e0);
   z-index: 1000;
   height: 60px;
   display: flex;
   align-items: center;
   padding: 0 16px;
   gap: 12px;
-  transition: border-top-color 0.3s ease;
 }
 
 .app-bar::before {
@@ -381,6 +410,24 @@ body.sidebar-open .menu-bar {
   transition: background-color 0.3s ease;
   pointer-events: none;
   z-index: -1;
+}
+
+/* Border as pseudo-element for selective positioning */
+.app-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--facet-border, #e0e0e0);
+  transition: left 0.3s ease, background-color 0.3s ease;
+  pointer-events: none;
+}
+
+/* When sidebar open, border only where workspace is visible */
+body.sidebar-open .app-bar::after {
+  left: 240px;
 }
 
 /* Workspace content area */
