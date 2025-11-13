@@ -1,0 +1,497 @@
+<div class="tokens-dashboard">
+  <div class="loading-state" id="loading">
+    <p>Loading token usage data...</p>
+  </div>
+
+  <div class="dashboard-content" id="dashboard" style="display: none;">
+    <!-- Daily Summary Card -->
+    <div class="summary-card">
+      <div class="summary-item">
+        <div class="summary-label">Daily Total</div>
+        <div class="summary-value" id="total-cost">$0.00</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Total Tokens</div>
+        <div class="summary-value" id="total-tokens">0</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Requests</div>
+        <div class="summary-value" id="total-requests">0</div>
+      </div>
+    </div>
+
+    <!-- By Provider -->
+    <div class="breakdown-section">
+      <h2>By Provider</h2>
+      <table class="breakdown-table" id="provider-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="provider">Provider</th>
+            <th class="sortable num" data-sort="requests">Requests</th>
+            <th class="sortable num" data-sort="tokens">Tokens</th>
+            <th class="sortable num" data-sort="input_cost">Input Cost</th>
+            <th class="sortable num" data-sort="output_cost">Output Cost</th>
+            <th class="sortable num" data-sort="cached_tokens">Cached</th>
+            <th class="sortable num" data-sort="cost">Total</th>
+            <th class="num">% of Day</th>
+          </tr>
+        </thead>
+        <tbody id="provider-body">
+          <tr class="empty-row">
+            <td colspan="8">No data for this day</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- By Model -->
+    <div class="breakdown-section">
+      <h2>By Model</h2>
+      <table class="breakdown-table" id="model-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="model">Model</th>
+            <th class="sortable num" data-sort="requests">Requests</th>
+            <th class="sortable num" data-sort="tokens">Tokens</th>
+            <th class="sortable num" data-sort="cost">Total Cost</th>
+            <th class="num">% of Day</th>
+            <th class="sortable num" data-sort="avg_cost_per_request">Per-Request Avg</th>
+          </tr>
+        </thead>
+        <tbody id="model-body">
+          <tr class="empty-row">
+            <td colspan="6">No data for this day</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- By Token Type -->
+    <div class="breakdown-section">
+      <h2>By Token Type</h2>
+      <table class="breakdown-table" id="token-type-table">
+        <thead>
+          <tr>
+            <th>Token Type</th>
+            <th class="num">Total Tokens</th>
+            <th class="num">Cost</th>
+            <th class="num">% of Total Cost</th>
+            <th class="num">Avg Rate</th>
+          </tr>
+        </thead>
+        <tbody id="token-type-body">
+          <tr class="empty-row">
+            <td colspan="5">No data for this day</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- By Context Prefix -->
+    <div class="breakdown-section">
+      <h2>By Context Prefix</h2>
+      <div class="search-box">
+        <input type="text" id="context-search" placeholder="Filter contexts..." />
+      </div>
+      <table class="breakdown-table" id="context-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="context">Context Prefix</th>
+            <th class="sortable num" data-sort="requests">Requests</th>
+            <th class="sortable num" data-sort="tokens">Tokens</th>
+            <th class="sortable num" data-sort="cost">Total Cost</th>
+            <th class="num">% of Day</th>
+            <th>Models Used</th>
+          </tr>
+        </thead>
+        <tbody id="context-body">
+          <tr class="empty-row">
+            <td colspan="6">No data for this day</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Additional Info -->
+    <div class="info-section">
+      <a href="#" id="view-raw">View token log file</a> |
+      <a href="#" id="export-csv">Export day as CSV</a>
+    </div>
+  </div>
+</div>
+
+<style>
+.tokens-dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2em;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 4em;
+  color: #666;
+}
+
+.summary-card {
+  display: flex;
+  gap: 2em;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 2em;
+  margin-bottom: 2em;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.summary-item {
+  text-align: center;
+}
+
+.summary-label {
+  font-size: 0.85em;
+  opacity: 0.9;
+  margin-bottom: 0.5em;
+}
+
+.summary-value {
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.breakdown-section {
+  margin-bottom: 3em;
+}
+
+.breakdown-section h2 {
+  font-size: 1.5em;
+  margin-bottom: 1em;
+  color: #333;
+}
+
+.search-box {
+  margin-bottom: 1em;
+}
+
+.search-box input {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.5em 1em;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.breakdown-table thead {
+  background: #f8f9fa;
+}
+
+.breakdown-table th {
+  padding: 1em;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #e0e0e0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.breakdown-table th.sortable:hover {
+  background: #e9ecef;
+}
+
+.breakdown-table th.num,
+.breakdown-table td.num {
+  text-align: right;
+}
+
+.breakdown-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.breakdown-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.breakdown-table td {
+  padding: 0.8em 1em;
+  color: #333;
+}
+
+.breakdown-table .empty-row {
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}
+
+.provider-openai {
+  color: #10a37f;
+}
+
+.provider-google {
+  color: #4285f4;
+}
+
+.provider-anthropic {
+  color: #cd7f32;
+}
+
+.percent-bar {
+  display: inline-block;
+  height: 1em;
+  background: linear-gradient(90deg, var(--bar-color) 0%, var(--bar-color) 100%);
+  border-radius: 2px;
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+
+.cost-value {
+  font-weight: 600;
+}
+
+.models-list {
+  font-size: 0.85em;
+  color: #666;
+}
+
+.info-section {
+  text-align: center;
+  padding: 2em 0;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.info-section a {
+  color: #667eea;
+  text-decoration: none;
+}
+
+.info-section a:hover {
+  text-decoration: underline;
+}
+</style>
+
+<script>
+// Global state
+let currentData = null;
+let currentDay = '{{ day }}';
+
+// Format numbers
+function formatCost(value) {
+  return '$' + value.toFixed(6);
+}
+
+function formatNumber(value) {
+  return value.toLocaleString();
+}
+
+function formatPercent(value) {
+  return value.toFixed(1) + '%';
+}
+
+function formatRate(value) {
+  return '$' + value.toFixed(4) + '/1K';
+}
+
+// Create percent bar
+function createPercentBar(percent, color) {
+  const width = Math.min(100, Math.max(0, percent * 2)); // Scale for visual effect
+  return `<span class="percent-bar" style="--bar-color: ${color}; width: ${width}px;"></span>`;
+}
+
+// Get provider color
+function getProviderColor(provider) {
+  const colors = {
+    'openai': '#10a37f',
+    'google': '#4285f4',
+    'anthropic': '#cd7f32'
+  };
+  return colors[provider] || '#999';
+}
+
+// Load token usage data
+async function loadTokenData(day) {
+  try {
+    const response = await fetch(`/app/tokens/api/usage?day=${day}`);
+    const data = await response.json();
+    currentData = data;
+    renderDashboard(data);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+  } catch (error) {
+    console.error('Failed to load token data:', error);
+    document.getElementById('loading').innerHTML = '<p style="color: red;">Failed to load data</p>';
+  }
+}
+
+// Render dashboard
+function renderDashboard(data) {
+  // Update summary
+  document.getElementById('total-cost').textContent = formatCost(data.total.cost);
+  document.getElementById('total-tokens').textContent = formatNumber(data.total.tokens);
+  document.getElementById('total-requests').textContent = formatNumber(data.total.requests);
+
+  // Render provider table
+  renderProviderTable(data.by_provider);
+
+  // Render model table
+  renderModelTable(data.by_model);
+
+  // Render token type table
+  renderTokenTypeTable(data.by_token_type);
+
+  // Render context table
+  renderContextTable(data.by_context);
+}
+
+// Render provider table
+function renderProviderTable(providers) {
+  const tbody = document.getElementById('provider-body');
+
+  if (providers.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No data for this day</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = providers.map(p => `
+    <tr>
+      <td><span class="provider-${p.provider}">${p.provider}</span></td>
+      <td class="num">${formatNumber(p.requests)}</td>
+      <td class="num">${formatNumber(p.tokens)}</td>
+      <td class="num">${formatCost(p.input_cost)}</td>
+      <td class="num">${formatCost(p.output_cost)}</td>
+      <td class="num">${formatNumber(p.cached_tokens)}</td>
+      <td class="num cost-value">${formatCost(p.cost)}</td>
+      <td class="num">${createPercentBar(p.percent, getProviderColor(p.provider))} ${formatPercent(p.percent)}</td>
+    </tr>
+  `).join('');
+}
+
+// Render model table
+function renderModelTable(models) {
+  const tbody = document.getElementById('model-body');
+
+  if (models.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No data for this day</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = models.map(m => `
+    <tr>
+      <td>${m.model}</td>
+      <td class="num">${formatNumber(m.requests)}</td>
+      <td class="num">${formatNumber(m.tokens)}</td>
+      <td class="num cost-value">${formatCost(m.cost)}</td>
+      <td class="num">${createPercentBar(m.percent, getProviderColor(m.provider))} ${formatPercent(m.percent)}</td>
+      <td class="num">${formatCost(m.avg_cost_per_request)}</td>
+    </tr>
+  `).join('');
+}
+
+// Render token type table
+function renderTokenTypeTable(tokenTypes) {
+  const tbody = document.getElementById('token-type-body');
+
+  const types = ['input', 'output'];
+  const hasData = types.some(t => tokenTypes[t].tokens > 0);
+
+  if (!hasData) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No data for this day</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = types.map(type => {
+    const data = tokenTypes[type];
+
+    // Build label with percentage annotation
+    let label = type.charAt(0).toUpperCase() + type.slice(1);
+    if (type === 'input' && data.cached_pct > 0) {
+      label += ` (${data.cached_pct.toFixed(1)}% cached)`;
+    } else if (type === 'output' && data.reasoning_pct > 0) {
+      label += ` (${data.reasoning_pct.toFixed(1)}% reasoning)`;
+    }
+
+    return `
+      <tr>
+        <td>${label}</td>
+        <td class="num">${formatNumber(data.tokens)}</td>
+        <td class="num cost-value">${formatCost(data.cost)}</td>
+        <td class="num">${createPercentBar(data.percent, '#667eea')} ${formatPercent(data.percent)}</td>
+        <td class="num">${data.avg_rate > 0 ? formatRate(data.avg_rate) : '-'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Render context table
+function renderContextTable(contexts, filter = '') {
+  const tbody = document.getElementById('context-body');
+
+  let filteredContexts = contexts;
+  if (filter) {
+    const lowerFilter = filter.toLowerCase();
+    filteredContexts = contexts.filter(c => c.context.toLowerCase().includes(lowerFilter));
+  }
+
+  if (filteredContexts.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No matching contexts</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filteredContexts.map(c => `
+    <tr>
+      <td><code>${c.context}</code></td>
+      <td class="num">${formatNumber(c.requests)}</td>
+      <td class="num">${formatNumber(c.tokens)}</td>
+      <td class="num cost-value">${formatCost(c.cost)}</td>
+      <td class="num">${createPercentBar(c.percent, '#667eea')} ${formatPercent(c.percent)}</td>
+      <td class="models-list">${c.models_used.join(', ')}</td>
+    </tr>
+  `).join('');
+}
+
+// Context search filter
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('context-search');
+  searchInput.addEventListener('input', (e) => {
+    if (currentData) {
+      renderContextTable(currentData.by_context, e.target.value);
+    }
+  });
+
+  // View raw log file
+  document.getElementById('view-raw').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.open(`/tokens/${currentDay}.jsonl`, '_blank');
+  });
+
+  // Export CSV (placeholder)
+  document.getElementById('export-csv').addEventListener('click', (e) => {
+    e.preventDefault();
+    alert('CSV export coming soon!');
+  });
+
+  // Load initial data
+  loadTokenData(currentDay);
+});
+
+// Listen for day changes from app bar
+window.addEventListener('tokens:daychange', (e) => {
+  currentDay = e.detail.day;
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('dashboard').style.display = 'none';
+  loadTokenData(currentDay);
+});
+</script>

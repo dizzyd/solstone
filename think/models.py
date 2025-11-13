@@ -308,16 +308,21 @@ def calc_token_cost(token_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             return None
 
         # Map our token fields to genai_prices Usage format
-        # Note: reasoning_tokens are included in output_tokens since genai-prices
-        # doesn't have a separate pricing tier for reasoning
+        # Note: Gemini reports reasoning_tokens separately, but they're billed at
+        # output token rates. genai-prices doesn't have a separate field for reasoning,
+        # so we add them to output_tokens for correct pricing.
         input_tokens = usage_data.get("input_tokens", 0)
         output_tokens = usage_data.get("output_tokens", 0)
         cached_tokens = usage_data.get("cached_tokens", 0)
+        reasoning_tokens = usage_data.get("reasoning_tokens", 0)
+
+        # Add reasoning tokens to output for pricing (Gemini bills them as output)
+        total_output_tokens = output_tokens + reasoning_tokens
 
         # Create Usage object
         usage = Usage(
             input_tokens=input_tokens,
-            output_tokens=output_tokens,
+            output_tokens=total_output_tokens,
             cache_read_tokens=cached_tokens if cached_tokens > 0 else None,
         )
 

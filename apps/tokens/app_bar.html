@@ -1,0 +1,183 @@
+<div class="tokens-nav">
+  <button id="prev-day" class="nav-button" title="Previous day">← Prev Day</button>
+  <div class="date-display">
+    <input type="date" id="date-picker" value="{{ day }}" />
+    <span id="current-date">{{ day }}</span>
+  </div>
+  <button id="next-day" class="nav-button" title="Next day">Next Day →</button>
+  <button id="today" class="nav-button today-button" title="Jump to today">Today</button>
+</div>
+
+<style>
+.tokens-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1em;
+  padding: 1em;
+}
+
+.nav-button {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.6em 1.2em;
+  font-family: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-button:hover {
+  background: #f8f9fa;
+  border-color: #667eea;
+}
+
+.nav-button:active {
+  transform: scale(0.98);
+}
+
+.today-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  font-weight: 600;
+}
+
+.today-button:hover {
+  opacity: 0.9;
+}
+
+.date-display {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#date-picker {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+#current-date {
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 1.1em;
+  font-weight: 600;
+  padding: 0.6em 1em;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  pointer-events: none;
+}
+</style>
+
+<script>
+(function() {
+  // Parse day from URL or use today
+  const pathParts = window.location.pathname.split('/');
+  let currentDay = pathParts[pathParts.length - 1];
+
+  // If current day doesn't look like YYYYMMDD, use today
+  if (!/^\d{8}$/.test(currentDay)) {
+    currentDay = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  }
+
+  // Format date for display
+  function formatDisplayDate(day) {
+    const year = day.substring(0, 4);
+    const month = day.substring(4, 6);
+    const dayNum = day.substring(6, 8);
+    const date = new Date(year, month - 1, dayNum);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+
+  // Convert YYYYMMDD to YYYY-MM-DD for input[type=date]
+  function toDateInputFormat(day) {
+    const year = day.substring(0, 4);
+    const month = day.substring(4, 6);
+    const dayNum = day.substring(6, 8);
+    return `${year}-${month}-${dayNum}`;
+  }
+
+  // Convert YYYY-MM-DD to YYYYMMDD
+  function fromDateInputFormat(dateStr) {
+    return dateStr.replace(/-/g, '');
+  }
+
+  // Add/subtract days
+  function adjustDay(day, delta) {
+    const year = parseInt(day.substring(0, 4));
+    const month = parseInt(day.substring(4, 6)) - 1;
+    const dayNum = parseInt(day.substring(6, 8));
+    const date = new Date(year, month, dayNum);
+    date.setDate(date.getDate() + delta);
+
+    const newYear = date.getFullYear();
+    const newMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const newDay = String(date.getDate()).padStart(2, '0');
+    return `${newYear}${newMonth}${newDay}`;
+  }
+
+  // Navigate to day
+  function navigateToDay(day) {
+    // Update URL and reload
+    window.location.href = `/app/tokens/${day}`;
+  }
+
+  // Update display
+  function updateDisplay() {
+    document.getElementById('current-date').textContent = formatDisplayDate(currentDay);
+    document.getElementById('date-picker').value = toDateInputFormat(currentDay);
+  }
+
+  // Event listeners
+  document.getElementById('prev-day').addEventListener('click', () => {
+    const newDay = adjustDay(currentDay, -1);
+    navigateToDay(newDay);
+  });
+
+  document.getElementById('next-day').addEventListener('click', () => {
+    const newDay = adjustDay(currentDay, 1);
+    navigateToDay(newDay);
+  });
+
+  document.getElementById('today').addEventListener('click', () => {
+    const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    navigateToDay(today);
+  });
+
+  document.getElementById('date-picker').addEventListener('change', (e) => {
+    const newDay = fromDateInputFormat(e.target.value);
+    navigateToDay(newDay);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Left arrow = previous day
+    if (e.key === 'ArrowLeft' && !e.target.matches('input, textarea')) {
+      const newDay = adjustDay(currentDay, -1);
+      navigateToDay(newDay);
+    }
+    // Right arrow = next day
+    if (e.key === 'ArrowRight' && !e.target.matches('input, textarea')) {
+      const newDay = adjustDay(currentDay, 1);
+      navigateToDay(newDay);
+    }
+    // T = today
+    if (e.key === 't' && !e.target.matches('input, textarea')) {
+      const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      navigateToDay(today);
+    }
+  });
+
+  // Initialize
+  updateDisplay();
+})();
+</script>
