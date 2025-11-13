@@ -194,9 +194,54 @@ pre-push: format lint-flake8 test
 # Capture screenshot of a Convey view
 screenshot:
 	@if [ -z "$(VIEW)" ]; then \
-		echo "Usage: make screenshot VIEW=<route> [OUTPUT=path]"; \
-		echo "Example: make screenshot VIEW=/"; \
-		echo "Example: make screenshot VIEW=/facets OUTPUT=logs/facets.png"; \
+		echo "ERROR: VIEW parameter is required"; \
+		echo ""; \
+		echo "Usage: make screenshot VIEW=<route> RESTART=<0|1> [OUTPUT=path]"; \
+		echo ""; \
+		echo "Parameters:"; \
+		echo "  VIEW     - Route to screenshot (e.g., /, /facets, /search)"; \
+		echo "  RESTART  - Required boolean (1/true/yes or 0/false/no)"; \
+		echo "  OUTPUT   - Optional output path (default: logs/screenshot.png)"; \
+		echo ""; \
+		echo "RESTART Guidelines:"; \
+		echo "  Use RESTART=1 when:"; \
+		echo "    - Convey code has changed (convey/*.py, convey/templates/*, convey/static/*)"; \
+		echo "    - App code has changed (apps/*/)"; \
+		echo "    - Static content has changed (CSS, JS, templates)"; \
+		echo "  Use RESTART=0 when:"; \
+		echo "    - Taking multiple screenshots without code/content changes"; \
+		echo "    - Service is already running with latest code"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make screenshot VIEW=/ RESTART=1"; \
+		echo "  make screenshot VIEW=/facets RESTART=0 OUTPUT=screenshots/facets.png"; \
 		exit 1; \
-	fi
-	convey-screenshot $(VIEW) $(if $(OUTPUT),-o $(OUTPUT))
+	fi; \
+	if [ -z "$(RESTART)" ]; then \
+		echo "ERROR: RESTART parameter is required"; \
+		echo ""; \
+		echo "Usage: make screenshot VIEW=<route> RESTART=<0|1> [OUTPUT=path]"; \
+		echo ""; \
+		echo "RESTART must be specified as a boolean:"; \
+		echo "  RESTART=1 (or true/yes)  - Restart convey service before screenshot"; \
+		echo "  RESTART=0 (or false/no)  - Skip restart (use when no code changes)"; \
+		echo ""; \
+		echo "RESTART=1 is required when convey/app code or static content has changed."; \
+		echo "RESTART=0 can be used between subsequent screenshots without code updates."; \
+		exit 1; \
+	fi; \
+	RESTART_FLAG=""; \
+	case "$(RESTART)" in \
+		1|true|yes|TRUE|YES|True|Yes) \
+			RESTART_FLAG="--restart"; \
+			;; \
+		0|false|no|FALSE|NO|False|No) \
+			RESTART_FLAG=""; \
+			;; \
+		*) \
+			echo "ERROR: Invalid RESTART value: $(RESTART)"; \
+			echo "RESTART must be: 1/true/yes (to restart) or 0/false/no (to skip)"; \
+			exit 1; \
+			;; \
+	esac; \
+	convey-screenshot $$RESTART_FLAG $(VIEW) $(if $(OUTPUT),-o $(OUTPUT))
