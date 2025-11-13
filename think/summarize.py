@@ -80,16 +80,25 @@ def count_tokens(markdown: str, prompt: str, api_key: str, model: str) -> None:
 
 def _get_or_create_cache(
     client: genai.Client, model: str, display_name: str, transcript: str
-) -> str:
-    """Return cache name for ``display_name`` creating it with ``transcript`` and
-    :data:`COMMON_SYSTEM_INSTRUCTION` if needed.
+) -> str | None:
+    """Return cache name for ``display_name`` or None if content too small.
+
+    Creates cache with ``transcript`` and :data:`COMMON_SYSTEM_INSTRUCTION` if needed.
+    Returns None if content is below estimated 2048 token minimum (~10k chars).
 
     The cache contains the system instruction + transcript which are identical
     for all topics on the same day, so display_name should be day-based only."""
 
+    MIN_CACHE_CHARS = 10000  # Heuristic: ~4 chars/token → 2048 tokens ≈ 8k-10k chars
+
+    # Check existing caches first
     for c in client.caches.list():
         if c.model == model and c.display_name == display_name:
             return c.name
+
+    # Skip cache creation for small content
+    if len(transcript) < MIN_CACHE_CHARS:
+        return None
 
     cache = client.caches.create(
         model=model,
@@ -114,16 +123,30 @@ def send_markdown(
 
     if cache_display_name:
         cache_name = _get_or_create_cache(client, model, cache_display_name, markdown)
-        contents: list[str] = [prompt]
-        return gemini_generate(
-            contents=contents,
-            model=model,
-            temperature=0.3,
-            max_output_tokens=8192 * 6,
-            thinking_budget=8192 * 3,
-            cached_content=cache_name,
-            client=client,
-        )
+
+        if cache_name:
+            # Cache created successfully, use it
+            contents: list[str] = [prompt]
+            return gemini_generate(
+                contents=contents,
+                model=model,
+                temperature=0.3,
+                max_output_tokens=8192 * 6,
+                thinking_budget=8192 * 3,
+                cached_content=cache_name,
+                client=client,
+            )
+        else:
+            # Content too small for caching, proceed without cache
+            contents = [markdown, prompt]
+            return gemini_generate(
+                contents=contents,
+                model=model,
+                temperature=0.3,
+                max_output_tokens=8192 * 6,
+                thinking_budget=8192 * 3,
+                system_instruction=COMMON_SYSTEM_INSTRUCTION,
+            )
     else:
         contents = [markdown, prompt]
         return gemini_generate(
