@@ -53,11 +53,14 @@
 
     facetPillsContainer.innerHTML = '';
 
+    // Check if facets are disabled for this app
+    const facetsDisabled = document.querySelector('.facet-bar')?.classList.contains('facets-disabled');
+
     // Find selected facet data
     const selectedFacetData = selectedFacet ? activeFacets.find(f => f.name === selectedFacet) : null;
 
-    // Apply theme by updating CSS variables
-    if (selectedFacetData && selectedFacetData.color) {
+    // Apply theme by updating CSS variables (only if facets are enabled)
+    if (!facetsDisabled && selectedFacetData && selectedFacetData.color) {
       const color = selectedFacetData.color;
       const bgColor = color + '1a';  // 10% opacity
 
@@ -74,7 +77,12 @@
     // Facet pills
     activeFacets.forEach(facet => {
       const pill = document.createElement('div');
-      pill.className = 'facet-pill' + (selectedFacet === facet.name ? ' selected' : '');
+      // When disabled, no pill gets 'selected' class - all look identical
+      if (facetsDisabled) {
+        pill.className = 'facet-pill';
+      } else {
+        pill.className = 'facet-pill' + (selectedFacet === facet.name ? ' selected' : '');
+      }
 
       if (facet.emoji) {
         const emojiContainer = document.createElement('div');
@@ -101,8 +109,8 @@
       title.textContent = facet.title;
       pill.appendChild(title);
 
-      // Apply color with opacity if facet is selected and has a color
-      if (selectedFacet === facet.name && facet.color) {
+      // Apply color with opacity if facet is selected and has a color (only if facets enabled)
+      if (!facetsDisabled && selectedFacet === facet.name && facet.color) {
         pill.style.background = hexToRgba(facet.color, 0.2);
         pill.style.borderColor = facet.color;
       }
@@ -119,11 +127,14 @@
 
     const pills = container.querySelectorAll('.facet-pill');
 
+    // Check if facets are disabled for this app
+    const facetsDisabled = document.querySelector('.facet-bar')?.classList.contains('facets-disabled');
+
     // Find selected facet data
     const selectedFacetData = selectedFacet ? activeFacets.find(f => f.name === selectedFacet) : null;
 
-    // Apply theme by updating CSS variables
-    if (selectedFacetData && selectedFacetData.color) {
+    // Apply theme by updating CSS variables (only if facets are enabled)
+    if (!facetsDisabled && selectedFacetData && selectedFacetData.color) {
       const color = selectedFacetData.color;
       const bgColor = color + '1a';  // 10% opacity
 
@@ -137,26 +148,33 @@
       document.documentElement.style.removeProperty('--facet-border');
     }
 
-    // Update pill selection states
+    // Update pill selection states (only if facets enabled)
     pills.forEach((pill, index) => {
       const facetName = activeFacets[index]?.name;
 
-      // Update selected class
-      if (selectedFacet === facetName) {
-        pill.classList.add('selected');
-
-        // Apply color styling if selected and has color
-        if (selectedFacetData && selectedFacetData.color) {
-          pill.style.background = hexToRgba(selectedFacetData.color, 0.2);
-          pill.style.borderColor = selectedFacetData.color;
-        } else {
-          pill.style.background = '';
-          pill.style.borderColor = '';
-        }
-      } else {
+      if (facetsDisabled) {
+        // When disabled, ensure no pill has 'selected' class
         pill.classList.remove('selected');
         pill.style.background = '';
         pill.style.borderColor = '';
+      } else {
+        // Normal selection logic when facets enabled
+        if (selectedFacet === facetName) {
+          pill.classList.add('selected');
+
+          // Apply color styling if selected and has color
+          if (selectedFacetData && selectedFacetData.color) {
+            pill.style.background = hexToRgba(selectedFacetData.color, 0.2);
+            pill.style.borderColor = selectedFacetData.color;
+          } else {
+            pill.style.background = '';
+            pill.style.borderColor = '';
+          }
+        } else {
+          pill.classList.remove('selected');
+          pill.style.background = '';
+          pill.style.borderColor = '';
+        }
       }
     });
   }

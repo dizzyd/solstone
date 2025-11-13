@@ -3,6 +3,18 @@
  * Styles for the app.html template system (facet bar, menu bar, app bar, etc.)
  */
 
+/* Universal box-sizing */
+* {
+  box-sizing: border-box;
+}
+
+/* Default theme (when no facet is selected) */
+:root {
+  --facet-color: #999;
+  --facet-bg: transparent;
+  --facet-border: #e0e0e0;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -11,10 +23,7 @@ body {
 }
 
 .container {
-  padding: 0 1em;
   margin-top: 60px;
-  margin-bottom: 1em;
-  margin-left: 1em;
 }
 
 /* Add bottom margin when app-bar is present */
@@ -332,6 +341,18 @@ body.sidebar-open .menu-bar {
   background: #007bff;
 }
 
+/* Apps without facet support - all pills identical, no selection */
+.facet-bar.facets-disabled .facet-pill {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: default;
+}
+
+.facet-bar.facets-disabled .facet-pill:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 /* App Bar (bottom) */
 .app-bar {
   position: fixed;
@@ -547,4 +568,35 @@ a.notification-card {
   .notification-card {
     width: 100%;
   }
+}
+
+/* Modal styling */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+  background: white;
+  margin: 5% auto;
+  padding: 1em;
+  border-radius: 8px;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: auto;
+  position: relative;
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  cursor: pointer;
+  font-size: 24px;
 }

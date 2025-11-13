@@ -66,6 +66,9 @@ class App:
     # Dynamic hooks (optional)
     hooks: dict[str, Callable] = field(default_factory=dict)
 
+    # Facet support (optional, default True)
+    facets_enabled: bool = True
+
     def get_blueprint(self) -> Blueprint:
         """Return Flask Blueprint with app routes."""
         return self.blueprint
@@ -193,6 +196,7 @@ class AppRegistry:
         # Get icon and label (with defaults)
         icon = metadata.get("icon", "📦")
         label = metadata.get("label", app_name.replace("_", " ").title())
+        facets_enabled = metadata.get("facets", True)
 
         # Import routes module and get blueprint
         routes_module = importlib.import_module(f"apps.{app_name}.routes")
@@ -258,6 +262,7 @@ class AppRegistry:
             app_bar_template=app_bar_template,
             service_template=service_template,
             hooks=hooks,
+            facets_enabled=facets_enabled,
         )
 
     def _load_metadata(self, app_path: Path) -> dict[str, Any]:
