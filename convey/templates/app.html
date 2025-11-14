@@ -4,10 +4,10 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ app_registry.apps[app].label }} - Sunstone</title>
-  <link rel="stylesheet" href="{{ url_for('home.static', filename='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('root.static', filename='app.css') }}">
 
   <!-- Error handling FIRST - catches all subsequent errors -->
-  <script src="{{ url_for('home.static', filename='error-handler.js') }}"></script>
+  <script src="{{ url_for('root.static', filename='error-handler.js') }}"></script>
 
   <!-- Embed facets data for immediate client-side access -->
   <script>
@@ -17,7 +17,7 @@
   </script>
 
   <!-- WebSocket connection for Callosum events -->
-  <script src="{{ url_for('home.static', filename='websocket.js') }}"></script>
+  <script src="{{ url_for('root.static', filename='websocket.js') }}"></script>
 
   <!-- Apply facet theme immediately to prevent flash -->
   {% if selected_facet and app_registry.apps[app].facets_enabled %}
@@ -67,7 +67,7 @@
 </div>
 
 <!-- App JavaScript (includes AppServices framework) -->
-<script src="{{ url_for('home.static', filename='app.js') }}"></script>
+<script src="{{ url_for('root.static', filename='app.js') }}"></script>
 
 <!-- Load all app background scripts -->
 {% for app_name, app_instance in app_registry.apps.items() %}

@@ -1,3 +1,5 @@
+"""Root blueprint: authentication and core routes."""
+
 from __future__ import annotations
 
 import os
@@ -27,19 +29,19 @@ def _get_password() -> str:
 
 
 bp = Blueprint(
-    "home",
+    "root",
     __name__,
-    template_folder="../templates",
-    static_folder="../static",
+    template_folder="templates",
+    static_folder="static",
 )
 
 
 @bp.before_app_request
 def require_login() -> Any:
     if request.endpoint in {
-        "home.login",
-        "home.static",
-        "home.favicon",
+        "root.login",
+        "root.static",
+        "root.favicon",
     }:
         return None
 
@@ -60,7 +62,7 @@ def require_login() -> Any:
 
     # Otherwise require session authentication
     if not session.get("logged_in"):
-        return redirect(url_for("home.login"))
+        return redirect(url_for("root.login"))
 
 
 @bp.route("/login", methods=["GET", "POST"])
@@ -82,7 +84,7 @@ def login() -> Any:
         if request.form.get("password") == password:
             session["logged_in"] = True
             session.permanent = True
-            return redirect(url_for("home.home"))
+            return redirect(url_for("root.index"))
         error = "Invalid password"
     return render_template("login.html", error=error, no_password=False)
 
@@ -90,7 +92,7 @@ def login() -> Any:
 @bp.route("/logout")
 def logout() -> Any:
     session.pop("logged_in", None)
-    return redirect(url_for("home.login"))
+    return redirect(url_for("root.login"))
 
 
 @bp.route("/favicon.ico")
@@ -103,5 +105,6 @@ def favicon() -> Any:
 
 
 @bp.route("/")
-def home() -> Any:
+def index() -> Any:
+    """Root redirect to home app."""
     return redirect(url_for("app:home.index"))

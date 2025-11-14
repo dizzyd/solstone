@@ -1,0 +1,73 @@
+"""CLI entry points for Convey web interface."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+
+from flask import Flask
+
+from .bridge import start_bridge
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_config_password() -> str:
+    """Return the configured Convey password from journal config."""
+    from think.utils import get_config
+
+    try:
+        config = get_config()
+        convey_config = config.get("convey", {})
+        return convey_config.get("password", "")
+    except Exception:
+        return ""
+
+
+def run_service(
+    app: Flask,
+    *,
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    debug: bool = False,
+    start_watcher: bool = True,
+) -> None:
+    """Run the Convey service, optionally starting the Cortex watcher."""
+
+    if start_watcher:
+        # In debug mode with reloader, only start in child process
+        # In non-debug mode, always start (no reloader)
+        # WERKZEUG_RUN_MAIN is set to 'true' only in the child/main process
+        should_start = not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+        if should_start:
+            logger.info("Starting Callosum bridge")
+            start_bridge()
+        else:
+            logger.debug("Skipping bridge start in reloader parent process")
+    app.run(host=host, port=port, debug=debug)
+
+
+def main() -> None:
+    """Main CLI entry point for convey command."""
+    from think.utils import setup_cli
+
+    from . import create_app
+
+    parser = argparse.ArgumentParser(description="Convey web interface")
+    parser.add_argument("--port", type=int, default=8000, help="Port to serve on")
+    args = setup_cli(parser)
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise SystemExit("JOURNAL_PATH not set")
+
+    app = create_app(journal)
+    password = _resolve_config_password()
+    if password:
+        logger.info("Password authentication enabled")
+    else:
+        logger.warning(
+            "No password configured - add to config/journal.json to enable authentication"
+        )
+
+    run_service(app, host="0.0.0.0", port=args.port, debug=args.debug)

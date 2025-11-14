@@ -87,7 +87,7 @@ dev = [
 
 [project.scripts]
 sunstone = "think.sunstone:main"
-convey = "convey:main"
+convey = "convey.cli:main"
 convey-screenshot = "convey.screenshot:main"
 think-summarize = "think.summarize:main"
 think-cluster = "think.cluster:main"
