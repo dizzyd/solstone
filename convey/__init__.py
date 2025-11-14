@@ -5,18 +5,13 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sys
-import types
-from datetime import datetime, timedelta
-from importlib import import_module
-from typing import Callable
+from datetime import timedelta
 
 from flask import Flask, request, url_for
 from flask_sock import Sock
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 from apps import AppRegistry
-from think import todo as todo_store
 from think.utils import setup_cli
 
 from . import state
@@ -37,58 +32,6 @@ def _resolve_config_password() -> str:
         return convey_config.get("password", "")
     except Exception:
         return ""
-
-
-def _count_pending_todos_today() -> int:
-    """Return count of unfinished todos for the current day."""
-
-    today = datetime.now().strftime("%Y%m%d")
-    try:
-        # Get all facets that have todos for today
-        facets = todo_store.get_facets_with_todos(today)
-    except (FileNotFoundError, RuntimeError, ValueError):
-        return 0
-
-    if not facets:
-        return 0
-
-    # Count pending todos across all facets
-    count = 0
-    for facet in facets:
-        try:
-            todos = todo_store.get_todos(today, facet)
-        except (FileNotFoundError, RuntimeError, ValueError):
-            continue
-        if not todos:
-            continue
-        count += sum(
-            1
-            for todo in todos
-            if not bool(todo.get("completed")) and not bool(todo.get("cancelled"))
-        )
-
-    return count
-
-
-BadgeProvider = Callable[[], int]
-
-NAV_BADGE_PROVIDERS: dict[str, BadgeProvider] = {
-    "todos": _count_pending_todos_today,
-}
-
-
-def _resolve_nav_badges() -> dict[str, int]:
-    """Run registered badge providers and gather non-zero counts."""
-    badges: dict[str, int] = {}
-    for key, provider in NAV_BADGE_PROVIDERS.items():
-        try:
-            count = int(provider())
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.debug("nav badge provider %s failed: %s", key, exc)
-            continue
-        if count > 0:
-            badges[key] = count
-    return badges
 
 
 def _get_facets_data() -> list[dict]:
@@ -148,11 +91,6 @@ def create_app(journal: str = "") -> Flask:
     registry.register_blueprints(app)
 
     @app.context_processor
-    def inject_nav_badges() -> dict[str, dict[str, int]]:
-        """Expose nav badge counts to all templates."""
-        return {"nav_badges": _resolve_nav_badges()}
-
-    @app.context_processor
     def inject_app_context() -> dict:
         """Inject app registry and facets context for new app system."""
         facets = _get_facets_data()
@@ -210,42 +148,11 @@ def create_app(journal: str = "") -> Flask:
 # Default application used by tests
 app = create_app()
 
-# Re-export commonly used callables
-home = home_view.home
-login = home_view.login
-logout = home_view.logout
-
 __all__ = [
     "app",
     "create_app",
-    "home",
-    "login",
-    "logout",
-    "journal_root",
     "run_service",
 ]
-
-
-def __getattr__(name: str):
-    if name == "journal_root":
-        return state.journal_root
-    raise AttributeError(name)
-
-
-def __setattr__(name: str, value) -> None:
-    if name == "journal_root":
-        state.journal_root = value
-    globals()[name] = value
-
-
-class _Module(types.ModuleType):
-    def __setattr__(self, key, value):
-        if key == "journal_root":
-            setattr(state, key, value)
-        super().__setattr__(key, value)
-
-
-sys.modules[__name__].__class__ = _Module
 
 
 def run_service(
