@@ -1,7 +1,3 @@
-{% extends 'base.html' %}
-{% set title = 'Chat' %}
-{% set active = 'chat' %}
-{% block head %}
 <style>
 body {height:100vh; overflow:hidden;}
 .container {height:100vh; display:flex; flex-direction:column; position:relative; padding:0 1em; box-sizing:border-box;}
@@ -72,8 +68,7 @@ body {height:100vh; overflow:hidden;}
 .activity-indicator span:nth-child(1) {animation-delay:-0.32s;}
 .activity-indicator span:nth-child(2) {animation-delay:-0.16s;}
 </style>
-{% endblock %}
-{% block body %}
+
 <div class="container">
   <div id="messages">
     <div class="typing-indicator" id="typingIndicator">
@@ -95,12 +90,13 @@ body {height:100vh; overflow:hidden;}
     </form>
   </div>
 </div>
-<script src="{{ url_for('static', filename='marked.min.js') }}"></script>
+
+<script src="{{ vendor_lib('marked') }}"></script>
 <script>
-const sendUrl = '{{ url_for('chat.send_message') }}';
-const historyUrl = '{{ url_for('chat.chat_history') }}';
-const clearUrl = '{{ url_for('chat.clear_history') }}';
-const agentUrl = '{{ url_for('chat.agent_events', agent_id='AGENT_ID') }}';
+const sendUrl = '{{ url_for('app:chat.send_message') }}';
+const historyUrl = '{{ url_for('app:chat.chat_history') }}';
+const clearUrl = '{{ url_for('app:chat.clear_history') }}';
+const agentUrl = '{{ url_for('app:chat.agent_events', agent_id='AGENT_ID') }}';
 const form = document.getElementById('inputArea');
 const input = document.getElementById('messageInput');
 const messagesDiv = document.getElementById('messages');
@@ -184,12 +180,12 @@ function showActivityIndicator() {
   }
   activityIndicator.classList.add('active');
   eventProcessingActive = true;
-  
+
   // Auto-scroll to keep activity indicator in view
   requestAnimationFrame(() => {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   });
-  
+
   // Clear any existing timeout
   if (eventTimeout) {
     clearTimeout(eventTimeout);
@@ -329,21 +325,21 @@ function addAgentUpdate(agentName){
 function addThinkingCard(summary, model){
   const div=document.createElement('div');
   div.className='thinking-card';
-  
+
   const label=document.createElement('div');
   label.className='thinking-label';
   label.textContent=`💭 Thinking (${model})`;
   div.appendChild(label);
-  
+
   const content=document.createElement('div');
   content.className='thinking-content';
   content.textContent=summary;
   div.appendChild(content);
-  
+
   div.addEventListener('click', () => {
     div.classList.toggle('expanded');
   });
-  
+
   messagesDiv.insertBefore(div, activityIndicator);
   ensureActivityIndicatorAtBottom();
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
@@ -706,7 +702,7 @@ function processEvent(event) {
 // Handle tool_start events
 function handleToolStart(event) {
   const {tool, args, call_id} = event;
-  
+
   // Handle search tools with special event cards
   if(args && args.query) {
     // Determine which index is being searched
@@ -719,7 +715,7 @@ function handleToolStart(event) {
       idx = 'transcripts';
       indexName = 'Transcripts';
     }
-    
+
     // Extract date from query if present (format: YYYYMMDD or YYYY-MM-DD)
     let dateStr = '';
     const dateMatch = args.query.match(/\b(\d{8}|\d{4}-\d{2}-\d{2})\b/);
@@ -729,17 +725,17 @@ function handleToolStart(event) {
       const day = parseInt(dateRaw.substring(6, 8), 10);
       dateStr = ` on ${month}/${day}`;
     }
-    
+
     // Build search URL
     const q = args.query + (idx === 'summaries' ? '' : ' index:' + idx);
     const url = searchBase + '#q=' + encodeURIComponent(q);
-    
+
     // Create descriptive text
     const searchText = `Searching ${indexName} for "${args.query}"${dateStr}`;
     addEventCard(searchText, url, event);
     return;
   }
-  
+
   // Handle get_resource tool
   if(tool === 'get_resource' && args && args.uri) {
     const resourceCard = createResourceCard(args.uri);
@@ -748,7 +744,7 @@ function handleToolStart(event) {
       return;
     }
   }
-  
+
   // Default: show tool placard
   addToolPlacard(tool, event, call_id);
 }
@@ -761,14 +757,14 @@ function createResourceCard(uri) {
     const day = parseInt(dateStr.substring(6, 8), 10);
     return `${month}/${day}`;
   }
-  
+
   // Helper to format time from HHMMSS to HH:MM
   function formatTime(timeStr) {
     const hours = timeStr.substring(0, 2);
     const minutes = timeStr.substring(2, 4);
     return `${hours}:${minutes}`;
   }
-  
+
   // Parse journal://summary/20250815/meetings format
   let match = uri.match(/journal:\/\/summary\/(\d{8})\/(.+)/);
   if(match) {
@@ -776,13 +772,13 @@ function createResourceCard(uri) {
     const topic = match[2];
     const dateStr = formatDate(date);
     const topicDisplay = topic.charAt(0).toUpperCase() + topic.slice(1);
-    
+
     return {
       text: `Reading ${topicDisplay} Summary from ${dateStr}`,
       url: `/calendar/${date}#${topic}`
     };
   }
-  
+
   // Parse journal://transcripts/{mode}/20250726/090000/45 format
   match = uri.match(/journal:\/\/transcripts\/(full|audio|screen)\/(\d{8})\/(\d{6})\/(\d+)/);
   if(match) {
@@ -800,14 +796,14 @@ function createResourceCard(uri) {
       url: `/calendar/${date}`
     };
   }
-  
+
   // Parse journal://media/20250726/audio_090000.flac or screenshot_090000.png format
   match = uri.match(/journal:\/\/media\/(\d{8})\/(.+)/);
   if(match) {
     const date = match[1];
     const filename = match[2];
     const dateStr = formatDate(date);
-    
+
     // Determine media type from filename
     let description = filename;
     if(filename.includes('audio') || filename.endsWith('.flac')) {
@@ -821,13 +817,13 @@ function createResourceCard(uri) {
         description = `screenshot from ${formatTime(timeMatch[1])}`;
       }
     }
-    
+
     return {
       text: `Loading ${description} (${dateStr})`,
       url: `/calendar/${date}`
     };
   }
-  
+
   // Fallback for unknown journal:// formats
   if(uri.startsWith('journal://')) {
     return {
@@ -835,7 +831,7 @@ function createResourceCard(uri) {
       url: '#'
     };
   }
-  
+
   return null;
 }
 
@@ -912,4 +908,3 @@ if (agentParam && /^\d+$/.test(agentParam)) {
   loadAgent(agentParam);
 }
 </script>
-{% endblock %}

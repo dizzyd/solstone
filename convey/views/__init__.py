@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from importlib import import_module
-
 from flask import Flask
 
 from . import (
@@ -12,8 +10,6 @@ from . import (
     search,
 )
 
-chat_view = import_module(".chat", __name__)
-
 
 def register_views(app: Flask) -> None:
     for bp in [
@@ -21,7 +17,6 @@ def register_views(app: Flask) -> None:
         facets.bp,
         search.bp,
         calendar.bp,
-        chat_view.bp,
         agents.bp,
     ]:
         app.register_blueprint(bp)

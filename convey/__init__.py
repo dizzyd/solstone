@@ -24,7 +24,6 @@ from . import state
 from .bridge import register_websocket, start_bridge
 from .views import agents as agents_view
 from .views import calendar as calendar_view
-from .views import chat as chat_view
 from .views import facets as facets_view
 from .views import home as home_view
 from .views import register_views
@@ -224,12 +223,8 @@ facets_page = facets_view.facets_page
 facets_list = facets_view.facets_list
 calendar = calendar_view.calendar_page
 calendar_day = calendar_view.calendar_day
-chat_page = chat_view.chat_page
 agents_page = agents_view.agents_page
 agents_list = agents_view.agents_list
-send_message = chat_view.send_message
-chat_history = chat_view.chat_history
-clear_history = chat_view.clear_history
 search_page = search_view.search_page
 calendar_days = calendar_view.calendar_days
 calendar_stats = calendar_view.calendar_stats
@@ -248,12 +243,8 @@ __all__ = [
     "facets_list",
     "calendar",
     "calendar_day",
-    "chat_page",
     "agents_page",
     "agents_list",
-    "send_message",
-    "chat_history",
-    "clear_history",
     "search_page",
     "calendar_days",
     "calendar_stats",

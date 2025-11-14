@@ -6,22 +6,26 @@ from typing import Any
 
 from flask import Blueprint, jsonify, render_template, request
 
-from .. import state
+chat_bp = Blueprint(
+    "app:chat",
+    __name__,
+    url_prefix="/app/chat",
+)
 
-bp = Blueprint("chat", __name__, template_folder="../templates")
 
-
-@bp.route("/chat")
+@chat_bp.route("/")
 def chat_page() -> str:
     from think.utils import get_agents
 
     agents = get_agents()
     persona_titles = {aid: a["title"] for aid, a in agents.items()}
-    return render_template("chat.html", active="chat", persona_titles=persona_titles)
+    return render_template("app.html", app="chat", persona_titles=persona_titles)
 
 
-@bp.route("/chat/api/send", methods=["POST"])
+@chat_bp.route("/api/send", methods=["POST"])
 def send_message() -> Any:
+    from convey import state
+
     payload = request.get_json(force=True)
     message = payload.get("message", "")
     attachments = payload.get("attachments", [])
@@ -46,7 +50,7 @@ def send_message() -> Any:
         return resp
 
     try:
-        from ..utils import spawn_agent
+        from convey.utils import spawn_agent
 
         # Prepare the full prompt with attachments
         if attachments:
@@ -69,14 +73,14 @@ def send_message() -> Any:
         return resp
 
 
-@bp.route("/chat/api/history")
+@chat_bp.route("/api/history")
 def chat_history() -> Any:
     """Return empty history since we use one-shot pattern with no persistence."""
 
     return jsonify(history=[])
 
 
-@bp.route("/chat/api/agent/<agent_id>")
+@chat_bp.route("/api/agent/<agent_id>")
 def agent_events(agent_id: str) -> Any:
     """Return events from an agent run.
 
@@ -101,7 +105,7 @@ def agent_events(agent_id: str) -> Any:
         return jsonify(events=[], is_complete=False)
 
 
-@bp.route("/chat/api/clear", methods=["POST"])
+@chat_bp.route("/api/clear", methods=["POST"])
 def clear_history() -> Any:
     """No-op since we use one-shot pattern with no persistent state."""
 
