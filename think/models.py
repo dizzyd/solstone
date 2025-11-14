@@ -181,8 +181,13 @@ def log_token_usage(
         # Auto-detect calling context if not provided
         if context is None:
             frame = inspect.currentframe()
-            if frame and frame.f_back:
-                caller_frame = frame.f_back
+            caller_frame = frame.f_back if frame else None
+
+            # Skip frames that contain "gemini" in function name
+            while caller_frame and "gemini" in caller_frame.f_code.co_name.lower():
+                caller_frame = caller_frame.f_back
+
+            if caller_frame:
                 module_name = caller_frame.f_globals.get("__name__", "unknown")
                 func_name = caller_frame.f_code.co_name
                 line_num = caller_frame.f_lineno
