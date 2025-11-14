@@ -1,0 +1,254 @@
+{# Calendar month overview - integrated with app facet system #}
+
+<style>
+.container { padding: 0 1em; }
+h1 { margin-bottom: 0.5em; }
+
+#controls { display: flex; align-items: center; margin-bottom: 1em; gap: 6px; }
+#controls button { background:#007bff; color:white; border:none; padding:6px 12px; margin:0 6px; border-radius:4px; cursor:pointer; }
+#controls span { font-size:1.2em; font-weight:bold; }
+#calendar { width:100%; border-collapse:collapse; }
+#calendar th, #calendar td { width:14.28%; border:1px solid #e0e0e0; vertical-align:top; height:90px; padding:4px; position:relative; }
+#calendar th { background:#f8f9fa; }
+#calendar td.today { background:rgba(0,123,255,0.12); box-shadow:inset 0 0 0 2px #007bff; }
+.day-number { font-weight:bold; text-decoration:none; color:inherit; display:inline-block; }
+.missing { color:#ccc; }
+.day-actions {
+  position:absolute;
+  bottom:4px;
+  left:4px;
+  right:4px;
+  display:flex;
+  gap:3px;
+  justify-content:flex-start;
+}
+.day-actions a {
+  text-decoration:none;
+  font-size:18px;
+  padding:2px;
+  opacity:0.7;
+  transition:opacity 0.2s;
+}
+.day-actions a:hover {
+  opacity:1;
+}
+</style>
+
+<div class="container">
+  <div id="controls">
+    <button id="prevMonth">&#8592;</button>
+    <span id="monthLabel"></span>
+    <button id="nextMonth">&#8594;</button>
+    <button id="todayBtn" style="margin-left:auto;">Today</button>
+  </div>
+  <table id="calendar">
+    <thead>
+      <tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let dayStats = {};
+let availableDays = new Set();
+const dayBase = '/app/calendar/';
+const todosBase = '/app/todos/';
+let months = [];
+let currentIndex = 0;
+const now = new Date();
+const CURRENT_YEAR_MONTH = generateYearMonth(now.getFullYear(), now.getMonth());
+const TODAY_DATE_STRING = CURRENT_YEAR_MONTH + String(now.getDate()).padStart(2,'0');
+
+// Get selected facet from cookie (set by facet-bar)
+function getSelectedFacet() {
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'selectedFacet') {
+      return value || null;
+    }
+  }
+  return null;
+}
+
+// Listen for facet changes from facet-bar
+let selectedFacet = getSelectedFacet();
+window.addEventListener('facet.switch', (e) => {
+  selectedFacet = e.detail.facet;
+  loadData();
+});
+
+function loadData() {
+  // Build stats URL with facet filter if selected
+  let statsUrl = '/app/calendar/api/stats';
+  if (selectedFacet) {
+    statsUrl += `?facet=${encodeURIComponent(selectedFacet)}`;
+  }
+
+  const statsReq = fetch(statsUrl).then(r => {
+    if (!r.ok) throw new Error('Failed to fetch stats');
+    return r.json();
+  });
+  const daysReq = fetch('/app/calendar/api/days').then(r => {
+    if (!r.ok) throw new Error('Failed to fetch days');
+    return r.json();
+  });
+  Promise.all([statsReq, daysReq])
+    .then(([stats, days]) => {
+      dayStats = stats || {};
+      availableDays = new Set(days || []);
+      const monthSet = new Set(Array.from(availableDays).map(d => d.slice(0,6)));
+      monthSet.add(CURRENT_YEAR_MONTH);
+      months = Array.from(monthSet).sort();
+      currentIndex = months.indexOf(CURRENT_YEAR_MONTH);
+      if (currentIndex === -1) {
+        currentIndex = months.length - 1;
+      }
+      showMonth(months[currentIndex]);
+    })
+    .catch(err => {
+      console.error('Error loading calendar data:', err);
+      months = [CURRENT_YEAR_MONTH];
+      currentIndex = 0;
+      showMonth(months[currentIndex]);
+    });
+}
+
+function createDayContent(dateStr, day) {
+  const stats = dayStats[dateStr];
+  const exists = availableDays.has(dateStr);
+
+  let html = '';
+
+  // Day number
+  if (exists) {
+    html += `<a class='day-number' href='${dayBase}${dateStr}'>${day}</a>`;
+  } else {
+    html += `<span class='day-number missing'>${day}</span>`;
+  }
+
+  // Action icons
+  if (exists && stats) {
+    html += `<div class='day-actions'>`;
+
+    // Note/Topics icon - only if topics exist
+    if (stats.has_topics) {
+      html += `<a href='${dayBase}${dateStr}' title='Day Notes'>📝</a>`;
+    }
+
+    // Todos icon - only if todos exist
+    if (stats.has_todos) {
+      html += `<a href='${todosBase}${dateStr}' title='Todos'>✅</a>`;
+    }
+
+    // Transcript icon - only if transcripts exist
+    if (stats.has_transcripts) {
+      html += `<a href='${dayBase}${dateStr}/transcript' title='Transcript'>💬</a>`;
+    }
+
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+function showMonth(ym) {
+  const year = parseInt(ym.slice(0,4));
+  const month = parseInt(ym.slice(4)) - 1;
+  const first = new Date(year, month, 1);
+  document.getElementById('monthLabel').textContent = first.toLocaleString('default',{month:'long', year:'numeric'});
+
+  // Show/hide Today button based on current month
+  const todayBtn = document.getElementById('todayBtn');
+  if (ym === CURRENT_YEAR_MONTH) {
+    todayBtn.style.display = 'none';
+  } else {
+    todayBtn.style.display = 'block';
+  }
+
+  const tbody = document.querySelector('#calendar tbody');
+  tbody.innerHTML='';
+  const startDay = first.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  let row = document.createElement('tr');
+
+  // Empty cells for days before month starts
+  for(let i=0; i<startDay; i++){
+    row.appendChild(document.createElement('td'));
+  }
+
+  // Days of the month
+  for(let day=1; day<=daysInMonth; day++){
+    if((startDay+day-1)%7===0 && day!==1){
+      tbody.appendChild(row);
+      row=document.createElement('tr');
+    }
+    const td = document.createElement('td');
+    const dateStr = ym + String(day).padStart(2,'0');
+
+    td.innerHTML = createDayContent(dateStr, day);
+
+    if (dateStr === TODAY_DATE_STRING) {
+      td.classList.add('today');
+    }
+
+    row.appendChild(td);
+  }
+
+  // Fill remaining cells in last row
+  while(row.children.length<7){
+    row.appendChild(document.createElement('td'));
+  }
+  tbody.appendChild(row);
+}
+
+
+function generateYearMonth(year, month) {
+  return year + String(month + 1).padStart(2, '0');
+}
+
+function navigateMonth(direction) {
+  const newIndex = currentIndex + direction;
+
+  if (newIndex >= 0 && newIndex < months.length) {
+    currentIndex = newIndex;
+    showMonth(months[currentIndex]);
+    return;
+  }
+
+  // Generate new month if at boundaries
+  const isNext = direction > 0;
+  const referenceYm = months[isNext ? months.length - 1 : 0];
+  const year = parseInt(referenceYm.slice(0,4));
+  const month = parseInt(referenceYm.slice(4)) - 1;
+  const newDate = new Date(year, month + direction, 1);
+  const newYm = generateYearMonth(newDate.getFullYear(), newDate.getMonth());
+
+  if (isNext) {
+    months.push(newYm);
+    currentIndex = months.length - 1;
+  } else {
+    months.unshift(newYm);
+    currentIndex = 0;
+  }
+  showMonth(months[currentIndex]);
+}
+
+
+document.getElementById('prevMonth').onclick = () => navigateMonth(-1);
+document.getElementById('nextMonth').onclick = () => navigateMonth(1);
+document.getElementById('todayBtn').onclick = () => {
+  currentIndex = months.indexOf(CURRENT_YEAR_MONTH);
+  if (currentIndex === -1) {
+    // If current month not in list, add it
+    months.push(CURRENT_YEAR_MONTH);
+    months.sort();
+    currentIndex = months.indexOf(CURRENT_YEAR_MONTH);
+  }
+  showMonth(CURRENT_YEAR_MONTH);
+};
+
+// Load calendar data on page load
+loadData();
+</script>
