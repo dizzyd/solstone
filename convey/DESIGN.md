@@ -23,7 +23,7 @@ apps/{name}/
 ├── app.json            # Optional: Metadata (icon, label)
 ├── hooks.py            # Optional: Dynamic logic (submenu, badges)
 ├── app_bar.html        # Optional: Bottom bar controls
-└── service.html        # Optional: Background service (JavaScript)
+└── background.html     # Optional: Background service (JavaScript)
 ```
 
 **Naming Conventions**
@@ -76,7 +76,7 @@ apps/{name}/
 
 5. **`app_bar.html`** - Bottom bar controls (forms, buttons, search)
 
-6. **`service.html`** - Background JavaScript service for WebSocket events
+6. **`background.html`** - Background JavaScript service for WebSocket events
 
 **App Discovery**
 - Apps are automatically discovered on startup
@@ -96,8 +96,8 @@ Apps can register background services that run globally, even when the app is no
 
 **Service File Structure**
 ```
-apps/{name}/templates/
-└── service.html       # Background service template (JavaScript)
+apps/{name}/
+└── background.html    # Background service template (JavaScript)
 ```
 
 **Service Capabilities**
@@ -151,7 +151,7 @@ Notification System:
 **Service Registration**
 Services are automatically loaded and executed on page load. Each service runs in an isolated function scope and can listen to WebSocket events via `window.appEvents`.
 
-**Example Service** (apps/home/templates/service.html)
+**Example Service** (apps/home/background.html)
 ```javascript
 window.AppServices.register('home', {
   initialize() {

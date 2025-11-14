@@ -6,7 +6,7 @@ Directory Structure:
     apps/my_app/           # Use underscores, not hyphens!
       routes.py            # Required: Flask blueprint
       workspace.html       # Required: Main template
-      service.html         # Optional: Background service
+      background.html      # Optional: Background service
       app_bar.html         # Optional: Bottom bar
       app.json             # Optional: Metadata overrides
       hooks.py             # Optional: Dynamic logic
@@ -61,7 +61,7 @@ class App:
     # Template paths (relative to Flask template root)
     workspace_template: str
     app_bar_template: Optional[str] = None
-    service_template: Optional[str] = None
+    background_template: Optional[str] = None
 
     # Dynamic hooks (optional)
     hooks: dict[str, Callable] = field(default_factory=dict)
@@ -81,9 +81,9 @@ class App:
         """Return path to custom app-bar template, or None."""
         return self.app_bar_template
 
-    def get_service_template(self) -> Optional[str]:
+    def get_background_template(self) -> Optional[str]:
         """Return path to background service template, or None."""
-        return self.service_template
+        return self.background_template
 
     def get_submenu_items(
         self, facets: list[dict], selected_facet: Optional[str] = None
@@ -142,7 +142,7 @@ class AppRegistry:
         1. Load app.json if present (for icon, label overrides)
         2. Import routes.py and get blueprint
         3. Check for workspace.html (required)
-        4. Check for service.html, app_bar.html (optional)
+        4. Check for background.html, app_bar.html (optional)
         5. Import hooks.py if present (for dynamic logic)
         """
         apps_dir = Path(__file__).parent
@@ -236,9 +236,9 @@ class AppRegistry:
         # Resolve template paths (relative to apps/ directory since that's in the loader)
         workspace_template = f"{app_name}/workspace.html"
 
-        service_template = None
-        if (app_path / "service.html").exists():
-            service_template = f"{app_name}/service.html"
+        background_template = None
+        if (app_path / "background.html").exists():
+            background_template = f"{app_name}/background.html"
 
         app_bar_template = None
         if (app_path / "app_bar.html").exists():
@@ -254,7 +254,7 @@ class AppRegistry:
             blueprint=blueprint,
             workspace_template=workspace_template,
             app_bar_template=app_bar_template,
-            service_template=service_template,
+            background_template=background_template,
             hooks=hooks,
             facets_enabled=facets_enabled,
         )

@@ -69,20 +69,20 @@
 <!-- App JavaScript (includes AppServices framework) -->
 <script src="{{ url_for('home.static', filename='app.js') }}"></script>
 
-<!-- Load all app background services -->
+<!-- Load all app background scripts -->
 {% for app_name, app_instance in app_registry.apps.items() %}
-  {% set service_tpl = app_instance.get_service_template() %}
-  {% if service_tpl %}
-<!-- Background service: {{ app_name }} -->
+  {% set background_tpl = app_instance.get_background_template() %}
+  {% if background_tpl %}
+<!-- Background script: {{ app_name }} -->
 <script>
 (function() {
   try {
     {% set blueprint = app_instance.get_blueprint() %}
     {% with current_app = app_name %}
-    {% include service_tpl %}
+    {% include background_tpl %}
     {% endwith %}
   } catch (err) {
-    console.error('[AppServices] Failed to load {{ app_name }} service:', err);
+    console.error('[AppServices] Failed to load {{ app_name }} background script:', err);
   }
 })();
 </script>
