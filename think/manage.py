@@ -29,23 +29,6 @@ def _get_notifier() -> DesktopNotifier:
     return _notifier
 
 
-async def send_notification(message: str) -> None:
-    """Send a desktop notification with ``message``.
-
-    Args:
-        message: The notification message to display
-    """
-    try:
-        notifier = _get_notifier()
-        await notifier.send(
-            title="Sunstone Manager",
-            message=message,
-            urgency=Urgency.Critical,
-        )
-    except Exception as exc:
-        logging.error("Failed to send notification: %s", exc)
-
-
 class ServiceManager:
     """Interactive TUI for managing Sunstone services."""
 
@@ -64,7 +47,76 @@ class ServiceManager:
         self.cpu_cache = {}  # Maps pid -> last cpu_percent value
         self.cpu_procs = {}  # Maps pid -> Process object for cpu tracking
         self.running_tasks = {}  # Maps ref -> task info from logs tract
-        self.pending_notifications = []  # Queue for async notifications
+        self.pending_notifications = []  # Queue for async notifications (dicts)
+        self.active_notifications = {}  # Maps service_name -> notification_id
+        self.crash_history = {}  # Maps service_name -> [crash_timestamps]
+
+    def count_recent_crashes(self, service: str, window_minutes: int = 5) -> int:
+        """Count recent crashes for a service within the time window.
+
+        Args:
+            service: Service name
+            window_minutes: Time window in minutes to count crashes
+
+        Returns:
+            Number of crashes within the time window
+        """
+        if service not in self.crash_history:
+            return 0
+
+        cutoff = datetime.now() - timedelta(minutes=window_minutes)
+        # Filter to only recent crashes
+        recent = [ts for ts in self.crash_history[service] if ts >= cutoff]
+        # Update history to remove old crashes
+        self.crash_history[service] = recent
+        return len(recent)
+
+    async def clear_notification(self, service: str) -> None:
+        """Clear active notification for a service.
+
+        Args:
+            service: Service name
+        """
+        if service in self.active_notifications:
+            notif_id = self.active_notifications[service]
+            try:
+                notifier = _get_notifier()
+                await notifier.clear(notif_id)
+            except Exception as exc:
+                logging.debug("Failed to clear notification %s: %s", notif_id, exc)
+            finally:
+                # Remove from tracking even if clear failed
+                del self.active_notifications[service]
+
+    async def send_notification(self, service: str, message: str) -> None:
+        """Send a desktop notification for a service crash.
+
+        Tracks the notification ID and sets up dismissal callback.
+
+        Args:
+            service: Service name
+            message: The notification message to display
+        """
+        try:
+            notifier = _get_notifier()
+
+            # Create dismissal callback that captures service name
+            def on_dismissed() -> None:
+                """Clean up tracking when user dismisses notification."""
+                self.active_notifications.pop(service, None)
+
+            notif_id = await notifier.send(
+                title="Sunstone Manager",
+                message=message,
+                urgency=Urgency.Critical,
+                on_dismissed=on_dismissed,
+            )
+
+            # Track this notification
+            self.active_notifications[service] = notif_id
+
+        except Exception as exc:
+            logging.error("Failed to send notification for %s: %s", service, exc)
 
     def handle_event(self, message: dict) -> None:
         """Process Callosum events.
@@ -115,6 +167,16 @@ class ServiceManager:
                 service = message.get("service")
                 self.status_message = f"Started {service}"
 
+                # Clear any active crash notification (service restarted successfully)
+                if service in self.active_notifications:
+                    self.pending_notifications.append(
+                        {"service": service, "message": None, "clear_only": True}
+                    )
+
+                # Reset crash history when service starts successfully
+                if service in self.crash_history:
+                    del self.crash_history[service]
+
             elif event == "stopped":
                 service = message.get("service")
                 exit_code = message.get("exit_code", "?")
@@ -123,6 +185,14 @@ class ServiceManager:
 
                 # Queue notification for non-zero exits
                 if exit_code != 0 and exit_code != "?":
+                    # Track crash timestamp
+                    if service not in self.crash_history:
+                        self.crash_history[service] = []
+                    self.crash_history[service].append(datetime.now())
+
+                    # Count recent crashes
+                    crash_count = self.count_recent_crashes(service)
+
                     # Get last log line if available
                     log_line = ""
                     if ref and ref in self.last_log_lines:
@@ -130,12 +200,19 @@ class ServiceManager:
                         # Truncate to 100 chars to avoid giant notifications
                         log_line = log_line[:100]
 
-                    # Format notification message
-                    msg = f"{service} exited with code {exit_code}"
+                    # Format notification message with crash count
+                    if crash_count > 1:
+                        msg = f"{service} crashed ({crash_count}x in 5 min)\nExit code: {exit_code}"
+                    else:
+                        msg = f"{service} exited with code {exit_code}"
+
                     if log_line:
                         msg += f"\nLast log: {log_line}"
 
-                    self.pending_notifications.append(msg)
+                    # Queue notification dict with service info
+                    self.pending_notifications.append(
+                        {"service": service, "message": msg}
+                    )
 
         elif tract == "logs":
             if event == "exec":
@@ -565,9 +642,22 @@ class ServiceManager:
                 if iteration % 50 == 0:
                     self.cleanup_dead_tasks()
 
-                # Send any pending notifications
+                # Process pending notifications
                 while self.pending_notifications:
-                    await send_notification(self.pending_notifications.pop(0))
+                    notif = self.pending_notifications.pop(0)
+                    service = notif["service"]
+
+                    # Check if this is a clear-only request
+                    if notif.get("clear_only"):
+                        await self.clear_notification(service)
+                    else:
+                        # Clear any existing notification first (deduplication)
+                        if service in self.active_notifications:
+                            await self.clear_notification(service)
+
+                        # Send new notification
+                        message = notif["message"]
+                        await self.send_notification(service, message)
 
                 # Render on every iteration (includes callosum updates)
                 print(self.render(), flush=True)
