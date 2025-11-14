@@ -1,0 +1,1435 @@
+<style>
+/* Entities container styling */
+.entities-container {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.entities-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.entities-table th,
+.entities-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.entities-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+}
+
+.entities-table tr:hover {
+  background: #f8f9fa;
+}
+
+.entity-type {
+  width: 120px;
+  font-weight: 500;
+  color: #6c757d;
+}
+
+.entity-name {
+  font-weight: 500;
+}
+
+.entity-desc {
+  color: #6c757d;
+}
+
+.star-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.5em;
+  padding: 0;
+  line-height: 1;
+  transition: transform 0.2s;
+  width: 40px;
+}
+
+.star-button:hover {
+  transform: scale(1.2);
+}
+
+.star-button.starred {
+  color: #ffc107;
+}
+
+.star-button.unstarred {
+  color: #ccc;
+}
+
+
+.star-button.unstarred:hover {
+  color: #ffc107;
+}
+
+
+.entities-section {
+  margin-bottom: 2em;
+}
+
+.entities-section h3 {
+  padding: 1em 1.5em;
+  margin: 0;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.no-entities {
+  padding: 3em;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #5568d3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.add-entity-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Description modal styling */
+.description-modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+}
+
+.description-modal-content {
+  background: white;
+  margin: 5% auto;
+  padding: 0;
+  width: 90%;
+  max-width: 600px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.description-modal-header {
+  padding: 1.5em;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.description-modal-header h3 {
+  margin: 0;
+  font-size: 1.25em;
+}
+
+.description-close {
+  color: #aaa;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 20px;
+}
+
+.description-close:hover {
+  color: #000;
+}
+
+.description-modal-body {
+  padding: 1.5em;
+}
+
+.description-modal-body textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.description-buttons {
+  margin-top: 1em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5em;
+}
+
+.generate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.generate-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.generate-btn.generating {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.generate-icon {
+  font-size: 16px;
+}
+
+.cancel-btn {
+  padding: 8px 16px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cancel-btn:hover {
+  background: #5a6268;
+}
+
+.save-btn {
+  padding: 8px 16px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.save-btn:hover {
+  background: #5568d3;
+}
+
+/* Entity description edit button */
+.entity-edit-btn {
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: 8px;
+}
+
+.entity-edit-btn:hover {
+  opacity: 1 !important;
+}
+
+.has-entity-desc .entity-edit-btn {
+  opacity: 0.4;
+}
+
+.has-entity-desc:hover .entity-edit-btn {
+  opacity: 1;
+}
+
+.no-entity-desc {
+  color: #999;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.no-entity-desc:hover {
+  color: #667eea;
+  text-decoration: underline;
+}
+
+.no-entity-desc-cell .entity-edit-btn {
+  opacity: 0.3;
+}
+
+.no-entity-desc-cell:hover .entity-edit-btn {
+  opacity: 1;
+}
+
+/* Delete modal styling */
+.delete-modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+}
+
+.delete-modal-content {
+  background: white;
+  margin: 10% auto;
+  padding: 0;
+  width: 90%;
+  max-width: 500px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.delete-modal-header {
+  padding: 1.5em;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delete-modal-header h3 {
+  margin: 0;
+  color: #dc3545;
+}
+
+.delete-modal-body {
+  padding: 1.5em;
+}
+
+.delete-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 1em;
+  color: #856404;
+}
+
+.delete-days-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.delete-day-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.delete-day-item:last-child {
+  border-bottom: none;
+}
+
+.delete-buttons {
+  margin-top: 1.5em;
+  display: flex;
+  gap: 0.5em;
+  justify-content: flex-end;
+}
+
+/* Entity edit modal */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+}
+
+.modal-content {
+  background: white;
+  margin: 10% auto;
+  padding: 0;
+  width: 90%;
+  max-width: 500px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+  padding: 1.5em;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.25em;
+}
+
+.close {
+  color: #aaa;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 20px;
+}
+
+.close:hover {
+  color: #000;
+}
+
+.form-group {
+  margin-bottom: 1em;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5em;
+  font-weight: 500;
+  color: #495057;
+}
+
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.25em;
+  color: #6c757d;
+  font-size: 0.875em;
+}
+
+.form-actions {
+  margin-top: 1.5em;
+  display: flex;
+  gap: 0.5em;
+  justify-content: flex-end;
+  padding: 1.5em;
+  border-top: 1px solid #e9ecef;
+}
+
+#entityEditError {
+  padding: 12px;
+  margin: 1em 1.5em 0;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  color: #721c24;
+  display: none;
+}
+
+/* Entity delete button */
+.entity-delete-btn {
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: 8px;
+  font-size: 1.1em;
+}
+
+.entity-desc:hover .entity-delete-btn {
+  opacity: 0.5;
+}
+
+.entity-delete-btn:hover {
+  opacity: 1 !important;
+}
+
+/* No facet message */
+.no-facet-message {
+  text-align: center;
+  padding: 4em 2em;
+  color: #666;
+}
+
+.no-facet-message h2 {
+  color: #999;
+  margin-bottom: 0.5em;
+}
+
+/* Entity assistant styling */
+.entity-assistant {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5em;
+  border-radius: 12px;
+  margin-bottom: 2em;
+}
+
+.entity-assistant h4 {
+  margin: 0 0 0.5em 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entity-assistant-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 1em;
+}
+
+.entity-assistant-input input {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.entity-assistant-input button {
+  padding: 10px 20px;
+  background: white;
+  color: #667eea;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.entity-assistant-input button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.entity-assistant-input button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.entities-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2em;
+}
+
+.entities-loading {
+  text-align: center;
+  padding: 4em;
+  color: #666;
+}
+
+.spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1em;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>
+
+<div class="entities-page">
+  <div id="entities-loading" class="entities-loading">
+    <div class="spinner"></div>
+    <p>Loading entities...</p>
+  </div>
+
+  <div id="no-facet-message" class="no-facet-message" style="display: none;">
+    <h2>Select a facet to view entities</h2>
+    <p>Choose a facet from the pills above to see its entities.</p>
+  </div>
+
+  <div id="entities-content" style="display: none;">
+    <!-- Entity Assistant -->
+    <div class="entity-assistant">
+      <h4>
+        <span>🤖</span>
+        <span>Entity Assistant</span>
+      </h4>
+      <p style="margin: 0; opacity: 0.9;">Quickly add an entity with AI-generated type and description.</p>
+      <div class="entity-assistant-input">
+        <input type="text" id="entity-assist-input" placeholder="Enter entity name (e.g., 'OpenAI', 'Claude', 'GPT-4')..." />
+        <button id="entity-assist-submit" onclick="submitEntityAssist()">Add</button>
+      </div>
+    </div>
+
+    <!-- Facet Entities Section -->
+    <div class="entities-section">
+      <div class="entities-container" id="facet-entities-section">
+        <h3>
+          <span>Facet Entities</span>
+          <button class="btn btn-primary add-entity-btn" onclick="openEntityAssistInput()">
+            <span>+</span>
+            <span>Add Entity</span>
+          </button>
+        </h3>
+        <table class="entities-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th class="entity-type">Type</th>
+              <th class="entity-name">Name</th>
+              <th class="entity-desc">Description</th>
+            </tr>
+          </thead>
+          <tbody id="facet-entities-tbody">
+          </tbody>
+        </table>
+        <div id="no-facet-entities" class="no-entities" style="display: none;">
+          No entities added to this facet yet. Star entities below to add them.
+        </div>
+      </div>
+    </div>
+
+    <!-- Detected Entities Section -->
+    <div class="entities-section">
+      <div class="entities-container">
+        <h3 id="all-entities-title" style="display: flex; align-items: center; justify-content: space-between;">
+          <span>Detected Entities</span>
+          <input type="text" id="entity-search" placeholder="Search entities..." style="
+            max-width: 250px;
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: inherit;
+          ">
+        </h3>
+        <table class="entities-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th class="entity-type">Type</th>
+              <th class="entity-name">Name</th>
+              <th class="entity-desc">Description</th>
+            </tr>
+          </thead>
+          <tbody id="all-entities-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Description Editor Modal -->
+<div id="descriptionModal" class="description-modal">
+  <div class="description-modal-content">
+    <span class="description-close">&times;</span>
+    <div class="description-modal-header">
+      <h3 id="modal-title">Edit Description</h3>
+    </div>
+    <div class="description-modal-body">
+      <textarea id="descriptionText" placeholder="Enter description..."></textarea>
+      <div class="description-buttons">
+        <button id="generateBtn" class="generate-btn" title="Generate description with AI">
+          <span class="generate-icon">✨</span>
+          <span class="generate-text">Generate</span>
+        </button>
+        <div class="button-group">
+          <button id="cancelBtn" class="cancel-btn">Cancel</button>
+          <button id="saveBtn" class="save-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Entity Confirmation Modal -->
+<div id="deleteModal" class="delete-modal">
+  <div class="delete-modal-content">
+    <div class="delete-modal-header">
+      <h3>Delete Detected Entity</h3>
+      <span class="close" onclick="closeDeleteModal()">&times;</span>
+    </div>
+    <div class="delete-modal-body">
+      <div class="delete-warning">
+        ⚠️ This will permanently remove this entity from all detected day files. This action cannot be undone.
+      </div>
+      <p>Entity: <strong id="deleteEntityName"></strong></p>
+      <div id="deleteLoadingMsg" style="text-align: center; padding: 20px; display: none;">
+        <p>Loading preview...</p>
+      </div>
+      <div id="deleteDaysContainer" style="display: none;">
+        <p>Found in <strong id="deleteDaysCount"></strong>:</p>
+        <div class="delete-days-list" id="deleteDaysList"></div>
+      </div>
+      <div class="delete-buttons">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button id="confirmDeleteBtn" class="btn btn-danger" onclick="confirmEntityDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Entity Edit Modal -->
+<div id="entityEditModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Edit Entity</h2>
+      <span class="close" onclick="closeEntityEditModal()">&times;</span>
+    </div>
+    <div id="entityEditError"></div>
+    <form id="entityEditForm">
+      <div style="padding: 1.5em;">
+        <div class="form-group">
+          <label for="entityEditName">Name</label>
+          <input type="text" id="entityEditName" name="name" required>
+        </div>
+        <div class="form-group">
+          <label for="entityEditAkas">Alternative Names (AKAs)</label>
+          <input type="text" id="entityEditAkas" name="akas" placeholder="alias1, alias2, alias3">
+          <small>Comma-separated list of alternative names for audio transcription</small>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeEntityEditModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="entityEditSaveBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let currentFacet = getSelectedFacet();
+let entitiesData = null;
+let currentEditEntity = null;
+let currentDescriptionEntity = null;
+
+// Get selected facet from cookie
+function getSelectedFacet() {
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'selectedFacet') {
+      return value || null;
+    }
+  }
+  return null;
+}
+
+// Listen for facet changes
+window.addEventListener('facet.switch', (e) => {
+  currentFacet = e.detail.facet;
+  entitiesData = null; // Reset data
+  loadEntities();
+});
+
+// Load entities on page load
+document.addEventListener('DOMContentLoaded', function() {
+  loadEntities();
+
+  // Entity search functionality
+  const entitySearchInput = document.getElementById('entity-search');
+  if (entitySearchInput) {
+    entitySearchInput.addEventListener('input', function() {
+      const searchTerm = this.value.trim();
+      if (entitiesData) {
+        renderEntities(searchTerm);
+      }
+    });
+  }
+
+  // Entity assistant input Enter key
+  const assistInput = document.getElementById('entity-assist-input');
+  if (assistInput) {
+    assistInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        submitEntityAssist();
+      }
+    });
+  }
+
+  // Description modal events
+  const descModal = document.getElementById('descriptionModal');
+  const descCloseBtn = document.querySelector('.description-close');
+  const descCancelBtn = document.getElementById('cancelBtn');
+  const descSaveBtn = document.getElementById('saveBtn');
+  const descGenerateBtn = document.getElementById('generateBtn');
+
+  if (descCloseBtn) {
+    descCloseBtn.onclick = closeDescriptionEditor;
+  }
+  if (descCancelBtn) {
+    descCancelBtn.onclick = closeDescriptionEditor;
+  }
+  if (descSaveBtn) {
+    descSaveBtn.onclick = function() {
+      const textarea = document.getElementById('descriptionText');
+      saveDescription(textarea.value);
+    };
+  }
+  if (descGenerateBtn) {
+    descGenerateBtn.onclick = generateDescription;
+  }
+
+  // Close modal when clicking outside
+  window.onclick = function(event) {
+    if (event.target == descModal) {
+      closeDescriptionEditor();
+    }
+    const deleteModal = document.getElementById('deleteModal');
+    if (event.target == deleteModal) {
+      closeDeleteModal();
+    }
+    const editModal = document.getElementById('entityEditModal');
+    if (event.target == editModal) {
+      closeEntityEditModal();
+    }
+  };
+
+  // Entity edit form submit
+  const editForm = document.getElementById('entityEditForm');
+  if (editForm) {
+    editForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      saveEntityEdit();
+    });
+  }
+});
+
+function loadEntities() {
+  // Show message if no facet selected
+  if (!currentFacet) {
+    document.getElementById('entities-loading').style.display = 'none';
+    document.getElementById('no-facet-message').style.display = 'block';
+    document.getElementById('entities-content').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('entities-loading').style.display = 'block';
+  document.getElementById('no-facet-message').style.display = 'none';
+  document.getElementById('entities-content').style.display = 'none';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}`)
+    .then(response => {
+      return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
+    })
+    .then(({ ok, status, data }) => {
+      // Check if the API returned an error
+      if (!ok || data.error) {
+        const errorMsg = data.error || `Server error (${status})`;
+        document.getElementById('entities-loading').innerHTML =
+          `<div style="color: #c33; background: #fee; padding: 1em; border-radius: 6px; border: 1px solid #fcc;">
+            <strong>Error loading entities:</strong><br>${escapeHtml(errorMsg)}
+          </div>`;
+        return;
+      }
+
+      // Transform new API format {attached, detected} to old format {all_entities}
+      const all_entities = [];
+
+      // Add attached entities with starred=true
+      if (data.attached) {
+        data.attached.forEach(entity => {
+          all_entities.push({
+            type: entity.type,
+            name: entity.name,
+            desc: entity.description,
+            starred: true,
+            aka: entity.aka || []
+          });
+        });
+      }
+
+      // Add detected entities with starred=false
+      if (data.detected) {
+        data.detected.forEach(entity => {
+          all_entities.push({
+            type: entity.type,
+            name: entity.name,
+            desc: entity.description,
+            starred: false,
+            count: entity.count,
+            last_seen: entity.last_seen
+          });
+        });
+      }
+
+      entitiesData = { all_entities };
+      renderEntities();
+      document.getElementById('entities-loading').style.display = 'none';
+      document.getElementById('entities-content').style.display = 'block';
+      document.getElementById('no-facet-message').style.display = 'none';
+    })
+    .catch(error => {
+      console.error('Error loading entities:', error);
+      document.getElementById('entities-loading').innerHTML =
+        `<div style="color: #c33; background: #fee; padding: 1em; border-radius: 6px; border: 1px solid #fcc;">
+          <strong>Error loading entities:</strong><br>${escapeHtml(error.message || 'Network error')}
+        </div>`;
+    });
+}
+
+function renderEntities(searchTerm = '') {
+  if (!entitiesData) return;
+
+  const facetTbody = document.getElementById('facet-entities-tbody');
+  const allTbody = document.getElementById('all-entities-tbody');
+  const noFacetEntities = document.getElementById('no-facet-entities');
+
+  // Clear existing content
+  facetTbody.innerHTML = '';
+  allTbody.innerHTML = '';
+
+  // Render facet entities
+  const starredEntities = entitiesData.all_entities.filter(e => e.starred);
+  if (starredEntities.length === 0) {
+    noFacetEntities.style.display = 'block';
+    document.getElementById('facet-entities-section').querySelector('table').style.display = 'none';
+  } else {
+    noFacetEntities.style.display = 'none';
+    document.getElementById('facet-entities-section').querySelector('table').style.display = 'table';
+
+    starredEntities.forEach(entity => {
+      const row = createEntityRow(entity, true);
+      facetTbody.appendChild(row);
+    });
+  }
+
+  // Render non-starred entities only (filtering out facet entities)
+  const unstarredEntities = entitiesData.all_entities.filter(e => !e.starred);
+
+  // Get set of attached entity names for filtering
+  const attachedNames = new Set(starredEntities.map(e => e.name));
+
+  // Filter out detected entities that have exact name match with attached entities
+  const uniqueUnstarredEntities = unstarredEntities.filter(entity =>
+    !attachedNames.has(entity.name)
+  );
+
+  // Apply search filter if searchTerm is provided
+  const filteredEntities = searchTerm
+    ? uniqueUnstarredEntities.filter(entity =>
+        entity.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : uniqueUnstarredEntities;
+
+  filteredEntities.forEach(entity => {
+    const row = createEntityRow(entity, false);
+    allTbody.appendChild(row);
+  });
+}
+
+function createEntityRow(entity, isFacetSection) {
+  const row = document.createElement('tr');
+
+  const starCell = document.createElement('td');
+  const starButton = document.createElement('button');
+  starButton.className = `star-button ${entity.starred ? 'starred' : 'unstarred'}`;
+  starButton.innerHTML = entity.starred ? '★' : '☆';
+  starButton.onclick = () => toggleEntityStar(entity, starButton);
+  starCell.appendChild(starButton);
+
+  const typeCell = document.createElement('td');
+  typeCell.className = 'entity-type';
+  typeCell.textContent = entity.type;
+
+  const nameCell = document.createElement('td');
+  nameCell.className = 'entity-name';
+
+  // Create clickable name for attached entities
+  if (entity.starred) {
+    const nameLink = document.createElement('span');
+    nameLink.style.cssText = 'cursor: pointer; text-decoration: underline dotted;';
+    nameLink.textContent = entity.name;
+    nameLink.onclick = () => openEntityEditModal(entity.type, entity.name, entity.aka || []);
+    nameCell.appendChild(nameLink);
+
+    // Add AKAs if present
+    if (entity.aka && Array.isArray(entity.aka) && entity.aka.length > 0) {
+      const akaSpan = document.createElement('span');
+      akaSpan.style.cssText = 'margin-left: 4px; color: #666;';
+      akaSpan.textContent = ` (${entity.aka.join(', ')})`;
+      nameCell.appendChild(akaSpan);
+    }
+  } else {
+    nameCell.textContent = entity.name;
+
+    // Add detection count badge for detected entities
+    if (entity.count && entity.count > 1) {
+      const badge = document.createElement('span');
+      badge.style.cssText = 'margin-left: 8px; background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500;';
+      badge.textContent = `${entity.count} detections`;
+      nameCell.appendChild(badge);
+    }
+  }
+
+  const descCell = document.createElement('td');
+  descCell.className = 'entity-desc';
+  if (entity.desc) {
+    descCell.innerHTML = `<span class="entity-desc-text">${entity.desc}</span> <span class="entity-edit-btn" onclick="openEntityDescriptionEditor('${entity.type}', '${entity.name.replace(/'/g, "\\'")}', '${(entity.desc || '').replace(/'/g, "\\'")}')" title="Edit description">✏️</span>`;
+    descCell.classList.add('has-entity-desc');
+  } else {
+    descCell.innerHTML = `<span class="no-entity-desc" onclick="openEntityDescriptionEditor('${entity.type}', '${entity.name.replace(/'/g, "\\'")}', '')">Add description...</span> <span class="entity-edit-btn" onclick="openEntityDescriptionEditor('${entity.type}', '${entity.name.replace(/'/g, "\\'")}', '')" title="Add description">✨</span>`;
+    descCell.classList.add('no-entity-desc-cell');
+  }
+
+  // Add delete button only for detected entities (not facet section)
+  if (!isFacetSection) {
+    const deleteBtn = document.createElement('span');
+    deleteBtn.className = 'entity-delete-btn';
+    deleteBtn.innerHTML = '🗑️';
+    deleteBtn.title = 'Delete detected entity';
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      previewEntityDelete(entity.name);
+    };
+    descCell.appendChild(deleteBtn);
+  }
+
+  row.appendChild(starCell);
+  row.appendChild(typeCell);
+  row.appendChild(nameCell);
+  row.appendChild(descCell);
+
+  return row;
+}
+
+function toggleEntityStar(entity, starButton) {
+  const wasStarred = entity.starred;
+
+  // Disable button during request
+  starButton.disabled = true;
+  starButton.style.opacity = '0.5';
+
+  const method = wasStarred ? 'DELETE' : 'POST';
+  const url = `api/${encodeURIComponent(currentFacet)}`;
+
+  fetch(url, {
+    method: method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: entity.type,
+      name: entity.name,
+      desc: entity.desc || ''
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Update entity state
+      entity.starred = !wasStarred;
+
+      // Re-render to move entity between sections
+      renderEntities(document.getElementById('entity-search').value.trim());
+    } else {
+      throw new Error(data.error || 'Failed to toggle entity');
+    }
+  })
+  .catch(error => {
+    console.error('Error toggling entity star:', error);
+    alert('Error: ' + error.message);
+
+    // Re-enable button
+    starButton.disabled = false;
+    starButton.style.opacity = '1';
+  });
+}
+
+function openEntityDescriptionEditor(entityType, entityName, currentDescription) {
+  currentDescriptionEntity = { type: entityType, name: entityName };
+
+  const modal = document.getElementById('descriptionModal');
+  const textarea = document.getElementById('descriptionText');
+  const title = document.getElementById('modal-title');
+
+  title.textContent = `Edit Description: ${entityName}`;
+  textarea.value = currentDescription || '';
+
+  modal.style.display = 'block';
+}
+
+function closeDescriptionEditor() {
+  const modal = document.getElementById('descriptionModal');
+  modal.style.display = 'none';
+  currentDescriptionEntity = null;
+}
+
+function saveDescription(description) {
+  if (!currentDescriptionEntity) return;
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}/description`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: currentDescriptionEntity.type,
+      name: currentDescriptionEntity.name,
+      description: description
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Update local data
+      const entity = entitiesData.all_entities.find(e =>
+        e.type === currentDescriptionEntity.type && e.name === currentDescriptionEntity.name
+      );
+      if (entity) {
+        entity.desc = description;
+      }
+
+      // Re-render entities
+      renderEntities(document.getElementById('entity-search').value.trim());
+      closeDescriptionEditor();
+    } else {
+      throw new Error(data.error || 'Failed to save description');
+    }
+  })
+  .catch(error => {
+    console.error('Error saving description:', error);
+    alert('Error: ' + error.message);
+  })
+  .finally(() => {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  });
+}
+
+function generateDescription() {
+  if (!currentDescriptionEntity) return;
+
+  const generateBtn = document.getElementById('generateBtn');
+  const textarea = document.getElementById('descriptionText');
+
+  generateBtn.disabled = true;
+  generateBtn.classList.add('generating');
+  generateBtn.querySelector('.generate-text').textContent = 'Generating...';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}/generate-description`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: currentDescriptionEntity.type,
+      name: currentDescriptionEntity.name,
+      current_description: textarea.value
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success && data.agent_id) {
+      // Listen for agent completion
+      listenForAgentCompletion(data.agent_id, (result) => {
+        if (result.success && result.response) {
+          textarea.value = result.response;
+        }
+        generateBtn.disabled = false;
+        generateBtn.classList.remove('generating');
+        generateBtn.querySelector('.generate-text').textContent = 'Generate';
+      });
+    } else {
+      throw new Error(data.error || 'Failed to start generation');
+    }
+  })
+  .catch(error => {
+    console.error('Error generating description:', error);
+    alert('Error: ' + error.message);
+    generateBtn.disabled = false;
+    generateBtn.classList.remove('generating');
+    generateBtn.querySelector('.generate-text').textContent = 'Generate';
+  });
+}
+
+function listenForAgentCompletion(agentId, callback) {
+  if (!window.appEvents) {
+    callback({ success: false, error: 'Events not available' });
+    return;
+  }
+
+  const cleanup = window.appEvents.listen('cortex', (msg) => {
+    if (msg.event === 'agent_complete' && msg.agent_id === agentId) {
+      cleanup();
+      callback({ success: true, response: msg.response });
+    } else if (msg.event === 'agent_error' && msg.agent_id === agentId) {
+      cleanup();
+      callback({ success: false, error: msg.error });
+    }
+  });
+}
+
+function openEntityAssistInput() {
+  const input = document.getElementById('entity-assist-input');
+  if (input) {
+    input.focus();
+  }
+}
+
+function submitEntityAssist() {
+  const input = document.getElementById('entity-assist-input');
+  const button = document.getElementById('entity-assist-submit');
+  const name = input.value.trim();
+
+  if (!name) {
+    alert('Please enter an entity name');
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Processing...';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}/assist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success && data.agent_id) {
+      input.value = '';
+
+      // Listen for agent completion to refresh entities
+      listenForAgentCompletion(data.agent_id, (result) => {
+        if (result.success) {
+          // Reload entities to show the newly added entity
+          loadEntities();
+        }
+        button.disabled = false;
+        button.textContent = 'Add';
+      });
+    } else {
+      throw new Error(data.error || 'Failed to start assistant');
+    }
+  })
+  .catch(error => {
+    console.error('Error with entity assistant:', error);
+    alert('Error: ' + error.message);
+    button.disabled = false;
+    button.textContent = 'Add';
+  });
+}
+
+function previewEntityDelete(entityName) {
+  const modal = document.getElementById('deleteModal');
+  const nameEl = document.getElementById('deleteEntityName');
+  const loadingMsg = document.getElementById('deleteLoadingMsg');
+  const daysContainer = document.getElementById('deleteDaysContainer');
+  const deleteBtn = document.getElementById('confirmDeleteBtn');
+
+  nameEl.textContent = entityName;
+  loadingMsg.style.display = 'block';
+  daysContainer.style.display = 'none';
+  deleteBtn.disabled = true;
+
+  modal.style.display = 'block';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}/detected/preview?name=${encodeURIComponent(entityName)}`)
+    .then(response => response.json())
+    .then(data => {
+      loadingMsg.style.display = 'none';
+
+      if (data.success && data.days) {
+        const daysList = document.getElementById('deleteDaysList');
+        const daysCount = document.getElementById('deleteDaysCount');
+
+        daysCount.textContent = data.days.length === 1 ? '1 day' : `${data.days.length} days`;
+
+        daysList.innerHTML = '';
+        data.days.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'delete-day-item';
+          div.innerHTML = `<strong>${item.day}</strong> - ${item.type}`;
+          daysList.appendChild(div);
+        });
+
+        daysContainer.style.display = 'block';
+        deleteBtn.disabled = false;
+        deleteBtn.dataset.entityName = entityName;
+      } else {
+        throw new Error(data.error || 'Failed to preview');
+      }
+    })
+    .catch(error => {
+      console.error('Error previewing delete:', error);
+      loadingMsg.innerHTML = `<p style="color: #dc3545;">Error: ${error.message}</p>`;
+    });
+}
+
+function closeDeleteModal() {
+  const modal = document.getElementById('deleteModal');
+  modal.style.display = 'none';
+}
+
+function confirmEntityDelete() {
+  const deleteBtn = document.getElementById('confirmDeleteBtn');
+  const entityName = deleteBtn.dataset.entityName;
+
+  if (!entityName) return;
+
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting...';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}/detected`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: entityName })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      closeDeleteModal();
+      // Reload entities to reflect deletion
+      loadEntities();
+    } else {
+      throw new Error(data.error || 'Failed to delete entity');
+    }
+  })
+  .catch(error => {
+    console.error('Error deleting entity:', error);
+    alert('Error: ' + error.message);
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete';
+  });
+}
+
+function openEntityEditModal(entityType, entityName, entityAkas) {
+  currentEditEntity = { type: entityType, oldName: entityName };
+
+  const modal = document.getElementById('entityEditModal');
+  const nameInput = document.getElementById('entityEditName');
+  const akasInput = document.getElementById('entityEditAkas');
+  const errorDiv = document.getElementById('entityEditError');
+
+  nameInput.value = entityName;
+  akasInput.value = Array.isArray(entityAkas) ? entityAkas.join(', ') : '';
+  errorDiv.style.display = 'none';
+  errorDiv.textContent = '';
+
+  modal.style.display = 'block';
+}
+
+function closeEntityEditModal() {
+  const modal = document.getElementById('entityEditModal');
+  modal.style.display = 'none';
+  currentEditEntity = null;
+}
+
+function saveEntityEdit() {
+  if (!currentEditEntity) return;
+
+  const nameInput = document.getElementById('entityEditName');
+  const akasInput = document.getElementById('entityEditAkas');
+  const saveBtn = document.getElementById('entityEditSaveBtn');
+  const errorDiv = document.getElementById('entityEditError');
+
+  const newName = nameInput.value.trim();
+  const akaList = akasInput.value.trim();
+
+  if (!newName) {
+    errorDiv.textContent = 'Name is required';
+    errorDiv.style.display = 'block';
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  errorDiv.style.display = 'none';
+
+  fetch(`api/${encodeURIComponent(currentFacet)}/update`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: currentEditEntity.type,
+      old_name: currentEditEntity.oldName,
+      new_name: newName,
+      aka_list: akaList
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      closeEntityEditModal();
+      // Reload entities to show updated name/akas
+      loadEntities();
+    } else {
+      throw new Error(data.error || 'Failed to update entity');
+    }
+  })
+  .catch(error => {
+    console.error('Error updating entity:', error);
+    errorDiv.textContent = error.message;
+    errorDiv.style.display = 'block';
+  })
+  .finally(() => {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
