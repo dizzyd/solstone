@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
 
 from flask import (
     Blueprint,
-    jsonify,
     redirect,
     render_template,
     request,
@@ -15,9 +13,7 @@ from flask import (
     url_for,
 )
 
-from think.utils import get_config, get_topics
-
-from .. import state
+from think.utils import get_config
 
 
 def _get_password() -> str:
@@ -111,24 +107,3 @@ def favicon() -> Any:
 def home() -> str:
     # Just render the template - all data loading happens client-side
     return render_template("home.html", active="home")
-
-
-@bp.route("/api/stats")
-def stats_data() -> Any:
-    """Return statistics from stats.json."""
-    response = {
-        "stats": {},
-    }
-
-    # Load stats.json
-    stats_path = os.path.join(state.journal_root, "stats.json")
-    if os.path.isfile(stats_path):
-        try:
-            with open(stats_path, "r", encoding="utf-8") as f:
-                response["stats"] = json.load(f)
-        except Exception:
-            pass
-
-    response["topics"] = get_topics()
-
-    return jsonify(response)

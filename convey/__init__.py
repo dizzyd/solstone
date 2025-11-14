@@ -228,7 +228,6 @@ calendar_transcript_ranges = calendar_view.calendar_transcript_ranges
 calendar_transcript_range = calendar_view.calendar_transcript_range
 login = home_view.login
 logout = home_view.logout
-stats_data = home_view.stats_data
 
 __all__ = [
     "app",
@@ -245,7 +244,6 @@ __all__ = [
     "calendar_transcript_range",
     "login",
     "logout",
-    "stats_data",
     "journal_root",
     "run_service",
 ]

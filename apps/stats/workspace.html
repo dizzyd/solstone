@@ -1,0 +1,473 @@
+<style>
+/* Layout */
+.dashboard {
+  padding: 2em;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 2.5em;
+  margin-bottom: 0.5em;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Loading state */
+#loading {
+  text-align: center;
+  padding: 4em;
+  color: #666;
+}
+
+.spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1em;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Alerts */
+.alert {
+  padding: 1em;
+  border-radius: 8px;
+  margin-bottom: 2em;
+}
+
+.alert-warning {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+}
+
+.alert-error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+/* Stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5em;
+  margin-bottom: 3em;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+.stat-card h3 {
+  font-size: 0.9em;
+  color: #666;
+  margin: 0 0 0.5em 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 2.5em;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+
+.stat-subtitle {
+  font-size: 0.9em;
+  color: #999;
+  margin-top: 0.5em;
+  font-weight: 500;
+}
+
+/* Progress cards */
+.progress-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2em;
+  margin-bottom: 2em;
+}
+
+.progress-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.progress-card h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.progress-bar {
+  background: #f0f0f0;
+  border-radius: 8px;
+  height: 24px;
+  overflow: hidden;
+  margin: 1em 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 8px;
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  color: white;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* Chart sections */
+.chart-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2em;
+  margin-bottom: 2em;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.chart-section h2 {
+  margin-top: 0;
+  color: #333;
+  font-size: 1.5em;
+}
+
+.chart {
+  height: 300px;
+  position: relative;
+  margin-top: 1.5em;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  gap: 2px;
+  padding: 0 10px;
+}
+
+.bar {
+  flex: 1;
+  background: linear-gradient(to top, #667eea, #764ba2);
+  border-radius: 4px 4px 0 0;
+  transition: opacity 0.2s;
+  position: relative;
+  min-width: 20px;
+}
+
+.bar:hover {
+  opacity: 0.8;
+}
+
+.bar-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7em;
+  color: #666;
+  white-space: nowrap;
+}
+
+.bar-value {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.empty-chart {
+  text-align: center;
+  color: #999;
+  padding: 2em;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Heatmap */
+.heatmap-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2em;
+  margin-bottom: 2em;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: 40px repeat(24, 1fr);
+  gap: 2px;
+  margin-top: 1.5em;
+}
+
+.heatmap-label {
+  font-size: 0.8em;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: #f0f0f0;
+  transition: transform 0.2s;
+  cursor: default;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.2);
+  z-index: 10;
+}
+
+.heatmap-header {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.heatmap-hour {
+  text-align: center;
+  font-size: 0.7em;
+  color: #999;
+}
+
+/* Topics */
+.topics-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2em;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  margin-bottom: 2em;
+}
+
+.topics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1em;
+  margin-top: 1.5em;
+}
+
+.topic-card {
+  background: #f8f8f8;
+  border-radius: 8px;
+  padding: 1em;
+  transition: all 0.2s;
+}
+
+.topic-card:hover {
+  transform: translateY(-2px);
+  background: #f0f0f0;
+}
+
+.topic-name {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5em;
+}
+
+.topic-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85em;
+  color: #666;
+}
+
+/* Repair alert */
+.alert-repair {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+}
+
+.alert-repair .stat-value {
+  background: #f5576c;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Model selector */
+.model-select {
+  float: right;
+  padding: 0.4em 0.8em;
+  font-size: 0.85em;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.model-select:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+}
+
+/* Stacked bar styles */
+.bar-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+
+.stack-segment {
+  min-height: 2px;
+  transition: opacity 0.2s;
+  position: relative;
+}
+
+.stack-segment.input {
+  background: #667eea;
+}
+
+.stack-segment.reasoning {
+  background: #9b59b6;
+}
+
+.stack-segment.output {
+  background: #e91e63;
+}
+
+.bar-stack:hover .stack-segment {
+  opacity: 0.85;
+}
+
+.token-legend {
+  display: flex;
+  gap: 1.5em;
+  margin-top: 1em;
+  font-size: 0.85em;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 1em;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .heatmap {
+    font-size: 0.8em;
+    grid-template-columns: 30px repeat(24, 1fr);
+  }
+  .bar {
+    min-width: 10px;
+  }
+  .bar-value {
+    font-size: 0.7em;
+  }
+}
+</style>
+
+<div class="dashboard" data-stats-url="{{ url_for('app:stats.stats_data') }}">
+  <h1>Journal Dashboard</h1>
+
+  <div id="notice"></div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Loading dashboard data...</p>
+  </div>
+
+  <div id="mainContent" style="display: none;">
+    <div id="statsGrid" class="stats-grid"></div>
+    <div id="progressSection" class="progress-section"></div>
+
+    <div class="chart-section">
+      <h2>Token Activity (Last 30 Days)
+        <select id="modelSelector" class="model-select">
+          <option value="">Select Model...</option>
+        </select>
+      </h2>
+      <div class="chart" id="tokenChart"></div>
+    </div>
+
+    <div class="chart-section">
+      <h2>Captured Hours per Day</h2>
+      <div class="chart" id="audioChart"></div>
+    </div>
+
+    <div class="heatmap-section">
+      <h2>Activity Heatmap</h2>
+      <div id="heatmap"></div>
+    </div>
+
+    <div id="topicsSection" class="topics-section"></div>
+    <div id="repairSection"></div>
+  </div>
+</div>
+
+<script src="{{ url_for('app:stats.static', filename='dashboard.js') }}"></script>
+<script>
+  // Load dashboard data when page loads
+  Dashboard.load('{{ url_for('app:stats.stats_data') }}');
+</script>
