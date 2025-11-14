@@ -6,14 +6,44 @@ and provides keyboard controls for restarting services.
 
 import argparse
 import asyncio
+import logging
 import signal
 from datetime import datetime, timedelta
 
 import psutil
 from blessed import Terminal
+from desktop_notifier import DesktopNotifier, Urgency
 
 from think.callosum import CallosumConnection
 from think.utils import setup_cli
+
+# Desktop notification system
+_notifier: DesktopNotifier | None = None
+
+
+def _get_notifier() -> DesktopNotifier:
+    """Get or create the global desktop notifier instance."""
+    global _notifier
+    if _notifier is None:
+        _notifier = DesktopNotifier(app_name="Sunstone Manager")
+    return _notifier
+
+
+async def send_notification(message: str) -> None:
+    """Send a desktop notification with ``message``.
+
+    Args:
+        message: The notification message to display
+    """
+    try:
+        notifier = _get_notifier()
+        await notifier.send(
+            title="Sunstone Manager",
+            message=message,
+            urgency=Urgency.Critical,
+        )
+    except Exception as exc:
+        logging.error("Failed to send notification: %s", exc)
 
 
 class ServiceManager:
@@ -34,6 +64,7 @@ class ServiceManager:
         self.cpu_cache = {}  # Maps pid -> last cpu_percent value
         self.cpu_procs = {}  # Maps pid -> Process object for cpu tracking
         self.running_tasks = {}  # Maps ref -> task info from logs tract
+        self.pending_notifications = []  # Queue for async notifications
 
     def handle_event(self, message: dict) -> None:
         """Process Callosum events.
@@ -87,7 +118,24 @@ class ServiceManager:
             elif event == "stopped":
                 service = message.get("service")
                 exit_code = message.get("exit_code", "?")
+                ref = message.get("ref")
                 self.status_message = f"Stopped {service} (exit {exit_code})"
+
+                # Queue notification for non-zero exits
+                if exit_code != 0 and exit_code != "?":
+                    # Get last log line if available
+                    log_line = ""
+                    if ref and ref in self.last_log_lines:
+                        _, _, log_line = self.last_log_lines[ref]
+                        # Truncate to 100 chars to avoid giant notifications
+                        log_line = log_line[:100]
+
+                    # Format notification message
+                    msg = f"{service} exited with code {exit_code}"
+                    if log_line:
+                        msg += f"\nLast log: {log_line}"
+
+                    self.pending_notifications.append(msg)
 
         elif tract == "logs":
             if event == "exec":
@@ -516,6 +564,10 @@ class ServiceManager:
                 iteration += 1
                 if iteration % 50 == 0:
                     self.cleanup_dead_tasks()
+
+                # Send any pending notifications
+                while self.pending_notifications:
+                    await send_notification(self.pending_notifications.pop(0))
 
                 # Render on every iteration (includes callosum updates)
                 print(self.render(), flush=True)
