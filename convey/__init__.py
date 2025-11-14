@@ -246,8 +246,6 @@ __all__ = [
     "home",
     "facets_page",
     "facets_list",
-    "inbox_page",
-    "get_messages",
     "calendar",
     "calendar_day",
     "chat_page",
