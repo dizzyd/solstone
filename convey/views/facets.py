@@ -501,26 +501,6 @@ def assist_entity_add(facet_name: str) -> Any:
         return jsonify({"error": f"Failed to start entity assistant: {str(e)}"}), 500
 
 
-@bp.route("/api/facets/<facet_name>/news")
-def get_facet_news_feed(facet_name: str) -> Any:
-    """Return paginated news entries for a facet."""
-
-    cursor = request.args.get("cursor")
-    day = request.args.get("day")
-    # Default to 5 newsletters for initial load, 5 more for "load more"
-    limit = request.args.get("days", default=5, type=int) or 5
-    if limit < 0:
-        limit = 5
-
-    try:
-        news_payload = get_facet_news(facet_name, cursor=cursor, limit=limit, day=day)
-        return jsonify(news_payload)
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 500
-    except Exception as exc:  # pragma: no cover - defensive
-        return jsonify({"error": f"Failed to load news: {str(exc)}"}), 500
-
-
 @bp.route("/facets/<facet_name>/entities/manage")
 def entity_manager(facet_name: str) -> str:
     """Display entity management page for a facet."""

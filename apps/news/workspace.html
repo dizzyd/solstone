@@ -1,0 +1,371 @@
+<style>
+/* News feed styles */
+.news-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2em;
+}
+
+.news-loading {
+  text-align: center;
+  padding: 4em;
+  color: #666;
+}
+
+.spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1em;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.news-empty {
+  text-align: center;
+  padding: 4em;
+  color: #999;
+}
+
+.news-days {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5em;
+}
+
+.news-day {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5em;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eef2ff;
+}
+
+.news-day-header {
+  font-size: 1.5em;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 1em 0;
+  padding-bottom: 0.5em;
+  border-bottom: 2px solid #eef2ff;
+}
+
+.newsletter-content {
+  line-height: 1.6;
+  color: #444;
+}
+
+/* Markdown styling */
+.newsletter-content h1 {
+  font-size: 1.8em;
+  margin: 1em 0 0.5em 0;
+  color: #333;
+}
+
+.newsletter-content h2 {
+  font-size: 1.4em;
+  margin: 1em 0 0.5em 0;
+  color: #444;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.25em;
+}
+
+.newsletter-content h3 {
+  font-size: 1.2em;
+  margin: 0.8em 0 0.4em 0;
+  color: #555;
+}
+
+.newsletter-content p {
+  margin: 0.8em 0;
+}
+
+.newsletter-content ul,
+.newsletter-content ol {
+  margin: 0.8em 0;
+  padding-left: 1.5em;
+}
+
+.newsletter-content li {
+  margin: 0.4em 0;
+}
+
+.newsletter-content blockquote {
+  background: #f9f9fa;
+  border-left: 4px solid #667eea;
+  padding: 0.8em 1em;
+  margin: 1em 0;
+  color: #555;
+}
+
+.newsletter-content code {
+  background: #f4f4f5;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.newsletter-content pre {
+  background: #f4f4f5;
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.newsletter-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.newsletter-content strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.newsletter-content em {
+  font-style: italic;
+}
+
+.newsletter-content a {
+  color: #667eea;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.newsletter-content a:hover {
+  border-bottom-color: #667eea;
+}
+
+.news-load-more {
+  text-align: center;
+  margin-top: 1.5em;
+}
+
+.news-load-more button {
+  padding: 0.6em 1.5em;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.news-load-more button:hover:not(:disabled) {
+  background: #eee;
+}
+
+.news-load-more button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.no-facet-message {
+  text-align: center;
+  padding: 4em 2em;
+  color: #666;
+}
+
+.no-facet-message h2 {
+  color: #999;
+  margin-bottom: 0.5em;
+}
+</style>
+
+<div class="news-container">
+  <div id="news-loading" class="news-loading">
+    <div class="spinner"></div>
+    <p>Loading newsletters...</p>
+  </div>
+
+  <div id="news-content" style="display: none;">
+    <div id="news-empty" class="news-empty" style="display: none;">
+      <p>No newsletters recorded yet.</p>
+    </div>
+
+    <div id="no-facet-message" class="no-facet-message" style="display: none;">
+      <h2>Select a facet to view newsletters</h2>
+      <p>Choose a facet from the pills above to see its newsletter feed.</p>
+    </div>
+
+    <div class="news-days" id="news-days"></div>
+
+    <div class="news-load-more" id="news-load-more-container" style="display: none;">
+      <button id="news-load-more">Load more newsletters</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ vendor_lib('marked') }}"></script>
+<script>
+let newsCursor = null;
+let newsLoading = false;
+let currentFacet = getSelectedFacet();
+
+// Get selected facet from cookie
+function getSelectedFacet() {
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'selectedFacet') {
+      return value || null;
+    }
+  }
+  return null;
+}
+
+// Listen for facet changes
+window.addEventListener('facet.switch', (e) => {
+  currentFacet = e.detail.facet;
+  resetAndLoad();
+});
+
+function resetAndLoad() {
+  newsCursor = null;
+  document.getElementById('news-days').innerHTML = '';
+  loadNews();
+}
+
+function loadNews() {
+  if (newsLoading) return;
+
+  // Show message if no facet selected
+  if (!currentFacet) {
+    document.getElementById('news-loading').style.display = 'none';
+    document.getElementById('news-content').style.display = 'block';
+    document.getElementById('no-facet-message').style.display = 'block';
+    document.getElementById('news-empty').style.display = 'none';
+    document.getElementById('news-days').style.display = 'none';
+    document.getElementById('news-load-more-container').style.display = 'none';
+    return;
+  }
+
+  newsLoading = true;
+
+  const loadingEl = document.getElementById('news-loading');
+  const contentEl = document.getElementById('news-content');
+  const loadMoreBtn = document.getElementById('news-load-more');
+
+  if (newsCursor === null) {
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+  } else {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = 'Loading...';
+  }
+
+  const params = new URLSearchParams({ days: '5' });
+  if (newsCursor) params.append('cursor', newsCursor);
+
+  fetch(`api/${encodeURIComponent(currentFacet)}?${params}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      document.getElementById('no-facet-message').style.display = 'none';
+      document.getElementById('news-days').style.display = 'flex';
+
+      const days = data.days || [];
+
+      if (days.length === 0 && newsCursor === null) {
+        document.getElementById('news-empty').style.display = 'block';
+      } else {
+        document.getElementById('news-empty').style.display = 'none';
+        days.forEach(appendNewsDay);
+      }
+
+      newsCursor = data.next_cursor || null;
+
+      const loadMoreContainer = document.getElementById('news-load-more-container');
+      if (data.has_more && newsCursor) {
+        loadMoreContainer.style.display = 'block';
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Load more newsletters';
+      } else {
+        loadMoreContainer.style.display = 'none';
+      }
+
+      newsLoading = false;
+    })
+    .catch(error => {
+      console.error('Error loading news:', error);
+      loadingEl.innerHTML = `<p style="color: #c33;">Error: ${error.message}</p>`;
+      newsLoading = false;
+    });
+}
+
+function appendNewsDay(day) {
+  const container = document.getElementById('news-days');
+
+  const section = document.createElement('section');
+  section.className = 'news-day';
+
+  const header = document.createElement('h3');
+  header.className = 'news-day-header';
+  header.textContent = formatDateKey(day.date);
+  section.appendChild(header);
+
+  if (day.raw_content) {
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'newsletter-content';
+
+    // Configure marked
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      headerIds: false,
+      mangle: false
+    });
+
+    // Remove top-level heading (we show it in header)
+    let content = day.raw_content.replace(/^# .+\n+/, '');
+
+    // Render markdown
+    contentDiv.innerHTML = marked.parse(content);
+    section.appendChild(contentDiv);
+  } else {
+    const emptyNotice = document.createElement('div');
+    emptyNotice.className = 'news-empty';
+    emptyNotice.textContent = 'No newsletter content for this day.';
+    section.appendChild(emptyNotice);
+  }
+
+  container.appendChild(section);
+}
+
+function formatDateKey(dateKey) {
+  if (!dateKey || dateKey.length !== 8) return dateKey || 'Unknown date';
+
+  const year = Number(dateKey.slice(0, 4));
+  const month = Number(dateKey.slice(4, 6)) - 1;
+  const day = Number(dateKey.slice(6, 8));
+
+  const date = new Date(year, month, day);
+  if (isNaN(date.getTime())) return dateKey;
+
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
+// Load more button
+document.getElementById('news-load-more').addEventListener('click', loadNews);
+
+// Initial load
+loadNews();
+</script>
