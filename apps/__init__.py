@@ -197,6 +197,7 @@ class AppRegistry:
 
         # Import routes module and get blueprint (optional)
         blueprint = None
+        routes_module = None
         routes_file = app_path / "routes.py"
 
         if routes_file.exists():
@@ -232,6 +233,13 @@ class AppRegistry:
                     f"App '{app_name}': Blueprint name must be '{expected_name}', "
                     f"got '{blueprint.name}'. Update Blueprint() declaration in routes.py"
                 )
+        else:
+            # No routes.py - create a minimal blueprint
+            blueprint = self._create_minimal_blueprint(app_name)
+            logger.debug(f"Created minimal blueprint for app '{app_name}' (no routes.py)")
+
+        # Inject default index route if app doesn't define one
+        self._inject_index_if_needed(blueprint, routes_module, app_name)
 
         # Resolve template paths (relative to apps/ directory since that's in the loader)
         workspace_template = f"{app_name}/workspace.html"
@@ -305,6 +313,69 @@ class AppRegistry:
             logger.warning(f"Failed to load hooks for {app_name}: {e}")
             return {}
 
+    def _create_minimal_blueprint(self, app_name: str) -> Blueprint:
+        """Create a minimal blueprint for apps without routes.py.
+
+        Args:
+            app_name: Name of the app
+
+        Returns:
+            Blueprint with proper naming and URL prefix
+        """
+        blueprint = Blueprint(
+            f"app:{app_name}",
+            __name__,
+            url_prefix=f"/app/{app_name}",
+        )
+        return blueprint
+
+    def _inject_index_if_needed(
+        self, blueprint: Blueprint, routes_module: Any, app_name: str
+    ) -> None:
+        """Inject default index route if app doesn't define one.
+
+        Checks if routes module has an 'index' function. If not, adds a
+        default index route that renders app.html using blueprint.record()
+        to support multiple app registrations.
+
+        Args:
+            blueprint: The Flask blueprint to inject into
+            routes_module: The imported routes module (or None if no routes.py)
+            app_name: Name of the app
+        """
+        import inspect
+
+        has_index = False
+
+        if routes_module:
+            # Get functions defined in this module (not imported)
+            module_functions = [
+                name
+                for name, obj in inspect.getmembers(routes_module)
+                if inspect.isfunction(obj) and obj.__module__ == routes_module.__name__
+            ]
+            has_index = "index" in module_functions
+
+        if not has_index:
+            # No index function, inject default one using record() for deferred setup
+            # Only inject if blueprint hasn't been registered yet
+            if not blueprint._got_registered_once:
+                def index():
+                    from flask import render_template
+
+                    return render_template("app.html", app=app_name)
+
+                def setup_index(state):
+                    """Deferred setup function called when blueprint is registered."""
+                    state.app.add_url_rule(
+                        f"{blueprint.url_prefix}/",
+                        endpoint=f"{blueprint.name}.index",
+                        view_func=index,
+                    )
+
+                blueprint.record(setup_index)
+                logger.debug(f"Injected default index route for app '{app_name}'")
+
     def register_blueprints(self, flask_app) -> None:
         """Register all app blueprints with Flask.
 
@@ -313,8 +384,7 @@ class AppRegistry:
         """
         for app in self.apps.values():
             if not app.blueprint:
-                # App has no custom routes, skip blueprint registration
-                logger.debug(f"App '{app.name}' has no blueprint (no custom routes)")
+                logger.error(f"App '{app.name}' has no blueprint - this should not happen")
                 continue
 
             try:

@@ -101,7 +101,7 @@ const form = document.getElementById('inputArea');
 const input = document.getElementById('messageInput');
 const messagesDiv = document.getElementById('messages');
 const backendSelect = document.getElementById('backendSelect');
-const searchBase = '{{ url_for('search.search_page') }}';
+const searchBase = '{{ url_for('app:search.index') }}';
 
 // Fetch persona titles from API
 let personaTitles = {};
