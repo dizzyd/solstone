@@ -1,14 +1,6 @@
 <style>
-.dev-app-bar-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 0;
-}
-
 .dev-facet-display {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
@@ -16,7 +8,6 @@
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   font-size: 14px;
-  min-width: 200px;
 }
 
 .dev-facet-display.has-facet {
@@ -24,62 +15,45 @@
   border-color: var(--facet-color, #e5e7eb);
 }
 
-.dev-facet-label {
+.dev-facet-display strong {
   font-weight: 500;
   color: #6b7280;
-  margin-right: 4px;
 }
 
-.dev-facet-value {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  color: #1f2937;
-}
-
-.dev-facet-emoji {
-  font-size: 16px;
+.dev-facet-display small {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+  margin-left: 4px;
 }
 
 .dev-facet-all {
   color: #667eea;
   font-weight: 600;
 }
-
-.dev-facet-mode {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #9ca3af;
-  margin-left: 8px;
-}
 </style>
 
-<div class="dev-app-bar-content">
-  <div class="dev-facet-display{% if selected_facet %} has-facet{% endif %}">
-    <span class="dev-facet-label">Facet Mode:</span>
-    <span class="dev-facet-value" id="dev-current-facet">
-      {% if selected_facet %}
-        {% set selected_facet_data = facets|selectattr("name", "equalto", selected_facet)|first %}
-        {% if selected_facet_data %}
-          <span class="dev-facet-emoji">{{ selected_facet_data.emoji }}</span>
-          <span class="dev-facet-name">{{ selected_facet_data.title }}</span>
-          <span class="dev-facet-mode">specific</span>
-        {% else %}
-          <span class="dev-facet-name">{{ selected_facet }}</span>
-          <span class="dev-facet-mode">specific</span>
-        {% endif %}
+<div class="dev-facet-display{% if selected_facet %} has-facet{% endif %}" id="dev-facet-display">
+  <strong>Facet:</strong>
+  <span id="dev-facet-value">
+    {% if selected_facet %}
+      {% set selected_facet_data = facets|selectattr("name", "equalto", selected_facet)|first %}
+      {% if selected_facet_data %}
+        {{ selected_facet_data.emoji }} {{ selected_facet_data.title }}
+        <small>specific</small>
       {% else %}
-        <span class="dev-facet-all">All Facets</span>
-        <span class="dev-facet-mode">all-facet</span>
+        {{ selected_facet }}
+        <small>specific</small>
       {% endif %}
-    </span>
-  </div>
+    {% else %}
+      <strong class="dev-facet-all">All Facets</strong>
+      <small>all-facet</small>
+    {% endif %}
+  </span>
 </div>
 
 <script>
-// Update facet display when facet selection changes
 (function() {
   // Listen for facet.switch events
   window.addEventListener('facet.switch', (e) => {
@@ -87,8 +61,8 @@
   });
 
   function updateFacetDisplay(facetName, facetData) {
-    const display = document.querySelector('.dev-facet-display');
-    const valueEl = document.getElementById('dev-current-facet');
+    const display = document.getElementById('dev-facet-display');
+    const valueEl = document.getElementById('dev-facet-value');
 
     if (!display || !valueEl) return;
 
@@ -96,8 +70,8 @@
       // All-facet mode
       display.classList.remove('has-facet');
       valueEl.innerHTML = `
-        <span class="dev-facet-all">All Facets</span>
-        <span class="dev-facet-mode">all-facet</span>
+        <strong class="dev-facet-all">All Facets</strong>
+        <small>all-facet</small>
       `;
       return;
     }
@@ -111,14 +85,13 @@
 
     if (facetData) {
       valueEl.innerHTML = `
-        <span class="dev-facet-emoji">${facetData.emoji}</span>
-        <span class="dev-facet-name">${facetData.title}</span>
-        <span class="dev-facet-mode">specific</span>
+        ${facetData.emoji} ${facetData.title}
+        <small>specific</small>
       `;
     } else {
       valueEl.innerHTML = `
-        <span class="dev-facet-name">${facetName}</span>
-        <span class="dev-facet-mode">specific</span>
+        ${facetName}
+        <small>specific</small>
       `;
     }
   }

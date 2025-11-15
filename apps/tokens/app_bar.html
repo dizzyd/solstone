@@ -1,23 +1,5 @@
-<div class="tokens-nav">
-  <button id="prev-day" class="nav-button" title="Previous day">← Prev Day</button>
-  <div class="date-display">
-    <input type="date" id="date-picker" value="{{ day }}" />
-    <span id="current-date">{{ day }}</span>
-  </div>
-  <button id="next-day" class="nav-button" title="Next day">Next Day →</button>
-  <button id="today" class="nav-button today-button" title="Jump to today">Today</button>
-</div>
-
 <style>
-.tokens-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1em;
-  padding: 1em;
-}
-
-.nav-button {
+.tokens-nav-button {
   background: white;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -28,33 +10,39 @@
   transition: all 0.2s;
 }
 
-.nav-button:hover {
+.tokens-nav-button:hover {
   background: #f8f9fa;
   border-color: #667eea;
 }
 
-.nav-button:active {
+.tokens-nav-button:active {
   transform: scale(0.98);
 }
 
-.today-button {
+.tokens-today-button {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
+  border-radius: 6px;
+  padding: 0.6em 1.2em;
+  font-family: inherit;
+  font-size: 0.9em;
   font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
 }
 
-.today-button:hover {
+.tokens-today-button:hover {
   opacity: 0.9;
 }
 
-.date-display {
+.tokens-date-display {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-#date-picker {
+.tokens-date-display input {
   position: absolute;
   opacity: 0;
   width: 100%;
@@ -62,7 +50,7 @@
   cursor: pointer;
 }
 
-#current-date {
+.tokens-date-display span {
   font-family: 'SF Mono', Monaco, monospace;
   font-size: 1.1em;
   font-weight: 600;
@@ -73,6 +61,14 @@
   pointer-events: none;
 }
 </style>
+
+<button id="prev-day" class="tokens-nav-button" title="Previous day">← Prev Day</button>
+<div class="tokens-date-display">
+  <input type="date" id="date-picker" value="{{ day }}" />
+  <span id="current-date">{{ day }}</span>
+</div>
+<button id="next-day" class="tokens-nav-button" title="Next day">Next Day →</button>
+<button id="today" class="tokens-today-button" title="Jump to today">Today</button>
 
 <script>
 (function() {
@@ -127,7 +123,6 @@
 
   // Navigate to day
   function navigateToDay(day) {
-    // Update URL and reload
     window.location.href = `/app/tokens/${day}`;
   }
 

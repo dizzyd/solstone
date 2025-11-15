@@ -22,12 +22,12 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-.container {
+.workspace {
   margin-top: 60px;
 }
 
 /* Add bottom margin when app-bar is present */
-body.has-app-bar .container {
+body.has-app-bar .workspace {
   margin-bottom: 70px;
 }
 
@@ -402,9 +402,12 @@ body.sidebar-open .menu-bar {
   z-index: 1000;
   height: 60px;
   display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
   padding: 0 16px;
   gap: 12px;
+  overflow: hidden;
 }
 
 .app-bar::before {
@@ -436,16 +439,6 @@ body.sidebar-open .menu-bar {
 /* When sidebar open, border only where workspace is visible */
 body.sidebar-open .app-bar::after {
   left: 240px;
-}
-
-/* Workspace content area */
-.workspace {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  overflow: hidden;
 }
 
 /* Error log display */

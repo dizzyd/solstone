@@ -55,14 +55,12 @@
 {% set app_bar_template = app_registry.apps[app].get_app_bar_template() %}
 {% if app_bar_template %}
 <div class="app-bar">
-  <div class="workspace">
-    {% include app_bar_template %}
-  </div>
+  {% include app_bar_template %}
 </div>
 {% endif %}
 
 <!-- Main Content -->
-<div class="container">
+<div class="workspace">
   {% include app_registry.apps[app].get_workspace_template() %}
 </div>
 

@@ -1,24 +1,48 @@
 <style>
-.chat-app-bar {
-  display: flex;
-  align-items: center;
-  padding: 0;
-  width: 100%;
-  position: relative;
+.chat-message-input {
+  flex: 1;
+  resize: none;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 0.75em 1em;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  max-height: 120px;
+  min-height: 42px;
 }
 
-.chat-input-group {
-  display: flex;
-  gap: 0.5em;
-  align-items: center;
-  flex: 1;
-  max-width: 70%;
-  margin: 0 auto;
+.chat-message-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.chat-send-btn {
+  padding: 0.75em 1.5em;
+  border: none;
+  border-radius: 20px;
+  background: #667eea;
+  color: white;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.chat-send-btn:hover {
+  background: #5a67d8;
+  transform: translateY(-1px);
+}
+
+.chat-send-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .chat-backend-toggle {
-  position: absolute;
-  right: 0;
+  margin-left: auto;
   padding: 0.75em 1em;
   background: transparent;
   border: 1px solid #ddd;
@@ -51,56 +75,80 @@
   color: #10a37f;
   border-color: #10a37f;
 }
-
-#chatMessageInput {
-  flex: 1;
-  resize: none;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  padding: 0.75em 1em;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.5;
-  max-height: 120px;
-  min-height: 42px;
-}
-
-#chatMessageInput:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-#chatSendBtn {
-  padding: 0.75em 1.5em;
-  border: none;
-  border-radius: 20px;
-  background: #667eea;
-  color: white;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-#chatSendBtn:hover {
-  background: #5a67d8;
-  transform: translateY(-1px);
-}
-
-#chatSendBtn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-  transform: none;
-}
 </style>
 
-<form id="chatInputForm" class="chat-app-bar">
-  <div class="chat-input-group">
-    <textarea id="chatMessageInput" rows="1" placeholder="Send a message..."></textarea>
-    <button type="submit" id="chatSendBtn">Send</button>
-  </div>
-  <button type="button" id="chatBackendToggle" class="chat-backend-toggle" data-backend="anthropic" title="Click to change backend">
-    Claude
-  </button>
-</form>
+<textarea id="chatMessageInput" class="chat-message-input" rows="1" placeholder="Send a message..."></textarea>
+<button type="submit" id="chatSendBtn" class="chat-send-btn">Send</button>
+<button type="button" id="chatBackendToggle" class="chat-backend-toggle" data-backend="anthropic" title="Click to change backend">
+  Claude
+</button>
+
+<script>
+(function() {
+  const form = document.querySelector('.app-bar');
+  const input = document.getElementById('chatMessageInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const backendToggle = document.getElementById('chatBackendToggle');
+
+  // Form is now the app-bar itself, handle as form
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+
+    // Send message to chat endpoint
+    fetch('/app/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: message,
+        backend: backendToggle.dataset.backend
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        input.value = '';
+        // Message will appear via WebSocket
+      } else {
+        alert('Error: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      console.error('Send error:', err);
+      alert('Failed to send message');
+    })
+    .finally(() => {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+    });
+  });
+
+  // Backend toggle
+  const backends = [
+    { name: 'anthropic', label: 'Claude' },
+    { name: 'google', label: 'Gemini' },
+    { name: 'openai', label: 'GPT-4' }
+  ];
+  let currentBackendIndex = 0;
+
+  backendToggle.addEventListener('click', () => {
+    currentBackendIndex = (currentBackendIndex + 1) % backends.length;
+    const backend = backends[currentBackendIndex];
+    backendToggle.dataset.backend = backend.name;
+    backendToggle.textContent = backend.label;
+  });
+
+  // Auto-resize textarea
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+
+  // Focus input on load
+  input.focus();
+})();
+</script>

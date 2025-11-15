@@ -65,7 +65,7 @@
   .zoom-sel:active{cursor:grabbing}
 </style>
 
-<div class="container">
+<div class="calendar-content">
   {{ macros.day_heading(title,
         prev_day and url_for('app:calendar.calendar_transcript_page', day=prev_day),
         next_day and url_for('app:calendar.calendar_transcript_page', day=next_day)) }}
