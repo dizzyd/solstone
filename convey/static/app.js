@@ -12,6 +12,7 @@
   // Facet filtering state
   let activeFacets = [];
   let selectedFacet = null; // null means "All"
+  let previousFacet = null; // Track previous facet for toggle restoration
 
   // Save facet selection to cookie (server-driven)
   function saveSelectedFacetToCookie(facet) {
@@ -155,16 +156,6 @@
       }
     }
 
-    // Update app-icon tooltip
-    const appIcon = document.querySelector('.facet-bar .app-icon');
-    if (appIcon && !facetsDisabled) {
-      if (selectedFacet) {
-        appIcon.setAttribute('title', 'Show all facets');
-      } else {
-        appIcon.removeAttribute('title');
-      }
-    }
-
     // Apply theme by updating CSS variables (only if facets are enabled)
     if (!facetsDisabled && selectedFacetData && selectedFacetData.color) {
       const color = selectedFacetData.color;
@@ -229,11 +220,41 @@
     });
   }
 
+  // Update all-facet toggle visual state
+  function updateAllFacetToggle(isHover = false) {
+    const toggle = document.querySelector('.all-facet-toggle');
+    if (!toggle) return;
+
+    const facetsDisabled = document.querySelector('.facet-bar')?.classList.contains('facets-disabled');
+    if (facetsDisabled) {
+      toggle.style.display = 'none';
+      return;
+    }
+
+    if (!selectedFacet) {
+      // All-facet mode active
+      toggle.textContent = isHover ? '⚪' : '🔘';
+      toggle.setAttribute('data-active', 'true');
+      toggle.title = previousFacet ? `Switch to ${activeFacets.find(f => f.name === previousFacet)?.title || previousFacet}` : 'Switch to first facet';
+    } else {
+      // Specific facet mode
+      toggle.textContent = isHover ? '🔘' : '⚪';
+      toggle.removeAttribute('data-active');
+      toggle.title = 'Show all facets';
+    }
+  }
+
   // Handle facet selection
   function selectFacet(facet) {
+    // Save previous facet before changing (only when switching to all-facet mode)
+    if (facet === null && selectedFacet !== null) {
+      previousFacet = selectedFacet;
+    }
+
     selectedFacet = facet;
     saveSelectedFacetToCookie(facet);
     updateFacetSelection();
+    updateAllFacetToggle();
 
     // Dispatch custom event for apps to listen to facet changes
     const facetData = facet ? activeFacets.find(f => f.name === facet) : null;
@@ -384,21 +405,29 @@
       });
     }
 
-    // App icon click - switch to all-facet mode
-    const appIcon = document.querySelector('.facet-bar .app-icon');
-    if (appIcon) {
-      appIcon.addEventListener('click', (e) => {
-        selectedFacet = null;
-        saveSelectedFacetToCookie(null);
-        updateFacetSelection();
-
-        // Dispatch facet.switch event for all-facet mode
-        window.dispatchEvent(new CustomEvent('facet.switch', {
-          detail: {
-            facet: null,
-            facetData: null
+    // All-facet toggle click - toggle between all-facet and specific facet
+    const allFacetToggle = document.querySelector('.all-facet-toggle');
+    if (allFacetToggle) {
+      allFacetToggle.addEventListener('click', () => {
+        if (selectedFacet === null) {
+          // Currently in all-facet mode, switch to previous or first facet
+          const targetFacet = previousFacet || (activeFacets.length > 0 ? activeFacets[0].name : null);
+          if (targetFacet) {
+            selectFacet(targetFacet);
           }
-        }));
+        } else {
+          // Currently in specific facet mode, switch to all-facet mode
+          selectFacet(null);
+        }
+      });
+
+      // Hover effect - show opposite state
+      allFacetToggle.addEventListener('mouseenter', () => {
+        updateAllFacetToggle(true);
+      });
+
+      allFacetToggle.addEventListener('mouseleave', () => {
+        updateAllFacetToggle(false);
       });
     }
 
