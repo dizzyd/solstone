@@ -8,7 +8,7 @@ This document provides comprehensive guidelines for contributing to Sunstone, wh
 
 * **observe/** - Multimodal capture (audio + visual) and AI-powered analysis
 * **think/** - Data post-processing, summarization, and intelligent insights
-* **convey/** - Web application for navigating and interacting with captured content
+* **convey/** - Web application for navigating and interacting with captured content (extensible via apps/)
 * **muse/** - AI agent system and MCP tooling
 
 The project uses a modular architecture where each package can operate independently while sharing common utilities and data formats through the journal system.
@@ -47,6 +47,7 @@ sunstone/
 │   ├── static/     # JavaScript and CSS assets
 │   ├── templates/  # Jinja2 HTML templates
 │   └── views/      # Flask view modules
+├── apps/           # Convey app extensions
 ├── muse/           # AI agent system and MCP tooling
 │   └── agents/     # Agent system prompts and configs
 ├── tests/          # Comprehensive pytest test suites
@@ -57,6 +58,7 @@ sunstone/
 ├── pyproject.toml  # Package configuration and dependencies
 ├── JOURNAL.md      # Journal directory structure documentation
 ├── README.md       # Project overview and quick start
+├── APPS.md         # App development guide
 ├── CRUMBS.md       # Crumb file format specification
 ├── CORTEX.md       # Agent system documentation
 ├── CALLOSUM.md     # Callosum connection system documentation
@@ -192,7 +194,7 @@ make check-all   # Format, lint, and test (run before commit)
 * Update README files for new functionality
 * Code comments explain "why" not "what"
 * Type hints required on function signatures
-* **See subsystem docs**: JOURNAL.md, CORTEX.md, CALLOSUM.md, CRUMBS.md
+* **See subsystem docs**: JOURNAL.md, APPS.md, CORTEX.md, CALLOSUM.md, CRUMBS.md
 
 ---
 
@@ -251,5 +253,5 @@ make clean-install # Clean and reinstall
 ### Getting Help
 * Run `make help` for available Make targets
 * Run `sunstone` for CLI command list
-* Check **JOURNAL.md**, **CORTEX.md**, **CALLOSUM.md**, **CRUMBS.md** for subsystem details
+* Check **JOURNAL.md**, **APPS.md**, **CORTEX.md**, **CALLOSUM.md**, **CRUMBS.md** for subsystem details
 * Review test files in `tests/` for usage examples
