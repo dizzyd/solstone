@@ -351,67 +351,16 @@
     // Initial collapse check after DOM settles
     setTimeout(debouncedCollapseFacetPills, 0);
 
-    // Menu state tracking
-    let isClickMode = false;
-    let hideTimeout = null;
-
     // Hamburger and menu-bar elements
     const hamburger = document.getElementById('hamburger');
     const menuBar = document.querySelector('.menu-bar');
 
     // Hamburger menu interactions
     if (hamburger && menuBar) {
-      // Hover to show menu (hover mode)
-      hamburger.addEventListener('mouseenter', () => {
-        if (!isClickMode) {
-          clearTimeout(hideTimeout);
-          document.body.classList.add('sidebar-open');
-        }
-      });
-
-      // Auto-dismiss when leaving hamburger (hover mode)
-      hamburger.addEventListener('mouseleave', () => {
-        if (!isClickMode) {
-          hideTimeout = setTimeout(() => {
-            if (!isClickMode) {
-              document.body.classList.remove('sidebar-open');
-            }
-          }, 200);
-        }
-      });
-
-      // Cancel auto-dismiss when entering menu (hover mode)
-      menuBar.addEventListener('mouseenter', () => {
-        if (!isClickMode) {
-          clearTimeout(hideTimeout);
-        }
-      });
-
-      // Auto-dismiss when leaving menu (hover mode)
-      menuBar.addEventListener('mouseleave', () => {
-        if (!isClickMode) {
-          hideTimeout = setTimeout(() => {
-            if (!isClickMode) {
-              document.body.classList.remove('sidebar-open');
-            }
-          }, 200);
-        }
-      });
-
-      // Click to toggle and lock menu (click mode)
+      // Click to toggle menu
       hamburger.addEventListener('click', (e) => {
         e.stopPropagation();
-        clearTimeout(hideTimeout);
-
-        if (isClickMode) {
-          // Already locked, clicking closes it
-          document.body.classList.remove('sidebar-open');
-          isClickMode = false;
-        } else {
-          // Lock menu open
-          document.body.classList.add('sidebar-open');
-          isClickMode = true;
-        }
+        document.body.classList.toggle('sidebar-open');
       });
 
       // Close sidebar when clicking outside
@@ -419,8 +368,6 @@
         if (document.body.classList.contains('sidebar-open')) {
           if (!menuBar.contains(e.target) && !hamburger.contains(e.target)) {
             document.body.classList.remove('sidebar-open');
-            isClickMode = false;
-            clearTimeout(hideTimeout);
           }
         }
       });
