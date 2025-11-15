@@ -6,7 +6,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -105,7 +105,26 @@ def detect_created(
     )
 
     try:
-        return json.loads(response_text)
+        result = json.loads(response_text)
+
+        # Convert UTC to local time if needed
+        if result and result.get("utc") is True:
+            day = result.get("day")
+            time = result.get("time")
+
+            if day and time:
+                # Parse as UTC datetime
+                utc_dt = datetime.strptime(f"{day}{time}", "%Y%m%d%H%M%S")
+                utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+
+                # Convert to local timezone
+                local_dt = utc_dt.astimezone()
+
+                # Update result with local time
+                result["day"] = local_dt.strftime("%Y%m%d")
+                result["time"] = local_dt.strftime("%H%M%S")
+
+        return result
     except json.JSONDecodeError:
         return None
 
