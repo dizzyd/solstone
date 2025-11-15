@@ -13,13 +13,14 @@ chat_bp = Blueprint(
 )
 
 
-@chat_bp.route("/")
-def chat_page() -> str:
+@chat_bp.route("/api/personas")
+def get_personas() -> Any:
+    """Get available personas for chat."""
     from think.utils import get_agents
 
     agents = get_agents()
     persona_titles = {aid: a["title"] for aid, a in agents.items()}
-    return render_template("app.html", app="chat", persona_titles=persona_titles)
+    return jsonify(persona_titles)
 
 
 @chat_bp.route("/api/send", methods=["POST"])

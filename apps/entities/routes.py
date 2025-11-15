@@ -62,12 +62,6 @@ def get_facet_entities_data(facet_name: str) -> dict:
     return {"attached": attached, "detected": detected}
 
 
-@entities_bp.route("/")
-def index() -> str:
-    """Entities page with facet integration."""
-    return render_template("app.html", app="entities")
-
-
 @entities_bp.route("/api/<facet_name>")
 def get_entities(facet_name: str) -> Any:
     """Get entities for a specific facet (attached and detected)."""

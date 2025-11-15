@@ -15,12 +15,6 @@ agents_bp = Blueprint(
 )
 
 
-@agents_bp.route("/")
-def agents_page() -> str:
-    """Render the Agents view."""
-    return render_template("app.html", app="agents")
-
-
 def _list_items(item_type: str) -> list[dict[str, object]]:
     """Generic function to list items from think/{item_type}/.
 

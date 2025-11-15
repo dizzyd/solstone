@@ -18,12 +18,6 @@ stats_bp = Blueprint(
 )
 
 
-@stats_bp.route("/")
-def stats_page() -> str:
-    """Render the stats dashboard page."""
-    return render_template("app.html", app="stats")
-
-
 @stats_bp.route("/api/stats")
 def stats_data() -> Any:
     """Return statistics from stats.json."""

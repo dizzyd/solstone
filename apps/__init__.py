@@ -4,8 +4,8 @@ Convention-based app discovery with minimal configuration:
 
 Directory Structure:
     apps/my_app/           # Use underscores, not hyphens!
-      routes.py            # Required: Flask blueprint
       workspace.html       # Required: Main template
+      routes.py            # Optional: Flask blueprint (for custom routes beyond index)
       background.html      # Optional: Background service
       app_bar.html         # Optional: Bottom bar
       app.json             # Optional: Metadata overrides
@@ -33,6 +33,8 @@ hooks.py format (all functions optional):
         return {"facet_name": count}
 
 Apps are automatically discovered and registered.
+All apps are served at /app/{name} via shared handler.
+Apps with routes.py can define custom routes beyond the index route.
 """
 
 from __future__ import annotations
@@ -56,10 +58,10 @@ class App:
     name: str
     icon: str
     label: str
-    blueprint: Blueprint
+    blueprint: Optional[Blueprint] = None
 
     # Template paths (relative to Flask template root)
-    workspace_template: str
+    workspace_template: str = ""
     app_bar_template: Optional[str] = None
     background_template: Optional[str] = None
 
@@ -69,8 +71,8 @@ class App:
     # Facet support (optional, default True)
     facets_enabled: bool = True
 
-    def get_blueprint(self) -> Blueprint:
-        """Return Flask Blueprint with app routes."""
+    def get_blueprint(self) -> Optional[Blueprint]:
+        """Return Flask Blueprint with app routes, or None if app has no custom routes."""
         return self.blueprint
 
     def get_workspace_template(self) -> str:
@@ -139,9 +141,9 @@ class AppRegistry:
         """Auto-discover apps using convention over configuration.
 
         For each directory in apps/:
-        1. Load app.json if present (for icon, label overrides)
-        2. Import routes.py and get blueprint
-        3. Check for workspace.html (required)
+        1. Check for workspace.html (required)
+        2. Load app.json if present (for icon, label overrides)
+        3. Import routes.py and get blueprint (optional - for custom routes)
         4. Check for background.html, app_bar.html (optional)
         5. Import hooks.py if present (for dynamic logic)
         """
@@ -153,11 +155,6 @@ class AppRegistry:
                 continue
 
             app_name = app_path.name
-
-            # Skip if routes.py doesn't exist (required)
-            if not (app_path / "routes.py").exists():
-                logger.debug(f"Skipping {app_name}/ - no routes.py found")
-                continue
 
             # Skip if workspace.html doesn't exist (required)
             if not (app_path / "workspace.html").exists():
@@ -198,40 +195,43 @@ class AppRegistry:
         label = metadata.get("label", app_name.replace("_", " ").title())
         facets_enabled = metadata.get("facets", True)
 
-        # Import routes module and get blueprint
-        routes_module = importlib.import_module(f"apps.{app_name}.routes")
-
-        # Find blueprint - look for *_bp attribute
+        # Import routes module and get blueprint (optional)
         blueprint = None
-        expected_bp_var = f"{app_name}_bp"
+        routes_file = app_path / "routes.py"
 
-        for attr_name in dir(routes_module):
-            if attr_name.endswith("_bp"):
-                bp = getattr(routes_module, attr_name)
-                if isinstance(bp, Blueprint):
-                    blueprint = bp
+        if routes_file.exists():
+            routes_module = importlib.import_module(f"apps.{app_name}.routes")
 
-                    # Warn if variable name doesn't match convention
-                    if attr_name != expected_bp_var:
-                        logger.warning(
-                            f"App '{app_name}': Blueprint variable '{attr_name}' should be '{expected_bp_var}'"
-                        )
+            # Find blueprint - look for *_bp attribute
+            expected_bp_var = f"{app_name}_bp"
 
-                    break
+            for attr_name in dir(routes_module):
+                if attr_name.endswith("_bp"):
+                    bp = getattr(routes_module, attr_name)
+                    if isinstance(bp, Blueprint):
+                        blueprint = bp
 
-        if not blueprint:
-            raise ValueError(
-                f"No blueprint found in apps.{app_name}.routes - "
-                f"expected variable named '{expected_bp_var}'"
-            )
+                        # Warn if variable name doesn't match convention
+                        if attr_name != expected_bp_var:
+                            logger.warning(
+                                f"App '{app_name}': Blueprint variable '{attr_name}' should be '{expected_bp_var}'"
+                            )
 
-        # Verify blueprint name uses "app:{name}" pattern for consistency
-        expected_name = f"app:{app_name}"
-        if blueprint.name != expected_name:
-            raise ValueError(
-                f"App '{app_name}': Blueprint name must be '{expected_name}', "
-                f"got '{blueprint.name}'. Update Blueprint() declaration in routes.py"
-            )
+                        break
+
+            if not blueprint:
+                raise ValueError(
+                    f"No blueprint found in apps.{app_name}.routes - "
+                    f"expected variable named '{expected_bp_var}'"
+                )
+
+            # Verify blueprint name uses "app:{name}" pattern for consistency
+            expected_name = f"app:{app_name}"
+            if blueprint.name != expected_name:
+                raise ValueError(
+                    f"App '{app_name}': Blueprint name must be '{expected_name}', "
+                    f"got '{blueprint.name}'. Update Blueprint() declaration in routes.py"
+                )
 
         # Resolve template paths (relative to apps/ directory since that's in the loader)
         workspace_template = f"{app_name}/workspace.html"
@@ -312,6 +312,11 @@ class AppRegistry:
             flask_app: Flask application instance
         """
         for app in self.apps.values():
+            if not app.blueprint:
+                # App has no custom routes, skip blueprint registration
+                logger.debug(f"App '{app.name}' has no blueprint (no custom routes)")
+                continue
+
             try:
                 flask_app.register_blueprint(app.blueprint)
                 logger.info(f"Registered blueprint: {app.blueprint.name}")

@@ -14,12 +14,6 @@ inbox_bp = Blueprint(
 )
 
 
-@inbox_bp.route("/")
-def index() -> str:
-    """Render the inbox view."""
-    return render_template("app.html", app="inbox")
-
-
 @inbox_bp.route("/api/messages")
 def get_messages() -> Any:
     """Get messages from active or archived folder."""

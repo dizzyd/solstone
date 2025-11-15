@@ -18,11 +18,6 @@ calendar_bp = Blueprint(
 )
 
 
-@calendar_bp.route("/")
-def calendar_page() -> str:
-    return render_template("app.html", app="calendar", view="month")
-
-
 @calendar_bp.route("/<day>")
 def calendar_day(day: str) -> str:
     if not re.fullmatch(DATE_RE.pattern, day):

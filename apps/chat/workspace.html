@@ -103,8 +103,12 @@ const messagesDiv = document.getElementById('messages');
 const backendSelect = document.getElementById('backendSelect');
 const searchBase = '{{ url_for('search.search_page') }}';
 
-// Pass persona titles from backend
-const personaTitles = {{ persona_titles | tojson }};
+// Fetch persona titles from API
+let personaTitles = {};
+fetch('/app/chat/api/personas')
+  .then(r => r.json())
+  .then(data => { personaTitles = data; })
+  .catch(err => console.error('Failed to load personas:', err));
 
 // Deduplication using agent_id:ts as key
 const processedEventIds = new Set();

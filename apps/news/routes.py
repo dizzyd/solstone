@@ -13,12 +13,6 @@ news_bp = Blueprint(
 )
 
 
-@news_bp.route("/")
-def index() -> str:
-    """News page with facet integration."""
-    return render_template("app.html", app="news")
-
-
 @news_bp.route("/api/<facet_name>")
 def get_news(facet_name: str) -> Any:
     """Get paginated news for a facet."""

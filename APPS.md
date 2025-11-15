@@ -8,29 +8,14 @@ Apps are the primary way to extend Sunstone's web interface (Convey). Each app i
 
 ## Quick Start
 
-Create a new app in three steps:
+Create a minimal app in two steps:
 
 ```bash
 # 1. Create app directory (use underscores, not hyphens!)
 mkdir apps/my_app
 
-# 2. Create required files
-touch apps/my_app/routes.py
+# 2. Create workspace template
 touch apps/my_app/workspace.html
-
-# 3. Add optional metadata
-touch apps/my_app/app.json
-```
-
-**Minimal `routes.py`:**
-```python
-from flask import Blueprint, render_template
-
-my_app_bp = Blueprint("app:my_app", __name__, url_prefix="/app/my_app")
-
-@my_app_bp.route("/")
-def index():
-    return render_template("app.html", app="my_app")
 ```
 
 **Minimal `workspace.html`:**
@@ -38,7 +23,9 @@ def index():
 <h1>Hello from My App!</h1>
 ```
 
-**That's it!** Restart Convey and your app appears in the menu bar.
+**That's it!** Restart Convey and your app is automatically available at `/app/my_app`.
+
+All apps are served via a shared route handler at `/app/{app_name}`. You only need `routes.py` if your app requires custom routes beyond the index page (e.g., API endpoints, form handlers, or navigation routes).
 
 ---
 
@@ -46,8 +33,8 @@ def index():
 
 ```
 apps/my_app/
-├── routes.py          # Required: Flask blueprint with routes
 ├── workspace.html     # Required: Main content template
+├── routes.py          # Optional: Flask blueprint (only if custom routes needed)
 ├── app.json          # Optional: Metadata (icon, label, facet support)
 ├── hooks.py          # Optional: Dynamic submenu and badge logic
 ├── app_bar.html      # Optional: Bottom bar controls (forms, buttons)
@@ -58,8 +45,8 @@ apps/my_app/
 
 | File | Required | Purpose |
 |------|----------|---------|
-| `routes.py` | **Yes** | Flask blueprint with route handlers |
 | `workspace.html` | **Yes** | Main app content (rendered in container) |
+| `routes.py` | No | Flask blueprint for custom routes (API endpoints, forms, etc.) |
 | `app.json` | No | Icon, label, facet support overrides |
 | `hooks.py` | No | Submenu items and facet badge counts |
 | `app_bar.html` | No | Bottom fixed bar for app controls |
@@ -72,34 +59,19 @@ apps/my_app/
 **Critical for auto-discovery:**
 
 1. **App directory**: Use `snake_case` (e.g., `my_app`, **not** `my-app`)
-2. **Blueprint variable**: Must be `{app_name}_bp` (e.g., `my_app_bp`)
-3. **Blueprint name**: Must be `app:{app_name}` (e.g., `"app:my_app"`)
+2. **Blueprint variable** (if using routes.py): Must be `{app_name}_bp` (e.g., `my_app_bp`)
+3. **Blueprint name** (if using routes.py): Must be `app:{app_name}` (e.g., `"app:my_app"`)
 4. **URL prefix**: Convention is `/app/{app_name}` (e.g., `/app/my_app`)
 
-**Why it matters**: The registry scans directories and imports `{app_name}_bp` from `apps.{app_name}.routes`. Incorrect naming prevents discovery.
+**Index route**: All apps are automatically served at `/app/{app_name}` via a shared handler. You don't need to define an index route in `routes.py`.
 
-See `apps/__init__.py` for discovery logic.
+See `apps/__init__.py` for discovery logic and `convey/__init__.py` for the shared route handler.
 
 ---
 
 ## Required Files
 
-### 1. `routes.py` - Flask Blueprint
-
-Define all routes for your app using Flask blueprints.
-
-**Key Points:**
-- All routes render `app.html` as the container, passing `app="my_app"`
-- Use `url_for('app:my_app.index')` for internal links
-- Access journal root via `state.journal_root` (always available)
-- Import utilities from `convey.utils` (see [Flask Utilities](#flask-utilities))
-
-**Reference implementations:**
-- Minimal: `apps/home/routes.py` (simple index route)
-- Basic: `apps/dev/routes.py` (single route app)
-- Full-featured: `apps/todos/routes.py` (date navigation, POST handlers, JSON APIs, form processing with validation and flash messages)
-
-### 2. `workspace.html` - Main Content
+### 1. `workspace.html` - Main Content
 
 The workspace template is included inside the app container (`app.html`).
 
@@ -123,6 +95,27 @@ The workspace template is included inside the app container (`app.html`).
 ---
 
 ## Optional Files
+
+### 2. `routes.py` - Flask Blueprint
+
+Define custom routes for your app (API endpoints, form handlers, navigation routes).
+
+**Key Points:**
+- **Not needed for simple apps** - the shared handler at `/app/{app_name}` serves your workspace automatically
+- Only create `routes.py` if you need custom routes beyond the index page
+- Blueprint variable must be named `{app_name}_bp`
+- Blueprint name must be `"app:{app_name}"`
+- URL prefix convention: `/app/{app_name}`
+- Access journal root via `state.journal_root` (always available)
+- Import utilities from `convey.utils` (see [Flask Utilities](#flask-utilities))
+
+**Reference implementations:**
+- API endpoints: `apps/search/routes.py` (search APIs, no index route)
+- Form handlers: `apps/todos/routes.py` (POST handlers, validation, flash messages)
+- Navigation: `apps/calendar/routes.py` (date-based routes with custom context)
+- Redirects: `apps/todos/routes.py` index route (redirects `/` to today's date)
+
+
 
 ### 3. `app.json` - Metadata
 
@@ -370,11 +363,11 @@ FLASK_DEBUG=1 convey
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| App not discovered | Missing `routes.py` or `workspace.html` | Ensure both files exist |
-| Blueprint not found | Wrong variable name | Use `{app_name}_bp` exactly |
-| Import error | Blueprint name mismatch | Use `"app:{app_name}"` exactly |
+| App not discovered | Missing `workspace.html` | Ensure workspace.html exists |
+| Blueprint not found (with routes.py) | Wrong variable name | Use `{app_name}_bp` exactly |
+| Import error (with routes.py) | Blueprint name mismatch | Use `"app:{app_name}"` exactly |
 | Hyphens in name | Directory uses hyphens | Rename to use underscores |
-| Routes don't work | URL prefix mismatch | Check `url_prefix` matches pattern |
+| Custom routes don't work | URL prefix mismatch | Check `url_prefix` matches pattern |
 
 ### Logging
 
@@ -401,11 +394,13 @@ Use `current_app.logger` from Flask for debugging. See `apps/todos/routes.py` fo
 
 Study these reference implementations:
 
-- **`apps/home/`** - Minimal app with background service
-- **`apps/todos/`** - Full-featured with date navigation, forms, AJAX
-- **`apps/inbox/`** - Submenu with badges via hooks
-- **`apps/dev/`** - Custom styling and notification testing
-- **`apps/tokens/`** - App bar with form controls
+- **`apps/home/`** - Minimal app (no routes.py, just workspace + background service)
+- **`apps/dev/`** - Simple app (no routes.py, custom styling and notifications)
+- **`apps/live/`** - Minimal app (no routes.py, event dashboard)
+- **`apps/todos/`** - Full-featured (custom routes with date navigation, forms, AJAX)
+- **`apps/inbox/`** - API-driven (custom routes, submenu with badges via hooks)
+- **`apps/search/`** - API-only (custom routes for search, no index route)
+- **`apps/tokens/`** - Navigation (index redirects to today, app bar with controls)
 
 ---
 

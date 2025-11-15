@@ -30,12 +30,6 @@ import_bp = Blueprint(
 )
 
 
-@import_bp.route("/")
-def index() -> str:
-    """Render the import page."""
-    return render_template("app.html", app="import")
-
-
 @import_bp.route("/api/save", methods=["POST"])
 def import_save() -> Any:
     from datetime import datetime

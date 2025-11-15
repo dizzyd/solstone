@@ -57,6 +57,16 @@ def create_app(journal: str = "") -> Flask:
     # Register app system context processors
     register_app_context(app, registry)
 
+    # Shared route handler for all apps (apps can have custom routes via blueprints)
+    @app.route("/app/<app_name>")
+    def serve_app(app_name: str):
+        """Serve app workspace template via shared handler."""
+        from flask import abort, render_template
+
+        if app_name not in registry.apps:
+            abort(404)
+        return render_template("app.html", app=app_name)
+
     sock = Sock(app)
     register_websocket(sock)
 

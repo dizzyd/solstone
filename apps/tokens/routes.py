@@ -295,9 +295,11 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
 
 @tokens_bp.route("/")
 def index():
-    """Token usage dashboard main view."""
+    """Redirect to today's token usage."""
+    from flask import redirect, url_for
+
     today = date.today().strftime("%Y%m%d")
-    return render_template("app.html", app="tokens", day=today)
+    return redirect(url_for("app:tokens.day_view", day=today))
 
 
 @tokens_bp.route("/<day>")

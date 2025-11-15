@@ -24,11 +24,6 @@ search_bp = Blueprint(
 )
 
 
-@search_bp.route("/")
-def index() -> str:
-    return render_template("app.html", app="search")
-
-
 @search_bp.route("/api/summaries")
 def search_summaries_api() -> Any:
     query = request.args.get("q", "").strip()

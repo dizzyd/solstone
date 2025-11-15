@@ -16,12 +16,6 @@ settings_bp = Blueprint(
 )
 
 
-@settings_bp.route("/")
-def index() -> str:
-    """Render the settings view."""
-    return render_template("app.html", app="settings")
-
-
 @settings_bp.route("/api/config")
 def get_config() -> Any:
     """Return the journal configuration."""
