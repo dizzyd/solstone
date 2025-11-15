@@ -244,6 +244,16 @@ Available in `convey/utils.py`:
 
 **See source:** `convey/utils.py` for full signatures and documentation
 
+### App Storage
+
+Apps can persist journal-specific configuration and data in `<journal>/apps/<app_name>/`:
+
+- `get_app_storage_path(app_name, *sub_paths, ensure_exists)` - Get path to app storage directory
+- `load_app_config(app_name, default)` - Load app config from `config.json`
+- `save_app_config(app_name, config)` - Save app config to `config.json`
+
+**See source:** `apps/utils.py` for implementation details
+
 ---
 
 ## Think Module Integration

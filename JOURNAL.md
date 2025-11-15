@@ -10,6 +10,7 @@ This document describes the layout of a **journal** directory where all audio, s
 - `facets/` – facet-specific organization folders described below.
 - `inbox/` – asynchronous messaging system for agent communications described below.
 - `tokens/` – token usage logs from AI model calls, organized by day (see below).
+- `apps/` – app-specific storage for configuration and data (see below).
 - `YYYYMMDD/` – individual day folders described below.
 
 ## User configuration
@@ -392,6 +393,14 @@ Usage fields (all optional depending on model capabilities):
 - `requests` – Number of API requests made (for batch operations)
 
 The logging system normalizes provider-specific formats (OpenAI, Gemini, Anthropic) into this unified schema for consistent cost tracking and analysis across all models.
+
+## App Storage
+
+The `apps/` directory provides storage space for Convey apps to persist configuration, data, and artifacts specific to this journal. Each app has its own directory at `apps/<app_name>/` where it can maintain app-specific state independent of the application codebase.
+
+Apps typically use `config.json` for journal-specific settings and create subdirectories for data storage (e.g., `cache/`, `data/`, `logs/`). This is distinct from the app metadata file (`apps/<app>/app.json` in the codebase) which defines icon, label, and facet support across all journals.
+
+See **APPS.md** for app storage utilities and access patterns.
 
 ## Day folder contents
 
