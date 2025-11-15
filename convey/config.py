@@ -346,3 +346,34 @@ def update_app_order() -> tuple[Any, int]:
     except Exception as e:
         logger.error(f"Failed to update app order: {e}", exc_info=True)
         return error_response("Failed to update app order", 500)
+
+
+@bp.route("/facets/select", methods=["POST"])
+def select_facet() -> tuple[Any, int]:
+    """POST /api/config/facets/select - Update selected facet.
+
+    Request body: {"facet": "work"} or {"facet": null}
+
+    Returns:
+        JSON success/error response
+    """
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response("Request body must be JSON", 400)
+
+        if "facet" not in data:
+            return error_response("Request must include 'facet' field", 400)
+
+        facet = data["facet"]
+        if facet is not None and not isinstance(facet, str):
+            return error_response("'facet' must be a string or null", 400)
+
+        # Update config
+        set_selected_facet(facet)
+
+        return success_response({"facet": facet})
+
+    except Exception as e:
+        logger.error(f"Failed to update selected facet: {e}", exc_info=True)
+        return error_response("Failed to update selected facet", 500)

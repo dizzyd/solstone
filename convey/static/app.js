@@ -257,6 +257,14 @@
 
     window.selectedFacet = facet;
     saveSelectedFacetToCookie(facet);
+
+    // Notify backend immediately (non-blocking, best-effort)
+    fetch('/api/config/facets/select', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({facet: facet})
+    }).catch(() => {}); // Ignore errors - cookie sync is fallback
+
     updateFacetSelection();
     updateAllFacetToggle();
 
