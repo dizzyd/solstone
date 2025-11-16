@@ -29,8 +29,7 @@ body {
 
 /* Add bottom margin when app-bar is present */
 body.has-app-bar .workspace {
-  /* Account for app bar height plus keyboard and safe area */
-  margin-bottom: calc(70px + env(safe-area-inset-bottom, 0px) + env(keyboard-inset-bottom, 0px));
+  margin-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Facet Bar (top) */
@@ -212,8 +211,7 @@ body.sidebar-open .facet-bar::after {
 
 /* When app bar is present, menu needs to stay above it */
 body.has-app-bar .menu-bar {
-  /* Account for app bar height plus keyboard and safe area */
-  bottom: calc(60px + env(safe-area-inset-bottom, 0px) + env(keyboard-inset-bottom, 0px));
+  bottom: calc(60px + env(safe-area-inset-bottom, 0px));
 }
 
 .menu-bar::before {
@@ -332,9 +330,9 @@ body.sidebar-open .menu-bar::before {
   border-radius: 20px;
   background: #f5f5f5;
   border: 1px solid #ddd;
-  cursor: pointer;
+  cursor: grab;
   font-size: 14px;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   user-select: none;
   position: relative;
 }
@@ -370,10 +368,14 @@ body.sidebar-open .menu-bar::before {
   margin-right: 8px;
   display: flex;
   align-items: center;
+  user-select: none;
+  pointer-events: none;
 }
 
 .facet-pill .emoji {
   display: block;
+  user-select: none;
+  pointer-events: none;
 }
 
 .facet-pill .facet-badge {
@@ -390,10 +392,36 @@ body.sidebar-open .menu-bar::before {
   text-align: center;
   line-height: 1.3;
   box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  user-select: none;
+  pointer-events: none;
+}
+
+.facet-pill > span {
+  user-select: none;
+  pointer-events: none;
 }
 
 .facet-pill.selected .facet-badge {
   background: #007bff;
+}
+
+/* Drag-and-drop states */
+.facet-pill:active {
+  cursor: grabbing;
+}
+
+.facet-pill.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+  transform: scale(1.05) rotate(2deg);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  z-index: 1000;
+  transition: none; /* Disable transitions while dragging */
+}
+
+.facet-pill.drag-over {
+  /* Subtle indicator only - actual reordering happens via DOM manipulation */
+  transform: scale(0.95);
 }
 
 /* Apps without facet support - all pills identical, no selection */
@@ -424,22 +452,30 @@ body.sidebar-open .menu-bar::before {
   bottom: 0;
   left: 0;
   right: 0;
-  background: white;
   z-index: 1000;
-  /* Use min-height instead of fixed height to allow growth */
   min-height: 60px;
-  box-sizing: border-box;
+  padding: 0 16px env(safe-area-inset-bottom, 0px) 16px;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  /* Padding: top right bottom left - bottom grows with keyboard and safe area */
-  padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + env(keyboard-inset-bottom, 0px)) 16px;
   gap: 12px;
-  overflow: hidden;
+  box-shadow: 0 -1px 0 var(--facet-border, #e0e0e0);
 }
 
 .app-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: white;
+  pointer-events: none;
+  z-index: -2;
+}
+
+.app-bar::after {
   content: '';
   position: absolute;
   top: 0;
@@ -450,24 +486,6 @@ body.sidebar-open .menu-bar::before {
   transition: background-color 0.3s ease;
   pointer-events: none;
   z-index: -1;
-}
-
-/* Border as pseudo-element for selective positioning */
-.app-bar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 60px;
-  right: 0;
-  height: 1px;
-  background: var(--facet-border, #e0e0e0);
-  transition: left 0.3s ease, background-color 0.3s ease;
-  pointer-events: none;
-}
-
-/* When sidebar open, border only where workspace is visible */
-body.sidebar-open .app-bar::after {
-  left: 240px;
 }
 
 /* Error log display */

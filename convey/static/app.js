@@ -133,6 +133,11 @@
       }
 
       pill.onclick = () => selectFacet(facet.name);
+
+      // Setup for drag-and-drop (attributes added here, listeners added in init)
+      pill.dataset.facetName = facet.name;
+      pill.draggable = true;
+
       facetPillsContainer.appendChild(pill);
     });
   }
@@ -278,6 +283,193 @@
     }));
   }
 
+  // Generic drag-and-drop setup for reordering items
+  function setupDragDrop(config) {
+    const {
+      container,           // Container element
+      itemSelector,        // '.menu-item' or '.facet-pill'
+      dataAttribute,       // 'appName' or 'facetName'
+      onReorder,          // Callback with new order array
+      preventDefault      // Optional click prevention
+    } = config;
+
+    let draggedItem = null;
+    let touchedItem = null;
+    let touchDragActive = false;
+    let isDragging = false;
+
+    // Helper: Get current order and trigger callback
+    function triggerReorder() {
+      const items = Array.from(container.querySelectorAll(itemSelector));
+      const order = items.map(item => item.dataset[dataAttribute]);
+      onReorder(order);
+    }
+
+    // Prevent text selection during drag (but allow drag to start)
+    container.addEventListener('selectstart', (e) => {
+      const target = e.target.closest(itemSelector);
+      if (target) {
+        e.preventDefault(); // Prevent text selection
+      }
+    });
+
+    // Click prevention (if needed)
+    if (preventDefault) {
+      container.addEventListener('click', (e) => {
+        if (isDragging) {
+          e.preventDefault();
+          e.stopPropagation();
+          isDragging = false;
+        }
+      }, true);
+    }
+
+    // Mouse drag-and-drop
+    container.addEventListener('dragstart', (e) => {
+      const target = e.target.closest(itemSelector);
+      if (!target) return;
+
+      draggedItem = target;
+      isDragging = true;
+
+      target.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', '');
+
+      // Create a better drag image
+      const dragImage = target.cloneNode(true);
+      dragImage.style.position = 'absolute';
+      dragImage.style.top = '-9999px';
+      dragImage.style.left = '-9999px';
+      dragImage.style.opacity = '0.8';
+      dragImage.style.transform = 'rotate(3deg)';
+      dragImage.style.pointerEvents = 'none';
+      document.body.appendChild(dragImage);
+
+      const rect = target.getBoundingClientRect();
+      e.dataTransfer.setDragImage(dragImage, rect.width / 2, rect.height / 2);
+
+      // Remove the clone after drag image is captured
+      setTimeout(() => dragImage.remove(), 0);
+    });
+
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const target = e.target.closest(itemSelector);
+      if (!target || target === draggedItem) return;
+
+      // Remove drag-over from all items
+      container.querySelectorAll(itemSelector).forEach(item => item.classList.remove('drag-over'));
+      target.classList.add('drag-over');
+
+      // Live reordering: move the dragged item in DOM as we drag over targets
+      const items = Array.from(container.querySelectorAll(itemSelector));
+      const draggedIndex = items.indexOf(draggedItem);
+      const targetIndex = items.indexOf(target);
+
+      if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+        if (draggedIndex < targetIndex) {
+          // Moving down/right: insert after target
+          container.insertBefore(draggedItem, target.nextSibling);
+        } else {
+          // Moving up/left: insert before target
+          container.insertBefore(draggedItem, target);
+        }
+      }
+    });
+
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+
+      // DOM already reordered during dragover, just trigger callback
+      triggerReorder();
+    });
+
+    container.addEventListener('dragend', (e) => {
+      const target = e.target.closest(itemSelector);
+      if (!target) return;
+
+      target.classList.remove('dragging');
+      container.querySelectorAll(itemSelector).forEach(item => item.classList.remove('drag-over'));
+
+      draggedItem = null;
+
+      // Reset isDragging after a short delay to allow click prevention
+      setTimeout(() => { isDragging = false; }, 100);
+    });
+
+    // Touch drag-and-drop
+    container.addEventListener('touchstart', (e) => {
+      const target = e.target.closest(itemSelector);
+      if (!target) return;
+
+      touchedItem = target;
+      touchDragActive = false;
+
+      // Wait 200ms to distinguish tap from drag
+      setTimeout(() => {
+        if (touchedItem === target) {
+          touchDragActive = true;
+          isDragging = true;
+          target.classList.add('dragging');
+        }
+      }, 200);
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (!touchDragActive || !touchedItem) return;
+      e.preventDefault();
+
+      const touch = e.touches[0];
+      const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = elementAtPoint?.closest(itemSelector);
+
+      // Remove drag-over from all items
+      container.querySelectorAll(itemSelector).forEach(item => item.classList.remove('drag-over'));
+
+      if (target && target !== touchedItem) {
+        target.classList.add('drag-over');
+
+        // Live reordering during touch drag
+        const items = Array.from(container.querySelectorAll(itemSelector));
+        const draggedIndex = items.indexOf(touchedItem);
+        const targetIndex = items.indexOf(target);
+
+        if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+          if (draggedIndex < targetIndex) {
+            container.insertBefore(touchedItem, target.nextSibling);
+          } else {
+            container.insertBefore(touchedItem, target);
+          }
+        }
+      }
+    }, { passive: false });
+
+    container.addEventListener('touchend', (e) => {
+      if (!touchDragActive || !touchedItem) {
+        touchedItem = null;
+        touchDragActive = false;
+        return;
+      }
+
+      const touch = e.changedTouches[0];
+      const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = elementAtPoint?.closest(itemSelector);
+
+      // DOM already reordered during touchmove, just trigger callback
+      triggerReorder();
+
+      // Cleanup
+      touchedItem.classList.remove('dragging');
+      container.querySelectorAll(itemSelector).forEach(item => item.classList.remove('drag-over'));
+      touchedItem = null;
+      touchDragActive = false;
+
+      // Reset isDragging after a short delay
+      setTimeout(() => { isDragging = false; }, 100);
+    }, { passive: true });
+  }
+
   // Collapse facet pills when container is too narrow
   let collapseTimeout = null;
   let isCollapsing = false;
@@ -359,6 +551,46 @@
     // Initial collapse check after DOM settles
     setTimeout(debouncedCollapseFacetPills, 0);
 
+    // Setup facet pill drag-and-drop
+    if (facetPillsContainer) {
+      setupDragDrop({
+        container: facetPillsContainer,
+        itemSelector: '.facet-pill',
+        dataAttribute: 'facetName',
+        preventDefault: true,  // Prevent facet selection on drag
+        onReorder: async (order) => {
+          // Update local array to match new order
+          activeFacets.sort((a, b) => {
+            return order.indexOf(a.name) - order.indexOf(b.name);
+          });
+
+          // Re-render pills (maintains selection state)
+          renderFacetChooser();
+
+          // Save to backend
+          try {
+            const response = await fetch('/api/config/facets/order', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order })
+            });
+
+            if (!response.ok) throw new Error('Failed to save facet order');
+          } catch (error) {
+            console.error('Failed to save facet order:', error);
+            if (window.AppServices?.notifications) {
+              window.AppServices.notifications.show({
+                app: 'system',
+                title: 'Failed to save facet order',
+                message: error.message,
+                autoDismiss: 5000
+              });
+            }
+          }
+        }
+      });
+    }
+
     // Hamburger and menu-bar elements
     const hamburger = document.getElementById('hamburger');
     const menuBar = document.querySelector('.menu-bar');
@@ -383,16 +615,8 @@
 
     // App ordering via drag-and-drop
     if (menuBar) {
-      let draggedItem = null;
-      let touchedItem = null;
-      let touchDragActive = false;
-      let isDragging = false;
-
       // Helper: Save app order to config
-      async function saveAppOrder() {
-        const menuItems = Array.from(menuBar.querySelectorAll('.menu-item'));
-        const order = menuItems.map(item => item.dataset.appName);
-
+      async function saveAppOrder(order) {
         try {
           const response = await fetch('/api/config/apps/order', {
             method: 'POST',
@@ -416,145 +640,14 @@
         }
       }
 
-      // Prevent navigation if drag occurred
-      menuBar.addEventListener('click', (e) => {
-        if (isDragging) {
-          e.preventDefault();
-          isDragging = false;
-        }
-      }, true);
-
-      // Mouse drag-and-drop
-      menuBar.addEventListener('dragstart', (e) => {
-        const target = e.target.closest('.menu-item');
-        if (!target) return;
-
-        draggedItem = target;
-        isDragging = true;
-
-        target.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', '');
+      // Setup drag-and-drop using shared helper
+      setupDragDrop({
+        container: menuBar,
+        itemSelector: '.menu-item',
+        dataAttribute: 'appName',
+        preventDefault: true,
+        onReorder: saveAppOrder
       });
-
-      menuBar.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const target = e.target.closest('.menu-item');
-        if (!target || target === draggedItem) return;
-
-        // Remove drag-over from all items
-        menuBar.querySelectorAll('.menu-item').forEach(item => item.classList.remove('drag-over'));
-        target.classList.add('drag-over');
-      });
-
-      menuBar.addEventListener('drop', (e) => {
-        e.preventDefault();
-
-        const target = e.target.closest('.menu-item');
-        if (!target || target === draggedItem) return;
-
-        // Reorder DOM
-        const menuItems = Array.from(menuBar.querySelectorAll('.menu-item'));
-        const draggedIndex = menuItems.indexOf(draggedItem);
-        const targetIndex = menuItems.indexOf(target);
-
-        if (draggedIndex < targetIndex) {
-          // Moving down: insert after target
-          menuBar.insertBefore(draggedItem, target.nextSibling);
-        } else {
-          // Moving up: insert before target
-          menuBar.insertBefore(draggedItem, target);
-        }
-
-        // Save order
-        saveAppOrder();
-      });
-
-      menuBar.addEventListener('dragend', (e) => {
-        const target = e.target.closest('.menu-item');
-        if (!target) return;
-
-        target.classList.remove('dragging');
-        menuBar.querySelectorAll('.menu-item').forEach(item => item.classList.remove('drag-over'));
-
-        draggedItem = null;
-
-        // Reset isDragging after a short delay to allow click prevention
-        setTimeout(() => { isDragging = false; }, 100);
-      });
-
-      // Touch drag-and-drop
-      menuBar.addEventListener('touchstart', (e) => {
-        const target = e.target.closest('.menu-item');
-        if (!target) return;
-
-        touchedItem = target;
-        touchDragActive = false;
-
-        // Wait 200ms to distinguish tap from drag
-        setTimeout(() => {
-          if (touchedItem === target) {
-            touchDragActive = true;
-            isDragging = true;
-            target.classList.add('dragging');
-          }
-        }, 200);
-      }, { passive: true });
-
-      menuBar.addEventListener('touchmove', (e) => {
-        if (!touchDragActive || !touchedItem) return;
-        e.preventDefault();
-
-        const touch = e.touches[0];
-        const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-        const target = elementAtPoint?.closest('.menu-item');
-
-        // Remove drag-over from all items
-        menuBar.querySelectorAll('.menu-item').forEach(item => item.classList.remove('drag-over'));
-
-        if (target && target !== touchedItem) {
-          target.classList.add('drag-over');
-        }
-      }, { passive: false });
-
-      menuBar.addEventListener('touchend', (e) => {
-        if (!touchDragActive || !touchedItem) {
-          touchedItem = null;
-          touchDragActive = false;
-          return;
-        }
-
-        const touch = e.changedTouches[0];
-        const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-        const target = elementAtPoint?.closest('.menu-item');
-
-        if (target && target !== touchedItem) {
-          // Reorder DOM
-          const menuItems = Array.from(menuBar.querySelectorAll('.menu-item'));
-          const draggedIndex = menuItems.indexOf(touchedItem);
-          const targetIndex = menuItems.indexOf(target);
-
-          if (draggedIndex < targetIndex) {
-            // Moving down: insert after target
-            menuBar.insertBefore(touchedItem, target.nextSibling);
-          } else {
-            // Moving up: insert before target
-            menuBar.insertBefore(touchedItem, target);
-          }
-
-          // Save order
-          saveAppOrder();
-        }
-
-        // Cleanup
-        touchedItem.classList.remove('dragging');
-        menuBar.querySelectorAll('.menu-item').forEach(item => item.classList.remove('drag-over'));
-        touchedItem = null;
-        touchDragActive = false;
-
-        // Reset isDragging after a short delay
-        setTimeout(() => { isDragging = false; }, 100);
-      }, { passive: true });
     }
 
     // All-facet toggle click - toggle between all-facet and specific facet
