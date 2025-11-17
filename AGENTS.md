@@ -46,7 +46,7 @@ sunstone/
 ├── convey/         # Web app frontend & backend
 │   ├── static/     # JavaScript and CSS assets
 │   ├── templates/  # Jinja2 HTML templates
-│   └── views/      # Flask view modules
+│   └── root.py     # Core Flask routes (app-specific views live in apps/, see APPS.md)
 ├── apps/           # Convey app extensions
 ├── muse/           # AI agent system and MCP tooling
 │   └── agents/     # Agent system prompts and configs
@@ -65,10 +65,12 @@ sunstone/
 └── AGENTS.md       # Development guidelines (this file)
 ```
 
+> Note: `fixtures/` is a data directory backing tests/ and intentionally lacks `__init__.py`.
+
 ### Package Organization
 
-* **Modules**: Each top-level folder is a Python package with `__init__.py`
-* **Imports**: Use absolute imports (e.g., `from think.utils import setup_cli`)
+* **Modules**: Each top-level folder is a Python package with `__init__.py` unless it is data-only (e.g., `fixtures/`)
+* **Imports**: Prefer absolute imports (e.g., `from think.utils import setup_cli`) whenever feasible
 * **Entry Points**: Defined in `pyproject.toml` under `[project.scripts]` - see this file for the full list of available commands
 * **Journal**: Data stored under `JOURNAL_PATH` environment variable location always loaded from .env
 * **Calling**: When calling other modules as a separate process always use their command name and never call using `python -m ...` (e.g., use `think-indexer`, NOT `python -m think.indexer`)
@@ -90,12 +92,8 @@ sunstone/
 * Cortex orchestrates agent execution, managing requests and event distribution
 * Agents process via `muse-agents` command with persona configurations
 
-**Main Entry Points**:
-* `observe-gnome` - Multimodal capture (requires Linux/GNOME)
-* `think-indexer` - Build searchable database
-* `convey` - Launch web UI
-* `muse-cortex` - Agent system server
-* See `pyproject.toml` `[project.scripts]` for complete command list
+**Command Reference**:
+See `pyproject.toml` `[project.scripts]` for the authoritative, current list of CLI entry points (e.g., `sunstone`, `think-*`, `observe-*`, `muse-*`, `convey*`).
 
 ---
 
@@ -127,9 +125,9 @@ The `fixtures/journal/` directory contains a complete mock journal structure wit
 * **Private Members**: `_leading_underscore`
 
 ### Code Organization
-* **Imports**: Absolute only, grouped (stdlib, third-party, local), one per line
+* **Imports**: Prefer absolute imports, grouped (stdlib, third-party, local), one per line
 * **Docstrings**: Google or NumPy style with parameter/return descriptions
-* **Type Hints**: Required on function signatures
+* **Type Hints**: Should be included on function signatures (legacy helpers may still need updates)
 * **File Structure**: Constants → helpers → classes → main/CLI
 
 ---
@@ -193,8 +191,9 @@ make check-all   # Format, lint, and test (run before commit)
 ### Documentation & References
 * Update README files for new functionality
 * Code comments explain "why" not "what"
-* Type hints required on function signatures
+* Function signatures should include type hints; highlight gaps when touching older modules
 * **See subsystem docs**: JOURNAL.md, APPS.md, CORTEX.md, CALLOSUM.md, CRUMBS.md
+* **App/UI work**: APPS.md is required reading before modifying anything under `apps/` (where HTML/JS lives)
 
 ---
 
