@@ -5,7 +5,7 @@ pre { background:#f5f5f5; padding:0.5em; }
 
 /* Config form styles */
 .config-section { max-width: 600px; margin-top: 1em; }
-.config-section h3 { color: #333; font-size: 1.3em; margin: 1.5em 0 1em 0; border-bottom: 2px solid #eee; padding-bottom: 0.5em; }
+.config-section h2 { color: #333; font-size: 1.5em; margin: 0 0 1.5em 0; font-weight: 600; }
 .form-group { margin-bottom: 1.5em; }
 .form-group label { display: block; font-weight: 600; color: #333; margin-bottom: 0.5em; font-size: 0.95em; }
 .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.6em 0.75em; border: 2px solid #ddd; border-radius: 8px; font-size: 0.95em; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; box-sizing: border-box; }
@@ -16,13 +16,74 @@ pre { background:#f5f5f5; padding:0.5em; }
 .config-status.success { background: #d4edda; color: #155724; display: block; }
 .config-status.error { background: #f8d7da; color: #721c24; display: block; }
 .config-status.saving { background: #d1ecf1; color: #0c5460; display: block; }
+
+/* Facet section (no separator needed since it shows exclusively) */
+#facetConfig { margin-top: 0; }
+
+/* Editable field pattern (double-tap to edit) */
+.editable-field { min-height: 2.5em; display: flex; align-items: center; }
+.editable-field .field-display { cursor: pointer; padding: 0.6em 0.75em; border: 2px solid transparent; border-radius: 8px; transition: all 0.2s; flex: 1; min-height: 2.5em; display: flex; align-items: center; }
+.editable-field .field-display:hover { background: #f5f5f5; border-color: #ddd; }
+.editable-field .field-input { width: 100%; padding: 0.6em 0.75em; border: 2px solid var(--facet-color, #667eea); border-radius: 8px; font-size: 0.95em; font-family: inherit; }
+.editable-field .field-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+/* Emoji picker */
+.emoji-picker-container { display: flex; flex-direction: column; gap: 0.75em; }
+.emoji-display { font-size: 3em; cursor: pointer; display: inline-block; padding: 0.2em 0.3em; border-radius: 12px; transition: all 0.2s; user-select: none; width: fit-content; }
+.emoji-display:hover { transform: scale(1.1); background: #f5f5f5; }
+.emoji-input { width: 100%; max-width: 200px; padding: 0.6em 0.75em; border: 2px solid #ddd; border-radius: 8px; font-size: 1.2em; text-align: center; }
+.emoji-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+/* Color picker trigger */
+.color-picker-trigger { display: flex; align-items: center; gap: 1em; cursor: pointer; padding: 0.6em 0.75em; border: 2px solid #ddd; border-radius: 8px; width: fit-content; transition: all 0.2s; }
+.color-picker-trigger:hover { background: #f5f5f5; border-color: #999; }
+.color-preview { width: 40px; height: 40px; border-radius: 8px; border: 2px solid #ddd; }
+.color-picker-trigger span { font-family: monospace; font-size: 1em; font-weight: 600; }
+
+/* Color picker modal */
+.color-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+.color-modal-content { background: white; margin: 5% auto; padding: 2em; border-radius: 12px; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); position: relative; }
+.color-close { position: absolute; right: 1em; top: 1em; font-size: 2em; font-weight: bold; color: #999; cursor: pointer; line-height: 1; transition: color 0.2s; }
+.color-close:hover { color: #333; }
+.color-modal h3 { margin: 0 0 1.5em 0; color: #333; }
+.color-modal h4 { margin: 1.5em 0 0.75em 0; color: #333; font-size: 1em; }
+
+/* Color swatches grid */
+.color-swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75em; margin-bottom: 1.5em; }
+.color-swatch { width: 100%; aspect-ratio: 1; border-radius: 8px; cursor: pointer; border: 3px solid transparent; transition: all 0.2s; }
+.color-swatch:hover { transform: scale(1.1); border-color: #333; }
+.color-swatch.selected { border-color: #000; box-shadow: 0 0 0 2px #fff, 0 0 0 5px #000; }
+
+/* Custom color input */
+.custom-color { margin-bottom: 1.5em; }
+.custom-color label { display: block; font-weight: 600; margin-bottom: 0.5em; color: #333; }
+.color-input-group { display: flex; gap: 0.75em; align-items: center; }
+.custom-color input[type="color"] { width: 60px; height: 45px; padding: 0.2em; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; }
+.custom-color input[type="color"]:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+.custom-color input[type="text"] { flex: 1; padding: 0.6em 0.75em; border: 2px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 1em; }
+.custom-color input[type="text"]:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+/* Preview section */
+.color-preview-section { padding: 1em; background: #f8f8f8; border-radius: 8px; margin-bottom: 1.5em; }
+.settings-preview { margin-top: 2em; padding: 1.5em; background: #f8f8f8; border-radius: 8px; }
+.settings-preview label { display: block; font-weight: 600; margin-bottom: 1em; color: #333; }
+
+/* Facet pill preview */
+.preview-pill, .modal-preview-pill { display: inline-flex; align-items: center; gap: 0.5em; padding: 0.6em 1.2em; border-radius: 20px; border: 2px solid #667eea; background: rgba(102, 126, 234, 0.1); font-weight: 500; font-size: 1em; }
+.preview-emoji, .modal-preview-emoji { font-size: 1.3em; }
+.preview-title, .modal-preview-title { color: #667eea; }
+
+/* Save button */
+.save-color-btn { width: 100%; padding: 0.75em 1.5em; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.save-color-btn:hover { background: #5568d3; }
+.save-color-btn:active { transform: scale(0.98); }
 </style>
 
 <div class="settings-content">
-  <h2>Journal Configuration</h2>
   <div class="content" id="config">
-    <div class="config-section">
-      <h3>Identity</h3>
+    <!-- Identity Section (shown in all-facet mode) -->
+    <div class="config-section" id="identityConfig">
+      <h2>Journal Configuration</h2>
       <div class="form-group">
         <label for="config-name">Full Name</label>
         <input type="text" id="config-name" data-field="name" placeholder="Your full name">
@@ -131,6 +192,75 @@ pre { background:#f5f5f5; padding:0.5em; }
       </div>
       <div id="config-status" class="config-status"></div>
     </div>
+
+    <!-- Facet Configuration Section -->
+    <div class="config-section" id="facetConfig" style="display:none;">
+      <h2>Facet Settings: <span id="facetName"></span></h2>
+
+      <div class="form-group">
+        <label>Title</label>
+        <div class="editable-field" id="facetTitleField" data-facet-field="title">
+          <span class="field-display" id="facetTitleDisplay">Loading...</span>
+          <input type="text" class="field-input" id="facetTitleInput" style="display:none;">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <div class="editable-field" id="facetDescField" data-facet-field="description">
+          <span class="field-display" id="facetDescDisplay">No description set</span>
+          <textarea class="field-input" id="facetDescInput" rows="3" style="display:none;"></textarea>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Icon</label>
+        <div class="emoji-picker-container">
+          <div class="emoji-display" id="emojiDisplay">📦</div>
+          <input type="text" id="emojiInput" class="emoji-input" maxlength="4" placeholder="Paste emoji here" style="display:none;">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Theme Color</label>
+        <div class="color-picker-trigger" id="colorTrigger">
+          <div class="color-preview" id="colorPreview"></div>
+          <span id="colorHexDisplay">#667eea</span>
+        </div>
+      </div>
+
+      <div id="facet-config-status" class="config-status"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Color Picker Modal -->
+<div id="colorPickerModal" class="color-modal">
+  <div class="color-modal-content">
+    <span class="color-close">&times;</span>
+    <h3>Choose Theme Color</h3>
+
+    <div class="color-swatches" id="colorSwatches">
+      <!-- Color swatches will be populated by JavaScript -->
+    </div>
+
+    <div class="custom-color">
+      <label for="customColorInput">Custom Color:</label>
+      <div class="color-input-group">
+        <input type="color" id="customColorPicker" value="#667eea">
+        <input type="text" id="customColorInput" placeholder="#667eea" maxlength="7">
+      </div>
+    </div>
+
+    <div class="color-preview-section">
+      <h4>Preview</h4>
+      <div class="facet-pill modal-preview-pill" id="modalPreview">
+        <span class="emoji modal-preview-emoji" id="modalPreviewEmoji">📦</span>
+        <span class="modal-preview-title" id="modalPreviewTitle">Facet Name</span>
+      </div>
+    </div>
+
+    <button class="save-color-btn" id="saveColorBtn">Apply Color</button>
   </div>
 </div>
 
@@ -312,6 +442,384 @@ function showConfigStatus(msg, type){
 function hideConfigStatus(){
   const status = document.getElementById('config-status');
   status.className = 'config-status';
+}
+
+// ========== FACET CONFIGURATION ==========
+let currentFacetConfig = null;
+let facetSaveTimeout = null;
+
+// Listen for facet switches
+window.addEventListener('facet.switch', (e) => {
+  const facet = e.detail.facet;
+  const identityConfig = document.getElementById('identityConfig');
+  const facetConfig = document.getElementById('facetConfig');
+
+  if (facet) {
+    // Facet selected: show ONLY facet settings
+    identityConfig.style.display = 'none';
+    facetConfig.style.display = 'block';
+    loadFacetConfig(facet);
+  } else {
+    // All-facet mode: show ONLY journal settings
+    identityConfig.style.display = 'block';
+    facetConfig.style.display = 'none';
+  }
+});
+
+// Load facet configuration
+async function loadFacetConfig(facetName) {
+  try {
+    const response = await fetch(`/app/settings/api/facet/${facetName}`);
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    currentFacetConfig = data.config;
+    populateFacetForm(facetName, data.config);
+    setupFacetEditing();
+  } catch (err) {
+    console.error('Error loading facet config:', err);
+    showFacetStatus('Error loading facet configuration', 'error');
+  }
+}
+
+// Populate facet form with data
+function populateFacetForm(facetName, config) {
+  document.getElementById('facetName').textContent = facetName;
+
+  // Title
+  const title = config.title || facetName;
+  document.getElementById('facetTitleDisplay').textContent = title;
+  document.getElementById('facetTitleInput').value = title;
+
+  // Description
+  const description = config.description || 'No description set';
+  document.getElementById('facetDescDisplay').textContent = description;
+  document.getElementById('facetDescInput').value = config.description || '';
+
+  // Emoji
+  const emoji = config.emoji || '📦';
+  document.getElementById('emojiDisplay').textContent = emoji;
+
+  // Color
+  const color = config.color || '#667eea';
+  document.getElementById('colorPreview').style.backgroundColor = color;
+  document.getElementById('colorHexDisplay').textContent = color;
+}
+
+// Helper: convert hex to rgba
+function hexToRgba(hex, alpha) {
+  if (!hex || hex.length < 6) return `rgba(128,128,128,${alpha})`;
+  const r = parseInt(hex.substring(1,3), 16);
+  const g = parseInt(hex.substring(3,5), 16);
+  const b = parseInt(hex.substring(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Setup facet editing interactions
+function setupFacetEditing() {
+  // Double-tap editing for title and description
+  setupDoubleTapEdit('facetTitleField', 'facetTitleDisplay', 'facetTitleInput', 'title');
+  setupDoubleTapEdit('facetDescField', 'facetDescDisplay', 'facetDescInput', 'description');
+
+  // Emoji picker
+  setupEmojiPicker();
+
+  // Color picker
+  setupColorPicker();
+}
+
+// Setup double-tap editing
+function setupDoubleTapEdit(fieldId, displayId, inputId, configKey) {
+  const field = document.getElementById(fieldId);
+  const display = document.getElementById(displayId);
+  const input = document.getElementById(inputId);
+
+  let tapTimeout = null;
+
+  display.addEventListener('click', () => {
+    if (!tapTimeout) {
+      tapTimeout = setTimeout(() => tapTimeout = null, 300);
+    } else {
+      clearTimeout(tapTimeout);
+      tapTimeout = null;
+      // Double-tap detected - enable editing
+      display.style.display = 'none';
+      input.style.display = 'block';
+      input.focus();
+      input.select();
+    }
+  });
+
+  // Save on blur
+  input.addEventListener('blur', () => {
+    const value = input.value.trim();
+    if (configKey === 'description' || value) {  // Description can be empty
+      display.textContent = value || (configKey === 'description' ? 'No description set' : currentFacetConfig.title);
+      display.style.display = 'flex';
+      input.style.display = 'none';
+
+      // Save to backend
+      saveFacetField(configKey, value);
+    } else {
+      // Revert if empty (for title)
+      input.value = display.textContent;
+      display.style.display = 'flex';
+      input.style.display = 'none';
+    }
+  });
+
+  // Save on Enter (not for textarea)
+  if (input.tagName !== 'TEXTAREA') {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      }
+    });
+  }
+}
+
+// Setup emoji picker
+function setupEmojiPicker() {
+  const emojiDisplay = document.getElementById('emojiDisplay');
+  const emojiInput = document.getElementById('emojiInput');
+
+  emojiDisplay.addEventListener('click', () => {
+    emojiInput.style.display = 'block';
+    emojiInput.focus();
+    emojiInput.select();
+  });
+
+  emojiInput.addEventListener('blur', () => {
+    const value = emojiInput.value.trim();
+    if (value && isEmoji(value)) {
+      emojiDisplay.textContent = value;
+      saveFacetField('emoji', value);
+      emojiInput.style.display = 'none';
+      emojiInput.value = '';
+    } else if (value) {
+      showFacetStatus('Please enter a valid emoji', 'error');
+      setTimeout(() => hideFacetStatus(), 2000);
+    } else {
+      emojiInput.style.display = 'none';
+    }
+  });
+
+  emojiInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      emojiInput.blur();
+    }
+  });
+}
+
+// Check if string contains emoji
+function isEmoji(str) {
+  return /\p{Emoji}/u.test(str);
+}
+
+// Setup color picker
+function setupColorPicker() {
+  const modal = document.getElementById('colorPickerModal');
+  const trigger = document.getElementById('colorTrigger');
+  const closeBtn = document.querySelector('.color-close');
+  const saveBtn = document.getElementById('saveColorBtn');
+  const swatchesContainer = document.getElementById('colorSwatches');
+  const customColorPicker = document.getElementById('customColorPicker');
+  const customInput = document.getElementById('customColorInput');
+
+  let selectedColor = currentFacetConfig.color || '#667eea';
+
+  // Populate color swatches
+  const colors = window.CATEGORY_COLORS || [
+    '#007bff','#28a745','#17a2b8','#ffc107','#6f42c1','#fd7e14',
+    '#e83e8c','#6c757d','#20c997','#ff5722','#9c27b0','#795548'
+  ];
+
+  swatchesContainer.innerHTML = '';
+  colors.forEach(color => {
+    const swatch = document.createElement('div');
+    swatch.className = 'color-swatch';
+    swatch.style.backgroundColor = color;
+    swatch.dataset.color = color;
+    swatch.addEventListener('click', () => selectColorSwatch(color));
+    swatchesContainer.appendChild(swatch);
+  });
+
+  // Open modal
+  trigger.addEventListener('click', () => {
+    selectedColor = currentFacetConfig.color || '#667eea';
+    customColorPicker.value = selectedColor;
+    customInput.value = selectedColor;
+    updateModalPreview(selectedColor);
+    updateSwatchSelection(selectedColor);
+    modal.style.display = 'block';
+  });
+
+  // Close modal
+  closeBtn.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+
+  window.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.style.display = 'none';
+    }
+  });
+
+  // Swatch selection
+  function selectColorSwatch(color) {
+    selectedColor = color;
+    customColorPicker.value = color;
+    customInput.value = color;
+    updateModalPreview(color);
+    updateSwatchSelection(color);
+  }
+
+  // HTML color picker input
+  customColorPicker.addEventListener('input', (e) => {
+    const value = e.target.value;
+    selectedColor = value;
+    customInput.value = value;
+    updateModalPreview(value);
+    updateSwatchSelection(value);
+  });
+
+  // Custom hex text input
+  customInput.addEventListener('input', (e) => {
+    const value = e.target.value.trim();
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+      selectedColor = value;
+      customColorPicker.value = value;
+      updateModalPreview(value);
+      updateSwatchSelection(value);
+    }
+  });
+
+  // Update modal preview
+  function updateModalPreview(color) {
+    const preview = document.getElementById('modalPreview');
+    const emoji = document.getElementById('emojiDisplay').textContent;
+    const title = document.getElementById('facetTitleDisplay').textContent;
+
+    document.getElementById('modalPreviewEmoji').textContent = emoji;
+    document.getElementById('modalPreviewTitle').textContent = title;
+    preview.style.borderColor = color;
+    preview.style.backgroundColor = hexToRgba(color, 0.1);
+    document.querySelector('.modal-preview-title').style.color = color;
+  }
+
+  // Update swatch selection visual
+  function updateSwatchSelection(color) {
+    document.querySelectorAll('.color-swatch').forEach(swatch => {
+      if (swatch.dataset.color.toLowerCase() === color.toLowerCase()) {
+        swatch.classList.add('selected');
+      } else {
+        swatch.classList.remove('selected');
+      }
+    });
+  }
+
+  // Save color
+  saveBtn.addEventListener('click', () => {
+    if (/^#[0-9A-Fa-f]{6}$/.test(selectedColor)) {
+      document.getElementById('colorPreview').style.backgroundColor = selectedColor;
+      document.getElementById('colorHexDisplay').textContent = selectedColor;
+      saveFacetField('color', selectedColor);
+      modal.style.display = 'none';
+    } else {
+      showFacetStatus('Please enter a valid hex color (e.g., #667eea)', 'error');
+    }
+  });
+}
+
+// Save facet field with debounce
+function saveFacetField(field, value) {
+  clearTimeout(facetSaveTimeout);
+  facetSaveTimeout = setTimeout(async () => {
+    const facetName = window.selectedFacet;
+    if (!facetName) return;
+
+    try {
+      const response = await fetch(`/app/settings/api/facet/${facetName}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({[field]: value})
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        currentFacetConfig = data.config;
+
+        // Show success notification
+        if (window.AppServices && window.AppServices.notifications) {
+          window.AppServices.notifications.show({
+            app: 'settings',
+            icon: '✅',
+            title: 'Facet Updated',
+            message: `${field.charAt(0).toUpperCase() + field.slice(1)} saved successfully`,
+            dismissible: true,
+            autoDismiss: 2000
+          });
+        } else {
+          showFacetStatus('Saved', 'success');
+          setTimeout(() => hideFacetStatus(), 2000);
+        }
+
+        // Trigger facet data refresh in parent app
+        if (window.location) {
+          window.location.reload();
+        }
+      } else {
+        throw new Error(data.error || 'Save failed');
+      }
+    } catch (err) {
+      console.error('Error saving facet field:', err);
+      if (window.AppServices && window.AppServices.notifications) {
+        window.AppServices.notifications.show({
+          app: 'settings',
+          icon: '❌',
+          title: 'Save Failed',
+          message: err.message || 'Error saving facet configuration',
+          dismissible: true,
+          autoDismiss: 5000
+        });
+      } else {
+        showFacetStatus('Error: ' + err.message, 'error');
+      }
+    }
+  }, 500);
+}
+
+// Status display helpers
+function showFacetStatus(msg, type) {
+  const status = document.getElementById('facet-config-status');
+  status.textContent = msg;
+  status.className = 'config-status ' + type;
+}
+
+function hideFacetStatus() {
+  const status = document.getElementById('facet-config-status');
+  status.className = 'config-status';
+}
+
+// Initialize visibility based on current facet selection
+const identityConfig = document.getElementById('identityConfig');
+const facetConfig = document.getElementById('facetConfig');
+
+if (window.selectedFacet) {
+  // Facet selected: show ONLY facet settings
+  identityConfig.style.display = 'none';
+  facetConfig.style.display = 'block';
+  loadFacetConfig(window.selectedFacet);
+} else {
+  // All-facet mode: show ONLY journal settings
+  identityConfig.style.display = 'block';
+  facetConfig.style.display = 'none';
 }
 
 // Load config on page load
