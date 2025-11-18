@@ -332,51 +332,7 @@ def add_module_stubs(request, monkeypatch):
 
         sf_mod.write = write
         sys.modules["soundfile"] = sf_mod
-    ws_mod = types.ModuleType("websockets")
-
-    class DummyWS:
-        async def send(self, data):
-            return None
-
-        async def wait_closed(self):
-            return None
-
-    class ConnectionClosed(Exception):
-        pass
-
-    class ClientConnection:
-        def __init__(self, *a, **k):
-            pass
-
-    client_mod = types.ModuleType("websockets.client")
-    client_mod.ClientConnection = ClientConnection
-
-    async def connect(*a, **k):
-        return ClientConnection()
-
-    client_mod.connect = connect
-
-    async def serve(handler, host, port):
-        class Server:
-            def __init__(self):
-                self.ws = DummyWS()
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, exc_type, exc, tb):
-                return False
-
-        return Server()
-
-    ws_mod.WebSocketServerProtocol = DummyWS
-    ws_mod.serve = serve
-    ws_mod.ConnectionClosed = ConnectionClosed
-    ws_mod.client = client_mod
-    sys.modules["websockets"] = ws_mod
-    sys.modules["websockets.client"] = client_mod
     for name in [
-        "librosa",
         "noisereduce",
         "silero_vad",
         "watchdog.events",

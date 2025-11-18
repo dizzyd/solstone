@@ -45,7 +45,6 @@ dependencies = [
     "dbus-next",
     "desktop-notifier",
     "av",
-    "imagehash",
 
     "sqlite-utils",
     "openai>=1.2.0",
@@ -65,14 +64,11 @@ full = [
     "silero-vad",
     "deepfilternet",
     "torch",
-    "librosa",
     "scipy",
-    "websockets",
     "opencv-python",
     "scikit-image",
     "PyGObject",
     "watchdog",
-    "pydub",
 ]
 
 dev = [
