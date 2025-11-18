@@ -17,19 +17,6 @@
     <span class="star-toggle" data-app-name="{{ app_name }}">{{ '★' if is_starred else '☆' }}</span>
     <span class="drag-handle" draggable="true">⋮</span>
   </a>
-  {# Submenus temporarily disabled - will be reimplemented differently #}
-  {# {% if app_data.get('submenu') %}
-  <div class="submenu">
-    {% for item in app_data['submenu'] %}
-    <a href="{{ item['path'] }}" class="submenu-item" {% if item.get('facet') %}data-facet="{{ item['facet'] }}"{% endif %}>
-      <span>{{ item['label'] }}</span>
-      {% if item.get('count') and item['count'] > 0 %}
-      <span class="submenu-badge">{{ item['count'] }}</span>
-      {% endif %}
-    </a>
-    {% endfor %}
-  </div>
-  {% endif %} #}
   {% endfor %}
   <div class="menu-expander">⏷</div>
 </div>

@@ -63,14 +63,12 @@ def register_app_context(app: Flask, registry: AppRegistry) -> None:
         facets = _get_facets_data()
         selected_facet = _get_selected_facet()
 
-        # Build apps dict for menu-bar (includes submenu items)
+        # Build apps dict for menu-bar
         apps_dict = {}
         for app_instance in registry.apps.values():
-            submenu = app_instance.get_submenu_items(facets, selected_facet)
             apps_dict[app_instance.name] = {
                 "icon": app_instance.icon,
                 "label": app_instance.label,
-                "submenu": submenu if submenu else None,
             }
 
         # Apply custom ordering from config

@@ -94,14 +94,6 @@ body.sidebar-open .facet-bar::after {
   background: rgba(0,0,0,0.05);
 }
 
-.facet-bar .app-icon {
-  font-size: 28px;
-  padding: 4px;
-  flex-shrink: 0;
-  border-radius: 4px;
-  text-decoration: none;
-}
-
 .facet-bar .all-facet-toggle {
   font-size: 20px;
   padding: 4px 8px;
@@ -371,46 +363,6 @@ body.sidebar-open .menu-bar .menu-item .drag-handle:active {
   margin-bottom: 8px;
 }
 
-.menu-bar .submenu {
-  display: none;
-  /* Temporarily disabled - will be reimplemented differently */
-  /* display: flex; */
-  /* flex-direction: column; */
-  /* background: rgba(0,0,0,0.03); */
-  /* border-left: 2px solid rgba(102, 126, 234, 0.3); */
-}
-
-.menu-bar .submenu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px 6px 44px;
-  font-size: 13px;
-  color: inherit;
-  text-decoration: none;
-  transition: background 0.2s;
-  border-bottom: none;
-  white-space: nowrap;
-}
-
-.menu-bar .submenu-item:hover {
-  background: var(--facet-bg);
-}
-
-.menu-bar .submenu-badge {
-  display: inline-block;
-  background: var(--facet-color);
-  color: white;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 5px;
-  border-radius: 8px;
-  min-width: 18px;
-  text-align: center;
-  line-height: 1.2;
-  margin-left: auto;
-}
-
 /* Menu expander (down arrow below last visible app icon) */
 .menu-bar .menu-expander {
   padding: 4px 0;
@@ -590,16 +542,6 @@ body.menu-icons-expanded .menu-bar {
 .facet-bar.facets-disabled .facet-pill:hover {
   transform: none;
   box-shadow: none;
-}
-
-/* Disable app-icon interaction when facets are disabled */
-.facet-bar.facets-disabled .app-icon {
-  cursor: default;
-  pointer-events: none;
-}
-
-.facet-bar.facets-disabled .app-icon:hover {
-  background: none;
 }
 
 /* App Bar (bottom) */

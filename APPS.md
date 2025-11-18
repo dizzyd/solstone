@@ -36,7 +36,7 @@ apps/my_app/
 ├── workspace.html     # Required: Main content template
 ├── routes.py          # Optional: Flask blueprint (only if custom routes needed)
 ├── app.json          # Optional: Metadata (icon, label, facet support)
-├── hooks.py          # Optional: Dynamic submenu and badge logic
+├── hooks.py          # Optional: Dynamic badge logic
 ├── app_bar.html      # Optional: Bottom bar controls (forms, buttons)
 └── background.html   # Optional: Background JavaScript service
 ```
@@ -48,7 +48,7 @@ apps/my_app/
 | `workspace.html` | **Yes** | Main app content (rendered in container) |
 | `routes.py` | No | Flask blueprint for custom routes (API endpoints, forms, etc.) |
 | `app.json` | No | Icon, label, facet support overrides |
-| `hooks.py` | No | Submenu items and facet badge counts |
+| `hooks.py` | No | Facet badge counts |
 | `app_bar.html` | No | Bottom fixed bar for app controls |
 | `background.html` | No | Background service (WebSocket listeners) |
 
@@ -141,26 +141,12 @@ Override default icon, label, and facet support.
 
 ### 4. `hooks.py` - Dynamic Logic
 
-Provide submenu items and facet badge counts that update dynamically.
+Provide facet badge counts that update dynamically.
 
 **Functions:**
-- `get_submenu_items(facets, selected_facet)` - Returns list of submenu item dicts
-  - Keys: `label` (required), `path` (required), `count` (optional), `facet` (optional)
-  - `facet` attribute enables facet selection on click (same as facet pills)
 - `get_facet_counts(facets, selected_facet)` - Returns dict mapping facet name to count
   - Used for badge counts on facet pills
-
-**Submenu Items:**
-- Appear below your app in the menu bar when expanded
-- Optional `count` shows badge next to label
-- Optional `facet` attribute enables facet selection on click
-- Without `facet`, items navigate directly to `path`
-
-**Facet Counts:**
-- Show badge on facet pills in the top bar
-- Useful for showing counts per facet (e.g., pending todos, unread messages)
-
-**Reference implementation:** `apps/inbox/hooks.py` - Shows both functions with real badge logic
+  - Useful for showing counts per facet (e.g., pending todos, unread messages)
 
 ### 5. `app_bar.html` - Bottom Bar Controls
 
@@ -185,7 +171,6 @@ JavaScript service that runs globally, even when app is not active.
 **Core Methods:**
 - `AppServices.register(appName, service)` - Register background service
 - `AppServices.updateBadge(appName, facetName, count)` - Update facet badge
-- `AppServices.updateSubmenu(appName, items)` - Update submenu items
 
 **Notification Methods:**
 - `AppServices.notifications.show(options)` - Show persistent notification card
@@ -300,7 +285,7 @@ Apps can access and control facet selection through a uniform API:
 **Facet Modes:**
 - **all-facet mode**: `window.selectedFacet === null`, show content from all facets
 - **specific-facet mode**: `window.selectedFacet === "work"`, show only that facet's content
-- Selection persisted via cookie, synchronized across pills and submenu items
+- Selection persisted via cookie, synchronized across facet pills
 
 **See implementation:** `convey/static/app.js` - Facet switching logic and event dispatch
 
@@ -396,7 +381,7 @@ Use `current_app.logger` from Flask for debugging. See `apps/todos/routes.py` fo
 3. **Validate input** on all POST endpoints (use `error_response`)
 4. **Check facet selection** when loading facet-specific data
 5. **Use state.journal_root** for journal path (always available)
-6. **Provide hooks** if app has submenu or facet counts
+6. **Provide hooks** if app has facet counts
 7. **Handle errors gracefully** with flash messages or JSON errors
 8. **Test facet switching** to ensure content updates correctly
 9. **Use background services** for WebSocket event handling
@@ -412,7 +397,7 @@ Study these reference implementations:
 - **`apps/dev/`** - Simple app (no routes.py, custom styling and notifications)
 - **`apps/live/`** - Minimal app (no routes.py, event dashboard)
 - **`apps/todos/`** - Full-featured (custom routes with date navigation, forms, AJAX)
-- **`apps/inbox/`** - API-driven (custom routes, submenu with badges via hooks)
+- **`apps/inbox/`** - API-driven (custom routes, message management)
 - **`apps/search/`** - API-only (custom routes for search, no index route)
 - **`apps/tokens/`** - Navigation (index redirects to today, app bar with controls)
 

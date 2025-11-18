@@ -26,9 +26,6 @@ app.json format (all optional):
     }
 
 hooks.py format (all functions optional):
-    def get_submenu_items(facets, selected_facet):
-        return [{"label": "...", "path": "...", "count": 0, "facet": "..."}]
-
     def get_facet_counts(facets, selected_facet):
         return {"facet_name": count}
 
@@ -86,29 +83,6 @@ class App:
     def get_background_template(self) -> Optional[str]:
         """Return path to background service template, or None."""
         return self.background_template
-
-    def get_submenu_items(
-        self, facets: list[dict], selected_facet: Optional[str] = None
-    ) -> list[dict]:
-        """Return submenu items for the menu-bar.
-
-        Calls hooks.get_submenu_items() if defined, otherwise returns empty list.
-
-        Args:
-            facets: List of active facet dicts with name, title, color, emoji
-            selected_facet: Currently selected facet name, or None
-
-        Returns:
-            List of dicts with:
-                - label: Display text
-                - path: URL path
-                - count: Optional badge count (int)
-                - facet: Optional facet name for data-facet attribute
-        """
-        hook = self.hooks.get("get_submenu_items")
-        if hook:
-            return hook(facets, selected_facet)
-        return []
 
     def get_facet_counts(
         self, facets: list[dict], selected_facet: Optional[str] = None
@@ -306,7 +280,7 @@ class AppRegistry:
             hooks = {}
 
             # Look for known hook functions
-            for hook_name in ["get_submenu_items", "get_facet_counts"]:
+            for hook_name in ["get_facet_counts"]:
                 if hasattr(hooks_module, hook_name):
                     hooks[hook_name] = getattr(hooks_module, hook_name)
 

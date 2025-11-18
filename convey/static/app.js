@@ -929,21 +929,6 @@
         updateAllFacetToggle(false);
       });
     }
-
-    // Handle submenu items with data-facet attribute
-    document.querySelectorAll('.submenu-item[data-facet]').forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.preventDefault();
-        const facetName = item.getAttribute('data-facet');
-        const targetPath = item.getAttribute('href');
-
-        // Select the facet (sets cookie and updates UI)
-        selectFacet(facetName);
-
-        // Navigate to the path
-        window.location.href = targetPath;
-      });
-    });
   }
 
   // Expose selectFacet globally for notifications and other services
@@ -1003,21 +988,6 @@ window.AppServices = {
         badge.textContent = count || '';
         badge.style.display = count > 0 ? 'inline-block' : 'none';
       }
-
-      // Update submenu badge for facet
-      const submenuItem = document.querySelector(
-        `.menu-item[data-app="${appName}"] .submenu-item[data-facet="${facetName}"]`
-      );
-      if (submenuItem) {
-        let badge = submenuItem.querySelector('.submenu-badge');
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'submenu-badge';
-          submenuItem.appendChild(badge);
-        }
-        badge.textContent = count || '';
-        badge.style.display = count > 0 ? 'inline-block' : 'none';
-      }
     } else {
       // Update app-level badge in menu
       const menuItem = document.querySelector(`.menu-item[data-app="${appName}"]`);
@@ -1033,23 +1003,6 @@ window.AppServices = {
         badge.style.display = count > 0 ? 'inline-block' : 'none';
       }
     }
-  },
-
-  /**
-   * Update submenu items for an app
-   * @param {string} appName - Name of the app
-   * @param {Array} items - Array of {label, path, facet?, count?} objects
-   */
-  updateSubmenu(appName, items) {
-    const submenu = document.querySelector(`.menu-item[data-app="${appName}"] .submenu`);
-    if (!submenu) return;
-
-    submenu.innerHTML = items.map(item => `
-      <div class="submenu-item" ${item.facet ? `data-facet="${item.facet}"` : ''}>
-        <a href="${item.path}">${this._escapeHtml(item.label)}</a>
-        ${item.count ? `<span class="submenu-badge">${item.count}</span>` : ''}
-      </div>
-    `).join('');
   },
 
   /**
@@ -1214,7 +1167,7 @@ window.AppServices = {
           e.preventDefault();
         }
 
-        // Select facet if specified (like submenu navigation)
+        // Select facet if specified (for facet-aware navigation)
         if (n.facet && window.selectFacet) {
           window.selectFacet(n.facet);
         }

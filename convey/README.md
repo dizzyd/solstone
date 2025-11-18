@@ -72,7 +72,7 @@ All functional views are implemented as apps in `/apps/`. Each app:
 - Has its own directory with `app.json`, `routes.py`, and `workspace.html`
 - Uses blueprint name `app:{name}` with URL prefix `/app/{name}/`
 - Is automatically discovered and registered by `AppRegistry`
-- Can provide facet-scoped views, background services, and submenu items
+- Can provide facet-scoped views and background services
 
 **Available apps:** home, todos, inbox, chat, agents, search, calendar, entities, news, stats, tokens, settings, import, live, dev
 
