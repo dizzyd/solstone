@@ -202,11 +202,11 @@ body.sidebar-open .facet-bar::after {
   width: 60px;
   bottom: 0;
   background: white;
-  border-right: 1px solid var(--facet-border, #e0e0e0);
+  border-right: none; /* No border on container - items have their own borders */
   z-index: 999;
-  transition: width 0.3s ease, background 0.3s ease, border-right-color 0.3s ease, box-shadow 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden; /* Always clip, never show scrollbar */
 }
 
 /* When app bar is present, menu needs to stay above it */
@@ -245,6 +245,7 @@ body.sidebar-open .menu-bar::before {
   cursor: pointer;
   transition: background 0.2s, transform 0.3s ease, max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
   border-bottom: none;
+  border-right: 1px solid var(--facet-border, #e0e0e0); /* Always present - extends naturally with item animation */
   text-decoration: none;
   color: inherit;
   white-space: nowrap;
@@ -408,6 +409,73 @@ body.sidebar-open .menu-bar .menu-item .drag-handle:active {
   text-align: center;
   line-height: 1.2;
   margin-left: auto;
+}
+
+/* Menu expander (down arrow below last visible app icon) */
+.menu-bar .menu-expander {
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--facet-border, #e0e0e0);
+  border-right: 1px solid var(--facet-border, #e0e0e0); /* Always present */
+  background: white;
+  transition: background 0.2s;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+}
+
+.menu-bar .menu-expander::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--facet-bg, transparent);
+  transition: background-color 0.3s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Clear facet background below expander when collapsed */
+body:not(.sidebar-open):not(.menu-icons-expanded) .menu-bar .menu-expander::after {
+  content: '';
+  position: absolute;
+  top: calc(100% + 1px); /* Start below the bottom border of expander */
+  left: 0;
+  right: 0;
+  height: 200vh;
+  background: white;
+  pointer-events: none;
+  z-index: 5;
+}
+
+
+.menu-bar .menu-expander:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+/* Hide only when sidebar is fully expanded (keep visible during icon expansion) */
+body.sidebar-open .menu-bar .menu-expander {
+  display: none;
+}
+
+/* Show all apps in icon-only mode when vertically expanded */
+body.menu-icons-expanded .menu-bar .menu-item[data-starred="false"] {
+  max-height: 50px;
+  opacity: 1;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  pointer-events: auto;
+}
+
+/* Keep sidebar narrow in vertical expansion (icons only) */
+body.menu-icons-expanded .menu-bar {
+  width: 60px;
 }
 
 .facet-pill {

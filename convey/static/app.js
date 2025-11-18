@@ -764,6 +764,12 @@
       // Click to toggle menu
       hamburger.addEventListener('click', (e) => {
         e.stopPropagation();
+        // Option B: If icons are expanded, jump directly to full expansion
+        if (document.body.classList.contains('menu-icons-expanded')) {
+          document.body.classList.remove('menu-icons-expanded');
+          const menuExpander = document.querySelector('.menu-expander');
+          if (menuExpander) menuExpander.textContent = '⏷';
+        }
         document.body.classList.toggle('sidebar-open');
       });
 
@@ -772,6 +778,14 @@
         if (document.body.classList.contains('sidebar-open')) {
           if (!menuBar.contains(e.target) && !hamburger.contains(e.target)) {
             document.body.classList.remove('sidebar-open');
+          }
+        }
+        // Also close icon expansion when clicking outside
+        if (document.body.classList.contains('menu-icons-expanded')) {
+          const menuExpander = document.querySelector('.menu-expander');
+          if (!menuBar.contains(e.target) && (!menuExpander || !menuExpander.contains(e.target))) {
+            document.body.classList.remove('menu-icons-expanded');
+            if (menuExpander) menuExpander.textContent = '⏷';
           }
         }
       });
@@ -786,6 +800,22 @@
           if (appName) {
             toggleAppStar(appName);
           }
+        }
+      });
+    }
+
+    // Menu expander click (vertical icon expansion)
+    const menuExpander = document.querySelector('.menu-expander');
+    if (menuExpander && menuBar) {
+      menuExpander.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.body.classList.toggle('menu-icons-expanded');
+
+        // Update arrow direction
+        if (document.body.classList.contains('menu-icons-expanded')) {
+          menuExpander.textContent = '⏶'; // Up arrow when expanded
+        } else {
+          menuExpander.textContent = '⏷'; // Down arrow when collapsed
         }
       });
     }
