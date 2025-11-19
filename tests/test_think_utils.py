@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from think.entities import load_entity_names
-from think.utils import period_key
+from think.utils import segment_key
 
 
 def write_entities_jsonl(path: Path, entities: list[tuple[str, str, str]] | list[dict]):
@@ -507,74 +507,74 @@ def test_load_entity_names_non_spoken_with_aka(monkeypatch):
         assert result == "Alice Johnson (Ali, AJ); TechCorp; PostgreSQL (Postgres, PG)"
 
 
-def test_period_key_hhmmss_only():
-    """Test period_key with HHMMSS format only."""
-    assert period_key("143022") == "143022"
-    assert period_key("095604") == "095604"
-    assert period_key("000000") == "000000"
-    assert period_key("235959") == "235959"
+def test_segment_key_hhmmss_only():
+    """Test segment_key with HHMMSS format only."""
+    assert segment_key("143022") == "143022"
+    assert segment_key("095604") == "095604"
+    assert segment_key("000000") == "000000"
+    assert segment_key("235959") == "235959"
 
 
-def test_period_key_hhmmss_with_duration():
-    """Test period_key with HHMMSS_LEN format."""
-    assert period_key("143022_300") == "143022_300"
-    assert period_key("095604_303") == "095604_303"
-    assert period_key("120000_3600") == "120000_3600"
-    assert period_key("000000_1") == "000000_1"
+def test_segment_key_hhmmss_with_duration():
+    """Test segment_key with HHMMSS_LEN format."""
+    assert segment_key("143022_300") == "143022_300"
+    assert segment_key("095604_303") == "095604_303"
+    assert segment_key("120000_3600") == "120000_3600"
+    assert segment_key("000000_1") == "000000_1"
 
 
-def test_period_key_hhmmss_with_suffix():
-    """Test period_key with HHMMSS_suffix format (old format)."""
-    assert period_key("143022_audio") == "143022"
-    assert period_key("143022_screen") == "143022"
-    assert period_key("095604_recording") == "095604"
-    assert period_key("120000_mic_sys") == "120000"
+def test_segment_key_hhmmss_with_suffix():
+    """Test segment_key with HHMMSS_suffix format (old format)."""
+    assert segment_key("143022_audio") == "143022"
+    assert segment_key("143022_screen") == "143022"
+    assert segment_key("095604_recording") == "095604"
+    assert segment_key("120000_mic_sys") == "120000"
 
 
-def test_period_key_hhmmss_len_with_suffix():
-    """Test period_key with HHMMSS_LEN_suffix format (new format)."""
-    assert period_key("143022_300_audio") == "143022_300"
-    assert period_key("095604_303_screen") == "095604_303"
-    assert period_key("120000_3600_recording") == "120000_3600"
-    assert period_key("000000_1_mic_sys") == "000000_1"
+def test_segment_key_hhmmss_len_with_suffix():
+    """Test segment_key with HHMMSS_LEN_suffix format (new format)."""
+    assert segment_key("143022_300_audio") == "143022_300"
+    assert segment_key("095604_303_screen") == "095604_303"
+    assert segment_key("120000_3600_recording") == "120000_3600"
+    assert segment_key("000000_1_mic_sys") == "000000_1"
 
 
-def test_period_key_with_file_extension():
-    """Test period_key with various file extensions."""
-    assert period_key("143022_300_audio.flac") == "143022_300"
-    assert period_key("095604_303_screen.webm") == "095604_303"
-    assert period_key("143022_audio.flac") == "143022"
-    assert period_key("143022.flac") == "143022"
-    assert period_key("143022_300.jsonl") == "143022_300"
+def test_segment_key_with_file_extension():
+    """Test segment_key with various file extensions."""
+    assert segment_key("143022_300_audio.flac") == "143022_300"
+    assert segment_key("095604_303_screen.webm") == "095604_303"
+    assert segment_key("143022_audio.flac") == "143022"
+    assert segment_key("143022.flac") == "143022"
+    assert segment_key("143022_300.jsonl") == "143022_300"
 
 
-def test_period_key_in_path():
-    """Test period_key extraction from full paths."""
-    assert period_key("/journal/20250109/143022_300/audio.jsonl") == "143022_300"
-    assert period_key("/journal/20250109/143022/screen.webm") == "143022"
-    assert period_key("/home/user/20250110/095604_303_screen.webm") == "095604_303"
-    assert period_key("20250110/143022_300_audio.flac") == "143022_300"
+def test_segment_key_in_path():
+    """Test segment_key extraction from full paths."""
+    assert segment_key("/journal/20250109/143022_300/audio.jsonl") == "143022_300"
+    assert segment_key("/journal/20250109/143022/screen.webm") == "143022"
+    assert segment_key("/home/user/20250110/095604_303_screen.webm") == "095604_303"
+    assert segment_key("20250110/143022_300_audio.flac") == "143022_300"
 
 
-def test_period_key_invalid_formats():
-    """Test period_key with invalid formats returns None."""
-    assert period_key("invalid") is None
-    assert period_key("12345") is None  # Too short
-    assert period_key("1234567") is None  # Too long
-    assert period_key("abcdef") is None  # Not digits
-    assert period_key("14:30:22") is None  # Wrong separator
-    assert period_key("") is None
-    assert period_key("_143022") is None
+def test_segment_key_invalid_formats():
+    """Test segment_key with invalid formats returns None."""
+    assert segment_key("invalid") is None
+    assert segment_key("12345") is None  # Too short
+    assert segment_key("1234567") is None  # Too long
+    assert segment_key("abcdef") is None  # Not digits
+    assert segment_key("14:30:22") is None  # Wrong separator
+    assert segment_key("") is None
+    assert segment_key("_143022") is None
 
 
-def test_period_key_edge_cases():
-    """Test period_key with edge cases."""
+def test_segment_key_edge_cases():
+    """Test segment_key with edge cases."""
     # Multiple underscores in suffix
-    assert period_key("143022_300_mic_sys_audio") == "143022_300"
-    # Period key with non-word boundary prefix (should not match)
-    assert period_key("prefix_143022_300_suffix") is None
-    # Period key with space/path separator (word boundary - should match)
-    assert period_key("prefix/143022_300/suffix") == "143022_300"
-    assert period_key("prefix 143022_300 suffix") == "143022_300"
+    assert segment_key("143022_300_mic_sys_audio") == "143022_300"
+    # Segment key with non-word boundary prefix (should not match)
+    assert segment_key("prefix_143022_300_suffix") is None
+    # Segment key with space/path separator (word boundary - should match)
+    assert segment_key("prefix/143022_300/suffix") == "143022_300"
+    assert segment_key("prefix 143022_300 suffix") == "143022_300"
     # Multiple potential matches (should match first)
-    assert period_key("143022_300 and 150000_600") == "143022_300"
+    assert segment_key("143022_300 and 150000_600") == "143022_300"

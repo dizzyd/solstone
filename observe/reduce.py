@@ -65,15 +65,15 @@ def assemble_markdown(
     lines.append("# Frame Analyses")
     lines.append("")
 
-    # Extract base timestamp from period directory (HHMMSS)
+    # Extract base timestamp from segment directory (HHMMSS)
     # Expected structure: YYYYMMDD/HHMMSS/screen.jsonl
     base_hour = base_minute = base_second = 0
     if video_path:
         try:
-            from think.utils import period_parse
+            from think.utils import segment_parse
 
-            # Get period start time from parent directory
-            start_time, _ = period_parse(video_path.parent.name)
+            # Get segment start time from parent directory
+            start_time, _ = segment_parse(video_path.parent.name)
             if start_time:
                 base_hour = start_time.hour
                 base_minute = start_time.minute
@@ -309,10 +309,10 @@ def main():
         help="Day in YYYYMMDD format",
     )
     parser.add_argument(
-        "--period",
+        "--segment",
         type=str,
         required=True,
-        help="Period key (HHMMSS or HHMMSS_LEN)",
+        help="Segment key (HHMMSS or HHMMSS_LEN)",
     )
     args = setup_cli(parser)
 
@@ -327,12 +327,12 @@ def main():
         logger.error(f"Day directory not found: {day_dir}")
         sys.exit(1)
 
-    period_dir = day_dir / args.period
-    if not period_dir.exists():
-        logger.error(f"Period directory not found: {period_dir}")
+    segment_dir = day_dir / args.segment
+    if not segment_dir.exists():
+        logger.error(f"Segment directory not found: {segment_dir}")
         sys.exit(1)
 
-    jsonl_path = period_dir / "screen.jsonl"
+    jsonl_path = segment_dir / "screen.jsonl"
     if not jsonl_path.exists():
         logger.error(f"Analysis file not found: {jsonl_path}")
         sys.exit(1)

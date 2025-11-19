@@ -33,7 +33,7 @@ For each time block, capture notes such as:
 
 ## Format
 
-Output a nicely formatted markdown document with per-hour sections and sub-sections within each hour for every task or focus shift. Only include time periods when there was activity in the transcripts.
+Output a nicely formatted markdown document with per-hour sections and sub-sections within each hour for every task or focus shift. Only include time segments when there was activity in the transcripts.
 
 ## Documentation Guidelines
 

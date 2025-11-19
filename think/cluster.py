@@ -28,10 +28,10 @@ def _load_entries(
     day_path_obj = Path(day_dir)
 
     # Check timestamp subdirectories for transcript files
-    from think.utils import period_parse
+    from think.utils import segment_parse
 
     for item in day_path_obj.iterdir():
-        start_time, _ = period_parse(item.name)
+        start_time, _ = segment_parse(item.name)
         if not (item.is_dir() and start_time):
             continue
 
@@ -238,12 +238,12 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
     day_path_obj = Path(day_dir)
 
     # Check timestamp subdirectories for transcript files
-    from think.utils import period_parse
+    from think.utils import segment_parse
 
     for item in day_path_obj.iterdir():
-        start_time, _ = period_parse(item.name)
+        start_time, _ = segment_parse(item.name)
         if item.is_dir() and start_time:
-            # Found period - combine with date to get datetime
+            # Found segment - combine with date to get datetime
             day_date = datetime.strptime(date_str, "%Y%m%d").date()
             dt = datetime.combine(day_date, start_time)
             slot = dt.replace(
@@ -280,62 +280,62 @@ def cluster(day: str) -> Tuple[str, int]:
     return markdown, len(entries)
 
 
-def cluster_period(day: str, period: str) -> Tuple[str, int]:
-    """Return Markdown summary for one period's JSON files and the number processed.
+def cluster_period(day: str, segment: str) -> Tuple[str, int]:
+    """Return Markdown summary for one segment's JSON files and the number processed.
 
     Args:
         day: Day in YYYYMMDD format
-        period: Period key in HHMMSS_LEN format (e.g., "163045_300")
+        segment: Segment key in HHMMSS_LEN format (e.g., "163045_300")
 
     Returns:
         (markdown, file_count) tuple
     """
     day_dir = str(day_path(day))
-    period_dir = Path(day_dir) / period
+    segment_dir = Path(day_dir) / segment
 
-    if not period_dir.is_dir():
-        return f"Period folder not found: {period_dir}", 0
+    if not segment_dir.is_dir():
+        return f"Segment folder not found: {segment_dir}", 0
 
-    # Load entries from this specific period directory
-    entries = _load_entries_from_period(str(period_dir), True, "summary")
+    # Load entries from this specific segment directory
+    entries = _load_entries_from_segment(str(segment_dir), True, "summary")
     if not entries:
-        return f"No audio or screen files found for period {period}", 0
+        return f"No audio or screen files found for segment {segment}", 0
 
     groups = _group_entries(entries)
     markdown = _groups_to_markdown(groups)
     return markdown, len(entries)
 
 
-def _load_entries_from_period(
-    period_dir: str, audio: bool, screen_mode: Optional[str]
+def _load_entries_from_segment(
+    segment_dir: str, audio: bool, screen_mode: Optional[str]
 ) -> List[Dict[str, str]]:
-    """Load entries from a single period directory.
+    """Load entries from a single segment directory.
 
     Args:
-        period_dir: Path to period directory (e.g., /path/to/20251109/163045_300)
+        segment_dir: Path to segment directory (e.g., /path/to/20251109/163045_300)
         audio: Whether to load audio transcripts
         screen_mode: "summary" for screen.md, "raw" for screen.jsonl, None to skip
 
     Returns:
         List of entry dicts with timestamp, prefix, content, etc.
     """
-    period_path = Path(period_dir)
+    segment_path = Path(segment_dir)
     entries: List[Dict[str, str]] = []
 
-    # Extract day and time from period directory path
-    day_dir = period_path.parent
+    # Extract day and time from segment directory path
+    day_dir = segment_path.parent
     date_str = _date_str(str(day_dir))
-    period_name = period_path.name
+    segment_name = segment_path.name
 
-    from think.utils import period_parse
+    from think.utils import segment_parse
 
-    start_time, _ = period_parse(period_name)
+    start_time, _ = segment_parse(segment_name)
     if not start_time:
         return entries
 
     # Process audio transcripts
     if audio:
-        audio_files = [f for f in period_path.glob("*audio.jsonl") if f.is_file()]
+        audio_files = [f for f in segment_path.glob("*audio.jsonl") if f.is_file()]
         for audio_file in audio_files:
             from observe.hear import load_transcript
 
@@ -359,13 +359,13 @@ def _load_entries_from_period(
                     "monitor": None,
                     "source": None,
                     "id": None,
-                    "name": f"{period_name}/{audio_file.name}",
+                    "name": f"{segment_name}/{audio_file.name}",
                 }
             )
 
     # Process screen summaries or transcripts
     if screen_mode == "summary":
-        screen_md = period_path / "screen.md"
+        screen_md = segment_path / "screen.md"
         if screen_md.exists():
             try:
                 content = screen_md.read_text()
@@ -379,14 +379,14 @@ def _load_entries_from_period(
                         "monitor": None,
                         "source": None,
                         "id": None,
-                        "name": f"{period_name}/screen.md",
+                        "name": f"{segment_name}/screen.md",
                     }
                 )
             except Exception as e:
                 print(f"Warning: Could not read file screen.md: {e}", file=sys.stderr)
 
     elif screen_mode == "raw":
-        screen_jsonl = period_path / "screen.jsonl"
+        screen_jsonl = segment_path / "screen.jsonl"
         if screen_jsonl.exists():
             try:
                 frames = load_analysis_frames(screen_jsonl)
@@ -403,7 +403,7 @@ def _load_entries_from_period(
                             "monitor": None,
                             "source": None,
                             "id": None,
-                            "name": f"{period_name}/screen.jsonl",
+                            "name": f"{segment_name}/screen.jsonl",
                         }
                     )
             except Exception as e:

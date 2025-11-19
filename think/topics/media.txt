@@ -28,7 +28,7 @@ Analyze a single day's transcripts to identify instances of media consumption. T
 
 Produce a friendly markdown document with chronological individual sections with a short title and each containing these items:
 
-  - Time Period(s)
+  - Time Segment(s)
   - Media Type (video, article, music, etc.)
   - Work or Personal
   - Topic/Description

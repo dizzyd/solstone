@@ -10,9 +10,9 @@ import pytest
 from observe.reduce import assemble_markdown, reduce_analysis
 
 
-def test_assemble_markdown_extracts_period_from_directory():
-    """Test that assemble_markdown correctly extracts base time from period directory."""
-    # Mock frames with relative timestamps (seconds from period start)
+def test_assemble_markdown_extracts_segment_from_directory():
+    """Test that assemble_markdown correctly extracts base time from segment directory."""
+    # Mock frames with relative timestamps (seconds from segment start)
     frames = [
         {
             "timestamp": 0,
@@ -38,8 +38,8 @@ def test_assemble_markdown_extracts_period_from_directory():
         frames, entity_names="", video_path=jsonl_path, include_entity_context=False
     )
 
-    # Verify absolute times are calculated correctly from period (14:30:22)
-    assert "14:30:22" in markdown  # Base time from period
+    # Verify absolute times are calculated correctly from segment (14:30:22)
+    assert "14:30:22" in markdown  # Base time from segment
     assert "14:30:52" in markdown  # Base + 30 seconds
     assert "14:32:22" in markdown  # Base + 120 seconds (2 minutes)
 
@@ -49,8 +49,8 @@ def test_assemble_markdown_extracts_period_from_directory():
     assert "Reading docs" in markdown
 
 
-def test_assemble_markdown_handles_period_with_duration_suffix():
-    """Test that assemble_markdown handles HHMMSS_LEN period format."""
+def test_assemble_markdown_handles_segment_with_duration_suffix():
+    """Test that assemble_markdown handles HHMMSS_LEN segment format."""
     frames = [
         {
             "timestamp": 0,
@@ -64,7 +64,7 @@ def test_assemble_markdown_handles_period_with_duration_suffix():
         },
     ]
 
-    # Period with duration suffix: 143022_300 (5 minutes)
+    # Segment with duration suffix: 143022_300 (5 minutes)
     jsonl_path = Path("20240101/143022_300/screen.jsonl")
 
     markdown = assemble_markdown(
@@ -185,16 +185,16 @@ def test_assemble_markdown_includes_extracted_text():
     assert "All tests passed" in markdown
 
 
-def test_main_constructs_path_from_day_and_period(tmp_path, monkeypatch):
-    """Test that main() constructs correct JSONL path from --day and --period args."""
+def test_main_constructs_path_from_day_and_segment(tmp_path, monkeypatch):
+    """Test that main() constructs correct JSONL path from --day and --segment args."""
     # Create mock journal structure
     journal_path = tmp_path / "journal"
     day_dir = journal_path / "20251109"
-    period_dir = day_dir / "222502_303"
-    period_dir.mkdir(parents=True)
+    segment_dir = day_dir / "222502_303"
+    segment_dir.mkdir(parents=True)
 
     # Create mock screen.jsonl with minimal valid data
-    screen_jsonl = period_dir / "screen.jsonl"
+    screen_jsonl = segment_dir / "screen.jsonl"
     frames = [
         {
             "timestamp": 0,
@@ -237,6 +237,6 @@ def test_main_constructs_path_from_day_and_period(tmp_path, monkeypatch):
                 assert exit_code == 0
 
                 # Verify markdown was written
-                output_md = period_dir / "screen.md"
+                output_md = segment_dir / "screen.md"
                 assert output_md.exists()
                 assert "Test Summary" in output_md.read_text()

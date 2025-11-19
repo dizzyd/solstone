@@ -28,26 +28,26 @@ def _topic_basenames() -> list[str]:
 
 
 def _output_paths(
-    day_dir: os.PathLike[str], basename: str, period: str | None = None
+    day_dir: os.PathLike[str], basename: str, segment: str | None = None
 ) -> tuple[Path, Path]:
     """Return markdown and JSON output paths for ``basename`` in ``day_dir``.
 
     Args:
         day_dir: Day directory path (YYYYMMDD)
         basename: Topic basename
-        period: Optional period key (HHMMSS_LEN)
+        segment: Optional segment key (HHMMSS_LEN)
 
     Returns:
         (md_path, json_path) tuple
         - Daily: YYYYMMDD/topics/{basename}.md
-        - Period: YYYYMMDD/{period}/{basename}.md
+        - Segment: YYYYMMDD/{segment}/{basename}.md
     """
     day = Path(day_dir)
 
-    if period:
-        # Period topics go directly in period directory
-        period_dir = day / period
-        return period_dir / f"{basename}.md", period_dir / f"{basename}.json"
+    if segment:
+        # Segment topics go directly in segment directory
+        segment_dir = day / segment
+        return segment_dir / f"{basename}.md", segment_dir / f"{basename}.json"
     else:
         # Daily topics go in topics/ subdirectory
         topic_dir = day / "topics"
@@ -240,14 +240,14 @@ def main() -> None:
         help="Overwrite output file if it already exists",
     )
     parser.add_argument(
-        "--period",
-        help="Period key in HHMMSS_LEN format (processes only this period within the day)",
+        "--segment",
+        help="Segment key in HHMMSS_LEN format (processes only this segment within the day)",
     )
     args = setup_cli(parser)
 
     # Choose clustering function based on mode
-    if args.period:
-        markdown, file_count = cluster_period(args.day, args.period)
+    if args.segment:
+        markdown, file_count = cluster_period(args.day, args.segment)
     else:
         markdown, file_count = cluster(args.day)
     day_dir = str(day_path(args.day))
@@ -288,10 +288,10 @@ def main() -> None:
             count_tokens(markdown, prompt, api_key, model)
             return
 
-        md_path, json_path = _output_paths(day_dir, topic_basename, period=args.period)
-        # Use cache key scoped to day or period
-        if args.period:
-            cache_display_name = f"{day}_{args.period}"
+        md_path, json_path = _output_paths(day_dir, topic_basename, segment=args.segment)
+        # Use cache key scoped to day or segment
+        if args.segment:
+            cache_display_name = f"{day}_{args.segment}"
         else:
             cache_display_name = f"{day}"
 
@@ -393,11 +393,11 @@ def main() -> None:
             print(f"Error: {e}")
             return
 
-        # Include period in occurrence JSON if in period mode
-        if args.period:
+        # Include segment in occurrence JSON if in segment mode
+        if args.segment:
             full_occurrence_obj = {
                 "day": day,
-                "period": args.period,
+                "segment": args.segment,
                 "occurrences": occurrences,
             }
         else:

@@ -29,23 +29,23 @@ def run_command(cmd: list[str], day: str) -> bool:
 
 
 def build_commands(
-    day: str, force: bool, verbose: bool = False, period: str | None = None
+    day: str, force: bool, verbose: bool = False, segment: str | None = None
 ) -> list[list[str]]:
-    """Build processing commands for a day or specific period.
+    """Build processing commands for a day or specific segment.
 
     Args:
         day: YYYYMMDD format
-        period: Optional HHMMSS_LEN format (e.g., "163045_300")
+        segment: Optional HHMMSS_LEN format (e.g., "163045_300")
         force: Overwrite existing files
         verbose: Verbose logging
     """
     commands: list[list[str]] = []
 
     # Determine target frequency and what to run
-    if period:
-        logging.info("Running period processing for %s/%s", day, period)
-        target_frequency = "period"
-        # No sense repair for periods (already processed during observation)
+    if segment:
+        logging.info("Running segment processing for %s/%s", day, segment)
+        target_frequency = "segment"
+        # No sense repair for segments (already processed during observation)
     else:
         logging.info("Running daily processing for %s", day)
         target_frequency = "daily"
@@ -69,8 +69,8 @@ def build_commands(
             continue
 
         cmd = ["think-summarize", day, "-f", topic_data["path"], "-p"]
-        if period:
-            cmd.extend(["--period", period])
+        if segment:
+            cmd.extend(["--segment", segment])
         if verbose:
             cmd.append("--verbose")
         if force:
@@ -79,14 +79,14 @@ def build_commands(
 
     # Targeted indexing
     indexer_cmd = ["think-indexer", "--rescan-all", "--day", day]
-    if period:
-        indexer_cmd.extend(["--period", period])
+    if segment:
+        indexer_cmd.extend(["--segment", segment])
     if verbose:
         indexer_cmd.append("--verbose")
     commands.append(indexer_cmd)
 
     # Daily-only: journal stats
-    if not period:
+    if not segment:
         stats_cmd = ["think-journal-stats"]
         if verbose:
             stats_cmd.append("--verbose")
@@ -97,15 +97,15 @@ def build_commands(
 
 def parse_args() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run processing tasks on a journal day or period"
+        description="Run processing tasks on a journal day or segment"
     )
     parser.add_argument(
         "--day",
         help="Day folder in YYYYMMDD format (defaults to yesterday)",
     )
     parser.add_argument(
-        "--period",
-        help="Period key in HHMMSS_LEN format (processes period topics only)",
+        "--segment",
+        help="Segment key in HHMMSS_LEN format (processes segment topics only)",
     )
     parser.add_argument("--force", action="store_true", help="Overwrite existing files")
     return parser
@@ -126,7 +126,7 @@ def main() -> None:
     if not day_dir.is_dir():
         parser.error(f"Day folder not found: {day_dir}")
 
-    commands = build_commands(day, args.force, verbose=args.verbose, period=args.period)
+    commands = build_commands(day, args.force, verbose=args.verbose, segment=args.segment)
     success_count = 0
     fail_count = 0
     for cmd in commands:

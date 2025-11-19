@@ -262,12 +262,12 @@ def test_load_transcript_all_fields():
 def test_load_transcript_formatted_text_basic():
     """Test formatted text output with metadata and entries."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create test transcript file in YYYYMMDD/HHMMSS period
+        # Create test transcript file in YYYYMMDD/HHMMSS segment
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        period_dir = day_dir / "100500"
-        period_dir.mkdir()
-        file_path = period_dir / "audio.jsonl"
+        segment_dir = day_dir / "100500"
+        segment_dir.mkdir()
+        file_path = segment_dir / "audio.jsonl"
 
         # Write JSONL with metadata and entries
         metadata = {"topics": ["meeting", "planning"], "setting": "work"}
@@ -303,9 +303,9 @@ def test_load_transcript_formatted_text_minimal():
     with tempfile.TemporaryDirectory() as tmpdir:
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        period_dir = day_dir / "100500"
-        period_dir.mkdir()
-        file_path = period_dir / "audio.jsonl"
+        segment_dir = day_dir / "100500"
+        segment_dir.mkdir()
+        file_path = segment_dir / "audio.jsonl"
 
         # Minimal metadata (empty dict)
         metadata = {}
@@ -330,9 +330,9 @@ def test_load_transcript_formatted_text_imported():
     with tempfile.TemporaryDirectory() as tmpdir:
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        period_dir = day_dir / "100500"
-        period_dir.mkdir()
-        file_path = period_dir / "imported_audio.jsonl"
+        segment_dir = day_dir / "100500"
+        segment_dir.mkdir()
+        file_path = segment_dir / "imported_audio.jsonl"
 
         metadata = {
             "imported": {"id": "abc123", "facet": "uavionix"},
@@ -365,9 +365,9 @@ def test_load_transcript_formatted_text_no_speaker():
     with tempfile.TemporaryDirectory() as tmpdir:
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        period_dir = day_dir / "100500"
-        period_dir.mkdir()
-        file_path = period_dir / "audio.jsonl"
+        segment_dir = day_dir / "100500"
+        segment_dir.mkdir()
+        file_path = segment_dir / "audio.jsonl"
 
         metadata = {"setting": "personal"}
         entries = [

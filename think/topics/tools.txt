@@ -27,7 +27,7 @@ Create a comprehensive catalog of technology and tool usage from $pronouns_posse
 
 ### 4. Interaction Depth Analysis
 - **Surface Interactions**: Quick checks, notifications, brief visits
-- **Deep Work Sessions**: Extended focused usage periods
+- **Deep Work Sessions**: Extended focused usage segments
 - **Feature Utilization**: Which specific features/functions are actually used
 - **Keyboard vs. Mouse**: Interaction patterns that indicate proficiency
 
@@ -46,7 +46,7 @@ Create a detailed markdown document with these sections:
 
 ### Daily Tool Usage Chronicle
 - **Hour-by-Hour Breakdown**: What tools dominated each hour of the day
-- **Tool Session Log**: Start/stop times for major tool usage periods
+- **Tool Session Log**: Start/stop times for major tool usage segments
 - **Context Annotations**: Brief note on why each tool was used when it was used
 
 ### Tool Catalog & Classification
@@ -57,7 +57,7 @@ Create a detailed markdown document with these sections:
 ### Critical Usage Findings
 - **Essential Tool Dependencies**: Tools that block work when unavailable
 - **High-Frequency Micro-Usage**: Tools used in very short but frequent bursts
-- **Deep Work Enablers**: Tools that correlate with extended focus periods
+- **Deep Work Enablers**: Tools that correlate with extended focus segments
 - **Productivity Multipliers**: Tools that demonstrably accelerate task completion
 - **Time Sinks**: Tools that consume disproportionate time relative to output
 

@@ -204,30 +204,30 @@ def day_dirs() -> dict[str, str]:
     return days
 
 
-def period_key(name_or_path: str) -> str | None:
-    """Extract full period key (HHMMSS or HHMMSS_LEN) from any path/filename.
+def segment_key(name_or_path: str) -> str | None:
+    """Extract full segment key (HHMMSS or HHMMSS_LEN) from any path/filename.
 
     Parameters
     ----------
     name_or_path : str
-        Period name, filename, or full path containing period.
+        Segment name, filename, or full path containing segment.
 
     Returns
     -------
     str or None
-        Full period key (HHMMSS or HHMMSS_LEN) if valid, None otherwise.
+        Full segment key (HHMMSS or HHMMSS_LEN) if valid, None otherwise.
 
     Examples
     --------
-    >>> period_key("143022")
+    >>> segment_key("143022")
     "143022"
-    >>> period_key("143022_300")
+    >>> segment_key("143022_300")
     "143022_300"
-    >>> period_key("143022_300_summary.txt")
+    >>> segment_key("143022_300_summary.txt")
     "143022_300"
-    >>> period_key("/journal/20250109/143022_300/audio.jsonl")
+    >>> segment_key("/journal/20250109/143022_300/audio.jsonl")
     "143022_300"
-    >>> period_key("invalid")
+    >>> segment_key("invalid")
     None
     """
     pattern = r"\b(\d{6})(?:_(\d+))?(?:_|\b)"
@@ -239,15 +239,15 @@ def period_key(name_or_path: str) -> str | None:
     return None
 
 
-def period_parse(
+def segment_parse(
     name_or_path: str,
 ) -> tuple[datetime.time | None, datetime.time | None]:
-    """Parse period to extract start and end times as datetime objects.
+    """Parse segment to extract start and end times as datetime objects.
 
     Parameters
     ----------
     name_or_path : str
-        Period name (e.g., "143022" or "143022_300") or full path containing period.
+        Segment name (e.g., "143022" or "143022_300") or full path containing segment.
 
     Returns
     -------
@@ -255,22 +255,22 @@ def period_parse(
         Tuple of (start_time, end_time) where:
         - start_time: datetime.time for HHMMSS
         - end_time: datetime.time computed from start + LEN seconds, or None if no LEN
-        Returns (None, None) if not a valid period format.
+        Returns (None, None) if not a valid segment format.
 
     Examples
     --------
-    >>> period_parse("143022")
+    >>> segment_parse("143022")
     (datetime.time(14, 30, 22), None)
-    >>> period_parse("143022_300")  # 14:30:22 + 300 seconds = 14:35:22
+    >>> segment_parse("143022_300")  # 14:30:22 + 300 seconds = 14:35:22
     (datetime.time(14, 30, 22), datetime.time(14, 35, 22))
-    >>> period_parse("/journal/20250109/143022_300/audio.jsonl")
+    >>> segment_parse("/journal/20250109/143022_300/audio.jsonl")
     (datetime.time(14, 30, 22), datetime.time(14, 35, 22))
-    >>> period_parse("invalid")
+    >>> segment_parse("invalid")
     (None, None)
     """
     from datetime import time, timedelta
 
-    # Extract just the period name if it's a path
+    # Extract just the segment name if it's a path
     if "/" in name_or_path or "\\" in name_or_path:
         path_parts = Path(name_or_path).parts
         # Look for YYYYMMDD/HHMMSS* pattern
@@ -283,7 +283,7 @@ def period_parse(
     else:
         name = name_or_path
 
-    # Validate and extract HHMMSS from period name
+    # Validate and extract HHMMSS from segment name
     # Simple format: HHMMSS (6 digits)
     if name.isdigit() and len(name) == 6:
         time_str = name

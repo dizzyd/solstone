@@ -4,7 +4,7 @@ Unified observer for audio and screencast capture.
 
 Continuously captures audio and manages screencast recording based on activity.
 Creates 5-minute windows, saving audio if voice activity detected and recording
-screencasts during active periods.
+screencasts during active segments.
 """
 
 import argparse
@@ -209,14 +209,14 @@ class Observer:
             files.append(f"{time_part}_{duration}_screen.webm")
 
         if files:
-            period = f"{time_part}_{duration}"
+            segment = f"{time_part}_{duration}"
             self.callosum.emit(
                 "observe",
                 "observing",
-                period=period,
+                segment=segment,
                 files=files,
             )
-            logger.info(f"Period observing: {period} ({len(files)} files)")
+            logger.info(f"Segment observing: {segment} ({len(files)} files)")
 
     async def initialize_screencast(self) -> bool:
         """

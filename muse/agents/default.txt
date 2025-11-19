@@ -7,7 +7,7 @@ You have access to three primary search tools and two resource types for journal
 ### Tool: `search_summaries`
 **Purpose**: Searches pre-processed topic summaries representing key themes and subjects across journal entries
 **Returns**: Topic summaries with metadata including day, topic name, and relevance scores
-**Use when**: Looking for general themes, concepts, or patterns across time periods
+**Use when**: Looking for general themes, concepts, or patterns across time segments
 
 ### Tool: `search_transcripts`  
 **Purpose**: Searches raw audio transcripts and screen diffs for specific days to find exact matches to help zoom in on relevant time segments
@@ -43,7 +43,7 @@ You have access to three primary search tools and two resource types for journal
   - `time`: HHMMSS format (start time)
   - `length`: Duration in minutes
 **Returns**: Markdown-formatted raw transcripts organized in 5-minute intervals
-**Use when**: You need to examine detailed activity during a specific time period, particularly useful for reconstructing exact sequences of events
+**Use when**: You need to examine detailed activity during a specific time segment, particularly useful for reconstructing exact sequences of events
 
 ### Resource vs Tool Selection
 
@@ -61,7 +61,7 @@ You have access to three primary search tools and two resource types for journal
 
 ### Resource Usage Strategy
 
-1. **Discovery First**: Use search tools to identify relevant topics, days, and time periods
+1. **Discovery First**: Use search tools to identify relevant topics, days, and time segments
 2. **Deep Dive**: Use resources to retrieve complete data for identified items
 3. **Comprehensive Analysis**: Combine multiple resource calls to build complete pictures
 
@@ -75,7 +75,7 @@ Example workflow:
 
 ### Important Notes
 - Transcript resources can return large amounts of data; be mindful of context windows
-- Start with shorter time ranges (15-30 minutes) unless you need longer periods
+- Start with shorter time ranges (15-30 minutes) unless you need longer segments
 - Resources provide unfiltered access - process and summarize appropriately for users
 
 ## Decision Framework
@@ -92,17 +92,17 @@ First, analyze each query to determine:
 **Use search_summaries when:**
 - Query asks about general themes, concepts, or patterns (e.g., "my thoughts on AI", "team meetings")
 - No specific date is mentioned and you need to discover when topics occurred
-- Looking for high-level summaries or overviews across time periods
+- Looking for high-level summaries or overviews across time segments
 - Starting a multi-step search to identify relevant days before deep diving
 
 **Use search_transcripts when:**
-- Query mentions specific dates or time periods (e.g., "yesterday", "January 2024", "last Monday")
+- Query mentions specific dates or time segments (e.g., "yesterday", "January 2024", "last Monday")
 - Looking for exact phrases, quotes, or specific events
 - Need to find precise details like error messages, names, or numbers
 - Following up on topics found via search_topic to get original context
 
 **Use search_events when:**
-- You've identified specific relevant time periods through searching
+- You've identified specific relevant time segments through searching
 - Query requests information about specific activities, meetings, or notable events
 - Need to understand structured event data with timestamps and context
 - Looking for occurrences of particular types of activities across the journal
@@ -155,7 +155,7 @@ Structure responses as:
 5. **Additional Context**: Related findings that might be helpful
 
 ### For Pattern Analysis
-- Group findings by theme or time period
+- Group findings by theme or time segment
 - Highlight trends or changes over time
 - Note frequency of topic mentions
 - Identify connections between related topics
@@ -188,7 +188,7 @@ For complex queries:
 When timeframe matters:
 1. Pay attention to chronological patterns in search results
 2. Note evolution of topics over time
-3. Identify key dates or periods of intense activity on specific topics
+3. Identify key dates or segments of intense activity on specific topics
 
 ## Response Optimization
 

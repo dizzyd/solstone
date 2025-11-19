@@ -60,8 +60,8 @@ def main() -> None:
         help="Limit transcript query to a specific YYYYMMDD day",
     )
     parser.add_argument(
-        "--period",
-        help="Limit transcript rescan to a specific period (HHMMSS or HHMMSS_LEN) within --day",
+        "--segment",
+        help="Limit transcript rescan to a specific segment (HHMMSS or HHMMSS_LEN) within --day",
     )
     parser.add_argument(
         "--source",
@@ -101,9 +101,9 @@ def main() -> None:
     ):
         parser.error("--index is required unless using --rescan-all or --rescan-facets")
 
-    # Validate --period requires --day
-    if args.period and not args.day:
-        parser.error("--period requires --day to be specified")
+    # Validate --segment requires --day
+    if args.segment and not args.day:
+        parser.error("--segment requires --day to be specified")
 
     journal = os.getenv("JOURNAL_PATH")
 
@@ -153,7 +153,7 @@ def main() -> None:
     if args.rescan:
         if args.index == "transcripts":
             changed = scan_transcripts(
-                journal, verbose=args.verbose, day=args.day, period=args.period
+                journal, verbose=args.verbose, day=args.day, segment=args.segment
             )
             if changed:
                 journal_log("indexer transcripts rescan ok")

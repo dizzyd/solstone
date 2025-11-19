@@ -183,9 +183,9 @@ def add_module_stubs(request, monkeypatch):
 
         def scan_day(day_dir):
             # Stub matching real scan_day behavior:
-            # - "raw": processed files in periods
-            # - "processed": output JSON files in periods
-            # - "repairable": source media files in day root without matching period
+            # - "raw": processed files in segments
+            # - "processed": output JSON files in segments
+            # - "repairable": source media files in day root without matching segment
             from pathlib import Path
 
             day_path = Path(day_dir)
@@ -194,12 +194,12 @@ def add_module_stubs(request, monkeypatch):
             repairable_files = []
 
             if day_path.is_dir():
-                # Find raw (processed) files in periods (HHMMSS/)
+                # Find raw (processed) files in segments (HHMMSS/)
                 for item in day_path.iterdir():
-                    from think.utils import period_key
+                    from think.utils import segment_key
 
-                    if item.is_dir() and period_key(item.name):
-                        # Found period
+                    if item.is_dir() and segment_key(item.name):
+                        # Found segment
                         for p in item.glob("*.flac"):
                             raw_files.append(f"{item.name}/{p.name}")
                         for p in item.glob("*.m4a"):
@@ -209,23 +209,23 @@ def add_module_stubs(request, monkeypatch):
                         for p in item.glob("*.mp4"):
                             raw_files.append(f"{item.name}/{p.name}")
 
-                # Find processed output files in periods
+                # Find processed output files in segments
                 for item in day_path.iterdir():
-                    from think.utils import period_key
+                    from think.utils import segment_key
 
-                    if item.is_dir() and period_key(item.name):
+                    if item.is_dir() and segment_key(item.name):
                         for p in item.glob("*audio.jsonl"):
                             processed_files.append(f"{item.name}/{p.name}")
                         for p in item.glob("*screen.jsonl"):
                             processed_files.append(f"{item.name}/{p.name}")
 
-                # Find repairable files (source media in root without matching period)
+                # Find repairable files (source media in root without matching segment)
                 for audio_ext in ["*.flac", "*.m4a"]:
                     for p in day_path.glob(audio_ext):
                         if "_" in p.stem:
-                            period_name = p.stem.split("_")[0]
-                            period_dir = day_path / period_name
-                            if not period_dir.exists():
+                            segment_name = p.stem.split("_")[0]
+                            segment_dir = day_path / segment_name
+                            if not segment_dir.exists():
                                 repairable_files.append(p.name)
 
                 for video_ext in ["*.webm", "*.mp4"]:

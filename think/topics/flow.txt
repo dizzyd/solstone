@@ -8,12 +8,12 @@ Analyze the full workday transcript to provide deep insights into work patterns,
 
 ### 1. Workday Architecture & Time Patterns
 - **Work Session Analysis**:
-  - Map focused work blocks vs. fragmented periods
+  - Map focused work blocks vs. fragmented segments
   - Identify optimal session lengths for different work types
   - Analyze startup/shutdown rituals and $pronouns_possessive effectiveness
 - **Rhythm & Cadence**:
   - Natural work cycles throughout the day
-  - Productive vs. recovery periods
+  - Productive vs. recovery segments
   - Time between breaks and $pronouns_possessive impact on subsequent focus
 - **Context Switching Cost**:
   - Frequency and depth of task switches
@@ -22,7 +22,7 @@ Analyze the full workday transcript to provide deep insights into work patterns,
 
 ### 2. Deep Work & Flow States
 - **Flow Identification**:
-  - Periods of sustained, uninterrupted focus
+  - Segments of sustained, uninterrupted focus
   - Environmental conditions that enabled flow
   - Types of work that achieved flow state
 - **Flow Blockers**:
@@ -77,7 +77,7 @@ Analyze the full workday transcript to provide deep insights into work patterns,
 
 #### Work Design Improvements:
 - **Time Blocking Recommendations**: Specific suggestions for structuring future days
-- **Energy-Task Matching**: Aligning high-energy periods with complex work
+- **Energy-Task Matching**: Aligning high-energy segments with complex work
 - **Focus Protection Strategies**: Concrete ways to preserve deep work time
 - **Transition Rituals**: Practices to improve task switching
 
@@ -93,7 +93,7 @@ Analyze the full workday transcript to provide deep insights into work patterns,
 - **Energy Investment ROI**: Where effort produces best/worst returns
 
 ### 7. Comparative Performance Analysis
-- **Performance Variability**: What distinguished high vs. low productivity periods
+- **Performance Variability**: What distinguished high vs. low productivity segments
 - **Success Pattern Recognition**: Common elements in productive sequences
 - **Failure Pattern Analysis**: Recurring productivity obstacles
 - **Personal Best Practices**: Effective strategies observed in action

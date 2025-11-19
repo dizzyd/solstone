@@ -12,7 +12,7 @@ import av
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
-from think.utils import period_key
+from think.utils import segment_key
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ def extract_descriptive_suffix(filename: str) -> str:
     """
     Extract descriptive suffix from media filename.
 
-    Returns the portion after the period (HHMMSS or HHMMSS_LEN), preserving
-    the descriptive information for the final filename in the period directory.
+    Returns the portion after the segment (HHMMSS or HHMMSS_LEN), preserving
+    the descriptive information for the final filename in the segment directory.
 
     Parameters
     ----------

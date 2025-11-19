@@ -152,11 +152,11 @@ def calendar_transcript_range(day: str) -> Any:
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_key
+    from think.utils import segment_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_key(start) or not period_key(end):
+    if not segment_key(start) or not segment_key(end):
         return "", 400
 
     # Get checkbox states from query params
@@ -224,11 +224,11 @@ def calendar_raw_files(day: str) -> Any:
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_key
+    from think.utils import segment_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_key(start) or not period_key(end):
+    if not segment_key(start) or not segment_key(end):
         return "", 400
 
     file_type = request.args.get("type", None)  # 'audio', 'screen', or None for both
@@ -280,11 +280,11 @@ def calendar_media_files(day: str) -> Any:
 
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_key
+    from think.utils import segment_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_key(start) or not period_key(end):
+    if not segment_key(start) or not segment_key(end):
         return "", 400
 
     file_type = request.args.get("type", None)  # 'audio', 'screen', or None for both
@@ -387,11 +387,11 @@ def download_audio(day: str) -> Any:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    from think.utils import period_key
+    from think.utils import segment_key
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not period_key(start) or not period_key(end):
+    if not segment_key(start) or not segment_key(end):
         return "", 400
 
     import subprocess
@@ -654,18 +654,18 @@ def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
     """Render detail view for a specific screen.jsonl file."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_key
+    from think.utils import segment_key
 
-    if not period_key(timestamp):
+    if not segment_key(timestamp):
         return "", 404
 
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
         return "", 404
 
-    # Check if the screen.jsonl file exists in period
-    period_dir = os.path.join(day_dir, timestamp)
-    jsonl_path = os.path.join(period_dir, "screen.jsonl")
+    # Check if the screen.jsonl file exists in segment
+    segment_dir = os.path.join(day_dir, timestamp)
+    jsonl_path = os.path.join(segment_dir, "screen.jsonl")
     if not os.path.isfile(jsonl_path):
         return "", 404
 
@@ -694,14 +694,14 @@ def _dev_screen_files(day: str) -> Any:
     if not os.path.isdir(day_dir):
         return jsonify({"files": []})
 
-    from think.utils import period_key
+    from think.utils import segment_key
 
     files = []
-    # Look for periods (HHMMSS/)
+    # Look for segments (HHMMSS/)
     for item in sorted(os.listdir(day_dir)):
         item_path = os.path.join(day_dir, item)
-        if os.path.isdir(item_path) and period_key(item):
-            # Found period, check for screen.jsonl
+        if os.path.isdir(item_path) and segment_key(item):
+            # Found segment, check for screen.jsonl
             jsonl_path = os.path.join(item_path, "screen.jsonl")
             if os.path.isfile(jsonl_path):
                 timestamp = item
@@ -744,14 +744,14 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
     """Return all frame records and pre-cache decoded frames from video."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_key
+    from think.utils import segment_key
 
-    if not period_key(timestamp):
+    if not segment_key(timestamp):
         return "", 404
 
     day_dir = str(day_path(day))
-    period_dir = os.path.join(day_dir, timestamp)
-    jsonl_path = os.path.join(period_dir, "screen.jsonl")
+    segment_dir = os.path.join(day_dir, timestamp)
+    jsonl_path = os.path.join(segment_dir, "screen.jsonl")
 
     if not os.path.isfile(jsonl_path):
         return "", 404
@@ -774,8 +774,8 @@ def _dev_screen_frames(day: str, timestamp: str) -> Any:
         # Decode and cache all frames from the video
         cache_key = (day, timestamp)
         if cache_key not in _frame_cache and raw_video_path:
-            # Video path is relative to period directory (e.g., "screen.webm")
-            video_path = os.path.join(period_dir, raw_video_path)
+            # Video path is relative to segment directory (e.g., "screen.webm")
+            video_path = os.path.join(segment_dir, raw_video_path)
             if os.path.isfile(video_path):
                 # Use the new decode_frames utility
                 images = decode_frames(video_path, frames, annotate_boxes=True)
@@ -800,9 +800,9 @@ def _dev_screen_frame_image(day: str, timestamp: str, frame_id: int) -> Any:
     """Serve a cached frame image as JPEG."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-    from think.utils import period_key
+    from think.utils import segment_key
 
-    if not period_key(timestamp):
+    if not segment_key(timestamp):
         return "", 404
 
     try:

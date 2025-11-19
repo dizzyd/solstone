@@ -132,7 +132,7 @@ def get_idle_time_ms() -> int:
 - [ ] If active and screen not locked:
   - Call `initialize_capture()`
 - [ ] Build list of files that were captured
-- [ ] Emit Callosum event: `self.callosum.emit("observe", "observing", period="...", files=[...])`
+- [ ] Emit Callosum event: `self.callosum.emit("observe", "observing", segment="...", files=[...])`
 - [ ] Log boundary handling
 
 ### 3.4 Implement `initialize_capture()`

@@ -510,26 +510,26 @@ class VideoProcessor:
         contents.append(image)
         return contents
 
-    def _move_to_period(self, media_path: Path) -> Path:
-        """Move media file to its period and return new path."""
+    def _move_to_segment(self, media_path: Path) -> Path:
+        """Move media file to its segment and return new path."""
         from observe.utils import extract_descriptive_suffix
-        from think.utils import period_key
+        from think.utils import segment_key
 
-        period = period_key(media_path.stem)
-        if period is None:
+        segment = segment_key(media_path.stem)
+        if segment is None:
             raise ValueError(f"Invalid media filename: {media_path.stem}")
         suffix = extract_descriptive_suffix(media_path.stem)
-        period_dir = media_path.parent / period
+        segment_dir = media_path.parent / segment
         try:
-            period_dir.mkdir(exist_ok=True)
+            segment_dir.mkdir(exist_ok=True)
             # Preserve the original extension
             ext = media_path.suffix
-            new_path = period_dir / f"{suffix}{ext}"
+            new_path = segment_dir / f"{suffix}{ext}"
             media_path.rename(new_path)
-            logger.info(f"Moved {media_path} to {period_dir}")
+            logger.info(f"Moved {media_path} to {segment_dir}")
             return new_path
         except Exception as exc:
-            logger.error(f"Failed to move {media_path} to period: {exc}")
+            logger.error(f"Failed to move {media_path} to segment: {exc}")
             return media_path
 
     def _create_crumb(
@@ -860,7 +860,7 @@ class VideoProcessor:
         all_failed = total_frames > 0 and failed_frames == total_frames
 
         if all_failed:
-            # Don't move video to period - leave for retry
+            # Don't move video to segment - leave for retry
             error_detail = (
                 f"Error details in {output_path}" if output_path else "No output file"
             )
@@ -875,14 +875,14 @@ class VideoProcessor:
                 f"All {total_frames} frame(s) failed vision analysis after retries"
             )
         else:
-            # At least some frames succeeded - move to period and create crumb
+            # At least some frames succeeded - move to segment and create crumb
             if failed_frames > 0:
                 logger.warning(
                     f"{failed_frames}/{total_frames} frame(s) failed processing. "
-                    f"Moving video to period anyway."
+                    f"Moving video to segment anyway."
                 )
             if output_path:
-                moved_path = self._move_to_period(self.video_path)
+                moved_path = self._move_to_segment(self.video_path)
                 self._create_crumb(output_path, moved_path, used_prompts, used_models)
 
         # Clear qualified_frames to free memory
@@ -964,17 +964,17 @@ async def async_main():
     # Determine output path and warn if overwriting
     output_path = None
     if not args.frames_only:
-        # Extract period and create output in period
-        from think.utils import period_key
+        # Extract segment and create output in segment
+        from think.utils import segment_key
 
-        period = period_key(video_path.stem)
-        if period is None:
+        segment = segment_key(video_path.stem)
+        if segment is None:
             parser.error(
                 f"Invalid video filename: {video_path.stem} (must start with HHMMSS)"
             )
-        period_dir = video_path.parent / period
-        period_dir.mkdir(exist_ok=True)
-        output_path = period_dir / "screen.jsonl"
+        segment_dir = video_path.parent / segment
+        segment_dir.mkdir(exist_ok=True)
+        output_path = segment_dir / "screen.jsonl"
         if output_path.exists():
             logger.warning(f"Overwriting existing analysis file: {output_path}")
 
@@ -1001,7 +1001,7 @@ async def async_main():
             # Emit completion event
             if output_path and output_path.exists():
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
-                # Moved path is in period: YYYYMMDD/HHMMSS/screen.webm
+                # Moved path is in segment: YYYYMMDD/HHMMSS/screen.webm
                 time_part = video_path.stem.split("_")[0]
                 moved_path = video_path.parent / time_part / "screen.webm"
 

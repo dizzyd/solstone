@@ -344,7 +344,7 @@ def load_transcript(
 
     The JSONL format has metadata as the first line (may be empty {})
     and transcript entries as subsequent lines. Handles both native
-    transcripts (period/audio.jsonl) and imported transcripts (period/imported_audio.jsonl).
+    transcripts (segment/audio.jsonl) and imported transcripts (segment/imported_audio.jsonl).
 
     Args:
         file_path: Path to the JSONL transcript file
@@ -476,12 +476,12 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
     for i, part in enumerate(reversed(parts)):
         if re.match(r"^\d{8}$", part):
             day_str = part
-            # Check if previous part (parent dir) is HHMMSS period
+            # Check if previous part (parent dir) is HHMMSS segment
             if i > 0:
-                from think.utils import period_parse
+                from think.utils import segment_parse
 
                 prev_part = list(reversed(parts))[i - 1]
-                start_time, _ = period_parse(prev_part)
+                start_time, _ = segment_parse(prev_part)
             break
 
     # Build header line

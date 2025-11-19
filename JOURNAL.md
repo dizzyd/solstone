@@ -1,6 +1,6 @@
 # Sunstone Journal Guide
 
-This document describes the layout of a **journal** directory where all audio, screen and analysis artifacts are stored. Each dated `YYYYMMDD` folder is referred to as a **day**, and within each day captured content is organized into **periods** (timestamped duration folders). Each period folder uses the format `HHMMSS_LEN/` where `HHMMSS` is the start time and `LEN` is the duration in seconds. This folder name serves as the **period key**, uniquely identifying the period within a given day.
+This document describes the layout of a **journal** directory where all audio, screen and analysis artifacts are stored. Each dated `YYYYMMDD` folder is referred to as a **day**, and within each day captured content is organized into **segments** (timestamped duration folders). Each segment folder uses the format `HHMMSS_LEN/` where `HHMMSS` is the start time and `LEN` is the duration in seconds. This folder name serves as the **segment key**, uniquely identifying the segment within a given day.
 
 ## Top level files
 
@@ -405,17 +405,17 @@ See **APPS.md** for app storage utilities and access patterns.
 
 ## Day folder contents
 
-Within each day, captured content is organized into **periods** (timestamped duration folders). The folder name is the **period key**, which uniquely identifies the period within the day and follows this format:
+Within each day, captured content is organized into **segments** (timestamped duration folders). The folder name is the **segment key**, which uniquely identifies the segment within the day and follows this format:
 
-- `HHMMSS_LEN/` – Start time and duration in seconds (e.g., `143022_300/` for a 5-minute period starting at 14:30:22)
+- `HHMMSS_LEN/` – Start time and duration in seconds (e.g., `143022_300/` for a 5-minute segment starting at 14:30:22)
 
 Audio capture tools write FLAC files and transcripts:
 
-- `HHMMSS_LEN_*.flac` – audio files in day root (e.g., `143022_300_audio.flac`), moved to period after transcription.
+- `HHMMSS_LEN_*.flac` – audio files in day root (e.g., `143022_300_audio.flac`), moved to segment after transcription.
 - `HHMMSS_LEN/*.flac` – audio files moved here after processing, preserving descriptive suffix (e.g., `audio.flac`, `mic.flac`).
 - `HHMMSS_LEN/audio.jsonl` – transcript JSONL produced by transcription.
 
-Note: The descriptive portion after the period (e.g., `_audio`, `_recording`) is preserved when files are moved into period directories. Processing tools match files by extension only, ignoring the descriptive suffix.
+Note: The descriptive portion after the segment (e.g., `_audio`, `_recording`) is preserved when files are moved into segment directories. Processing tools match files by extension only, ignoring the descriptive suffix.
 
 ### Audio transcript output
 
@@ -447,12 +447,12 @@ Example transcript file:
 
 Screen capture produces screencast videos with multi-monitor metadata:
 
-- `HHMMSS_LEN_*.webm` – screencast video files in day root (e.g., `143022_300_screen.webm`), moved to period after analysis.
+- `HHMMSS_LEN_*.webm` – screencast video files in day root (e.g., `143022_300_screen.webm`), moved to segment after analysis.
 - `HHMMSS_LEN/*.webm` – video files moved here after analysis, preserving descriptive suffix (e.g., `screen.webm`, `monitor1.webm`).
 - `HHMMSS_LEN/screen.jsonl` – vision analysis results in JSON Lines format.
 - `HHMMSS_LEN/screen.md` – human-readable markdown summary of the video.
 
-Note: Like audio files, the descriptive portion is preserved when files are moved into period directories.
+Note: Like audio files, the descriptive portion is preserved when files are moved into segment directories.
 
 ### Screencast video format
 

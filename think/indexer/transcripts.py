@@ -21,7 +21,7 @@ SCREEN_JSONL_RE = re.compile(r"^(?P<time>\d{6})_screen\.jsonl$")
 
 
 def find_transcript_files(
-    journal: str, day: str | None = None, period: str | None = None
+    journal: str, day: str | None = None, segment: str | None = None
 ) -> Dict[str, str]:
     """Return mapping of transcript JSON file paths relative to ``journal``.
 
@@ -30,23 +30,23 @@ def find_transcript_files(
     If ``day`` is provided (YYYYMMDD format), only scan that specific day.
     Otherwise scan all days.
 
-    If ``period`` is provided (HHMMSS or HHMMSS_LEN format), only scan that
-    specific period within the day. Requires ``day`` to be specified.
+    If ``segment`` is provided (HHMMSS or HHMMSS_LEN format), only scan that
+    specific segment within the day. Requires ``day`` to be specified.
     """
     files: Dict[str, str] = {}
     days = {day: day_dirs()[day]} if day and day in day_dirs() else day_dirs()
     for day_key, day_path in days.items():
         # Check timestamp subdirectories
-        from think.utils import period_key
+        from think.utils import segment_key
 
         day_path_obj = Path(day_path)
         for item in day_path_obj.iterdir():
-            if item.is_dir() and period_key(item.name):
+            if item.is_dir() and segment_key(item.name):
                 # Found a timestamp directory (HHMMSS or HHMMSS_LEN)
-                # If period filter specified, check if this matches
-                if period:
-                    item_period_key = period_key(item.name)
-                    if item_period_key != period:
+                # If segment filter specified, check if this matches
+                if segment:
+                    item_segment_key = segment_key(item.name)
+                    if item_segment_key != segment:
                         continue
 
                 for result_file in item.glob("*.jsonl"):
@@ -204,18 +204,18 @@ def scan_transcripts(
     journal: str,
     verbose: bool = False,
     day: str | None = None,
-    period: str | None = None,
+    segment: str | None = None,
 ) -> bool:
     """Index transcript audio, screen diff JSON, and screen JSONL files on a per-day basis.
 
     If ``day`` is provided (YYYYMMDD format), only scan that specific day.
     Otherwise scan all days.
 
-    If ``period`` is provided (HHMMSS or HHMMSS_LEN format), only scan that
-    specific period within the day. Requires ``day`` to be specified.
+    If ``segment`` is provided (HHMMSS or HHMMSS_LEN format), only scan that
+    specific segment within the day. Requires ``day`` to be specified.
     """
     logger = logging.getLogger(__name__)
-    files = find_transcript_files(journal, day=day, period=period)
+    files = find_transcript_files(journal, day=day, segment=segment)
     if not files:
         return False
 

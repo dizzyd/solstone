@@ -58,13 +58,13 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 - `status`: Periodic state (every 5s, only when active)
   - From `observer.py`: `screencast`, `audio`, `activity` - Live capture state
   - From `sense.py`: `describe`, `transcribe` - Processing pipeline state
-- `observing`: `period`, `files` - Recording window boundary crossed with saved files
+- `observing`: `segment`, `files` - Recording window boundary crossed with saved files
 - `detected`: `file`, `handler`, `ref` - File detected and handler spawned
 - `described`/`transcribed`/`reduced`: `input`, `output`, `duration_ms` - Processing complete
-- `observed`: `period`, `duration` - All files for period fully processed
+- `observed`: `segment`, `duration` - All files for segment fully processed
 **Purpose:** Track observation pipeline from live capture state through processing completion
 **Path Format:** Relative to `JOURNAL_PATH` (e.g., `20251102/163045_screen.webm`, `20251102/seen/163045_screen.webm`)
-**Correlation:** `detected.ref` matches `logs.exec.ref` for the same handler process; `observed.period` groups all files from same capture window
+**Correlation:** `detected.ref` matches `logs.exec.ref` for the same handler process; `observed.segment` groups all files from same capture window
 
 ### `importer` - Media import and transcription processing
 **Source:** `think/importer.py`

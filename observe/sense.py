@@ -73,10 +73,10 @@ class FileSensor:
         # Track last status emission time
         self.last_status_emit = 0.0
 
-        # Track period processing: {period_key: {pending_files}}
-        self.period_files: Dict[str, set[Path]] = {}
-        # Track period start times: {period_key: start_timestamp}
-        self.period_start_time: Dict[str, float] = {}
+        # Track segment processing: {segment_key: {pending_files}}
+        self.segment_files: Dict[str, set[Path]] = {}
+        # Track segment start times: {segment_key: start_timestamp}
+        self.segment_start_time: Dict[str, float] = {}
 
     def register(self, pattern: str, handler_name: str, command: List[str]):
         """
@@ -96,7 +96,7 @@ class FileSensor:
         if file_path.name.startswith("."):
             return None
 
-        # Ignore files in subdirectories (periods, trash/)
+        # Ignore files in subdirectories (segments, trash/)
         # Expected structure: journal_dir/YYYYMMDD/file.ext (2 parts from journal_dir)
         # Reject: journal_dir/YYYYMMDD/HHMMSS/file.ext (3+ parts from journal_dir)
         try:
@@ -120,15 +120,15 @@ class FileSensor:
                 logger.debug(f"File {file_path.name} already being processed")
                 return
 
-            # Register file for period tracking
-            from think.utils import period_key
+            # Register file for segment tracking
+            from think.utils import segment_key
 
-            period = period_key(file_path.name)
-            if period:
-                if period not in self.period_files:
-                    self.period_files[period] = set()
-                    self.period_start_time[period] = time.time()
-                self.period_files[period].add(file_path)
+            segment = segment_key(file_path.name)
+            if segment:
+                if segment not in self.segment_files:
+                    self.segment_files[segment] = set()
+                    self.segment_start_time[segment] = time.time()
+                self.segment_files[segment].add(file_path)
 
             # Queue describe requests to ensure only one runs at a time
             if handler_name == "describe":
@@ -216,8 +216,8 @@ class FileSensor:
                             exc_info=True,
                         )
 
-                # Check if period is fully observed
-                self._check_period_observed(handler_proc.file_path)
+                # Check if segment is fully observed
+                self._check_segment_observed(handler_proc.file_path)
             else:
                 logger.error(
                     f"{handler_proc.handler_name} failed for {handler_proc.file_path.name} "
@@ -254,50 +254,50 @@ class FileSensor:
                     handler_name, command = handler_info
                     self._spawn_handler(next_file, handler_name, command)
 
-    def _check_period_observed(self, file_path: Path):
-        """Check if all files for this period have completed processing."""
-        from think.utils import period_key
+    def _check_segment_observed(self, file_path: Path):
+        """Check if all files for this segment have completed processing."""
+        from think.utils import segment_key
 
-        period = period_key(file_path.name)
-        if not period:
+        segment = segment_key(file_path.name)
+        if not segment:
             return
 
         with self.lock:
-            if period in self.period_files:
-                self.period_files[period].discard(file_path)
+            if segment in self.segment_files:
+                self.segment_files[segment].discard(file_path)
 
                 # If no more pending files, emit observed event
-                if not self.period_files[period]:
+                if not self.segment_files[segment]:
                     # Calculate processing duration
-                    duration = int(time.time() - self.period_start_time[period])
+                    duration = int(time.time() - self.segment_start_time[segment])
 
                     if self.callosum:
                         self.callosum.emit(
                             "observe",
                             "observed",
-                            period=period,
+                            segment=segment,
                             duration=duration,
                         )
-                    logger.info(f"Period fully observed: {period} ({duration}s)")
+                    logger.info(f"Segment fully observed: {segment} ({duration}s)")
 
                     # Cleanup
-                    del self.period_files[period]
-                    del self.period_start_time[period]
+                    del self.segment_files[segment]
+                    del self.segment_start_time[segment]
 
     def _run_reduce(self, video_path: Path):
         """Run reduce on the video file after describe completes."""
-        from think.utils import period_key
+        from think.utils import segment_key
 
-        # Extract day and period from video path
+        # Extract day and segment from video path
         # Expected structure: journal_dir/YYYYMMDD/HHMMSS_LEN_suffix.webm
         day = video_path.parent.name  # YYYYMMDD
-        period = period_key(video_path.stem)  # HHMMSS or HHMMSS_LEN
+        segment = segment_key(video_path.stem)  # HHMMSS or HHMMSS_LEN
 
-        if not period:
-            logger.error(f"Cannot extract period from {video_path.stem}")
+        if not segment:
+            logger.error(f"Cannot extract segment from {video_path.stem}")
             return
 
-        cmd = ["observe-reduce", "--day", day, "--period", period]
+        cmd = ["observe-reduce", "--day", day, "--segment", segment]
 
         # Add verbose/debug flags if set
         if self.debug:
@@ -305,15 +305,15 @@ class FileSensor:
         elif self.verbose:
             cmd.append("-v")
 
-        logger.info(f"Running reduce for {day}/{period}")
+        logger.info(f"Running reduce for {day}/{segment}")
 
         # Use unified runner with automatic logging and timeout
         success, exit_code = run_task(cmd, timeout=300)  # 5 minute timeout
 
         if success:
-            logger.info(f"Reduce completed successfully for {day}/{period}")
+            logger.info(f"Reduce completed successfully for {day}/{segment}")
         else:
-            logger.warning(f"Reduce failed for {day}/{period} (exit code {exit_code})")
+            logger.warning(f"Reduce failed for {day}/{segment} (exit code {exit_code})")
 
     def _handle_file(self, file_path: Path):
         """Route file to appropriate handler."""
@@ -521,7 +521,7 @@ class FileSensor:
         """Process all matching unprocessed files from a specific day directory.
 
         Files are considered unprocessed if the source media file has not been
-        moved to periods (HHMMSS/). This approach handles incomplete
+        moved to segments (HHMMSS/). This approach handles incomplete
         processing gracefully by re-running even if output files exist.
 
         Also finds JSONL files without corresponding MD files and runs reduce on them.
@@ -535,7 +535,7 @@ class FileSensor:
             logger.error(f"Day directory not found: {day_dir}")
             return
 
-        # Find all matching unprocessed files (not yet moved to periods)
+        # Find all matching unprocessed files (not yet moved to segments)
         to_process = []
         for file_path in day_dir.iterdir():
             if file_path.is_file():
@@ -544,20 +544,20 @@ class FileSensor:
                     handler_name, command = handler_info
                     to_process.append((file_path, handler_name, command))
 
-        # Find incomplete reduces (screen.jsonl files in periods without corresponding screen.md)
-        for period in day_dir.iterdir():
-            from think.utils import period_key
+        # Find incomplete reduces (screen.jsonl files in segments without corresponding screen.md)
+        for segment in day_dir.iterdir():
+            from think.utils import segment_key
 
-            if period.is_dir() and period_key(period.name):
-                screen_jsonl = period / "screen.jsonl"
-                screen_md = period / "screen.md"
+            if segment.is_dir() and segment_key(segment.name):
+                screen_jsonl = segment / "screen.jsonl"
+                screen_md = segment / "screen.md"
                 if screen_jsonl.exists() and not screen_md.exists():
                     # Register reduce as a handler task with semantic args
                     to_process.append(
                         (
                             screen_jsonl,
                             "reduce",
-                            ["observe-reduce", "--day", day, "--period", period.name],
+                            ["observe-reduce", "--day", day, "--segment", segment.name],
                         )
                     )
 
@@ -620,26 +620,26 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
 
     Returns:
         Dictionary with:
-        - "processed": List of JSONL output files in periods (HHMMSS/audio.jsonl, HHMMSS/screen.jsonl)
+        - "processed": List of JSONL output files in segments (HHMMSS/audio.jsonl, HHMMSS/screen.jsonl)
         - "unprocessed": List of unprocessed source media files in day root
     """
-    # Find processed output files in periods (HHMMSS/)
-    from think.utils import period_key
+    # Find processed output files in segments (HHMMSS/)
+    from think.utils import segment_key
 
     processed = []
-    for period in day_dir.iterdir():
-        if period.is_dir() and period_key(period.name):
+    for segment in day_dir.iterdir():
+        if segment.is_dir() and segment_key(segment.name):
             # Check for audio.jsonl and split audio files
-            for audio_file in period.glob("*audio.jsonl"):
-                processed.append(f"{period.name}/{audio_file.name}")
+            for audio_file in segment.glob("*audio.jsonl"):
+                processed.append(f"{segment.name}/{audio_file.name}")
             # Check for screen.jsonl
-            screen_jsonl = period / "screen.jsonl"
+            screen_jsonl = segment / "screen.jsonl"
             if screen_jsonl.exists():
-                processed.append(f"{period.name}/screen.jsonl")
+                processed.append(f"{segment.name}/screen.jsonl")
 
     processed.sort()
 
-    # Find unprocessed source media (still in day root, not yet moved to periods)
+    # Find unprocessed source media (still in day root, not yet moved to segments)
     # Match by extension only - any descriptive suffix is allowed
     unprocessed = []
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*.flac")))

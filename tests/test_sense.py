@@ -136,11 +136,11 @@ def test_file_sensor_match_pattern():
         txt_file = day_dir / "test.txt"
         assert sensor._match_pattern(txt_file) is None
 
-        # Should not match - in period
-        period_dir = day_dir / "123456"
-        period_dir.mkdir()
-        period_file = period_dir / "audio.jsonl"
-        assert sensor._match_pattern(period_file) is None
+        # Should not match - in segment
+        segment_dir = day_dir / "123456"
+        segment_dir.mkdir()
+        segment_file = segment_dir / "audio.jsonl"
+        assert sensor._match_pattern(segment_file) is None
 
 
 @patch("think.runner._get_journal_path")

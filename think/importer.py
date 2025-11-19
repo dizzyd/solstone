@@ -296,9 +296,9 @@ def process_transcript(
         ts = base_dt + timedelta(minutes=idx * 5)
         time_part = ts.strftime("%H%M%S")
 
-        # Create period directory with 5-minute (300 second) duration suffix
-        period_name = f"{time_part}_300"
-        ts_dir = os.path.join(day_dir, period_name)
+        # Create segment directory with 5-minute (300 second) duration suffix
+        segment_name = f"{time_part}_300"
+        ts_dir = os.path.join(day_dir, segment_name)
         os.makedirs(ts_dir, exist_ok=True)
         json_path = os.path.join(ts_dir, "imported_audio.jsonl")
 
@@ -435,9 +435,9 @@ def audio_transcribe(
         ts = base_dt + timedelta(minutes=chunk_index * 5)
         time_part = ts.strftime("%H%M%S")
 
-        # Create period directory with 5-minute (300 second) duration suffix
-        period_name = f"{time_part}_300"
-        ts_dir = os.path.join(day_dir, period_name)
+        # Create segment directory with 5-minute (300 second) duration suffix
+        segment_name = f"{time_part}_300"
+        ts_dir = os.path.join(day_dir, segment_name)
         os.makedirs(ts_dir, exist_ok=True)
         json_path = os.path.join(ts_dir, "imported_audio.jsonl")
 

@@ -74,7 +74,7 @@ def test_raw_index(tmp_path):
     os.environ["JOURNAL_PATH"] = str(journal)
     day = journal / "20240103"
     day.mkdir()
-    # Write JSONL format: metadata first, then entries in periody
+    # Write JSONL format: metadata first, then entries in segment directory
     ts_dir = day / "123000"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(
@@ -137,7 +137,7 @@ def test_search_raws_day(tmp_path):
 
     day1 = journal / "20240105"
     day1.mkdir()
-    # Write JSONL format: metadata first, then entries in periody
+    # Write JSONL format: metadata first, then entries in segment directory
     ts_dir1 = day1 / "123000"
     ts_dir1.mkdir()
     (ts_dir1 / "audio.jsonl").write_text(
@@ -151,7 +151,7 @@ def test_search_raws_day(tmp_path):
 
     day2 = journal / "20240106"
     day2.mkdir()
-    # Write JSONL format: metadata first, then entries in periody
+    # Write JSONL format: metadata first, then entries in segment directory
     ts_dir2 = day2 / "090000"
     ts_dir2.mkdir()
     (ts_dir2 / "audio.jsonl").write_text(
@@ -180,7 +180,7 @@ def test_search_raws_time_order(tmp_path):
 
     day = journal / "20240107"
     day.mkdir()
-    # Write JSONL format: metadata first, then entries in periodies
+    # Write JSONL format: metadata first, then entries in segment directory
     ts_dir1 = day / "090000"
     ts_dir1.mkdir()
     (ts_dir1 / "audio.jsonl").write_text(
@@ -279,86 +279,86 @@ def test_scan_transcripts_single_day(tmp_path):
     assert total == 2
 
 
-def test_scan_transcripts_single_period(tmp_path):
-    """Test scanning transcripts for a specific period within a day."""
+def test_scan_transcripts_single_segment(tmp_path):
+    """Test scanning transcripts for a specific segment within a day."""
     mod = importlib.import_module("think.indexer")
     journal = tmp_path
     os.environ["JOURNAL_PATH"] = str(journal)
 
-    # Create a day with multiple periods
+    # Create a day with multiple segments
     day = journal / "20240110"
     day.mkdir()
 
-    # Period 1: 100000
-    period1 = day / "100000"
-    period1.mkdir()
-    (period1 / "audio.jsonl").write_text(
+    # Segment 1: 100000
+    segment1 = day / "100000"
+    segment1.mkdir()
+    (segment1 / "audio.jsonl").write_text(
         json.dumps({"topics": ["test"], "setting": "personal"})
         + "\n"
         + json.dumps(
-            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "period one"}
+            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "segment one"}
         )
         + "\n"
     )
 
-    # Period 2: 110000_300 (with duration)
-    period2 = day / "110000_300"
-    period2.mkdir()
-    (period2 / "audio.jsonl").write_text(
+    # Segment 2: 110000_300 (with duration)
+    segment2 = day / "110000_300"
+    segment2.mkdir()
+    (segment2 / "audio.jsonl").write_text(
         json.dumps({"topics": ["test"], "setting": "personal"})
         + "\n"
         + json.dumps(
-            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "period two"}
+            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "segment two"}
         )
         + "\n"
     )
 
-    # Period 3: 120000
-    period3 = day / "120000"
-    period3.mkdir()
-    (period3 / "audio.jsonl").write_text(
+    # Segment 3: 120000
+    segment3 = day / "120000"
+    segment3.mkdir()
+    (segment3 / "audio.jsonl").write_text(
         json.dumps({"topics": ["test"], "setting": "personal"})
         + "\n"
         + json.dumps(
-            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "period three"}
+            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "segment three"}
         )
         + "\n"
     )
 
-    # Scan only period 2 with duration format
+    # Scan only segment 2 with duration format
     changed = mod.scan_transcripts(
-        str(journal), verbose=True, day="20240110", period="110000_300"
+        str(journal), verbose=True, day="20240110", segment="110000_300"
     )
     assert changed is True
 
     # Day should have index
     assert (day / "indexer" / "transcripts.sqlite").exists()
 
-    # Search should only find period 2
-    total, results = mod.search_transcripts("period", limit=10, day="20240110")
+    # Search should only find segment 2
+    total, results = mod.search_transcripts("segment", limit=10, day="20240110")
     assert total == 1
     assert results[0]["metadata"]["time"] == "110000_300"
-    assert "period two" in results[0]["text"]
+    assert "segment two" in results[0]["text"]
 
-    # Now scan period 1 (without duration format)
-    # This replaces the index with only period 1 (removes period 2)
+    # Now scan segment 1 (without duration format)
+    # This replaces the index with only segment 1 (removes segment 2)
     changed = mod.scan_transcripts(
-        str(journal), verbose=True, day="20240110", period="100000"
+        str(journal), verbose=True, day="20240110", segment="100000"
     )
     assert changed is True
 
-    # Search should now find only period 1 (period 2 was removed)
-    total, results = mod.search_transcripts("period", limit=10, day="20240110")
+    # Search should now find only segment 1 (segment 2 was removed)
+    total, results = mod.search_transcripts("segment", limit=10, day="20240110")
     assert total == 1
     assert results[0]["metadata"]["time"] == "100000"
-    assert "period one" in results[0]["text"]
+    assert "segment one" in results[0]["text"]
 
-    # Scan all periods in the day - this is the proper way to get all periods
+    # Scan all segments in the day - this is the proper way to get all segments
     changed = mod.scan_transcripts(str(journal), verbose=True, day="20240110")
     assert changed is True
 
-    # Search should now find all 3 periods
-    total, results = mod.search_transcripts("period", limit=10, day="20240110")
+    # Search should now find all 3 segments
+    total, results = mod.search_transcripts("segment", limit=10, day="20240110")
     assert total == 3
     assert {r["metadata"]["time"] for r in results} == {
         "100000",
@@ -366,13 +366,13 @@ def test_scan_transcripts_single_period(tmp_path):
         "120000",
     }
 
-    # Verify period-specific scan with duration still works after full scan
+    # Verify segment-specific scan with duration still works after full scan
     changed = mod.scan_transcripts(
-        str(journal), verbose=True, day="20240110", period="110000_300"
+        str(journal), verbose=True, day="20240110", segment="110000_300"
     )
     # Should return False because file hasn't changed (mtime caching)
-    # Actually returns True because it removes other periods
+    # Actually returns True because it removes other segments
     assert changed is True
-    total, results = mod.search_transcripts("period", limit=10, day="20240110")
+    total, results = mod.search_transcripts("segment", limit=10, day="20240110")
     assert total == 1
     assert results[0]["metadata"]["time"] == "110000_300"

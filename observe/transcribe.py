@@ -161,24 +161,24 @@ class Transcriber:
 
         self.vad_model = load_silero_vad()
 
-    def _move_to_period(self, audio_path: Path) -> Path:
-        """Move audio file to its period and return new path."""
+    def _move_to_segment(self, audio_path: Path) -> Path:
+        """Move audio file to its segment and return new path."""
         from observe.utils import extract_descriptive_suffix
-        from think.utils import period_key
+        from think.utils import segment_key
 
-        period = period_key(audio_path.stem)
-        if period is None:
+        segment = segment_key(audio_path.stem)
+        if segment is None:
             raise ValueError(f"Invalid audio filename: {audio_path.stem}")
         suffix = extract_descriptive_suffix(audio_path.stem)
-        period_dir = audio_path.parent / period
+        segment_dir = audio_path.parent / segment
         try:
-            period_dir.mkdir(exist_ok=True)
-            new_path = period_dir / f"{suffix}.flac"
+            segment_dir.mkdir(exist_ok=True)
+            new_path = segment_dir / f"{suffix}.flac"
             audio_path.rename(new_path)
-            logging.info("Moved %s to %s", audio_path, period_dir)
+            logging.info("Moved %s to %s", audio_path, segment_dir)
             return new_path
         except Exception as exc:
-            logging.error("Failed to move %s to period: %s", audio_path, exc)
+            logging.error("Failed to move %s to segment: %s", audio_path, exc)
             return audio_path
 
     def _process_audio(
@@ -431,21 +431,21 @@ class Transcriber:
             audio_path: Path to the audio file (in day root)
             stream: Optional stream identifier ('mic' or 'sys') for split processing
         """
-        from think.utils import period_key
+        from think.utils import segment_key
 
-        period = period_key(audio_path.stem)
-        if period is None:
+        segment = segment_key(audio_path.stem)
+        if segment is None:
             raise ValueError(f"Invalid audio filename: {audio_path.stem}")
-        period_dir = audio_path.parent / period
-        period_dir.mkdir(exist_ok=True)
+        segment_dir = audio_path.parent / segment
+        segment_dir.mkdir(exist_ok=True)
 
-        # Generate simple filename within period
+        # Generate simple filename within segment
         if stream:
             json_name = f"{stream}_audio.jsonl"
         else:
             json_name = "audio.jsonl"
 
-        return period_dir / json_name
+        return segment_dir / json_name
 
     def _transcribe(
         self,
@@ -501,7 +501,7 @@ class Transcriber:
                     transcript_items = result[:-1]
 
             # Add audio file reference to metadata
-            # Path is relative to the JSONL file (both in same period directory)
+            # Path is relative to the JSONL file (both in same segment directory)
             from observe.utils import extract_descriptive_suffix
 
             suffix = extract_descriptive_suffix(raw_path.stem)
@@ -542,7 +542,7 @@ class Transcriber:
                 logging.info(
                     f"Already processed (split), moving to timestamp dir: {raw_path}"
                 )
-                self._move_to_period(raw_path)
+                self._move_to_segment(raw_path)
                 return
 
             # Process audio in split mode
@@ -573,7 +573,7 @@ class Transcriber:
                 return
 
             if success:
-                moved_path = self._move_to_period(raw_path)
+                moved_path = self._move_to_segment(raw_path)
 
                 # Emit completion events for split mode
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
@@ -603,7 +603,7 @@ class Transcriber:
             json_path = self._get_json_path(raw_path)
             if json_path.exists():
                 logging.info(f"Already processed, moving to timestamp dir: {raw_path}")
-                self._move_to_period(raw_path)
+                self._move_to_segment(raw_path)
                 return
 
             # Process audio
@@ -622,7 +622,7 @@ class Transcriber:
             # Transcribe
             success = self._transcribe(raw_path, segments)
             if success:
-                moved_path = self._move_to_period(raw_path)
+                moved_path = self._move_to_segment(raw_path)
 
                 # Emit completion event for standard mode
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))

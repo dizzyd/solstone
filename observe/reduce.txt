@@ -47,7 +47,7 @@ Your job is to synthesize this into an articulate, comprehensive markdown report
 
 Provide a complete and detailed markdown report with:
 
-- **Clear structure**: Use headers (##, ###) to organize by time periods or major activity shifts
+- **Clear structure**: Use headers (##, ###) to organize by time segments or major activity shifts
 - **Narrative flow**: Write in past tense as a natural chronological account
 - **Time attribution**: Include approximate times for major activities or transitions
 - **Relevant excerpts**: Use blockquotes or code blocks for extracted text when meaningful

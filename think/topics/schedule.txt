@@ -49,7 +49,7 @@ For each future event, create a formatted entry with:
 Conclude with a brief summary highlighting:
 - The next upcoming event
 - Any particularly important or unusual scheduled items
-- General schedule density for the upcoming period
+- General schedule density for the upcoming segment
 
 ## Important Notes
 - Only extract what is clearly visible on screen or captured in a transcript

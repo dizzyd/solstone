@@ -8,7 +8,7 @@ Identify knowledge gaps and compile targeted research tasks by analyzing the day
 
 1. **Assess Deep Work**
    - Recognize segments of intense focus on a single problem or project.
-   - Note the specific tools, code files, documents or websites visible during these periods.
+   - Note the specific tools, code files, documents or websites visible during these segments.
    - Example: A 30‑minute block editing `models.py` with no meeting audio indicates deep coding work.
 
 2. **Detect Knowledge Gaps**
