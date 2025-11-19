@@ -52,7 +52,9 @@ class MacOSObserver:
         self.start_at_mono = time.monotonic()  # Monotonic for elapsed calculations
         self.capture_running = False
         self.current_output_base = None  # Base path for current capture
-        self.pending_finalization = None  # Tuple of (temp_base, final_video, final_audio)
+        self.pending_finalization = (
+            None  # Tuple of (temp_base, final_video, final_audio)
+        )
         self.last_video_size = 0  # Track file size for health checks
 
         # Activity status cache (updated each loop)
