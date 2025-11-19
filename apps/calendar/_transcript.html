@@ -1,5 +1,4 @@
 {# Calendar transcript viewer - dual-timeline interface #}
-{% import 'macros.html' as macros %}
 
 <style>
   :root{
@@ -66,9 +65,7 @@
 </style>
 
 <div class="calendar-content">
-  {{ macros.day_heading(title,
-        prev_day and url_for('app:calendar.calendar_transcript_page', day=prev_day),
-        next_day and url_for('app:calendar.calendar_transcript_page', day=next_day)) }}
+  <h1>{{ title }}</h1>
 </div>
 <div class="wrap">
   <div class="card">

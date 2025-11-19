@@ -1,5 +1,4 @@
 {# Calendar day view - events timeline and topic tabs #}
-{% import 'macros.html' as macros %}
 
 <style>
 .modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); }
@@ -11,14 +10,7 @@
 </style>
 
 <div class="workspace-content-wide">
-  {{ macros.day_heading(title,
-        prev_day and url_for('app:calendar.calendar_day', day=prev_day),
-        next_day and url_for('app:calendar.calendar_day', day=next_day),
-        url_for('app:calendar.calendar_transcript_page', day=day),
-        None,
-        url_for('app:todos.todos_day', day=day),
-        None,
-        url_for('app:calendar._dev_calendar_screens_list', day=day)) }}
+  <h1>{{ title }}</h1>
   <div class="tabs">
     <a class="tab active" href="#events" data-target="events" title="Events">Events</a>
     {% for file in files %}
@@ -40,7 +32,7 @@
     </div>
   </div>
 </div>
-<script src="{{ url_for('home.static', filename='colors.js') }}"></script>
+<script src="{{ url_for('root.static', filename='colors.js') }}"></script>
 <script>
 let tabs = Array.from(document.querySelectorAll('.tab'));
 const contents = document.querySelectorAll('.content');

@@ -1,0 +1,4 @@
+{% set current_view = view|default('month') %}
+{% if current_view != 'month' %}
+{% include 'date_nav.html' %}
+{% endif %}

@@ -1,5 +1,4 @@
 {# Screen debug viewer - list of screen.jsonl files for a day #}
-{% import 'macros.html' as macros %}
 
 <style>
 .screens-list {
@@ -89,10 +88,7 @@
 </style>
 
 <div class="calendar-content">
-  {{ macros.day_heading(title,
-        prev_day and url_for('app:calendar._dev_calendar_screens_list', day=prev_day),
-        next_day and url_for('app:calendar._dev_calendar_screens_list', day=next_day),
-        url_for('app:calendar.calendar_transcript_page', day=day)) }}
+  <h1>{{ title }}</h1>
 
   <div class="screens-list">
     <h2>

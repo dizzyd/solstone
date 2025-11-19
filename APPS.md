@@ -158,9 +158,26 @@ Fixed bottom bar for forms, buttons, date pickers, search boxes.
 - Only rendered when app provides this template
 - Great for persistent input controls across views
 
+**Date Navigator Component:**
+
+For apps with day-based navigation, include the shared date navigator:
+
+```html
+{% include 'date_nav.html' %}
+```
+
+This provides a unified `← 🗓️ Today →` control with:
+- Previous/next day buttons
+- Native date picker (calendar icon)
+- Today button (disabled when viewing current day)
+- Keyboard shortcuts: ←/→ arrows, `t` for today
+
+The component reads `day` and `app` from template context to construct navigation URLs.
+
 **Reference implementations:**
-- Form input: `apps/todos/app_bar.html` (date navigation, todo input)
-- Controls: `apps/tokens/app_bar.html` (action buttons)
+- Date navigation: `apps/todos/app_bar.html`, `apps/tokens/app_bar.html`, `apps/calendar/app_bar.html`
+
+**Implementation source:** `convey/templates/date_nav.html`
 
 ### 6. `background.html` - Background Service
 
