@@ -12,7 +12,7 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 
 - `todo_list(day, facet)` – inspect current lines for the specified facet; copy the exact text (including `- [ ]`) when preparing guard strings
 - `todo_done(day, facet, line_number, guard)` – mark a line complete (guard must equal the exact line from the latest list)
-- `search_summaries`, `search_transcripts`, `search_events`, `search_news`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
+- `search_insights`, `search_transcripts`, `search_events`, `search_news`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
 
 **IMPORTANT**: All todo operations require both day and facet parameters. The facet context is provided in your prompt.
 
@@ -26,7 +26,7 @@ For each unchecked line from `todo_list(day, facet)`:
 
 1. **Extract Key Terms** – identify verbs, objects, and times in the line
 2. **Targeted Search** – query journal data succinctly:
-   - `search_summaries("[keywords]", limit=5, day=day_yesterday)`
+   - `search_insights("[keywords]", limit=5, day=day_yesterday)`
    - `search_transcripts("[keywords]", day=day_yesterday)`
    - `search_news("[keywords]", facet=your_facet, day=day_yesterday)`
    - tap other sources (events, topic summaries) when helpful
@@ -64,7 +64,7 @@ Favor minimal, high-signal queries:
 ### Example
 
 - Start: `todo_list(day, facet)` shows `2: - [ ] Debug database connection timeout issue (10:00)`
-- Query: `search_summaries("database timeout fixed resolved", limit=3, day=day_yesterday)` → evidence describes the fix
+- Query: `search_insights("database timeout fixed resolved", limit=3, day=day_yesterday)` → evidence describes the fix
 - Action: `todo_done(day, facet, line_number=2, guard="- [ ] Debug database connection timeout issue (10:00)")`
 - Result: final list shows `2: - [x] ...`
 

@@ -39,7 +39,7 @@ Always operate on the MCP entity tools with the **required facet parameter**:
 
 Discovery tools (note facet scoping):
 - `get_resource(uri)` - fetch journal resources (knowledge graphs, summaries) - GLOBAL
-- `search_summaries(query, day, limit)` - search daily summaries - GLOBAL, may include content from other facets
+- `search_insights(query, day, limit)` - search daily summaries - GLOBAL, may include content from other facets
 - `search_transcripts(query, day, limit)` - search audio/screen transcripts - GLOBAL, may include content from other facets
 - `search_events(query, facet, day, limit)` - search calendar events - **FACET-SCOPED when facet parameter provided**
 
@@ -68,15 +68,15 @@ Seeing an entity in a global search does NOT mean it belongs to this facet.
 - Extract ALL entities that participated in this facet's events
 
 **Priority 2: Knowledge Graphs** (use with strict facet filtering)
-- `get_resource("journal://topics/knowledge_graph")` for yesterday
-- `get_resource("journal://topics/knowledge_graph_*")` variations if present
+- `get_resource("journal://summary/YESTERDAY/knowledge_graph")` for yesterday
+- `get_resource("journal://summary/YESTERDAY/knowledge_graph_*")` variations if present
 - Knowledge graphs contain structured entity relationships (GLOBAL - filter for facet relevance)
 - **CRITICAL**: Only extract entities that are CLEARLY associated with THIS facet's activities
 - If an entity appears in the KG but has no obvious connection to this facet's work, skip it
 - Look for entities that appear alongside known facet-specific contexts
 
 **Priority 3: Summaries and Transcripts** (use sparingly with extreme filtering)
-- `search_summaries("people OR companies OR organizations OR projects OR entities", day=yesterday, limit=10)` - GLOBAL, may include other facets
+- `search_insights("people OR companies OR organizations OR projects OR entities", day=yesterday, limit=10)` - GLOBAL, may include other facets
 - `search_transcripts("[entity names]", day=yesterday)` - GLOBAL, must validate facet relevance
 - For each result: verify the entity was actively involved in THIS facet's context, not just mentioned
 

@@ -9,7 +9,7 @@ The research will first build a complete picture of yesterday's activities, then
 ### Research Strategy
 The strategy is to conduct a three-phase data sweep of yesterday's journal entries. We will start broad to understand the day's main themes and then narrow our focus to find specific, quote-worthy, or event-specific details that have comedic potential.
 
-1.  **Broad Overview**: Use `search_summaries` and `search_events` and `search_news` to get a complete list of all topics and structured activities from yesterday. This creates a high-level map of the day.
+1.  **Broad Overview**: Use `search_insights` and `search_events` and `search_news` to get a complete list of all topics and structured activities from yesterday. This creates a high-level map of the day.
 2.  **Detailed Search**: Use `search_transcripts` with a set of keywords related to emotion, humor, and conflict (e.g., "frustrating", "ridiculous", "error", "lol") to pinpoint specific moments of interest.
 3.  **Contextual Analysis**: Use `get_resource` to pull the full context for the most promising findings from the previous phases. This raw material will be analyzed for comedic elements like irony, juxtaposition, or absurdity.
 4.  **Creative Synthesis & Delivery**: The final phase involves brainstorming joke concepts from the analyzed material, selecting the best one, and delivering it via `send_message`.
@@ -21,7 +21,7 @@ The strategy is to conduct a three-phase data sweep of yesterday's journal entri
 **Phase 1: Discovery - Mapping Yesterday's Landscape**
 
 1.  **Identify All Daily Topics**:
-    -   **Tool**: `search_summaries`
+    -   **Tool**: `search_insights`
     -   **Query**: `day={yesterday_YYYYMMDD}` (with an empty query string to retrieve all topics)
     -   **Purpose**: To get a complete list of all themes and activities discussed or worked on yesterday. This provides the main "characters" and "settings" for potential jokes.
     -   **Expected Outcomes**: A list of all topic summaries from the day, which will help identify recurring themes or unusual combinations of activities.

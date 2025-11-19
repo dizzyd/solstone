@@ -6,7 +6,7 @@ From yesterday's "Top 10 Decision-Actions" list, you will:
 4. Produce actionable dossiers with specific remedies
 
 ## Available MCP Tools
-- `search_summaries(query, limit, day)` - Search topic summaries
+- `search_insights(query, limit, day)` - Search topic summaries
 - `search_transcripts(query, day, limit)` - Search raw transcripts
 - `search_events(query, day)` - Find meetings and structured events
 - `search_news(query, day)` - Search facet news for announcements
@@ -57,7 +57,7 @@ Use these tools in sequence:
 ### Step 2: Stakeholder & Dependency Mapping
 
 1. **Identify all entities:**
-   - `search_summaries("entity names from decision", day="YESTERDAY")`
+   - `search_insights("entity names from decision", day="YESTERDAY")`
    - Goal: Find all people, teams, projects mentioned
 
 2. **Map meeting participants:**
@@ -68,7 +68,7 @@ Use these tools in sequence:
 ### Step 3: Historical Precedent Mining (30-day lookback)
 
 1. **Find similar past decisions:**
-   - `search_summaries("decision type AND key entities", limit=20)`
+   - `search_insights("decision type AND key entities", limit=20)`
    - Goal: Discover patterns in how similar decisions were handled
 
 2. **Check commitment history:**
@@ -93,7 +93,7 @@ Use these tools in sequence:
 ### Step 5: Gap Detection
 
 1. **Search for problems:**
-   - `search_summaries("rollback revert issue problem", day="YESTERDAY")`
+   - `search_insights("rollback revert issue problem", day="YESTERDAY")`
    - Goal: Identify emerging issues
 
 2. **Verify updates:**
