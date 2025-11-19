@@ -14,7 +14,7 @@
     <button type="submit">Search</button>
   </form>
   <div class="tabs">
-    <div class="tab active" data-index="summaries">Summaries</div>
+    <div class="tab active" data-index="insights">Insights</div>
     <div class="tab" data-index="events">Events</div>
     <div class="tab" data-index="entities">Entities</div>
     <div class="tab" data-index="transcripts">Transcripts</div>
@@ -28,7 +28,7 @@
 
 <script src="{{ url_for('root.static', filename='colors.js') }}"></script>
 <script>
-const summariesUrl = '{{ url_for('app:search.search_summaries_api') }}';
+const insightsUrl = '{{ url_for('app:search.search_insights_api') }}';
 const eventsUrl = '{{ url_for('app:search.search_events_api') }}';
 const entitiesUrl = '{{ url_for('app:search.search_entities_api') }}';
 const transcriptsUrl = '{{ url_for('app:search.search_transcripts_api') }}';
@@ -59,7 +59,7 @@ window.addEventListener('hashchange', loadFromHash);
 function parseQuery(q){
   let day = '';
   let topic = '';
-  let index = 'summaries';
+  let index = 'insights';
   let type = '';
   let name = '';
   let facet = '';
@@ -313,7 +313,7 @@ function doSearch(reset=true){
   if(reset){ offset = 0; topicColors = {}; colorIndex=0; document.querySelector('#resultsTable tbody').innerHTML=''; }
   setHeaders(parsed.index);
   updateTabs(parsed.index);
-  let api = summariesUrl;
+  let api = insightsUrl;
   if(parsed.index==='events') api = eventsUrl;
   else if(parsed.index==='entities') api = entitiesUrl;
   else if(parsed.index==='transcripts') api = transcriptsUrl;
@@ -363,7 +363,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const idx = tab.dataset.index;
     const parts = queryInput.value.split(/\s+/).filter(p => p && !p.startsWith('index:'));
-    if(idx !== 'summaries') parts.push('index:' + idx);
+    if(idx !== 'insights') parts.push('index:' + idx);
     queryInput.value = parts.join(' ');
     query = queryInput.value.trim();
     window.location.hash = `q=${encodeURIComponent(query)}`;

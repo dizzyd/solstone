@@ -10,7 +10,7 @@ Sunstone transforms raw recordings into actionable understanding through a three
 ┌─────────────────────────────────────┐
 │  LAYER 3: INSIGHTS                  │  Narrative summaries
 │  (Markdown files)                   │  "What it means"
-│  - topics/*.md (daily insights)     │
+│  - insights/*.md (daily insights)   │
 │  - screen.md (segment insights)     │
 └─────────────────────────────────────┘
          ↑ synthesized from
@@ -38,7 +38,7 @@ Sunstone transforms raw recordings into actionable understanding through a three
 |------|------------|----------|
 | **Capture** | Raw audio/video recording | `*.flac`, `*.webm` |
 | **Extract** | Structured data from captures | `*.jsonl`, `occurrences.json` |
-| **Insight** | AI-generated narrative summary | `topics/*.md`, `screen.md` |
+| **Insight** | AI-generated narrative summary | `insights/*.md`, `screen.md` |
 
 **Organization**
 

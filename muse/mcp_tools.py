@@ -355,7 +355,7 @@ def search_insights(
         return {"total": total, "limit": limit, "offset": offset, "results": items}
     except Exception as exc:
         return {
-            "error": f"Failed to search topics: {exc}",
+            "error": f"Failed to search insights: {exc}",
             "suggestion": "try adjusting the query or ensure indexes exist",
         }
 
@@ -1197,7 +1197,7 @@ async def get_resource(uri: str) -> object:
 def get_summary(day: str, topic: str) -> TextResource:
     """Return the markdown summary for a topic."""
     journal = os.getenv("JOURNAL_PATH", "journal")
-    md_path = Path(journal) / day / "topics" / f"{topic}.md"
+    md_path = Path(journal) / day / "insights" / f"{topic}.md"
 
     if not md_path.is_file():
         text = f"Topic '{topic}' not found for day {day}"

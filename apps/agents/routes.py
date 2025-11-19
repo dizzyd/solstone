@@ -19,10 +19,10 @@ def _list_items(item_type: str) -> list[dict[str, object]]:
     """Generic function to list items from think/{item_type}/.
 
     Args:
-        item_type: Either 'agents' or 'topics'
+        item_type: Either 'agents' or 'insights'
 
     Returns:
-        List of items with id, title, and description (and color for topics)
+        List of items with id, title, and description (and color for insights)
     """
     # Special handling for insights to get colors from get_insights()
     if item_type == "insights":
@@ -170,7 +170,7 @@ def _get_item_content(item_type: str, item_id: str) -> tuple[dict, int]:
     """Generic function to get item content from {item_type}/{item_id}.txt.
 
     Args:
-        item_type: Either 'agents' or 'topics'
+        item_type: Either 'agents' or 'insights'
         item_id: The item identifier
 
     Returns:
@@ -289,7 +289,7 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
     """Generic function to update or create an item.
 
     Args:
-        item_type: Either 'agents' or 'topics'
+        item_type: Either 'agents' or 'insights'
         item_id: The item identifier
         data: Request data with title and content
 
@@ -401,7 +401,7 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
             f.write(new_content)
 
         action = "created" if is_new else "updated"
-        item_name = item_type[:-1].title()  # 'agents' -> 'Agent', 'topics' -> 'Topic'
+        item_name = item_type[:-1].title()  # 'agents' -> 'Agent', 'insights' -> 'Insight'
         return {"success": True, "message": f"{item_name} {action} successfully"}, 200
     except Exception as e:
         return {"error": str(e)}, 500
@@ -412,7 +412,7 @@ def update_agent(agent_id: str) -> object:
     """Update an agent's title and content or create a new one."""
     data = request.get_json()
 
-    # Handle topics-specific fields (color, disabled)
+    # Handle insights-specific fields (color, muted)
     if "color" in data or "disabled" in data:
         # This is actually a topic update, not an agent
         return jsonify({"error": "Invalid fields for agent update"}), 400

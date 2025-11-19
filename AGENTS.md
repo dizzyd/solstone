@@ -42,7 +42,7 @@ sunstone/
 ├── observe/        # Multimodal capture & AI analysis
 ├── think/          # Data post-processing & AI analysis
 │   ├── indexer/    # Database indexing subsystem
-│   └── topics/     # Topic extraction templates
+│   └── insights/   # Insight generation templates
 ├── convey/         # Web app frontend & backend
 │   ├── static/     # JavaScript and CSS assets
 │   ├── templates/  # Jinja2 HTML templates

@@ -109,9 +109,9 @@ Emitted when a tool execution begins.
   "event": "tool_start",
   "ts": 1234567890123,
   "agent_id": "1234567890123",
-  "tool": "search_summaries",
+  "tool": "search_insights",
   "args": {"query": "search terms", "limit": 10},
-  "call_id": "search_summaries-1"
+  "call_id": "search_insights-1"
 }
 ```
 
@@ -122,10 +122,10 @@ Emitted when a tool execution completes.
   "event": "tool_end",
   "ts": 1234567890123,
   "agent_id": "1234567890123",
-  "tool": "search_summaries",
+  "tool": "search_insights",
   "args": {"query": "search terms"},
   "result": ["result", "array", "or", "object"],
-  "call_id": "search_summaries-1"
+  "call_id": "search_insights-1"
 }
 ```
 
@@ -243,7 +243,7 @@ The `.json` file for a persona can include:
 - `max_tokens`: Maximum response token limit
 - `tools`: MCP tools configuration (string or array)
   - String: Tool pack name (e.g., "default", "journal") - expanded via `get_tools()`
-  - Array: Explicit list of tool names (e.g., `["search_summaries", "get_facet"]`)
+  - Array: Explicit list of tool names (e.g., `["search_insights", "get_facet"]`)
   - If omitted, defaults to "default" pack
 - `schedule`: Scheduling configuration for automated execution
   - `"daily"`: Run automatically at midnight each day

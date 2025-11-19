@@ -1,4 +1,4 @@
-"""Integration tests for the summaries indexer."""
+"""Integration tests for the insights indexer."""
 
 import os
 import sqlite3
@@ -9,14 +9,14 @@ import pytest
 
 from think.indexer import (
     reset_index,
-    scan_summaries,
-    search_summaries,
+    scan_insights,
+    search_insights,
 )
 
 
 @pytest.mark.integration
-def test_summaries_indexer_scan_and_search():
-    """Test scanning and searching summary files from fixtures."""
+def test_insights_indexer_scan_and_search():
+    """Test scanning and searching insight files from fixtures."""
     # Use fixtures journal path
     journal_path = Path(__file__).parent.parent.parent / "fixtures" / "journal"
 
@@ -31,7 +31,7 @@ def test_summaries_indexer_scan_and_search():
 
         try:
             # Get the index database
-            index_path = Path(tmpdir) / "indexer" / "summaries.sqlite"
+            index_path = Path(tmpdir) / "indexer" / "insights.sqlite"
             index_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Override the index path for testing
@@ -56,18 +56,18 @@ def test_summaries_indexer_scan_and_search():
             think.indexer.core.get_index = test_get_index
 
             # Reset index to ensure clean state
-            reset_index(str(journal_path), "summaries")
+            reset_index(str(journal_path), "insights")
 
-            # Scan the summaries
-            scan_count = scan_summaries(str(journal_path))
+            # Scan the insights
+            scan_count = scan_insights(str(journal_path))
 
-            # We should have scanned some summary files
-            assert scan_count > 0, f"Expected to scan summary files, got {scan_count}"
+            # We should have scanned some insight files
+            assert scan_count > 0, f"Expected to scan insight files, got {scan_count}"
 
             # Search for specific terms we know are in the fixtures
 
             # Search for "authentication" (from flow.md)
-            total, results = search_summaries("authentication")
+            total, results = search_insights("authentication")
             assert total > 0, "Should find results for 'authentication'"
             assert len(results) > 0, "Should have actual results for 'authentication'"
             # Verify the result contains expected content
@@ -79,15 +79,15 @@ def test_summaries_indexer_scan_and_search():
             assert found_auth, "Should find 'authentication module' in results"
 
             # Search for "sprint planning" (from flow.md)
-            total, results = search_summaries("sprint planning")
+            total, results = search_insights("sprint planning")
             assert total > 0, "Should find results for 'sprint planning'"
 
             # Search for "Docker" (from day 2)
-            total, results = search_summaries("Docker")
+            total, results = search_insights("Docker")
             assert total > 0, "Should find results for 'Docker'"
 
             # Search for "FastAPI" (from day 2)
-            total, results = search_summaries("FastAPI")
+            total, results = search_insights("FastAPI")
             assert total > 0, "Should find results for 'FastAPI'"
 
             # Verify results have expected structure
@@ -113,8 +113,8 @@ def test_summaries_indexer_scan_and_search():
 
 
 @pytest.mark.integration
-def test_summaries_indexer_rescan():
-    """Test that rescanning summaries updates the index properly."""
+def test_insights_indexer_rescan():
+    """Test that rescanning insights updates the index properly."""
     journal_path = Path(__file__).parent.parent.parent / "fixtures" / "journal"
 
     if not journal_path.exists():
@@ -145,19 +145,19 @@ def test_summaries_indexer_rescan():
             think.indexer.core.get_index = test_get_index
 
             # Reset and scan initially
-            reset_index(str(journal_path), "summaries")
-            first_scan = scan_summaries(str(journal_path))
+            reset_index(str(journal_path), "insights")
+            first_scan = scan_insights(str(journal_path))
             assert first_scan > 0
 
             # Search for initial content
-            total1, results1 = search_summaries("authentication")
+            total1, results1 = search_insights("authentication")
             initial_count = total1
 
             # Rescan (should handle existing content gracefully)
-            # second_scan = scan_summaries(str(journal_path))
+            # second_scan = scan_insights(str(journal_path))
 
             # Search again - should get same results
-            total2, results2 = search_summaries("authentication")
+            total2, results2 = search_insights("authentication")
             assert total2 == initial_count, "Rescan should not duplicate entries"
 
         finally:

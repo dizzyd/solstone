@@ -687,8 +687,8 @@ function handleToolStart(event) {
   // Handle search tools with special event cards
   if(args && args.query) {
     // Determine which index is being searched
-    let idx = 'summaries';
-    let indexName = 'Summaries';
+    let idx = 'insights';
+    let indexName = 'Insights';
     if(tool.includes('event')) {
       idx = 'events';
       indexName = 'Events';
@@ -708,7 +708,7 @@ function handleToolStart(event) {
     }
 
     // Build search URL
-    const q = args.query + (idx === 'summaries' ? '' : ' index:' + idx);
+    const q = args.query + (idx === 'insights' ? '' : ' index:' + idx);
     const url = searchBase + '#q=' + encodeURIComponent(q);
 
     // Create descriptive text
