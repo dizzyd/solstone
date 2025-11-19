@@ -43,6 +43,25 @@ body.has-app-bar .workspace {
   margin-bottom: var(--app-bar-height);
 }
 
+/* Standard workspace containers */
+.workspace-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 2rem;
+}
+
+.workspace-content-wide {
+  padding: 1.5rem 2rem 2rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .workspace-content,
+  .workspace-content-wide {
+    padding: 1rem;
+  }
+}
+
 /* Facet Bar (top) */
 .facet-bar {
   position: fixed;

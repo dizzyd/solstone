@@ -303,6 +303,35 @@ See **CALLOSUM.md** for complete event protocol.
 
 ## CSS Styling
 
+### Workspace Containers
+
+**Always wrap your workspace content** in one of these standardized containers for consistent spacing and layout:
+
+**For readable content** (forms, lists, messages, text):
+```html
+<div class="workspace-content">
+  <!-- Your app content here -->
+</div>
+```
+
+**For data-heavy content** (tables, grids, calendars):
+```html
+<div class="workspace-content-wide">
+  <!-- Your app content here -->
+</div>
+```
+
+**Key differences:**
+- `.workspace-content` - Centered with 1200px max-width, ideal for readability
+- `.workspace-content-wide` - Full viewport width, ideal for data tables and grids
+- Both include consistent padding and mobile responsiveness
+
+**See:** `convey/static/app.css` for implementation details
+
+**Examples:**
+- Standard: `apps/home/workspace.html`, `apps/todos/workspace.html`, `apps/inbox/workspace.html`
+- Wide: `apps/search/workspace.html`, `apps/calendar/_month.html`, `apps/import/workspace.html`
+
 ### CSS Variables
 
 Dynamic variables based on selected facet (update automatically on facet change):
@@ -377,15 +406,16 @@ Use `current_app.logger` from Flask for debugging. See `apps/todos/routes.py` fo
 ## Best Practices
 
 1. **Use underscores** in directory names (`my_app`, not `my-app`)
-2. **Scope CSS** with unique class names to avoid conflicts
-3. **Validate input** on all POST endpoints (use `error_response`)
-4. **Check facet selection** when loading facet-specific data
-5. **Use state.journal_root** for journal path (always available)
-6. **Provide hooks** if app has facet counts
-7. **Handle errors gracefully** with flash messages or JSON errors
-8. **Test facet switching** to ensure content updates correctly
-9. **Use background services** for WebSocket event handling
-10. **Follow Flask patterns** for blueprints, url_for, etc.
+2. **Wrap workspace content** in `.workspace-content` or `.workspace-content-wide`
+3. **Scope CSS** with unique class names to avoid conflicts
+4. **Validate input** on all POST endpoints (use `error_response`)
+5. **Check facet selection** when loading facet-specific data
+6. **Use state.journal_root** for journal path (always available)
+7. **Provide hooks** if app has facet counts
+8. **Handle errors gracefully** with flash messages or JSON errors
+9. **Test facet switching** to ensure content updates correctly
+10. **Use background services** for WebSocket event handling
+11. **Follow Flask patterns** for blueprints, url_for, etc.
 
 ---
 
