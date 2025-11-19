@@ -24,8 +24,8 @@ search_bp = Blueprint(
 )
 
 
-@search_bp.route("/api/summaries")
-def search_summaries_api() -> Any:
+@search_bp.route("/api/insights")
+def search_insights_api() -> Any:
     query = request.args.get("q", "").strip()
     if not query:
         return jsonify({"total": 0, "results": []})

@@ -1624,9 +1624,9 @@ function loadAvailableAgents() {
     });
 }
 
-// Load available topics and render cards
+// Load available insights and render cards
 function loadAvailableTopics() {
-  fetch('{{ url_for('app:agents.available_topics') }}')
+  fetch('{{ url_for('app:agents.available_insights') }}')
     .then(r => r.json())
     .then(topics => {
       availableTopics = topics;
@@ -1844,7 +1844,7 @@ function viewItemDetails(itemId, itemType, event) {
   // Determine the correct endpoint based on item type
   const contentUrl = itemType === 'agent'
     ? `{{ url_for('app:agents.agent_content', agent_id='') }}${itemId}`
-    : `{{ url_for('app:agents.topic_content', topic_id='') }}${itemId}`;
+    : `{{ url_for('app:agents.insight_content', insight_id='') }}${itemId}`;
 
   // Load agent's config if it's an agent
   if (itemType === 'agent') {
@@ -2098,7 +2098,7 @@ async function saveTopicMetadata() {
     color: document.getElementById('modalTopicColor').value
   };
 
-  const updateUrl = `{{ url_for('app:agents.update_topic', topic_id='') }}${currentEditingItem}`;
+  const updateUrl = `{{ url_for('app:agents.update_insight', insight_id='') }}${currentEditingItem}`;
 
   try {
     const response = await fetch(updateUrl, {
@@ -2842,7 +2842,7 @@ async function saveNewTopic() {
 
   try {
     // Create or update the topic
-    const response = await fetch(`{{ url_for('app:agents.update_topic', topic_id='') }}${topicId}`, {
+    const response = await fetch(`{{ url_for('app:agents.update_insight', insight_id='') }}${topicId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
