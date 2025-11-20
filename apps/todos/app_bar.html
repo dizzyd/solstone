@@ -1,1 +1,75 @@
+<style>
+.todo-add-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75em 1em;
+  border: 1px solid #d1d5db;
+  border-radius: 20px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.todo-add-input:focus {
+  outline: none;
+  border-color: var(--facet-color, #2563eb);
+  box-shadow: 0 0 0 3px var(--facet-bg, rgba(37, 99, 235, 0.1));
+}
+
+.todo-add-input::placeholder {
+  color: #9ca3af;
+}
+
+.todo-add-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.todo-add-input:disabled::placeholder {
+  color: #d1d5db;
+}
+</style>
+
 {% include 'date_nav.html' %}
+
+<!-- Use display:contents to make form invisible to flexbox -->
+<form method="post" style="display: contents;">
+  <input type="hidden" name="action" value="add">
+  {% set is_future_or_today = day >= today_day %}
+  <input
+    type="text"
+    name="text"
+    id="todo-add-input"
+    class="todo-add-input"
+    placeholder="{% if not is_future_or_today %}Can't add todos to past dates{% elif selected_facet %}Add a todo to {{ facets|selectattr('name', 'equalto', selected_facet)|map(attribute='title')|first|default(selected_facet) }}...{% else %}Add a todo... (use #facet){% endif %}"
+    autocomplete="off"
+    {% if not is_future_or_today %}disabled{% endif %}
+  >
+</form>
+
+{% if is_future_or_today %}
+<script>
+(function() {
+  const input = document.getElementById('todo-add-input');
+  if (!input || input.disabled) return;
+
+  function updatePlaceholder(facetName) {
+    if (facetName) {
+      const facetData = window.facetsData?.find(f => f.name === facetName);
+      const facetTitle = facetData?.title || facetName;
+      input.placeholder = `Add a todo to ${facetTitle}...`;
+    } else {
+      input.placeholder = 'Add a todo... (use #facet)';
+    }
+  }
+
+  // Listen for facet selection changes
+  window.addEventListener('facet.switch', (e) => {
+    updatePlaceholder(e.detail.facet);
+  });
+})();
+</script>
+{% endif %}

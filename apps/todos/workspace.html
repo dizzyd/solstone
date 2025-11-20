@@ -8,29 +8,6 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
-.add-form {
-  margin-bottom: 2rem;
-}
-
-.add-form input[type="text"] {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.add-form input[type="text"]:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.add-form input[type="text"]::placeholder {
-  color: #9ca3af;
-}
-
 .facet-section {
   margin-bottom: 1.5rem;
 }
@@ -255,19 +232,6 @@
     {% endif %}
   {% endwith %}
 
-  {% if day == today_day %}
-    <form method="post" class="add-form">
-      <input type="hidden" name="action" value="add">
-      <input
-        type="text"
-        name="text"
-        placeholder="Add a todo... (use #facet)"
-        autocomplete="off"
-        autofocus
-      >
-    </form>
-  {% endif %}
-
   {% if todos_by_facet %}
     {% for facet_name, facet_todos in todos_by_facet.items() %}
       {% set facet_info = facet_map.get(facet_name, {}) %}
@@ -370,6 +334,46 @@ document.addEventListener('DOMContentLoaded', function() {
   const moveEndpoint = {{ url_for('app:todos.move_todo', day=day) | tojson }};
   const currentDay = {{ day | tojson }};
   const storageKey = `todos_collapsed_${currentDay}`;
+
+  // Facet filtering based on global selection
+  function filterByFacet(facetName) {
+    const sections = document.querySelectorAll('.facet-section');
+    const noTodosEl = document.querySelector('.no-todos');
+
+    if (facetName === null) {
+      // All-facet mode - show all sections
+      sections.forEach(s => s.style.display = '');
+      if (noTodosEl) {
+        noTodosEl.querySelector('p').textContent = 'No todos for this day yet.';
+      }
+    } else {
+      // Specific facet mode - show only matching section
+      let hasVisibleSection = false;
+      sections.forEach(s => {
+        if (s.dataset.facet === facetName) {
+          s.style.display = '';
+          hasVisibleSection = true;
+        } else {
+          s.style.display = 'none';
+        }
+      });
+
+      // Update no-todos message for specific facet
+      if (noTodosEl && !hasVisibleSection) {
+        const facetData = window.facetsData?.find(f => f.name === facetName);
+        const facetTitle = facetData?.title || facetName;
+        noTodosEl.querySelector('p').textContent = `No todos for ${facetTitle} yet.`;
+      }
+    }
+  }
+
+  // Initialize facet filtering
+  filterByFacet(window.selectedFacet);
+
+  // Listen for facet selection changes
+  window.addEventListener('facet.switch', (e) => {
+    filterByFacet(e.detail.facet);
+  });
 
   // Load collapsed state from sessionStorage
   function loadCollapsedState() {
@@ -887,10 +891,6 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   });
-
-  // Auto-focus add input
-  const addInput = document.querySelector('.add-form input[name="text"]');
-  addInput?.focus();
 
   // Listen for cortex events (agent completion)
   if (window.appEvents) {

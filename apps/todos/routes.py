@@ -15,6 +15,7 @@ from flask import (
 )
 
 from convey import state
+from convey.config import get_selected_facet
 from convey.utils import DATE_RE, adjacent_days, format_date
 from think.facets import get_facets
 from think.todo import (
@@ -76,8 +77,9 @@ def todos_day(day: str):  # type: ignore[override]
                         flash(f"Facet #{facet} does not exist", "error")
                         return redirect(url_for("app:todos.todos_day", day=day))
                 else:
-                    # Default to personal if no hashtag
-                    facet = "personal"
+                    # Use selected facet as default, fall back to personal
+                    selected = get_selected_facet()
+                    facet = selected if selected else "personal"
 
                 if not text:
                     flash("Cannot add an empty todo", "error")
