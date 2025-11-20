@@ -17,30 +17,6 @@
   border-color: #667eea;
 }
 
-.chat-send-btn {
-  padding: 0.75em 1.5em;
-  border: none;
-  border-radius: 20px;
-  background: #667eea;
-  color: white;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.chat-send-btn:hover {
-  background: #5a67d8;
-  transform: translateY(-1px);
-}
-
-.chat-send-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-  transform: none;
-}
-
 .chat-backend-toggle {
   margin-left: auto;
   padding: 0.75em 1em;
@@ -80,7 +56,6 @@
 <!-- Use display:contents to make form invisible to flexbox -->
 <form id="chatInputForm" style="display: contents;">
   <textarea id="chatMessageInput" class="chat-message-input" rows="1" placeholder="Send a message..."></textarea>
-  <button type="submit" id="chatSendBtn" class="chat-send-btn">Send</button>
   <button type="button" id="chatBackendToggle" class="chat-backend-toggle" data-backend="anthropic" title="Click to change backend">
     Claude
   </button>

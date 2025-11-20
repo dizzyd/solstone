@@ -469,16 +469,21 @@ function addThinkingCard(summary, model){
 }
 
 // Agent loading function
-async function loadAgent(agentId) {
+async function loadAgent(agentId, isContinuation = false) {
   currentAgentId = agentId;
   isComplete = false;
   resetEventTracking();
 
-  // Clear messages but keep activity indicator
-  messagesDiv.innerHTML = '';
-  messagesDiv.appendChild(activityIndicator);
-  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
-  previousAgent = null;
+  if (isContinuation) {
+    // Continuation - preserve existing messages
+    Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
+  } else {
+    // New conversation - clear everything
+    messagesDiv.innerHTML = '';
+    messagesDiv.appendChild(activityIndicator);
+    Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
+    previousAgent = null;
+  }
 
   // Fetch existing events from disk
   const url = agentUrl.replace('AGENT_ID', agentId);
@@ -657,8 +662,8 @@ function setupFormHandlers() {
 
     if (r.ok) {
       const d = await r.json();
-      // Load the agent (will fetch initial events and subscribe to WebSocket)
-      await loadAgent(d.agent_id);
+      // Load agent - preserve messages if continuing
+      await loadAgent(d.agent_id, !!continueAgentId);
     } else {
       input.disabled = false;
       let err = 'Error';
