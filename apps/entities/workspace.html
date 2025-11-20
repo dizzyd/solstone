@@ -130,12 +130,6 @@
   background: #c82333;
 }
 
-.add-entity-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* Description modal styling */
 .description-modal {
   display: none;
@@ -290,16 +284,12 @@
   margin-left: 8px;
 }
 
+.entity-desc:hover .entity-edit-btn {
+  opacity: 0.6;
+}
+
 .entity-edit-btn:hover {
   opacity: 1 !important;
-}
-
-.has-entity-desc .entity-edit-btn {
-  opacity: 0.4;
-}
-
-.has-entity-desc:hover .entity-edit-btn {
-  opacity: 1;
 }
 
 .no-entity-desc {
@@ -311,14 +301,6 @@
 .no-entity-desc:hover {
   color: #667eea;
   text-decoration: underline;
-}
-
-.no-entity-desc-cell .entity-edit-btn {
-  opacity: 0.3;
-}
-
-.no-entity-desc-cell:hover .entity-edit-btn {
-  opacity: 1;
 }
 
 /* Delete modal styling */
@@ -517,57 +499,6 @@
   margin-bottom: 0.5em;
 }
 
-/* Entity assistant styling */
-.entity-assistant {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 1.5em;
-  border-radius: 12px;
-  margin-bottom: 2em;
-}
-
-.entity-assistant h4 {
-  margin: 0 0 0.5em 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.entity-assistant-input {
-  display: flex;
-  gap: 8px;
-  margin-top: 1em;
-}
-
-.entity-assistant-input input {
-  flex: 1;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.entity-assistant-input button {
-  padding: 10px 20px;
-  background: white;
-  color: #667eea;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.entity-assistant-input button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
-.entity-assistant-input button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .entities-loading {
   text-align: center;
   padding: 4em;
@@ -602,28 +533,11 @@
   </div>
 
   <div id="entities-content" style="display: none;">
-    <!-- Entity Assistant -->
-    <div class="entity-assistant">
-      <h4>
-        <span>🤖</span>
-        <span>Entity Assistant</span>
-      </h4>
-      <p style="margin: 0; opacity: 0.9;">Quickly add an entity with AI-generated type and description.</p>
-      <div class="entity-assistant-input">
-        <input type="text" id="entity-assist-input" placeholder="Enter entity name (e.g., 'OpenAI', 'Claude', 'GPT-4')..." />
-        <button id="entity-assist-submit" onclick="submitEntityAssist()">Add</button>
-      </div>
-    </div>
-
     <!-- Facet Entities Section -->
     <div class="entities-section">
       <div class="entities-container" id="facet-entities-section">
         <h3>
           <span>Facet Entities</span>
-          <button class="btn btn-primary add-entity-btn" onclick="openEntityAssistInput()">
-            <span>+</span>
-            <span>Add Entity</span>
-          </button>
         </h3>
         <table class="entities-table">
           <thead>
@@ -792,11 +706,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Entity assistant input Enter key
+  // Entity assistant input Enter key (input is now in app bar)
   const assistInput = document.getElementById('entity-assist-input');
   if (assistInput) {
     assistInput.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
+        e.preventDefault();
         submitEntityAssist();
       }
     });
@@ -1213,25 +1128,18 @@ function listenForAgentCompletion(agentId, callback) {
   });
 }
 
-function openEntityAssistInput() {
-  const input = document.getElementById('entity-assist-input');
-  if (input) {
-    input.focus();
-  }
-}
-
 function submitEntityAssist() {
   const input = document.getElementById('entity-assist-input');
-  const button = document.getElementById('entity-assist-submit');
   const name = input.value.trim();
 
   if (!name) {
-    alert('Please enter an entity name');
     return;
   }
 
-  button.disabled = true;
-  button.textContent = 'Processing...';
+  // Disable input during processing
+  input.disabled = true;
+  const originalPlaceholder = input.placeholder;
+  input.placeholder = 'Processing...';
 
   fetch(`api/${encodeURIComponent(currentFacet)}/assist`, {
     method: 'POST',
@@ -1249,8 +1157,8 @@ function submitEntityAssist() {
           // Reload entities to show the newly added entity
           loadEntities();
         }
-        button.disabled = false;
-        button.textContent = 'Add';
+        input.disabled = false;
+        input.placeholder = originalPlaceholder;
       });
     } else {
       throw new Error(data.error || 'Failed to start assistant');
@@ -1259,8 +1167,8 @@ function submitEntityAssist() {
   .catch(error => {
     console.error('Error with entity assistant:', error);
     alert('Error: ' + error.message);
-    button.disabled = false;
-    button.textContent = 'Add';
+    input.disabled = false;
+    input.placeholder = originalPlaceholder;
   });
 }
 
