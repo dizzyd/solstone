@@ -973,7 +973,9 @@ def _run_segment_dream(day: str, segment: str) -> None:
     if success:
         logging.info(f"Segment dream completed: {day}/{segment}")
     else:
-        logging.error(f"Segment dream failed with exit code {exit_code}: {day}/{segment}")
+        logging.error(
+            f"Segment dream failed with exit code {exit_code}: {day}/{segment}"
+        )
 
 
 def _handle_callosum_message(message: dict) -> None:

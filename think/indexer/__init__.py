@@ -31,13 +31,6 @@ from .events import (
     search_events,
 )
 
-# Import from news
-from .news import (
-    find_news_files,
-    scan_news,
-    search_news,
-)
-
 # Import from insights
 from .insights import (
     INSIGHT_TYPES,
@@ -46,6 +39,13 @@ from .insights import (
     scan_insights,
     search_insights,
     split_sentences,
+)
+
+# Import from news
+from .news import (
+    find_news_files,
+    scan_news,
+    search_news,
 )
 
 # Import from transcripts

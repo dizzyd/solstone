@@ -320,7 +320,12 @@ def test_scan_transcripts_single_segment(tmp_path):
         json.dumps({"topics": ["test"], "setting": "personal"})
         + "\n"
         + json.dumps(
-            {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "segment three"}
+            {
+                "start": "00:00:01",
+                "source": "mic",
+                "speaker": 1,
+                "text": "segment three",
+            }
         )
         + "\n"
     )

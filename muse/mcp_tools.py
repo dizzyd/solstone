@@ -21,8 +21,8 @@ from think.entities import (
 )
 from think.facets import facet_summary, log_action
 from think.indexer import search_events as search_events_impl
-from think.indexer import search_news as search_news_impl
 from think.indexer import search_insights as search_insights_impl
+from think.indexer import search_news as search_news_impl
 from think.indexer import search_transcripts as search_transcripts_impl
 from think.messages import send_message as send_message_impl
 from think.utils import get_raw_file

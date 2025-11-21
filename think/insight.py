@@ -288,7 +288,9 @@ def main() -> None:
             count_tokens(markdown, prompt, api_key, model)
             return
 
-        md_path, json_path = _output_paths(day_dir, insight_basename, segment=args.segment)
+        md_path, json_path = _output_paths(
+            day_dir, insight_basename, segment=args.segment
+        )
         # Use cache key scoped to day or segment
         if args.segment:
             cache_display_name = f"{day}_{args.segment}"

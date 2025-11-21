@@ -74,7 +74,9 @@ def register_app_context(app: Flask, registry: AppRegistry) -> None:
         from .config import apply_app_order, load_convey_config
 
         # Determine if current app wants muted facets shown
-        current_app_name = request.path.split("/")[2] if "/app/" in request.path else None
+        current_app_name = (
+            request.path.split("/")[2] if "/app/" in request.path else None
+        )
         include_muted = False
         if current_app_name and current_app_name in registry.apps:
             include_muted = registry.apps[current_app_name].show_muted_facets()

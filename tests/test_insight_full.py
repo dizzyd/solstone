@@ -107,7 +107,9 @@ def test_ponder_extra_instructions(tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-    monkeypatch.setattr("sys.argv", ["think-insight", "20240101", "-f", str(insight_file)])
+    monkeypatch.setattr(
+        "sys.argv", ["think-insight", "20240101", "-f", str(insight_file)]
+    )
     mod.main()
 
     md = day_dir / "insights" / "flow.md"
@@ -154,7 +156,9 @@ def test_ponder_skip_occurrences(tmp_path, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
-    monkeypatch.setattr("sys.argv", ["think-insight", "20240101", "-f", str(insight_file)])
+    monkeypatch.setattr(
+        "sys.argv", ["think-insight", "20240101", "-f", str(insight_file)]
+    )
     mod.main()
 
     md = day_dir / "insights" / "flow.md"

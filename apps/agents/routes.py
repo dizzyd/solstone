@@ -401,7 +401,9 @@ def _update_item(item_type: str, item_id: str, data: dict) -> tuple[dict, int]:
             f.write(new_content)
 
         action = "created" if is_new else "updated"
-        item_name = item_type[:-1].title()  # 'agents' -> 'Agent', 'insights' -> 'Insight'
+        item_name = item_type[
+            :-1
+        ].title()  # 'agents' -> 'Agent', 'insights' -> 'Insight'
         return {"success": True, "message": f"{item_name} {action} successfully"}, 200
     except Exception as e:
         return {"error": str(e)}, 500

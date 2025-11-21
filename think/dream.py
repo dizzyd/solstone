@@ -127,7 +127,9 @@ def main() -> None:
     if not day_dir.is_dir():
         parser.error(f"Day folder not found: {day_dir}")
 
-    commands = build_commands(day, args.force, verbose=args.verbose, segment=args.segment)
+    commands = build_commands(
+        day, args.force, verbose=args.verbose, segment=args.segment
+    )
     success_count = 0
     fail_count = 0
     for cmd in commands:
