@@ -212,13 +212,25 @@ JavaScript service that runs globally, even when app is not active.
 }
 ```
 
+**Submenu Methods:**
+- `AppServices.submenus.set(appName, items)` - Set all submenu items
+- `AppServices.submenus.upsert(appName, item)` - Add or update single item
+- `AppServices.submenus.remove(appName, itemId)` - Remove item by id
+- `AppServices.submenus.clear(appName)` - Clear all items
+
+Submenus appear as hover pop-outs on menu bar icons. Items support `id`, `label`, `icon`, `href`, `facet`, `badge`, and `order` properties.
+
+**See implementation:** `convey/static/app.js` - Submenu rendering and positioning
+
 **WebSocket Events (`window.appEvents`):**
 - `listen(tract, callback)` - Listen to specific tract ('cortex', 'indexer', 'observe', etc.)
 - `listen('*', callback)` - Listen to all events
 - Messages have structure: `{tract: 'cortex', event: 'agent_complete', ...data}`
 - See **CALLOSUM.md** for event protocol details
 
-**Reference implementation:** `apps/home/background.html` - Shows WebSocket event listening, notification handling, and service pattern
+**Reference implementations:**
+- `apps/home/background.html` - WebSocket event listening, notification handling
+- `apps/dev/background.html` - Submenu quick-links with dynamic badges
 
 **Implementation source:** `convey/static/app.js` - AppServices framework, `convey/static/websocket.js` - WebSocket API
 

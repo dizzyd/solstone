@@ -1349,5 +1349,193 @@ window.AppServices = {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  },
+
+  /**
+   * Submenu system for app quick-links
+   * Allows apps to define contextual links that appear on hover over menu icons
+   */
+  submenus: {
+    _data: {},  // {appName: [items]}
+
+    /**
+     * Set entire submenu for an app (replaces existing)
+     * @param {string} appName - Name of the app
+     * @param {Array} items - Array of submenu items
+     */
+    set(appName, items) {
+      this._data[appName] = items.map((item, index) => ({
+        ...item,
+        order: item.order !== undefined ? item.order : index
+      }));
+      this._render(appName);
+    },
+
+    /**
+     * Add or update a single submenu item
+     * @param {string} appName - Name of the app
+     * @param {object} item - Item to add/update (must have id)
+     */
+    upsert(appName, item) {
+      if (!this._data[appName]) {
+        this._data[appName] = [];
+      }
+
+      const existing = this._data[appName].find(i => i.id === item.id);
+      if (existing) {
+        Object.assign(existing, item);
+      } else {
+        this._data[appName].push({
+          ...item,
+          order: item.order !== undefined ? item.order : this._data[appName].length
+        });
+      }
+      this._render(appName);
+    },
+
+    /**
+     * Remove a submenu item by id
+     * @param {string} appName - Name of the app
+     * @param {string} itemId - ID of item to remove
+     */
+    remove(appName, itemId) {
+      if (!this._data[appName]) return;
+      this._data[appName] = this._data[appName].filter(i => i.id !== itemId);
+      this._render(appName);
+    },
+
+    /**
+     * Clear all submenu items for an app
+     * @param {string} appName - Name of the app
+     */
+    clear(appName) {
+      delete this._data[appName];
+      this._render(appName);
+    },
+
+    /**
+     * Get submenu items for an app
+     * @param {string} appName - Name of the app
+     * @returns {Array} Array of submenu items
+     */
+    get(appName) {
+      return this._data[appName] || [];
+    },
+
+    /**
+     * Render submenu for an app
+     * @private
+     */
+    _render(appName) {
+      // Defer render if DOM not ready
+      if (document.readyState === 'loading') {
+        const self = this;
+        document.addEventListener('DOMContentLoaded', function() {
+          self._render(appName);
+        });
+        return;
+      }
+
+      const menuItem = document.querySelector(`.menu-item[data-app-name="${appName}"]`);
+      if (!menuItem) return;
+
+      // Remove existing submenu (could be in body or menu item)
+      const existingId = `menu-submenu-${appName}`;
+      const existing = document.getElementById(existingId);
+      if (existing) {
+        existing.remove();
+      }
+
+      // Get items for this app
+      const items = this._data[appName];
+      if (!items || items.length === 0) return;
+
+      // Sort by order
+      const sorted = [...items].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      // Create submenu container - append to body to escape overflow:hidden
+      const submenu = document.createElement('div');
+      submenu.className = 'menu-submenu';
+      submenu.id = existingId;
+      submenu.dataset.appName = appName;
+
+      // Create items
+      sorted.forEach(item => {
+        const link = document.createElement('a');
+        link.className = 'menu-submenu-item';
+        link.href = item.href || '#';
+
+        if (item.facet) {
+          link.dataset.facet = item.facet;
+        }
+
+        // Build inner HTML
+        let html = '';
+        if (item.icon) {
+          html += `<span class="submenu-icon">${item.icon}</span>`;
+        }
+        html += `<span class="submenu-label">${window.AppServices._escapeHtml(item.label)}</span>`;
+        if (item.badge) {
+          html += `<span class="submenu-badge">${item.badge}</span>`;
+        }
+
+        link.innerHTML = html;
+
+        // Click handler for facet selection
+        if (item.facet) {
+          link.addEventListener('click', (e) => {
+            if (window.selectFacet) {
+              window.selectFacet(item.facet);
+            }
+          });
+        }
+
+        submenu.appendChild(link);
+      });
+
+      // Append to body instead of menu item
+      document.body.appendChild(submenu);
+
+      // Position submenu on hover
+      const positionSubmenu = () => {
+        const rect = menuItem.getBoundingClientRect();
+        submenu.style.position = 'fixed';
+        submenu.style.top = rect.top + 'px';
+        submenu.style.left = rect.right + 'px';
+      };
+
+      // Show/hide on hover
+      menuItem.addEventListener('mouseenter', () => {
+        // Only show when sidebar is not fully open (labels visible)
+        if (document.body.classList.contains('sidebar-open')) {
+          return;
+        }
+        positionSubmenu();
+        submenu.classList.add('visible');
+      });
+
+      menuItem.addEventListener('mouseleave', (e) => {
+        // Check if moving to submenu
+        const related = e.relatedTarget;
+        if (related && submenu.contains(related)) {
+          return;
+        }
+        submenu.classList.remove('visible');
+      });
+
+      submenu.addEventListener('mouseleave', (e) => {
+        // Check if moving back to menu item
+        const related = e.relatedTarget;
+        if (related && menuItem.contains(related)) {
+          return;
+        }
+        submenu.classList.remove('visible');
+      });
+
+      // Keep submenu visible while hovering it
+      submenu.addEventListener('mouseenter', () => {
+        submenu.classList.add('visible');
+      });
+    }
   }
 };
