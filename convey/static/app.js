@@ -340,8 +340,8 @@
           return;
         }
 
-        // Only allow drag when sidebar is open
-        if (!document.body.classList.contains('sidebar-open')) {
+        // Only allow drag when menu is full
+        if (!document.body.classList.contains('menu-full')) {
           e.preventDefault();
           return;
         }
@@ -435,8 +435,8 @@
           return;
         }
 
-        // Only allow drag when sidebar is open
-        if (!document.body.classList.contains('sidebar-open')) {
+        // Only allow drag when menu is full
+        if (!document.body.classList.contains('menu-full')) {
           return;
         }
       }
@@ -769,27 +769,27 @@
       // Click to toggle menu
       hamburger.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Option B: If icons are expanded, jump directly to full expansion
-        if (document.body.classList.contains('menu-icons-expanded')) {
-          document.body.classList.remove('menu-icons-expanded');
+        // If menu-all is active, remove it before toggling to menu-full
+        if (document.body.classList.contains('menu-all')) {
+          document.body.classList.remove('menu-all');
           const menuExpander = document.querySelector('.menu-expander');
           if (menuExpander) menuExpander.textContent = '⏷';
         }
-        document.body.classList.toggle('sidebar-open');
+        document.body.classList.toggle('menu-full');
       });
 
-      // Close sidebar when clicking outside
+      // Close menu when clicking outside
       document.addEventListener('click', (e) => {
-        if (document.body.classList.contains('sidebar-open')) {
+        if (document.body.classList.contains('menu-full')) {
           if (!menuBar.contains(e.target) && !hamburger.contains(e.target)) {
-            document.body.classList.remove('sidebar-open');
+            document.body.classList.remove('menu-full');
           }
         }
-        // Also close icon expansion when clicking outside
-        if (document.body.classList.contains('menu-icons-expanded')) {
+        // Also close menu-all when clicking outside
+        if (document.body.classList.contains('menu-all')) {
           const menuExpander = document.querySelector('.menu-expander');
           if (!menuBar.contains(e.target) && (!menuExpander || !menuExpander.contains(e.target))) {
-            document.body.classList.remove('menu-icons-expanded');
+            document.body.classList.remove('menu-all');
             if (menuExpander) menuExpander.textContent = '⏷';
           }
         }
@@ -809,18 +809,18 @@
       });
     }
 
-    // Menu expander click (vertical icon expansion)
+    // Menu expander click (toggle menu-all state)
     const menuExpander = document.querySelector('.menu-expander');
     if (menuExpander && menuBar) {
       menuExpander.addEventListener('click', (e) => {
         e.stopPropagation();
-        document.body.classList.toggle('menu-icons-expanded');
+        document.body.classList.toggle('menu-all');
 
         // Update arrow direction
-        if (document.body.classList.contains('menu-icons-expanded')) {
-          menuExpander.textContent = '⏶'; // Up arrow when expanded
+        if (document.body.classList.contains('menu-all')) {
+          menuExpander.textContent = '⏶'; // Up arrow when menu-all
         } else {
-          menuExpander.textContent = '⏷'; // Down arrow when collapsed
+          menuExpander.textContent = '⏷'; // Down arrow when menu-minimal
         }
       });
     }
@@ -1506,8 +1506,8 @@ window.AppServices = {
 
       // Show/hide on hover
       menuItem.addEventListener('mouseenter', () => {
-        // Only show when sidebar is not fully open (labels visible)
-        if (document.body.classList.contains('sidebar-open')) {
+        // Only show when menu is not full (labels not visible)
+        if (document.body.classList.contains('menu-full')) {
           return;
         }
         positionSubmenu();

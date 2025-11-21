@@ -16,8 +16,8 @@
 
   /* Layout dimensions */
   --facet-bar-height: 60px;
-  --menu-bar-width-collapsed: 60px;
-  --menu-bar-width-expanded: 200px;
+  --menu-bar-width-minimal: 60px;
+  --menu-bar-width-full: 200px;
   --app-bar-height: 60px;
 
   /* Z-index hierarchy (increasing order) */
@@ -35,7 +35,7 @@ body {
 
 .workspace {
   margin-top: var(--facet-bar-height);
-  margin-left: var(--menu-bar-width-collapsed);
+  margin-left: var(--menu-bar-width-minimal);
 }
 
 /* Add bottom margin when app-bar is present */
@@ -97,7 +97,7 @@ body.has-app-bar .workspace {
   content: '';
   position: absolute;
   bottom: 0;
-  left: var(--menu-bar-width-collapsed);
+  left: var(--menu-bar-width-minimal);
   right: 0;
   height: 1px;
   background: var(--facet-border, #e0e0e0);
@@ -106,8 +106,8 @@ body.has-app-bar .workspace {
 }
 
 /* When sidebar open, border only where workspace is visible */
-body.sidebar-open .facet-bar::after {
-  left: var(--menu-bar-width-expanded);
+body.menu-full .facet-bar::after {
+  left: var(--menu-bar-width-full);
 }
 
 .facet-bar #hamburger {
@@ -221,7 +221,7 @@ body.sidebar-open .facet-bar::after {
   position: fixed;
   top: var(--facet-bar-height);
   left: 0;
-  width: var(--menu-bar-width-collapsed);
+  width: var(--menu-bar-width-minimal);
   bottom: 0;
   background: white;
   border-right: none; /* No border on container - items have their own borders */
@@ -236,8 +236,8 @@ body.has-app-bar .menu-bar {
   bottom: var(--app-bar-height);
 }
 
-body.sidebar-open .menu-bar {
-  width: var(--menu-bar-width-expanded);
+body.menu-full .menu-bar {
+  width: var(--menu-bar-width-full);
   background: linear-gradient(var(--facet-bg, transparent), var(--facet-bg, transparent)), white;
   border-right: 1px solid var(--facet-border, #e0e0e0);
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
@@ -260,7 +260,7 @@ body.sidebar-open .menu-bar {
 }
 
 
-/* Hide unstarred apps when collapsed */
+/* Hide unstarred apps in menu-minimal state */
 .menu-bar .menu-item[data-starred="false"] {
   max-height: 0;
   opacity: 0;
@@ -269,7 +269,7 @@ body.sidebar-open .menu-bar {
   pointer-events: none;
 }
 
-/* Always show current app, even if unstarred and collapsed */
+/* Always show current app, even if unstarred in menu-minimal state */
 .menu-bar .menu-item[data-starred="false"].current {
   max-height: 50px;
   opacity: 1;
@@ -278,8 +278,8 @@ body.sidebar-open .menu-bar {
   pointer-events: auto;
 }
 
-/* Show all apps when expanded */
-body.sidebar-open .menu-bar .menu-item[data-starred="false"] {
+/* Show all apps when menu-full */
+body.menu-full .menu-bar .menu-item[data-starred="false"] {
   max-height: 50px;
   opacity: 1;
   padding-top: 8px;
@@ -287,7 +287,7 @@ body.sidebar-open .menu-bar .menu-item[data-starred="false"] {
   pointer-events: auto;
 }
 
-body.sidebar-open .menu-bar .menu-item.dragging {
+body.menu-full .menu-bar .menu-item.dragging {
   opacity: 0.5;
   cursor: grabbing;
 }
@@ -296,8 +296,8 @@ body.sidebar-open .menu-bar .menu-item.dragging {
   border-top: 2px solid var(--facet-color);
 }
 
-/* Apply facet background to menu items when collapsed */
-body:not(.sidebar-open) .menu-bar .menu-item {
+/* Apply facet background to menu items in menu-minimal state */
+body:not(.menu-full) .menu-bar .menu-item {
   background: var(--facet-bg, white);
 }
 
@@ -307,9 +307,9 @@ body:not(.sidebar-open) .menu-bar .menu-item {
   background: rgba(0, 0, 0, 0.05);
 }
 
-/* When collapsed, layer the tint over facet background */
-body:not(.sidebar-open) .menu-bar .menu-item:hover,
-body:not(.sidebar-open) .menu-bar .menu-item.current {
+/* In menu-minimal state, layer the tint over facet background */
+body:not(.menu-full) .menu-bar .menu-item:hover,
+body:not(.menu-full) .menu-bar .menu-item.current {
   background:
     linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05)),
     var(--facet-bg, white);
@@ -317,7 +317,7 @@ body:not(.sidebar-open) .menu-bar .menu-item.current {
 
 .menu-bar .menu-item .icon {
   font-size: 20px;
-  width: var(--menu-bar-width-collapsed);
+  width: var(--menu-bar-width-minimal);
   text-align: center;
   flex-shrink: 0;
 }
@@ -340,12 +340,12 @@ body:not(.sidebar-open) .menu-bar .menu-item.current {
   line-height: 20px;
 }
 
-body.sidebar-open .menu-bar .menu-item .star-toggle {
+body.menu-full .menu-bar .menu-item .star-toggle {
   display: block;
 }
 
 /* Show star on hover or when starred */
-body.sidebar-open .menu-bar .menu-item:hover .star-toggle,
+body.menu-full .menu-bar .menu-item:hover .star-toggle,
 .menu-bar .menu-item[data-starred="true"] .star-toggle {
   opacity: 1;
 }
@@ -368,15 +368,15 @@ body.sidebar-open .menu-bar .menu-item:hover .star-toggle,
   line-height: 20px;
 }
 
-body.sidebar-open .menu-bar .menu-item .drag-handle {
+body.menu-full .menu-bar .menu-item .drag-handle {
   display: block;
 }
 
-body.sidebar-open .menu-bar .menu-item:hover .drag-handle {
+body.menu-full .menu-bar .menu-item:hover .drag-handle {
   opacity: 1;
 }
 
-body.sidebar-open .menu-bar .menu-item .drag-handle:active {
+body.menu-full .menu-bar .menu-item .drag-handle:active {
   cursor: grabbing;
 }
 
@@ -483,13 +483,13 @@ body.sidebar-open .menu-bar .menu-item .drag-handle:active {
   background: rgba(0,0,0,0.05);
 }
 
-/* Hide only when sidebar is fully expanded (keep visible during icon expansion) */
-body.sidebar-open .menu-bar .menu-expander {
+/* Hide only when sidebar is menu-full (keep visible during menu-all) */
+body.menu-full .menu-bar .menu-expander {
   display: none;
 }
 
-/* Show all apps in icon-only mode when vertically expanded */
-body.menu-icons-expanded .menu-bar .menu-item[data-starred="false"] {
+/* Show all apps in menu-all state (icons only, narrow width) */
+body.menu-all .menu-bar .menu-item[data-starred="false"] {
   max-height: 50px;
   opacity: 1;
   padding-top: 8px;
@@ -497,9 +497,9 @@ body.menu-icons-expanded .menu-bar .menu-item[data-starred="false"] {
   pointer-events: auto;
 }
 
-/* Keep sidebar narrow in vertical expansion (icons only) */
-body.menu-icons-expanded .menu-bar {
-  width: var(--menu-bar-width-collapsed);
+/* Keep sidebar narrow in menu-all state (icons only) */
+body.menu-all .menu-bar {
+  width: var(--menu-bar-width-minimal);
 }
 
 .facet-pill {
