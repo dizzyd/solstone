@@ -249,7 +249,10 @@ def import_detail(timestamp: str) -> str:
         return render_template("error.html", error="Import not found"), 404
 
     return render_template(
-        "apps/import/detail.html", timestamp=timestamp, active="import"
+        "app.html",
+        app="import",
+        view="detail",
+        timestamp=timestamp,
     )
 
 

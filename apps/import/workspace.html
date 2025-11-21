@@ -1,3 +1,8 @@
+{# Import app workspace - routes to different views based on view parameter #}
+
+{% set view = view|default('list') %}
+
+{% if view == 'list' %}
 <style>
 .import-inputs { display: flex; gap: 1em; margin-bottom: 1em; }
 .import-section { flex: 1; display: flex; flex-direction: column; }
@@ -253,7 +258,7 @@ function loadImports(){
         statusText = 'Pending';
       }
 
-      html += `<tr data-import-id="${imp.timestamp}" onclick="window.location.href='/app/import/${imp.timestamp}'">`;
+      html += `<tr data-import-id="${imp.timestamp}" data-facet="${imp.facet || ''}" onclick="window.location.href='/app/import/${imp.timestamp}'">`;
       html += `<td>${importedAt}</td>`;
       html += `<td>${imp.original_filename || 'Unknown'}</td>`;
       html += `<td class="file-size">${formatFileSize(imp.file_size || 0)}</td>`;
@@ -272,9 +277,59 @@ function loadImports(){
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Apply facet filter after rendering
+    filterImportsByFacet(window.selectedFacet);
   }).catch(err => {
     document.getElementById('importListContent').innerHTML = '<div class="no-imports">Error loading imports</div>';
   });
+}
+
+// Filter imports by facet
+function filterImportsByFacet(facetName) {
+  const rows = document.querySelectorAll('.import-table tbody tr');
+  const noImportsEl = document.querySelector('.no-imports');
+
+  if (rows.length === 0) return;
+
+  let visibleCount = 0;
+  rows.forEach(row => {
+    if (facetName === null) {
+      // All-facet mode - show all
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      // Specific facet mode - show only matching
+      if (row.dataset.facet === facetName) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    }
+  });
+
+  // Show/hide no-imports message based on visible rows
+  const container = document.getElementById('importListContent');
+  if (visibleCount === 0 && rows.length > 0) {
+    // Have imports but none match filter
+    const facetData = window.facetsData?.find(f => f.name === facetName);
+    const facetTitle = facetData?.title || facetName;
+    let noMatchEl = container.querySelector('.no-imports-filtered');
+    if (!noMatchEl) {
+      noMatchEl = document.createElement('div');
+      noMatchEl.className = 'no-imports no-imports-filtered';
+      container.appendChild(noMatchEl);
+    }
+    noMatchEl.textContent = `No imports for ${facetTitle}`;
+    noMatchEl.style.display = '';
+  } else {
+    // Hide filtered message if visible rows exist
+    const noMatchEl = container.querySelector('.no-imports-filtered');
+    if (noMatchEl) {
+      noMatchEl.style.display = 'none';
+    }
+  }
 }
 
 // Update import row with live progress from importer events
@@ -406,4 +461,15 @@ function loadFacets(defaultValue = null){
 
 loadImports();
 loadFacets();
+
+// Listen for facet selection changes
+window.addEventListener('facet.switch', (e) => {
+  filterImportsByFacet(e.detail.facet);
+});
 </script>
+
+{% elif view == 'detail' %}
+  {% include 'import/_detail.html' %}
+{% else %}
+  <p>Unknown view: {{ view }}</p>
+{% endif %}

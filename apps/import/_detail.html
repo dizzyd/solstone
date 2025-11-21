@@ -1,17 +1,5 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Import Details - {{ timestamp }}</title>
-  <style>
-body {
-  font-family: sans-serif;
-  margin: 0;
-  padding: 0;
-}
-
-.import-content { padding: 0 1em; }
+<style>
+.import-detail-content { padding: 0 1em; }
 .back-link { display: inline-block; margin-bottom: 1em; color: #007bff; text-decoration: none; }
 .back-link:hover { text-decoration: underline; }
 .import-header { margin-bottom: 2em; }
@@ -97,9 +85,8 @@ body {
 .progress-timing { font-size: 0.9em; color: #666; }
 .progress-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #007bff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 6px; }
   </style>
-</head>
-<body>
-<div class="import-content">
+
+<div class="import-detail-content">
   <a href="/app/import/" class="back-link">← Back to Imports</a>
 
   <div class="import-header">
@@ -276,23 +263,20 @@ function formatTimestamp(timestamp) {
 let importData = null;
 const settingInput = document.getElementById('settingInput');
 
-// Load facets for dropdown
+// Load facets for dropdown using app framework data
 function loadFacets() {
-  fetch('/facets/api/list')
-    .then(r => r.json())
-    .then(facets => {
-      const select = document.getElementById('facetSelect');
-      const current = importData?.import_json?.facet || ''; // Use current facet from import
-      select.innerHTML = '<option value="">None</option>';
-      Object.entries(facets).forEach(([name, data]) => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = data.title || name;
-        if (name === current) opt.selected = true;
-        select.appendChild(opt);
-      });
-    })
-    .catch(() => {/* ignore */});
+  const select = document.getElementById('facetSelect');
+  const current = importData?.import_json?.facet || ''; // Use current facet from import
+  select.innerHTML = '<option value="">None</option>';
+
+  const facets = window.facetsData || [];
+  facets.forEach(facet => {
+    const opt = document.createElement('option');
+    opt.value = facet.name;
+    opt.textContent = facet.title || facet.name;
+    if (facet.name === current) opt.selected = true;
+    select.appendChild(opt);
+  });
 }
 
 // Show progress banner and listen for importer events
@@ -489,46 +473,3 @@ fetch('/app/import/api/{{ timestamp }}')
     document.getElementById('importedJsonContent').innerHTML = '<span class="no-data">Error loading data</span>';
   });
 </script>
-
-<script>
-// WebSocket connection setup (simplified from base.html)
-(function(){
-  const listeners = {};
-  let ws;
-  let retry = 1000;
-  function connect(){
-    ws = new WebSocket(`ws://${location.host}/ws/events`);
-    ws.onopen = () => { retry = 1000; };
-    ws.onclose = () => {
-      retry = Math.min(retry * 1.5, 15000);
-      setTimeout(connect, retry);
-    };
-    ws.onmessage = e => {
-      let msg;
-      try { msg = JSON.parse(e.data); } catch(err) { return; }
-      const tract = msg.tract;
-      if(tract && listeners[tract]){
-        listeners[tract].forEach(fn => fn(msg));
-      }
-      if(listeners['*']){
-        listeners['*'].forEach(fn => fn(msg));
-      }
-    };
-  }
-  connect();
-  window.appEvents = {
-    listen(tract, fn){
-      if(!listeners[tract]) listeners[tract] = [];
-      listeners[tract].push(fn);
-      return () => this.unlisten(tract, fn);
-    },
-    unlisten(tract, fn){
-      if(listeners[tract]){
-        listeners[tract] = listeners[tract].filter(f => f !== fn);
-      }
-    }
-  };
-})();
-</script>
-</body>
-</html>
