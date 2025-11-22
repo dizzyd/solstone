@@ -1,49 +1,59 @@
-"""Utility functions for Convey app development."""
+"""Utility functions for Convey app storage in journal."""
 
-import os
 import re
+from pathlib import Path
+from typing import Any
 
 from flask import g
 
+# Compiled pattern for app name validation
+APP_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
-def get_app_storage_path(app_name, *sub_paths, ensure_exists=True):
+
+def get_app_storage_path(
+    app_name: str,
+    *sub_dirs: str,
+    ensure_exists: bool = True,
+) -> Path:
     """
     Get path to app storage directory in journal.
 
     Args:
         app_name: App name (must match [a-z][a-z0-9_]*)
-        *sub_paths: Optional subdirectory components
+        *sub_dirs: Optional subdirectory components
         ensure_exists: Create directory if it doesn't exist (default: True)
 
     Returns:
-        Absolute path to <journal>/apps/<app_name>/<sub_paths>/
+        Path to <journal>/apps/<app_name>/<sub_dirs>/
 
     Raises:
         ValueError: If app_name contains invalid characters
 
     Examples:
-        get_app_storage_path("search")  # → "<journal>/apps/search/"
-        get_app_storage_path("search", "cache")  # → "<journal>/apps/search/cache/"
+        get_app_storage_path("search")  # → Path("<journal>/apps/search")
+        get_app_storage_path("search", "cache")  # → Path("<journal>/apps/search/cache")
     """
     # Validate app_name to prevent path traversal
-    if not re.match(r"^[a-z][a-z0-9_]*$", app_name):
+    if not APP_NAME_PATTERN.match(app_name):
         raise ValueError(f"Invalid app name: {app_name}")
 
-    # Get journal root from Flask state
-    journal_root = g.state.journal_root
-
     # Build path
-    path = os.path.join(journal_root, "apps", app_name, *sub_paths)
+    path = Path(g.state.journal_root) / "apps" / app_name
+    for sub_dir in sub_dirs:
+        path = path / sub_dir
 
     if ensure_exists:
-        os.makedirs(path, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True)
 
     return path
 
 
-def load_app_config(app_name, default=None):
+def load_app_config(
+    app_name: str,
+    default: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """
-    Load app configuration from <journal>/apps/<app>/config.json.
+    Load app configuration from <journal>/apps/<app_name>/config.json.
 
     Args:
         app_name: App name
@@ -58,13 +68,17 @@ def load_app_config(app_name, default=None):
     """
     from convey.utils import load_json
 
-    config_path = get_app_storage_path(app_name, "config.json", ensure_exists=False)
+    storage_path = get_app_storage_path(app_name, ensure_exists=False)
+    config_path = storage_path / "config.json"
     return load_json(config_path) or default
 
 
-def save_app_config(app_name, config):
+def save_app_config(
+    app_name: str,
+    config: dict[str, Any],
+) -> bool:
     """
-    Save app configuration to <journal>/apps/<app>/config.json.
+    Save app configuration to <journal>/apps/<app_name>/config.json.
 
     Args:
         app_name: App name
@@ -75,5 +89,6 @@ def save_app_config(app_name, config):
     """
     from convey.utils import save_json
 
-    config_path = get_app_storage_path(app_name, "config.json")
+    storage_path = get_app_storage_path(app_name, ensure_exists=True)
+    config_path = storage_path / "config.json"
     return save_json(config_path, config)

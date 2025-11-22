@@ -262,7 +262,11 @@ Available in `convey/utils.py`:
 
 Apps can persist journal-specific configuration and data in `<journal>/apps/<app_name>/`:
 
-- `get_app_storage_path(app_name, *sub_paths, ensure_exists)` - Get path to app storage directory
+```python
+from apps.utils import get_app_storage_path, load_app_config, save_app_config
+```
+
+- `get_app_storage_path(app_name, *sub_dirs, ensure_exists)` - Get Path to app storage directory
 - `load_app_config(app_name, default)` - Load app config from `config.json`
 - `save_app_config(app_name, config)` - Save app config to `config.json`
 
