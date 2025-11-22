@@ -54,7 +54,8 @@
 <script>
 (function() {
   const input = document.getElementById('todo-add-input');
-  if (!input || input.disabled) return;
+  const form = input?.closest('form');
+  if (!input || !form || input.disabled) return;
 
   function updatePlaceholder(facetName) {
     if (facetName) {
@@ -69,6 +70,43 @@
   // Listen for facet selection changes
   window.addEventListener('facet.switch', (e) => {
     updatePlaceholder(e.detail.facet);
+  });
+
+  // Handle form submission via AJAX
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const text = input.value.trim();
+    if (!text) {
+      input.focus();
+      return;
+    }
+
+    // Capture form data BEFORE disabling (disabled inputs are excluded from FormData)
+    const formData = new FormData(form);
+    input.disabled = true;
+
+    try {
+      const response = await fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'ok') {
+        input.value = '';
+        window.dispatchEvent(new CustomEvent('todo.added', { detail: data.todo }));
+      } else {
+        alert(data.message || 'Failed to add todo');
+      }
+    } catch (error) {
+      alert('Network error - please try again');
+    } finally {
+      input.disabled = false;
+      input.focus();
+    }
   });
 })();
 </script>

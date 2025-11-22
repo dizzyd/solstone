@@ -955,5 +955,406 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+
+  // Helper to set up event handlers for a single todo row
+  function setupTodoRowHandlers(todoRow) {
+    const facetSection = todoRow.closest('.facet-section');
+
+    // Setup checkbox handler
+    const checkbox = todoRow.querySelector('.todo-checkbox');
+    if (checkbox) {
+      let isCompleted = checkbox.dataset.completed === 'true';
+
+      checkbox.addEventListener('change', async (e) => {
+        e.preventDefault();
+
+        const index = parseInt(checkbox.dataset.index, 10);
+        const guard = checkbox.dataset.guard;
+        const facet = checkbox.dataset.facet;
+        const wasChecked = checkbox.checked;
+
+        checkbox.disabled = true;
+
+        try {
+          const form = new FormData();
+          form.append('action', isCompleted ? 'uncomplete' : 'complete');
+          form.append('facet', facet);
+          form.append('index', index);
+          form.append('guard', guard);
+
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: form
+          });
+
+          if (response.ok) {
+            isCompleted = !isCompleted;
+            checkbox.dataset.completed = isCompleted ? 'true' : 'false';
+
+            if (isCompleted) {
+              todoRow.classList.add('completed');
+            } else {
+              todoRow.classList.remove('completed');
+            }
+
+            const actionInput = checkbox.form.querySelector('input[name="action"]');
+            actionInput.value = isCompleted ? 'uncomplete' : 'complete';
+
+            const oldGuard = guard;
+            let newGuard;
+            if (isCompleted) {
+              newGuard = oldGuard.replace('- [ ]', '- [x]');
+            } else {
+              newGuard = oldGuard.replace('- [x]', '- [ ]');
+            }
+            updateRowGuards(todoRow, newGuard);
+
+            if (facetSection) {
+              updateFacetCount(facetSection);
+            }
+          } else {
+            checkbox.checked = !wasChecked;
+            alert('Failed to update todo - please refresh and try again');
+          }
+        } catch (error) {
+          checkbox.checked = !wasChecked;
+          alert('Network error - please try again');
+        } finally {
+          checkbox.disabled = false;
+        }
+      });
+    }
+
+    // Setup remove button handler
+    const removeBtn = todoRow.querySelector('.todo-action-btn.remove');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        const index = parseInt(removeBtn.dataset.index, 10);
+        const guard = removeBtn.dataset.guard;
+        const facet = removeBtn.dataset.facet;
+        const originalText = removeBtn.textContent;
+
+        removeBtn.disabled = true;
+
+        try {
+          const form = new FormData();
+          form.append('action', 'remove');
+          form.append('facet', facet);
+          form.append('index', index);
+          form.append('guard', guard);
+
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: form
+          });
+
+          if (response.ok) {
+            todoRow.style.transition = 'opacity 0.2s ease-out';
+            todoRow.style.opacity = '0';
+            setTimeout(() => {
+              const removedIndex = index;
+              todoRow.remove();
+
+              if (facetSection) {
+                const allRows = Array.from(facetSection.querySelectorAll('[data-todo-row]'));
+                allRows.forEach(row => {
+                  const elementsWithIndex = row.querySelectorAll('[data-index]');
+                  elementsWithIndex.forEach(el => {
+                    const currentIndex = parseInt(el.dataset.index, 10);
+                    if (currentIndex > removedIndex) {
+                      el.dataset.index = (currentIndex - 1).toString();
+                    }
+                  });
+
+                  const indexInput = row.querySelector('input[name="index"]');
+                  if (indexInput) {
+                    const currentIndex = parseInt(indexInput.value, 10);
+                    if (currentIndex > removedIndex) {
+                      indexInput.value = (currentIndex - 1).toString();
+                    }
+                  }
+                });
+
+                updateFacetCount(facetSection);
+              }
+            }, 200);
+          } else {
+            alert('Failed to remove todo - please refresh and try again');
+            removeBtn.disabled = false;
+            removeBtn.textContent = originalText;
+          }
+        } catch (error) {
+          alert('Network error - please try again');
+          removeBtn.disabled = false;
+          removeBtn.textContent = originalText;
+        }
+      });
+    }
+
+    // Setup move button handler
+    const moveBtn = todoRow.querySelector('.todo-action-btn.move');
+    if (moveBtn) {
+      moveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        const index = parseInt(moveBtn.dataset.index, 10);
+        const guard = moveBtn.dataset.guard;
+        const facet = moveBtn.dataset.facet;
+        const btnCurrentDay = moveBtn.dataset.currentDay;
+
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.value = dayToInputValue(btnCurrentDay);
+
+        const rect = moveBtn.getBoundingClientRect();
+        dateInput.style.position = 'fixed';
+        dateInput.style.left = `${rect.left}px`;
+        dateInput.style.top = `${rect.top}px`;
+        dateInput.style.opacity = '0';
+        dateInput.style.pointerEvents = 'none';
+        dateInput.style.width = '0';
+        dateInput.style.height = '0';
+
+        dateInput.addEventListener('change', () => {
+          const targetDay = inputValueToDay(dateInput.value);
+          if (targetDay && targetDay !== btnCurrentDay) {
+            moveTodo(targetDay, facet, index, guard, moveBtn);
+          }
+          dateInput.remove();
+        });
+
+        dateInput.addEventListener('blur', () => {
+          setTimeout(() => dateInput.remove(), 100);
+        });
+
+        document.body.appendChild(dateInput);
+        dateInput.focus();
+        if (typeof dateInput.showPicker === 'function') {
+          try {
+            dateInput.showPicker();
+          } catch (e) {
+            // Ignore
+          }
+        }
+      });
+    }
+
+    // Setup double-click to edit
+    const span = todoRow.querySelector('.todo-text');
+    if (span) {
+      const originalText = span.textContent;
+
+      span.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'todo-text-input';
+        input.value = originalText;
+
+        const content = span.parentElement;
+        content.replaceChild(input, span);
+        input.focus();
+        input.select();
+
+        let isEditing = true;
+
+        const save = async () => {
+          if (!isEditing) return;
+
+          const newText = input.value.trim();
+
+          if (!newText) {
+            alert('Todo text cannot be empty');
+            input.focus();
+            return;
+          }
+
+          if (newText === originalText) {
+            cancel();
+            return;
+          }
+
+          isEditing = false;
+
+          const index = parseInt(span.dataset.index, 10);
+          const guard = span.dataset.guard;
+          const facet = span.dataset.facet;
+
+          const facetMatch = newText.match(/#([a-z][a-z0-9_-]*)/i);
+          const hasFacetChange = facetMatch && facetMatch[1].toLowerCase() !== facet;
+
+          const form = new FormData();
+          form.append('action', 'edit');
+          form.append('facet', facet);
+          form.append('index', index);
+          form.append('guard', guard);
+          form.append('text', newText);
+
+          try {
+            const response = await fetch(window.location.href, {
+              method: 'POST',
+              body: form
+            });
+
+            if (response.ok) {
+              if (hasFacetChange) {
+                window.location.reload();
+              } else {
+                const cleanText = newText.replace(/#[a-z][a-z0-9_-]*/gi, '').trim();
+                span.textContent = cleanText;
+                span.title = cleanText;
+                content.replaceChild(span, input);
+
+                const oldGuard = guard;
+                const match = oldGuard.match(/^(- \[[x ]\] )/);
+                if (match) {
+                  const prefix = match[1];
+                  const newGuard = prefix + cleanText;
+                  updateRowGuards(todoRow, newGuard);
+                }
+              }
+            } else {
+              alert('Failed to update todo - please refresh and try again');
+              if (input.parentElement === content) {
+                content.replaceChild(span, input);
+              }
+            }
+          } catch (error) {
+            alert('Network error - please try again');
+            if (input.parentElement === content) {
+              content.replaceChild(span, input);
+            }
+          }
+        };
+
+        const cancel = () => {
+          if (!isEditing) return;
+          isEditing = false;
+          if (input.parentElement === content) {
+            content.replaceChild(span, input);
+          }
+        };
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            save();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancel();
+          }
+        });
+
+        input.addEventListener('blur', () => {
+          setTimeout(cancel, 100);
+        });
+      });
+    }
+  }
+
+  // Listen for new todos added via AJAX
+  window.addEventListener('todo.added', (e) => {
+    const todo = e.detail;
+    const facetName = todo.facet;
+
+    // Find or create facet section
+    let facetSection = document.querySelector(`.facet-section[data-facet="${facetName}"]`);
+
+    if (!facetSection) {
+      // Facet section doesn't exist, need to create it
+      // For simplicity, reload the page to get proper facet styling
+      window.location.reload();
+      return;
+    }
+
+    // Get the todo list within this facet
+    const todoList = facetSection.querySelector('.todo-list');
+    if (!todoList) {
+      window.location.reload();
+      return;
+    }
+
+    // Create the new todo row
+    const li = document.createElement('li');
+    li.className = 'todo-row';
+    li.setAttribute('data-todo-row', '');
+
+    li.innerHTML = `
+      <form method="post" style="display: contents;">
+        <input type="hidden" name="action" value="complete">
+        <input type="hidden" name="facet" value="${facetName}">
+        <input type="hidden" name="index" value="${todo.index}">
+        <input type="hidden" name="guard" value="${todo.guard.replace(/"/g, '&quot;')}">
+        <input
+          type="checkbox"
+          class="todo-checkbox"
+          data-index="${todo.index}"
+          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
+          data-facet="${facetName}"
+          data-completed="false"
+        >
+      </form>
+
+      <div class="todo-content">
+        <span
+          class="todo-text"
+          title="${todo.text.replace(/"/g, '&quot;')}"
+          data-index="${todo.index}"
+          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
+          data-facet="${facetName}"
+        >${todo.text}</span>
+        ${todo.time ? `<span class="todo-time">${todo.time}</span>` : ''}
+      </div>
+
+      <div class="todo-actions">
+        <button
+          type="button"
+          class="todo-action-btn move"
+          title="Move to another day"
+          data-index="${todo.index}"
+          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
+          data-facet="${facetName}"
+          data-current-day="${currentDay}"
+        >
+          📅
+        </button>
+
+        <button
+          type="button"
+          class="todo-action-btn remove"
+          title="Remove"
+          data-index="${todo.index}"
+          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
+          data-facet="${facetName}"
+        >
+          🗑️
+        </button>
+      </div>
+    `;
+
+    // Add to bottom of list
+    todoList.appendChild(li);
+
+    // Wire up event handlers
+    setupTodoRowHandlers(li);
+
+    // Update facet count
+    updateFacetCount(facetSection);
+
+    // Expand facet if collapsed
+    if (facetSection.classList.contains('collapsed')) {
+      toggleFacetCollapse(facetSection, false);
+    }
+
+    // Visual feedback - fast background fade
+    li.style.backgroundColor = 'rgba(37, 99, 235, 0.15)';
+    li.style.transition = 'background-color 0.3s ease-out';
+    setTimeout(() => {
+      li.style.backgroundColor = '';
+    }, 300);
+  });
 });
 </script>

@@ -49,8 +49,11 @@ def todos_day(day: str):  # type: ignore[override]
 
         if action == "add":
             text = request.form.get("text", "").strip()
+            is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            error_message = None
+
             if not text:
-                flash("Cannot add an empty todo", "error")
+                error_message = "Cannot add an empty todo"
             else:
                 # Extract facet from hashtag (e.g., "#work" -> "work")
                 import re
@@ -74,24 +77,59 @@ def todos_day(day: str):  # type: ignore[override]
                         facet_map = {}
 
                     if facet not in facet_map:
-                        flash(f"Facet #{facet} does not exist", "error")
-                        return redirect(url_for("app:todos.todos_day", day=day))
+                        error_message = f"Facet #{facet} does not exist"
                 else:
                     # Use selected facet as default, fall back to personal
                     selected = get_selected_facet()
                     facet = selected if selected else "personal"
 
-                if not text:
-                    flash("Cannot add an empty todo", "error")
-                else:
+                if not error_message and not text:
+                    error_message = "Cannot add an empty todo"
+
+                if not error_message:
                     try:
                         checklist = TodoChecklist.load(day, facet)
                         checklist.append_entry(text)
+
+                        # If AJAX request, return JSON with new todo data
+                        if is_ajax:
+                            new_index = len(checklist.entries)
+                            new_guard = checklist.entries[new_index - 1]
+                            # Extract time if present (e.g., "14:30")
+                            import re as time_re
+
+                            time_match = time_re.search(
+                                r"\((\d{1,2}:\d{2})\)", new_guard
+                            )
+                            time_str = time_match.group(1) if time_match else None
+                            return jsonify(
+                                {
+                                    "status": "ok",
+                                    "todo": {
+                                        "facet": facet,
+                                        "index": new_index,
+                                        "guard": new_guard,
+                                        "text": text,
+                                        "time": time_str,
+                                        "completed": False,
+                                    },
+                                }
+                            )
                     except (TodoEmptyTextError, RuntimeError) as exc:
                         current_app.logger.debug(
                             "Failed to append todo for %s/%s: %s", facet, day, exc
                         )
-                        flash("Unable to add todo right now", "error")
+                        error_message = "Unable to add todo right now"
+
+            # Handle errors
+            if error_message:
+                if is_ajax:
+                    return (
+                        jsonify({"status": "error", "message": error_message}),
+                        400,
+                    )
+                flash(error_message, "error")
+
             return redirect(url_for("app:todos.todos_day", day=day))
 
         # Get facet and index for other actions
