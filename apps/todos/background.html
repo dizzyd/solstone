@@ -1,0 +1,21 @@
+AppServices.register('todos', {
+  initialize() {
+    this.updateBadge();
+  },
+
+  async updateBadge() {
+    try {
+      const response = await fetch('/app/todos/api/badge-count');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.count > 0) {
+          AppServices.badges.set('todos', data.count);
+        } else {
+          AppServices.badges.clear('todos');
+        }
+      }
+    } catch (err) {
+      console.error('[Todos] Failed to fetch badge count:', err);
+    }
+  }
+});

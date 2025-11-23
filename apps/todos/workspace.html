@@ -334,6 +334,21 @@ document.addEventListener('DOMContentLoaded', function() {
   const moveEndpoint = {{ url_for('app:todos.move_todo', day=day) | tojson }};
   const currentDay = {{ day | tojson }};
   const storageKey = `todos_collapsed_${currentDay}`;
+  const todayDay = {{ today_day | tojson }};
+
+  // Update the app icon badge when todos change
+  function updateAppBadge(delta) {
+    // Only update badge if we're viewing today's todos
+    if (currentDay !== todayDay) return;
+
+    const current = AppServices.badges.get('todos') || 0;
+    const newCount = Math.max(0, current + delta);
+    if (newCount > 0) {
+      AppServices.badges.set('todos', newCount);
+    } else {
+      AppServices.badges.clear('todos');
+    }
+  }
 
   // Facet filtering based on global selection
   function filterByFacet(facetName) {
@@ -511,6 +526,7 @@ document.addEventListener('DOMContentLoaded', function() {
     button.textContent = '⏳';
 
     const todoRow = button.closest('[data-todo-row]');
+    const wasIncomplete = !todoRow.classList.contains('completed');
 
     try {
       const response = await fetch(moveEndpoint, {
@@ -544,6 +560,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update the count emoji (facet will now show ➕ if empty)
         if (facetSection) {
           updateFacetCount(facetSection);
+        }
+
+        // Update app badge if moved todo was incomplete
+        if (wasIncomplete) {
+          updateAppBadge(-1);
         }
       }, 200);
     } catch (error) {
@@ -619,6 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const facet = button.dataset.facet;
 
       const todoRow = button.closest('[data-todo-row]');
+      const wasIncomplete = !todoRow.classList.contains('completed');
       const originalText = button.textContent;
       button.disabled = true;
 
@@ -670,6 +692,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update the count emoji (facet will now show ➕ if empty)
             if (facetSection) {
               updateFacetCount(facetSection);
+            }
+
+            // Update app badge if removed todo was incomplete
+            if (wasIncomplete) {
+              updateAppBadge(-1);
             }
           }, 200);
         } else {
@@ -748,6 +775,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (facetSection) {
             updateFacetCount(facetSection);
           }
+
+          // Update app badge (complete = -1, uncomplete = +1)
+          updateAppBadge(isCompleted ? -1 : 1);
         } else {
           // Revert on error
           checkbox.checked = !wasChecked;
@@ -1012,6 +1042,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (facetSection) {
               updateFacetCount(facetSection);
             }
+
+            // Update app badge (complete = -1, uncomplete = +1)
+            updateAppBadge(isCompleted ? -1 : 1);
           } else {
             checkbox.checked = !wasChecked;
             alert('Failed to update todo - please refresh and try again');
@@ -1034,6 +1067,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const index = parseInt(removeBtn.dataset.index, 10);
         const guard = removeBtn.dataset.guard;
         const facet = removeBtn.dataset.facet;
+        const wasIncomplete = !todoRow.classList.contains('completed');
         const originalText = removeBtn.textContent;
 
         removeBtn.disabled = true;
@@ -1078,6 +1112,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 updateFacetCount(facetSection);
+              }
+
+              // Update app badge if removed todo was incomplete
+              if (wasIncomplete) {
+                updateAppBadge(-1);
               }
             }, 200);
           } else {
@@ -1348,6 +1387,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (facetSection.classList.contains('collapsed')) {
       toggleFacetCollapse(facetSection, false);
     }
+
+    // Update app badge (new todo is always incomplete)
+    updateAppBadge(1);
 
     // Visual feedback - fast background fade
     li.style.backgroundColor = 'rgba(37, 99, 235, 0.15)';

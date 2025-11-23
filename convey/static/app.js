@@ -1537,5 +1537,84 @@ window.AppServices = {
         submenu.classList.add('visible');
       });
     }
+  },
+
+  /**
+   * Badge system for app icon notifications
+   * Allows apps to display badge counts on their menu bar icons
+   */
+  badges: {
+    _data: {},  // {appName: count}
+
+    /**
+     * Set badge count for an app
+     * @param {string} appName - Name of the app
+     * @param {number} count - Badge count (0 or falsy to hide)
+     */
+    set(appName, count) {
+      if (count && count > 0) {
+        this._data[appName] = count;
+      } else {
+        delete this._data[appName];
+      }
+      this._render(appName);
+    },
+
+    /**
+     * Clear badge for an app
+     * @param {string} appName - Name of the app
+     */
+    clear(appName) {
+      delete this._data[appName];
+      this._render(appName);
+    },
+
+    /**
+     * Get badge count for an app
+     * @param {string} appName - Name of the app
+     * @returns {number} Badge count (0 if not set)
+     */
+    get(appName) {
+      return this._data[appName] || 0;
+    },
+
+    /**
+     * Render badge for an app
+     * @private
+     */
+    _render(appName) {
+      // Defer render if DOM not ready
+      if (document.readyState === 'loading') {
+        const self = this;
+        document.addEventListener('DOMContentLoaded', function() {
+          self._render(appName);
+        });
+        return;
+      }
+
+      const menuItem = document.querySelector(`.menu-item[data-app-name="${appName}"]`);
+      if (!menuItem) return;
+
+      // Find the icon container
+      const iconContainer = menuItem.querySelector('.icon');
+      if (!iconContainer) return;
+
+      // Remove existing badge
+      const existing = iconContainer.querySelector('.menu-badge');
+      if (existing) {
+        existing.remove();
+      }
+
+      // Get count for this app
+      const count = this._data[appName];
+      if (!count || count <= 0) return;
+
+      // Create badge element
+      const badge = document.createElement('span');
+      badge.className = 'menu-badge';
+      badge.textContent = count;
+
+      iconContainer.appendChild(badge);
+    }
   }
 };

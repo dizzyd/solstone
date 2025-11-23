@@ -187,7 +187,14 @@ JavaScript service that runs globally, even when app is not active.
 
 **Core Methods:**
 - `AppServices.register(appName, service)` - Register background service
-- `AppServices.updateBadge(appName, facetName, count)` - Update facet badge
+- `AppServices.updateBadge(appName, facetName, count)` - Update facet pill badge
+
+**Icon Badge Methods:**
+- `AppServices.badges.set(appName, count)` - Set app icon badge count
+- `AppServices.badges.clear(appName)` - Remove app icon badge
+- `AppServices.badges.get(appName)` - Get current badge count
+
+Icon badges appear as red notification counts on menu bar app icons.
 
 **Notification Methods:**
 - `AppServices.notifications.show(options)` - Show persistent notification card
@@ -229,7 +236,7 @@ Submenus appear as hover pop-outs on menu bar icons. Items support `id`, `label`
 - See **CALLOSUM.md** for event protocol details
 
 **Reference implementations:**
-- `apps/home/background.html` - WebSocket event listening, notification handling
+- `apps/todos/background.html` - App icon badge with API fetch
 - `apps/dev/background.html` - Submenu quick-links with dynamic badges
 
 **Implementation source:** `convey/static/app.js` - AppServices framework, `convey/static/websocket.js` - WebSocket API
@@ -456,10 +463,10 @@ Use `current_app.logger` from Flask for debugging. See `apps/todos/routes.py` fo
 
 Study these reference implementations:
 
-- **`apps/home/`** - Minimal app (no routes.py, just workspace + background service)
-- **`apps/dev/`** - Simple app (no routes.py, custom styling and notifications)
+- **`apps/home/`** - Minimal app (no routes.py, just workspace)
+- **`apps/dev/`** - Simple app (no routes.py, custom styling, submenu)
 - **`apps/live/`** - Minimal app (no routes.py, event dashboard)
-- **`apps/todos/`** - Full-featured (custom routes with date navigation, forms, AJAX)
+- **`apps/todos/`** - Full-featured (routes, forms, AJAX, icon badge)
 - **`apps/inbox/`** - API-driven (custom routes, message management)
 - **`apps/search/`** - API-only (custom routes for search, no index route)
 - **`apps/tokens/`** - Navigation (index redirects to today, app bar with controls)

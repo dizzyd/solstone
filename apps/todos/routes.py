@@ -29,6 +29,25 @@ from think.todo import (
 todos_bp = Blueprint("app:todos", __name__, url_prefix="/app/todos")
 
 
+@todos_bp.route("/api/badge-count")
+def badge_count():
+    """Get total pending todo count for today across all facets."""
+    today = date.today().strftime("%Y%m%d")
+    total = 0
+
+    try:
+        facet_map = get_facets()
+    except Exception:
+        facet_map = {}
+
+    for facet_name in facet_map.keys():
+        facet_todos = get_todos(today, facet_name)
+        if facet_todos:
+            total += sum(1 for todo in facet_todos if not todo.get("completed"))
+
+    return jsonify({"count": total})
+
+
 def _todo_path(day: str, facet: str) -> Path:
     return Path(state.journal_root) / "facets" / facet / "todos" / f"{day}.md"
 
