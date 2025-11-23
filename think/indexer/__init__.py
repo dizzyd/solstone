@@ -41,13 +41,6 @@ from .insights import (
     split_sentences,
 )
 
-# Import from news
-from .news import (
-    find_news_files,
-    scan_news,
-    search_news,
-)
-
 # Import from transcripts
 from .transcripts import (
     AUDIO_RE,
@@ -87,10 +80,6 @@ __all__ = [
     "parse_entities",
     "scan_entities",
     "search_entities",
-    # News
-    "find_news_files",
-    "scan_news",
-    "search_news",
     # CLI
     "main",
 ]

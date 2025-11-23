@@ -24,7 +24,7 @@ Entity operations (with required facet parameter):
 Research tools (use sparingly, be quick):
 - `search_insights(query, limit=3)` - find entity mentions in summaries
 - `search_transcripts(query, limit=3)` - find entity mentions in transcripts
-- `search_news(query, facet, limit=3)` - find entity in facet news
+- `search_insights(query, topic="news", limit=3)` - find entity in facet news
 - `search_events(query, limit=3)` - find entity in events
 
 ## Quick Addition Process
@@ -58,7 +58,7 @@ If entity name already exists, consider if anything in the request implies the n
 
 Execute a few targeted searches based on type:
 - **Person**: `search_insights("{name}", limit=3)` or `search_events("{name}", limit=3)`
-- **Organization/Company**: `search_news("{name}", facet, limit=3)` or `search_insights("{name}", limit=3)`
+- **Organization/Company**: `search_insights("{name}", topic="news", limit=3)` or `search_insights("{name}", limit=3)`
 - **Project**: `search_insights("{name}", limit=3)`
 - **Tool**: `search_insights("{name}", limit=3)`
 

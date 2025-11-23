@@ -53,7 +53,7 @@ Priority Discovery:
 5. search_transcripts("TODO OR FIXME", day={yesterday})
    → Catch technical debt and verbal commitments
 
-6. search_news("[keywords]", facet=relevant_facet, limit=5)
+6. search_insights("[keywords]", topic="news", limit=5)
    → Check facet news for announced commitments
 
 7. search_events(...) and additional targeted queries as needed

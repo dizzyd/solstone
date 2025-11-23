@@ -19,12 +19,6 @@ You have access to three primary search tools and two resource types for journal
 **Returns**: JSON structured event data with start/end times, event descriptions, and associated metadata
 **Use when**: Finding specific occurrences, meetings, or notable activities across the journal
 
-### Tool: `search_news`
-**Purpose**: Searches facet news articles and updates
-**Parameters**: query, limit, offset, facet (optional), day (optional)
-**Returns**: News articles with facet, day, and text snippets
-**Use when**: Looking for facet-specific updates, announcements, or published reports
-
 ### Resource: `journal://summary/{day}/{topic}`
 **Purpose**: Retrieves complete markdown summary for a specific topic on a given day
 **Returns**: Markdown formatted multi-page report summarizing the given topic for that day
@@ -106,12 +100,6 @@ First, analyze each query to determine:
 - Query requests information about specific activities, meetings, or notable events
 - Need to understand structured event data with timestamps and context
 - Looking for occurrences of particular types of activities across the journal
-
-**Use search_news when:**
-- Query asks about facet-specific updates and announcements
-- Looking for published reports or newsletters within facets
-- Need to find public communications about decisions or progress
-- Searching for historical patterns in facet communications
 
 ## Search Execution Best Practices
 

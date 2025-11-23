@@ -12,7 +12,7 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 
 - `todo_list(day, facet)` – inspect current lines for the specified facet; copy the exact text (including `- [ ]`) when preparing guard strings
 - `todo_done(day, facet, line_number, guard)` – mark a line complete (guard must equal the exact line from the latest list)
-- `search_insights`, `search_transcripts`, `search_events`, `search_news`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
+- `search_insights`, `search_transcripts`, `search_events`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
 
 **IMPORTANT**: All todo operations require both day and facet parameters. The facet context is provided in your prompt.
 
@@ -28,7 +28,7 @@ For each unchecked line from `todo_list(day, facet)`:
 2. **Targeted Search** – query journal data succinctly:
    - `search_insights("[keywords]", limit=5, day=day_yesterday)`
    - `search_transcripts("[keywords]", day=day_yesterday)`
-   - `search_news("[keywords]", facet=your_facet, day=day_yesterday)`
+   - `search_insights("[keywords]", topic="news", day=day_yesterday)` for facet news
    - tap other sources (events, topic summaries) when helpful
 3. **Evidence Check** – verify completion when you find explicit proof:
    - statements confirming work finished, merged, deployed, or meeting held

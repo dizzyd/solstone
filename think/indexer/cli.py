@@ -10,7 +10,6 @@ from .core import reset_index
 from .entities import scan_entities, search_entities
 from .events import scan_events, search_events
 from .insights import scan_insights, search_insights
-from .news import scan_news, search_news
 from .transcripts import scan_transcripts, search_transcripts
 
 
@@ -32,7 +31,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--index",
-        choices=["insights", "events", "transcripts", "entities", "news"],
+        choices=["insights", "events", "transcripts", "entities"],
         help="Which index to operate on",
     )
     parser.add_argument(
@@ -48,7 +47,7 @@ def main() -> None:
     parser.add_argument(
         "--rescan-facets",
         action="store_true",
-        help="Scan facets/ directory and update entity and news indexes",
+        help="Scan facets/ directory and update entity index",
     )
     parser.add_argument(
         "--reset",
@@ -66,10 +65,6 @@ def main() -> None:
     parser.add_argument(
         "--source",
         help="Filter transcript results by source (e.g., 'mic', 'sys', 'monitor_1')",
-    )
-    parser.add_argument(
-        "--facet",
-        help="Filter news results by facet",
     )
     parser.add_argument(
         "-q",
@@ -114,7 +109,7 @@ def main() -> None:
 
     if args.rescan_all:
         # Rescan all indexes
-        indexes = ["insights", "events", "transcripts", "entities", "news"]
+        indexes = ["insights", "events", "transcripts", "entities"]
         for index_name in indexes:
             if index_name == "transcripts":
                 changed = scan_transcripts(journal, verbose=args.verbose)
@@ -132,23 +127,12 @@ def main() -> None:
                 changed = scan_entities(journal, verbose=args.verbose)
                 if changed:
                     journal_log(f"indexer {index_name} rescan ok")
-            elif index_name == "news":
-                changed = scan_news(journal, verbose=args.verbose)
-                if changed:
-                    journal_log(f"indexer {index_name} rescan ok")
 
     if args.rescan_facets:
         # Rescan only facet-based indexes
-        facet_indexes = ["entities", "news"]
-        for index_name in facet_indexes:
-            if index_name == "entities":
-                changed = scan_entities(journal, verbose=args.verbose)
-                if changed:
-                    journal_log(f"indexer {index_name} rescan ok")
-            elif index_name == "news":
-                changed = scan_news(journal, verbose=args.verbose)
-                if changed:
-                    journal_log(f"indexer {index_name} rescan ok")
+        changed = scan_entities(journal, verbose=args.verbose)
+        if changed:
+            journal_log("indexer entities rescan ok")
 
     if args.rescan:
         if args.index == "transcripts":
@@ -169,10 +153,6 @@ def main() -> None:
             changed = scan_entities(journal, verbose=args.verbose)
             if changed:
                 journal_log("indexer entities rescan ok")
-        elif args.index == "news":
-            changed = scan_news(journal, verbose=args.verbose)
-            if changed:
-                journal_log("indexer news rescan ok")
 
     # Handle query argument
     if args.query is not None:
@@ -188,9 +168,6 @@ def main() -> None:
         elif args.index == "entities":
             search_func = search_entities
             query_kwargs = {"day": args.day}
-        elif args.index == "news":
-            search_func = search_news
-            query_kwargs = {"facet": args.facet, "day": args.day}
         else:
             search_func = search_insights
             query_kwargs = {}

@@ -22,7 +22,6 @@ from think.entities import (
 from think.facets import facet_summary, log_action
 from think.indexer import search_events as search_events_impl
 from think.indexer import search_insights as search_insights_impl
-from think.indexer import search_news as search_news_impl
 from think.indexer import search_transcripts as search_transcripts_impl
 from think.messages import send_message as send_message_impl
 from think.utils import get_raw_file
@@ -55,7 +54,6 @@ TOOL_PACKS = {
         "search_insights",
         "search_transcripts",
         "search_events",
-        "search_news",
         "get_facet",
         "send_message",
         "get_resource",
@@ -498,72 +496,6 @@ def search_events(
         return {
             "error": f"Failed to search events: {exc}",
             "suggestion": "try adjusting the query or filters",
-        }
-
-
-@register_tool(annotations=HINTS)
-def search_news(
-    query: str,
-    limit: int = 5,
-    offset: int = 0,
-    *,
-    facet: str | None = None,
-    day: str | None = None,
-) -> dict[str, Any]:
-    """Search facet news content using full-text search.
-
-    This tool searches through news markdown files stored in facet-specific
-    news directories (facets/<facet>/news/YYYYMMDD.md). Use this when looking
-    for news items, announcements, or facet-specific updates that have been
-    captured in the journal.
-
-    Args:
-        query: Natural language search query (e.g., "product launch", "security update")
-        limit: Optional maximum number of results to return (default: 5, max: 20)
-        offset: Optional number of results to skip for pagination (default: 0)
-        facet: Optional facet name to filter results by (e.g., "ml_research", "work")
-        day: Optional day to filter results by in YYYYMMDD format
-
-    Returns:
-        Dictionary containing:
-        - total: Total number of matching news items
-        - limit: Current limit value used for this query
-        - offset: Current offset value used for this query
-        - results: List of matching news items with facet, day, and text snippet,
-                  ordered by relevance
-
-    Examples:
-        - search_news("product announcement")
-        - search_news("security", facet="work", limit=10)
-        - search_news("ai breakthrough", day="20250118")
-        - search_news("quarterly results", limit=5, offset=5)
-    """
-    try:
-        kwargs = {}
-        if facet is not None:
-            kwargs["facet"] = facet
-        if day is not None:
-            kwargs["day"] = day
-
-        total, results = search_news_impl(query, limit, offset, **kwargs)
-
-        items = []
-        for r in results:
-            meta = r.get("metadata", {})
-            items.append(
-                {
-                    "facet": meta.get("facet", ""),
-                    "day": meta.get("day", ""),
-                    "text": r.get("text", ""),
-                    "path": meta.get("path", ""),
-                }
-            )
-
-        return {"total": total, "limit": limit, "offset": offset, "results": items}
-    except Exception as exc:
-        return {
-            "error": f"Failed to search news: {exc}",
-            "suggestion": "try adjusting the query or ensure news indexes exist",
         }
 
 
@@ -1169,7 +1101,6 @@ async def get_resource(uri: str) -> object:
     - ``journal://transcripts/screen/{day}/{time}/{length}`` — screen summaries only
     - ``journal://media/{day}/{name}`` — raw FLAC or PNG media files
     - ``journal://todo/{facet}/{day}`` — facet-scoped todo checklist file
-    - ``journal://news/{facet}/{day}`` — facet news markdown for a specific day
 
     Args:
         uri: Resource URI to fetch.
@@ -1380,30 +1311,6 @@ def get_todo(facet: str, day: str) -> TextResource:
         uri=f"journal://todo/{facet}/{day}",
         name=f"Todos: {facet}/{day}",
         description=f"Checklist entries for facet '{facet}' on {day}",
-        mime_type="text/markdown",
-        text=text,
-    )
-
-
-@mcp.resource("journal://news/{facet}/{day}")
-def get_news_content(facet: str, day: str) -> TextResource:
-    """Return the news markdown content for a specific facet and day."""
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    news_path = Path(journal) / "facets" / facet / "news" / f"{day}.md"
-
-    if not news_path.is_file():
-        facet_path = news_path.parents[1]
-        if not facet_path.is_dir():
-            text = f"Facet '{facet}' not found."
-        else:
-            text = f"No news recorded for {day} in facet '{facet}'."
-    else:
-        text = news_path.read_text(encoding="utf-8")
-
-    return TextResource(
-        uri=f"journal://news/{facet}/{day}",
-        name=f"News: {facet}/{day}",
-        description=f"News content for facet '{facet}' on {day}",
         mime_type="text/markdown",
         text=text,
     )
