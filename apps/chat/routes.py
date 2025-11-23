@@ -75,6 +75,13 @@ def send_message() -> Any:
         else:
             full_prompt = message
 
+        # Get selected facet for context and chat record
+        facet = get_selected_facet()
+
+        # Enhance prompt with facet focus if selected
+        if facet:
+            full_prompt = f"Focus on the `{facet}` facet and answer this request: {full_prompt}"
+
         # Create agent request - events will be broadcast by shared watcher
         agent_id = spawn_agent(
             prompt=full_prompt,
@@ -85,7 +92,6 @@ def send_message() -> Any:
 
         # Save chat metadata to app storage
         ts = int(time.time() * 1000)
-        facet = get_selected_facet()
 
         # Generate title for new chats only (not continuations)
         if continue_agent_id:

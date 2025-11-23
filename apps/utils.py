@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from flask import g
+from convey import state
 
 # Compiled pattern for app name validation
 APP_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -38,7 +38,7 @@ def get_app_storage_path(
         raise ValueError(f"Invalid app name: {app_name}")
 
     # Build path
-    path = Path(g.state.journal_root) / "apps" / app_name
+    path = Path(state.journal_root) / "apps" / app_name
     for sub_dir in sub_dirs:
         path = path / sub_dir
 
