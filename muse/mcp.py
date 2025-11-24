@@ -99,20 +99,65 @@ get_resource = register_tool(annotations=HINTS)(messaging.get_resource)
 from muse.resources import media, summaries, todos, transcripts  # noqa: F401
 
 
-# Phase 2: App-level tool discovery (stubbed for now)
+# Phase 2: App-level tool discovery
 def _discover_app_tools():
-    """Discover and load tools from apps/*/tools.py (Phase 2).
+    """Discover and load tools from apps/*/tools.py.
 
-    This function will scan the apps/ directory for tools.py files and
-    dynamically register any tools found there. This allows individual
+    This function scans the apps/ directory for tools.py files and
+    dynamically registers any tools found there. This allows individual
     apps to contribute their own MCP tools without modifying core code.
 
-    TODO: Implement in Phase 2
-    - Scan apps/*/tools.py files
-    - Import and register tools using a standard interface
-    - Handle errors gracefully if tool files are malformed
+    Apps can define tools using the @register_tool decorator:
+
+        # apps/myapp/tools.py
+        from muse.mcp import register_tool, HINTS
+
+        @register_tool(annotations=HINTS)
+        def my_tool(arg: str) -> dict:
+            return {"result": "..."}
+
+    Tools are registered when the module is imported. If an app's tools.py
+    file fails to import, the error is logged but doesn't prevent other
+    apps from loading or the server from starting.
     """
-    pass  # TODO: Implement in Phase 2
+    import importlib
+    import logging
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+    apps_dir = Path(__file__).parent.parent / "apps"
+
+    if not apps_dir.exists():
+        logger.debug("No apps/ directory found, skipping app tool discovery")
+        return
+
+    discovered_count = 0
+
+    for app_dir in sorted(apps_dir.iterdir()):
+        # Skip non-directories and private directories
+        if not app_dir.is_dir() or app_dir.name.startswith("_"):
+            continue
+
+        tools_file = app_dir / "tools.py"
+        if not tools_file.exists():
+            continue
+
+        app_name = app_dir.name
+
+        try:
+            # Import triggers @register_tool decorators
+            module_name = f"apps.{app_name}.tools"
+            importlib.import_module(module_name)
+            discovered_count += 1
+            logger.info(f"Loaded MCP tools from app: {app_name}")
+        except Exception as e:
+            # Gracefully handle errors - don't break server startup
+            logger.error(
+                f"Failed to load tools from app '{app_name}': {e}", exc_info=True
+            )
+
+    if discovered_count > 0:
+        logger.info(f"Discovered tools from {discovered_count} app(s)")
 
 
 _discover_app_tools()

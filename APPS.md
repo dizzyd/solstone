@@ -35,6 +35,7 @@ All apps are served via a shared route handler at `/app/{app_name}`. You only ne
 apps/my_app/
 ├── workspace.html     # Required: Main content template
 ├── routes.py          # Optional: Flask blueprint (only if custom routes needed)
+├── tools.py           # Optional: MCP tool extensions (auto-discovered)
 ├── app.json          # Optional: Metadata (icon, label, facet support)
 ├── app_bar.html      # Optional: Bottom bar controls (forms, buttons)
 └── background.html   # Optional: Background JavaScript service
@@ -46,6 +47,7 @@ apps/my_app/
 |------|----------|---------|
 | `workspace.html` | **Yes** | Main app content (rendered in container) |
 | `routes.py` | No | Flask blueprint for custom routes (API endpoints, forms, etc.) |
+| `tools.py` | No | MCP tool extensions for AI agents (auto-discovered) |
 | `app.json` | No | Icon, label, facet support overrides |
 | `app_bar.html` | No | Bottom fixed bar for app controls |
 | `background.html` | No | Background service (WebSocket listeners) |
@@ -235,6 +237,33 @@ Submenus appear as hover pop-outs on menu bar icons. Items support `id`, `label`
 - `apps/dev/background.html` - Submenu quick-links with dynamic badges
 
 **Implementation source:** `convey/static/app.js` - AppServices framework, `convey/static/websocket.js` - WebSocket API
+
+---
+
+### 6. `tools.py` - MCP Tool Extensions
+
+Define custom MCP tools for your app that are automatically discovered and registered.
+
+**Key Points:**
+- Only create `tools.py` if your app needs custom AI agent tools
+- Tools use the `@register_tool` decorator from `muse.mcp`
+- Automatically discovered and loaded at server startup
+- Errors in one app's tools don't prevent other apps from loading
+- Tools become available to all AI agents via the MCP protocol
+
+**Required imports:**
+```python
+from muse.mcp import register_tool, HINTS
+```
+
+**Decorator usage:** Apply `@register_tool(annotations=HINTS)` to plain functions that return dict responses. Functions should include type hints and docstrings for AI agent context.
+
+**Discovery behavior:** The MCP server scans `apps/*/tools.py` at startup, imports modules, and registers decorated functions. Private apps (directories starting with `_`) are skipped.
+
+**Reference implementations:**
+- Discovery logic: `muse/mcp.py` - `_discover_app_tools()` function
+- Testing: `tests/integration/test_app_tool_discovery.py` - Error handling and edge cases
+- Core tool examples: `muse/tools/todo.py`, `muse/tools/search.py` - Tool implementation patterns
 
 ---
 

@@ -148,7 +148,9 @@ async def test_mcp_server_stdio_e2e(integration_journal_path):
             assert "get_resource" in tool_names, "messaging tool missing"
 
             # Verify we have the expected number of tools (17 core tools)
-            assert len(tool_names) >= 17, f"Expected at least 17 tools, got {len(tool_names)}"
+            assert (
+                len(tool_names) >= 17
+            ), f"Expected at least 17 tools, got {len(tool_names)}"
 
             # Test 2: Call a tool (todo_list)
             result = await session.call_tool(
