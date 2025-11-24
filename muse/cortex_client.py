@@ -121,11 +121,14 @@ def create_synthetic_agent(result: str) -> str:
 
     # Create agent file with single finish event
     agent_file = agents_dir / f"{agent_id}.jsonl"
-    finish_event = {"event": "finish", "result": result, "ts": ts}
+    finish_event = {"event": "finish", "result": result, "ts": ts, "agent_id": agent_id}
 
     with open(agent_file, "w", encoding="utf-8") as f:
         json.dump(finish_event, f)
         f.write("\n")
+
+    # Broadcast finish event to Callosum so listeners are notified
+    callosum_send("cortex", "finish", agent_id=agent_id, result=result, ts=ts)
 
     return agent_id
 
