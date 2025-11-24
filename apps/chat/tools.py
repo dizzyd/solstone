@@ -11,6 +11,11 @@ from fastmcp import Context
 from muse.mcp import HINTS, register_tool
 from think.facets import _get_actor_info
 
+# Declare pack membership - add send_message to journal pack
+TOOL_PACKS = {
+    "journal": ["send_message"],
+}
+
 
 @register_tool(annotations=HINTS)
 def send_message(

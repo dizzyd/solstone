@@ -35,7 +35,8 @@ def register_tool(*tool_args: Any, **tool_kwargs: Any) -> Callable[[F], F]:
 
 
 # Tool packs - logical groupings of tools
-TOOL_PACKS = {
+# Apps can extend existing packs or create new ones via TOOL_PACKS in their tools.py
+TOOL_PACKS: dict[str, list[str]] = {
     "journal": [
         "search_insights",
         "search_transcripts",
@@ -60,6 +61,7 @@ TOOL_PACKS = {
         "entity_update",
         "entity_add_aka",
     ],
+    "apps": [],  # Auto-populated with all app-discovered tools
 }
 
 
@@ -116,9 +118,18 @@ def _discover_app_tools():
         def my_tool(arg: str) -> dict:
             return {"result": "..."}
 
-    Tools are registered when the module is imported. If an app's tools.py
-    file fails to import, the error is logged but doesn't prevent other
-    apps from loading or the server from starting.
+    Apps can also declare pack membership via a module-level TOOL_PACKS dict:
+
+        # apps/myapp/tools.py
+        TOOL_PACKS = {
+            "journal": ["my_tool"],      # Add to existing pack
+            "myapp": ["my_tool"],         # Create new pack
+        }
+
+    All app tools are automatically added to the "apps" pack. Tools are
+    registered when the module is imported. If an app's tools.py file
+    fails to import, the error is logged but doesn't prevent other apps
+    from loading or the server from starting.
     """
     import importlib
     import logging
@@ -132,6 +143,7 @@ def _discover_app_tools():
         return
 
     discovered_count = 0
+    total_tools = 0
 
     for app_dir in sorted(apps_dir.iterdir()):
         # Skip non-directories and private directories
@@ -147,9 +159,29 @@ def _discover_app_tools():
         try:
             # Import triggers @register_tool decorators
             module_name = f"apps.{app_name}.tools"
-            importlib.import_module(module_name)
+            module = importlib.import_module(module_name)
+
+            # Collect tool names (functions decorated with @register_tool have .fn)
+            app_tools = [
+                name
+                for name, obj in vars(module).items()
+                if callable(obj) and hasattr(obj, "fn") and not name.startswith("_")
+            ]
+
+            # Add all app tools to the "apps" pack
+            TOOL_PACKS["apps"].extend(app_tools)
+            total_tools += len(app_tools)
+
+            # Merge app-declared pack memberships
+            if hasattr(module, "TOOL_PACKS"):
+                for pack, tools in module.TOOL_PACKS.items():
+                    if pack not in TOOL_PACKS:
+                        TOOL_PACKS[pack] = []
+                    TOOL_PACKS[pack].extend(tools)
+                    logger.debug(f"App '{app_name}' added {tools} to pack '{pack}'")
+
             discovered_count += 1
-            logger.info(f"Loaded MCP tools from app: {app_name}")
+            logger.info(f"Loaded {len(app_tools)} MCP tool(s) from app: {app_name}")
         except Exception as e:
             # Gracefully handle errors - don't break server startup
             logger.error(
@@ -157,7 +189,7 @@ def _discover_app_tools():
             )
 
     if discovered_count > 0:
-        logger.info(f"Discovered tools from {discovered_count} app(s)")
+        logger.info(f"Discovered {total_tools} tool(s) from {discovered_count} app(s)")
 
 
 _discover_app_tools()
