@@ -1,25 +1,10 @@
 # Sunstone Makefile
 # Python-based AI-driven desktop journaling toolkit
 
-.PHONY: help install deps test lint format check clean dev full all
+.PHONY: install deps test lint format check clean dev full all
 
 # Default target - install package in editable mode
 all: install
-
-help:
-	@echo "Available targets:"
-	@echo "  make           - Install package in editable mode (default)"
-	@echo "  make install   - Install package in editable mode"
-	@echo "  make deps      - Install test/dev dependencies only"
-	@echo "  make full      - Install package with all optional dependencies"
-	@echo "  make test      - Run unit tests (installs deps if needed)"
-	@echo "  make test-integration - Run integration tests"
-	@echo "  make test-all  - Run both unit and integration tests"
-	@echo "  make lint      - Run all linting and formatting checks"
-	@echo "  make format    - Auto-format code with black and isort"
-	@echo "  make check     - Run type checking with mypy"
-	@echo "  make clean     - Remove build artifacts and cache files"
-	@echo "  make dev       - Install package with dev dependencies"
 
 # Marker files to track dependency installation
 .deps-installed: pyproject.toml

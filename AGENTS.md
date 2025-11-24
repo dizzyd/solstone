@@ -178,7 +178,9 @@ make check-all   # Format, lint, and test (run before commit)
 ## 📝 Important Development Notes
 
 ### Environment Management
-* **JOURNAL_PATH**: MUST call `setup_cli()` first in any CLI tool, or manually use `load_dotenv()` - then available via environment. To find current path: `grep JOURNAL_PATH .env`
+* **JOURNAL_PATH**: The live journal path is stored in `.env`. To access it:
+  - **Shell/CLI**: Run `grep JOURNAL_PATH .env` to get the path, then use it directly
+  - **Python CLI tools**: Call `setup_cli()` first, or manually use `load_dotenv()`
 * **API Keys**: Store in `.env` file, never commit to repository
 * **Entry Points**: Use command names (e.g., `think-indexer`) NOT `python -m ...`
 
@@ -250,7 +252,6 @@ make clean-install # Clean and reinstall
 * **Insight Templates**: `think/insights/*.txt` and `*.json`
 
 ### Getting Help
-* Run `make help` for available Make targets
 * Run `sunstone` for CLI command list
 * Check **JOURNAL.md**, **APPS.md**, **CORTEX.md**, **CALLOSUM.md**, **CRUMBS.md** for subsystem details
 * Review test files in `tests/` for usage examples
