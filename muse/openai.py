@@ -184,7 +184,7 @@ async def run_agent(
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
     max_turns = config.get("max_turns", _DEFAULT_MAX_TURNS)
     disable_mcp = config.get("disable_mcp", False)
-    conversation_id_in = config.get("conversation_id")
+    continue_from = config.get("continue_from")
 
     LOG.info(
         "Running agent with model %s (MCP: %s)",
@@ -260,16 +260,14 @@ async def run_agent(
     streamed_text: list[str] = []
 
     # Create session and load history if continuing conversation
-    session_id = conversation_id_in or config.get(
-        "agent_id", f"session-{int(time.time())}"
-    )
+    session_id = continue_from or config.get("agent_id", f"session-{int(time.time())}")
     session = SQLiteSession(session_id=session_id, db_path=":memory:")
 
     # Load conversation history if continuing
-    if conversation_id_in:
+    if continue_from:
         from .agents import parse_agent_events_to_turns
 
-        turns = parse_agent_events_to_turns(conversation_id_in)
+        turns = parse_agent_events_to_turns(continue_from)
         if turns:
             items = _convert_turns_to_items(turns)
             await session.add_items(items)
@@ -438,9 +436,6 @@ async def run_agent(
             if not isinstance(final_text, str) or not final_text:
                 final_text = "".join(streamed_text)
 
-            # Get conversation_id from session
-            conversation_id_out = session.session_id
-
             # Extract usage information from result
             usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
             usage_dict = None
@@ -470,7 +465,6 @@ async def run_agent(
                 {
                     "event": "finish",
                     "result": final_text,
-                    "conversation_id": conversation_id_out,
                     "usage": usage_dict,
                     "ts": _now_ms(),
                 }

@@ -218,12 +218,12 @@ async def run_agent(
         first_user = config.get("extra_context", "")
 
         # Build initial messages - check for continuation first
-        conversation_id = config.get("conversation_id")
-        if conversation_id:
+        continue_from = config.get("continue_from")
+        if continue_from:
             # Load previous conversation history using shared function
             from .agents import parse_agent_events_to_turns
 
-            messages = parse_agent_events_to_turns(conversation_id)
+            messages = parse_agent_events_to_turns(continue_from)
             # Add new prompt as continuation
             messages.append({"role": "user", "content": prompt})
         else:
@@ -312,13 +312,10 @@ async def run_agent(
                     messages.append({"role": "assistant", "content": response.content})
 
                     if not tool_uses:
-                        # Use agent_id as conversation_id for continuations
-                        agent_id = config.get("agent_id", "unknown")
                         callback.emit(
                             {
                                 "event": "finish",
                                 "result": final_text,
-                                "conversation_id": agent_id,
                             }
                         )
                         return final_text
@@ -381,11 +378,7 @@ async def run_agent(
                     }
                     callback.emit(thinking_event)
 
-            # Use agent_id as conversation_id for continuations
-            agent_id = config.get("agent_id", "unknown")
-            callback.emit(
-                {"event": "finish", "result": final_text, "conversation_id": agent_id}
-            )
+            callback.emit({"event": "finish", "result": final_text})
             return final_text
     except Exception as exc:
         callback.emit(

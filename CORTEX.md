@@ -41,11 +41,10 @@ Requests are created via `cortex_request()` from `muse.cortex_client`, which bro
   "persona": "default",              // Optional: agent persona from muse/agents/*.txt
   "model": "gpt-4o",               // Optional: backend-specific override
   "max_tokens": 8192,               // Optional: token limit (if supported)
-  "continue": "1234567890122",      // Optional: reuse prior run's conversation
+  "continue_from": "1234567890122",  // Optional: continue from previous agent
   "facet": "my-project",          // Required for Claude backend only
   "save": "analysis.md",             // Optional: save result to file in day directory
   "day": "20250109",                  // Optional: YYYYMMDD format, defaults to current day
-  "conversation_id": "abc123",       // Optional: resume OpenAI Agents session
   "handoff": {                       // Optional: chain to another agent on completion
     "persona": "reviewer",
     "prompt": "Review the analysis",
@@ -60,14 +59,12 @@ top-level keys to keep the schema flat and aligned with the agent backends.
 
 ### Conversation Continuations
 
-OpenAI's Agents SDK supports carrying a `conversation_id` across requests to reuse an
-existing session. Cortex now handles this automatically: include a `continue` field in
-your request with the `<timestamp>` identifier of any completed agent run. Cortex will
-open `<timestamp>.jsonl`, read the final event, and forward its `conversation_id` to the
-next agent invocation. You can still provide `conversation_id` manually if needed, but
-`continue` keeps callers agnostic of backend-specific identifiers. When the backend
-issues a `finish` event it will echo the active `conversation_id`, allowing callers to
-chain additional turns seamlessly.
+All backends (Anthropic, OpenAI, Google) support continuing conversations from previous
+agent runs. Include a `continue_from` field in your request with the `<timestamp>`
+identifier of any completed agent run. The backend will load the conversation history
+from the agent's event log and continue from where it left off. This works seamlessly
+across all backends - you can even switch backends mid-conversation (e.g., start with
+OpenAI, continue with Anthropic).
 
 ## Agent Event Format
 

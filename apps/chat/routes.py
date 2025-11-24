@@ -55,11 +55,11 @@ def send_message() -> Any:
     message = payload.get("message", "")
     attachments = payload.get("attachments", [])
     backend = payload.get("backend", state.chat_backend)
-    continue_agent_id = payload.get("continue")
+    continue_from = payload.get("continue_from")
 
     config: dict[str, Any] = {}
-    if continue_agent_id:
-        config["continue"] = continue_agent_id
+    if continue_from:
+        config["continue_from"] = continue_from
 
     if backend == "openai":
         key_name = "OPENAI_API_KEY"

@@ -289,9 +289,6 @@ class CortexService:
                 else:
                     self.agent_handoffs.pop(agent_id, None)
 
-            # Inspect previous run continuation to reuse conversation context
-            self._apply_conversation_continuation(config)
-
             # Expand tools if it's a string (tool pack name)
             tools_config = config.get("tools")
             if isinstance(tools_config, str):
@@ -327,89 +324,6 @@ class CortexService:
         except Exception as e:
             self.logger.exception(f"Error handling active file {file_path}: {e}")
             self._write_error_and_complete(file_path, f"Failed to spawn agent: {e}")
-
-    def _apply_conversation_continuation(self, config: Dict[str, Any]) -> None:
-        """Inject conversation_id from previous agent run when requested.
-
-        Cortex users can pass a `continue` field containing the timestamp ID of a
-        completed agent run. When present, look up the resulting JSONL file and
-        re-use the `conversation_id` from its final event. This keeps OpenAI
-        Agents conversations threaded without exposing the concept to callers.
-        """
-
-        continue_id = config.pop("continue", None)
-        if not continue_id:
-            return
-
-        if not isinstance(continue_id, str):
-            self.logger.warning(
-                "Ignoring non-string continue value on agent request: %s",
-                continue_id,
-            )
-            return
-
-        conversation_id = self._resolve_conversation_id(continue_id)
-        if conversation_id:
-            config.setdefault("conversation_id", conversation_id)
-            self.logger.debug(
-                "Resolved conversation_id %s from agent %s",
-                conversation_id,
-                continue_id,
-            )
-        else:
-            self.logger.warning(
-                "Could not find conversation_id to continue from agent %s", continue_id
-            )
-
-    def _resolve_conversation_id(self, agent_id: str) -> Optional[str]:
-        """Load the final event for a previous agent and return its conversation ID."""
-
-        history_path = self.agents_dir / f"{agent_id}.jsonl"
-        if not history_path.exists():
-            self.logger.warning(
-                "Continuation requested for missing agent history file: %s",
-                history_path,
-            )
-            return None
-
-        last_event: Optional[Dict[str, Any]] = None
-        try:
-            with open(history_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        last_event = json.loads(line)
-                    except json.JSONDecodeError:
-                        self.logger.debug(
-                            "Skipping malformed JSON line while reading %s",
-                            history_path,
-                        )
-                        continue
-
-        except OSError as exc:
-            self.logger.error(
-                "Failed to read continuation history from %s: %s", history_path, exc
-            )
-            return None
-
-        if not last_event:
-            self.logger.warning(
-                "No events found in agent history file for continuation: %s",
-                history_path,
-            )
-            return None
-
-        conversation_id = last_event.get("conversation_id")
-        if conversation_id:
-            return str(conversation_id)
-
-        self.logger.info(
-            "Previous agent %s did not emit a conversation_id on final event",
-            agent_id,
-        )
-        return None
 
     def _spawn_agent(
         self,

@@ -709,31 +709,13 @@ async function loadAgent(agentId, isContinuation = false) {
       const startEvent = events.find(e => e.event === 'start');
       const appBar = document.querySelector('.app-bar');
 
-      if (finishEvent && finishEvent.conversation_id) {
-        // Can continue - show app bar
+      if (finishEvent) {
+        // Agent completed - enable continuation
         if (appBar) appBar.style.display = '';
         if (input) {
           input.disabled = false;
           input.placeholder = 'Continue conversation...';
           input.dataset.continueAgent = agentId;
-        }
-      } else {
-        // Can't continue - hide app bar and show completion message
-        if (appBar) appBar.style.display = 'none';
-
-        // Add completion message
-        if (finishEvent && startEvent) {
-          const startTime = new Date(startEvent.ts);
-          const endTime = new Date(finishEvent.ts);
-          const runtime = ((endTime - startTime) / 1000).toFixed(1);
-          const dateStr = endTime.toLocaleString('en-US', {
-            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-          });
-
-          const completionDiv = document.createElement('div');
-          completionDiv.className = 'completion-message';
-          completionDiv.textContent = `Chat completed ${dateStr} after ${runtime}s`;
-          messagesDiv.appendChild(completionDiv);
         }
       }
     }
@@ -875,7 +857,7 @@ function setupFormHandlers() {
 
     const payload = { message: text, backend: currentBackend };
     if (continueAgentId) {
-      payload['continue'] = continueAgentId;
+      payload['continue_from'] = continueAgentId;
     }
 
     const r = await fetch(sendUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -925,15 +907,11 @@ function processEvent(event) {
       isComplete = true;
       forceHideActivityIndicator();
 
-      // Re-enable input
+      // Re-enable input and enable continuation
       if(input){
         input.disabled = false;
-        if(event.conversation_id){
-          input.placeholder = 'Continue conversation...';
-          input.dataset.continueAgent = event.agent_id;
-        } else {
-          input.placeholder = 'Send a message...';
-        }
+        input.placeholder = 'Continue conversation...';
+        input.dataset.continueAgent = event.agent_id;
       }
       break;
 

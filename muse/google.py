@@ -170,12 +170,12 @@ async def run_agent(
         first_user = config.get("extra_context", "")
 
         # Build history - check for continuation first
-        conversation_id = config.get("conversation_id")
-        if conversation_id:
+        continue_from = config.get("continue_from")
+        if continue_from:
             # Load previous conversation history using shared function
             from .agents import parse_agent_events_to_turns
 
-            turns = parse_agent_events_to_turns(conversation_id)
+            turns = parse_agent_events_to_turns(continue_from)
             # Convert to Google's format
             history = []
             for turn in turns:
@@ -287,9 +287,7 @@ async def run_agent(
             callback.emit(thinking_event)
 
         text = response.text
-        # Use agent_id as conversation_id for continuations
-        agent_id = config.get("agent_id", "unknown")
-        callback.emit({"event": "finish", "result": text, "conversation_id": agent_id})
+        callback.emit({"event": "finish", "result": text})
         return text
     except Exception as exc:
         callback.emit(
