@@ -6,12 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from fastmcp import Context
 
 from muse.mcp import HINTS, register_tool
+from think.facets import _get_actor_info
 
 
 @register_tool(annotations=HINTS)
-def send_message(body: str) -> dict[str, Any]:
+def send_message(
+    body: str, facet: str | None = None, context: Context | None = None
+) -> dict[str, Any]:
     """Send a message to the user's inbox for asynchronous communication.
 
     This tool allows MCP agents and tools to leave messages in the user's inbox
@@ -25,6 +29,9 @@ def send_message(body: str) -> dict[str, Any]:
         body: The message content to send. Can be plain text or markdown formatted.
               Keep messages concise but informative. Include relevant context or
               action items if applicable.
+        facet: Optional facet to associate the message with (e.g., "work", "personal").
+               Always provide a facet if the context implies one or if you know which
+               facet is relevant. This enables proper filtering in the inbox UI.
 
     Returns:
         Dictionary containing either:
@@ -32,10 +39,10 @@ def send_message(body: str) -> dict[str, Any]:
         - error: Error message if sending failed
 
     Examples:
-        - send_message("While analysing I found a potential security vulnerability")
-        - send_message("Daily summary ready for review in facet 'work_projects'")
+        - send_message("Security vulnerability found in auth module", facet="work")
+        - send_message("Daily summary ready for review", facet="acme_project")
         - send_message("Failed to process transcript for 20240115 - file corrupted")
-        - send_message("Reminder: Review the pending PRs in the dashboard")
+        - send_message("Reminder: Review the pending PRs", facet="opensource")
     """
     try:
         load_dotenv()
@@ -57,12 +64,16 @@ def send_message(body: str) -> dict[str, Any]:
         if len(body.split("\n")[0]) > 50:
             title += "..."
 
+        # Extract caller's agent identity from context
+        actor, caller_agent_id = _get_actor_info(context)
+
         chat_record = {
             "agent_id": agent_id,
             "ts": int(agent_id),  # agent_id is already the timestamp
-            "from": {"type": "agent", "id": "mcp_tool"},
+            "from": {"type": "agent", "id": caller_agent_id or "mcp_tool"},
             "title": title,
             "unread": True,
+            "facet": facet,
         }
 
         # Save chat metadata
