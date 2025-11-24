@@ -19,7 +19,8 @@ AppServices.register('chat', {
         label: {{ chat.title|tojson }},
         href: '/app/chat?open={{ chat.agent_id }}',
         badge: '●',
-        order: {{ loop.index0 }}
+        order: {{ loop.index0 }},
+        facet: {{ chat.facet|tojson }}
       }{{ ',' if not loop.last else '' }}
       {% endfor %}
     ]);

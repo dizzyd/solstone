@@ -222,7 +222,7 @@
   max-width: 500px;
 }
 
-.recent-chat-item {
+a.recent-chat-item {
   display: flex;
   flex-direction: column;
   padding: 0.75em 1em;
@@ -231,6 +231,8 @@
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s;
+  text-decoration: none;
+  color: inherit;
 }
 
 .recent-chat-item:hover {
@@ -346,15 +348,36 @@ function renderRecentChats() {
     list.className = 'recent-chats-list';
 
     for (const chat of chats) {
-      const item = document.createElement('div');
+      const item = document.createElement('a');
       item.className = 'recent-chat-item';
+      item.href = `/app/chat?open=${chat.agent_id}`;
+
       if (chat.unread) {
         item.classList.add('unread');
         const dot = document.createElement('span');
         dot.className = 'unread-indicator';
         item.appendChild(dot);
       }
-      item.onclick = () => loadRecentChat(chat.agent_id);
+
+      // In all-facets mode, show facet color indicator
+      if (facet === null && chat.facet) {
+        const facetData = (window.facetsData || []).find(f => f.name === chat.facet);
+        if (facetData?.color) {
+          item.style.borderLeftColor = facetData.color;
+          item.style.borderLeftWidth = '3px';
+          item.style.borderLeftStyle = 'solid';
+        }
+      }
+
+      // Switch to chat's facet on click (like submenu behavior)
+      if (chat.facet) {
+        item.dataset.facet = chat.facet;
+        item.addEventListener('click', () => {
+          if (window.selectFacet) {
+            window.selectFacet(chat.facet);
+          }
+        });
+      }
 
       const time = document.createElement('div');
       time.className = 'recent-chat-time';
@@ -431,11 +454,15 @@ async function fetchRecentChats() {
   }
 }
 
-// Listen for facet changes to update recent chats
+// Listen for facet changes - reset view to show recent chats for new facet
 document.addEventListener('facet.switch', () => {
-  if (!currentAgentId) {
-    showRecentChats();
-  }
+  currentAgentId = null;
+  isComplete = false;
+  messagesDiv.innerHTML = '';
+  messagesDiv.appendChild(activityIndicator);
+  forceHideActivityIndicator();
+  resetEventTracking();
+  showRecentChats();
 });
 
 // Simple error display - adds error message to chat
