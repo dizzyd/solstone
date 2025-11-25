@@ -34,6 +34,14 @@
   {% endif %}
 </head>
 <body{% if app_registry.apps[app].get_app_bar_template() %} class="has-app-bar"{% endif %}>
+<!-- Corner Tags (screen region detection) -->
+<div class="corner-tags">
+  <div class="corner-tag corner-tag-tl"></div>
+  <div class="corner-tag corner-tag-tr"></div>
+  <div class="corner-tag corner-tag-bl"></div>
+  <div class="corner-tag corner-tag-br"></div>
+</div>
+
 <!-- Menu Bar -->
 {% include "menu_bar.html" %}
 
