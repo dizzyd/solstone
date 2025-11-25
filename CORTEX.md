@@ -41,6 +41,7 @@ Requests are created via `cortex_request()` from `muse.cortex_client`, which bro
   "persona": "default",              // Optional: agent persona from muse/agents/*.txt
   "model": "gpt-4o",               // Optional: backend-specific override
   "max_tokens": 8192,               // Optional: token limit (if supported)
+  "disable_mcp": false,             // Optional: disable MCP tools for this request
   "continue_from": "1234567890122",  // Optional: continue from previous agent
   "facet": "my-project",          // Required for Claude backend only
   "save": "analysis.md",             // Optional: save result to file in day directory
@@ -239,9 +240,10 @@ The `.json` file for a persona can include:
 - `model`: Default model name for the backend
 - `max_tokens`: Maximum response token limit
 - `tools`: MCP tools configuration (string or array)
-  - String: Tool pack name (e.g., "default", "journal") - expanded via `get_tools()`
+  - String: Comma-separated pack names (e.g., `"journal"`, `"journal, todo"`) - expanded via `get_tools()`
+  - Available packs: `journal`, `todo`, `facets`, `entities`, `apps`
   - Array: Explicit list of tool names (e.g., `["search_insights", "get_facet"]`)
-  - If omitted, defaults to "default" pack
+  - If omitted, defaults to "default" pack (alias for "journal")
 - `schedule`: Scheduling configuration for automated execution
   - `"daily"`: Run automatically at midnight each day
 - `priority`: Execution order for scheduled agents (integer, default: 50)

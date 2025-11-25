@@ -1,8 +1,9 @@
-{# Chat app background service - manages badge and submenu for unread messages #}
-{# Python code will pass unread_chats and unread_count via template context #}
+{# Chat app background service - manages badge, submenu, and real-time notifications #}
 
 AppServices.register('chat', {
   unreadCount: {{ unread_count|default(0) }},
+  activeAgentId: null,
+  facetCounts: {},
 
   initialize() {
     // Set badge from server data
@@ -10,28 +11,120 @@ AppServices.register('chat', {
       AppServices.badges.app.set('chat', this.unreadCount);
     }
 
-    // Set submenu from server data
+    // Set submenu and build facet counts from server data
     {% if unread_chats %}
     AppServices.submenus.set('chat', [
       {% for chat in unread_chats %}
       {
         id: '{{ chat.agent_id }}',
-        label: {{ chat.title|tojson }},
+        label: {{ chat.title|default('(untitled)')|tojson }},
         href: '/app/chat?open={{ chat.agent_id }}',
         badge: '●',
         order: {{ loop.index0 }},
-        facet: {{ chat.facet|tojson }}
+        facet: {{ chat.facet|default(none)|tojson }}
       }{{ ',' if not loop.last else '' }}
       {% endfor %}
     ]);
+
+    // Build initial facet counts
+    {% for chat in unread_chats %}
+    {% if chat.facet %}
+    this.facetCounts[{{ chat.facet|tojson }}] = (this.facetCounts[{{ chat.facet|tojson }}] || 0) + 1;
     {% endif %}
+    {% endfor %}
+    {% endif %}
+
+    // Update facet badges if chat app is active
+    this.updateFacetBadges();
+
+    // Listen for cortex events
+    appEvents.listen('cortex', (e) => this.handleCortexEvent(e));
   },
 
-  // Called from workspace when user marks message as read
-  markRead(agentId) {
+  // Called by workspace to track which agent is being viewed
+  setActiveAgent(agentId) {
+    this.activeAgentId = agentId;
+  },
+
+  // Handle cortex finish/error events
+  async handleCortexEvent(e) {
+    if (e.event !== 'finish' && e.event !== 'error') return;
+
+    // Skip if user is actively viewing this agent
+    if (this.activeAgentId === e.agent_id) return;
+
+    // Check if this is a chat agent
+    try {
+      const resp = await fetch(`/app/chat/api/chat/${e.agent_id}`);
+      if (!resp.ok) return; // Not a chat agent
+
+      const chat = await resp.json();
+
+      // Skip if already processed (chat already has unread flag from send_message)
+      if (chat.unread) return;
+
+      // Update state
+      this.unreadCount++;
+      if (chat.facet) {
+        this.facetCounts[chat.facet] = (this.facetCounts[chat.facet] || 0) + 1;
+      }
+
+      // Update app badge (always)
+      AppServices.badges.app.set('chat', this.unreadCount);
+
+      // Add to submenu (always)
+      const title = chat.title || '(untitled)';
+      AppServices.submenus.upsert('chat', {
+        id: chat.agent_id,
+        label: title,
+        href: `/app/chat?open=${chat.agent_id}`,
+        badge: '●',
+        facet: chat.facet
+      });
+
+      // Update facet badges if chat app is active
+      this.updateFacetBadges();
+
+      // Show notification (always)
+      const isError = e.event === 'error';
+      AppServices.notifications.show({
+        app: 'chat',
+        icon: isError ? '❌' : '💬',
+        title: isError ? 'Chat Error' : 'Chat Complete',
+        message: title,
+        action: `/app/chat?open=${chat.agent_id}`,
+        facet: chat.facet,
+        autoDismiss: 5000
+      });
+
+    } catch (err) {
+      console.error('Failed to handle chat event:', err);
+    }
+  },
+
+  // Update facet badges (only when chat app is active)
+  updateFacetBadges() {
+    if (!window.location.pathname.startsWith('/app/chat')) return;
+
+    for (const [facet, count] of Object.entries(this.facetCounts)) {
+      if (count > 0) {
+        AppServices.badges.facet.set(facet, count);
+      } else {
+        AppServices.badges.facet.clear(facet);
+      }
+    }
+  },
+
+  // Called from workspace when user views a chat
+  markRead(agentId, facet) {
     this.unreadCount = Math.max(0, this.unreadCount - 1);
 
-    // Update badge
+    // Update facet count
+    if (facet && this.facetCounts[facet]) {
+      this.facetCounts[facet] = Math.max(0, this.facetCounts[facet] - 1);
+    }
+
+    // Update app badge
     if (this.unreadCount > 0) {
       AppServices.badges.app.set('chat', this.unreadCount);
     } else {
@@ -40,5 +133,8 @@ AppServices.register('chat', {
 
     // Remove from submenu
     AppServices.submenus.remove('chat', agentId);
+
+    // Update facet badges
+    this.updateFacetBadges();
   }
 });

@@ -125,7 +125,7 @@ def send_message() -> Any:
         ts = int(time.time() * 1000)
 
         # Generate title for new chats only (not continuations)
-        if continue_agent_id:
+        if continue_from:
             title = None  # Don't update title for continuations
         else:
             title = generate_chat_title(message)
@@ -201,6 +201,33 @@ def clear_history() -> Any:
     return jsonify(ok=True)
 
 
+@chat_bp.route("/api/chat/<agent_id>")
+def get_chat(agent_id: str) -> Any:
+    """Get chat metadata by agent_id.
+
+    Args:
+        agent_id: The agent/chat ID
+
+    Returns:
+        Chat metadata JSON or 404 if not found
+    """
+    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    chat_file = chats_dir / f"{agent_id}.json"
+
+    if not chat_file.exists():
+        resp = jsonify({"error": f"Chat not found: {agent_id}"})
+        resp.status_code = 404
+        return resp
+
+    chat_data = load_json(chat_file)
+    if not chat_data:
+        resp = jsonify({"error": f"Failed to load chat: {agent_id}"})
+        resp.status_code = 500
+        return resp
+
+    return jsonify(chat_data)
+
+
 @chat_bp.route("/api/chat/<agent_id>/read", methods=["POST"])
 def mark_chat_read(agent_id: str) -> Any:
     """Mark a chat as read by updating its metadata.
@@ -232,5 +259,3 @@ def mark_chat_read(agent_id: str) -> Any:
         resp = jsonify({"error": str(e)})
         resp.status_code = 500
         return resp
-
-
