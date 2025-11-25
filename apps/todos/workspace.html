@@ -16,6 +16,11 @@
   display: none;
 }
 
+/* In single-facet mode, hide facet headers since they're redundant */
+.single-facet-mode .facet-header {
+  display: none;
+}
+
 .facet-header {
   display: flex;
   align-items: center;
@@ -357,20 +362,27 @@ document.addEventListener('DOMContentLoaded', function() {
   function filterByFacet(facetName) {
     const sections = document.querySelectorAll('.facet-section');
     const noTodosEl = document.querySelector('.no-todos');
+    const workspaceContent = document.querySelector('.workspace-content');
 
     if (facetName === null) {
-      // All-facet mode - show all sections
+      // All-facet mode - show all sections, enable facet headers
+      workspaceContent?.classList.remove('single-facet-mode');
       sections.forEach(s => s.style.display = '');
       if (noTodosEl) {
         noTodosEl.querySelector('p').textContent = 'No todos for this day yet.';
       }
     } else {
-      // Specific facet mode - show only matching section
+      // Single-facet mode - hide headers, disable auto-collapse
+      workspaceContent?.classList.add('single-facet-mode');
+
+      // Show only matching section
       let hasVisibleSection = false;
       sections.forEach(s => {
         if (s.dataset.facet === facetName) {
           s.style.display = '';
           hasVisibleSection = true;
+          // Expand the section (no auto-collapse in single-facet mode)
+          s.classList.remove('collapsed');
         } else {
           s.style.display = 'none';
         }
@@ -452,8 +464,8 @@ document.addEventListener('DOMContentLoaded', function() {
       countSpan.textContent = '0️⃣';
     } else if (isAllComplete) {
       countSpan.textContent = '✅';
-      // Auto-collapse when all items are done
-      if (!wasAllComplete) {
+      // Auto-collapse when all items are done (only in all-facet mode)
+      if (!wasAllComplete && !window.selectedFacet) {
         toggleFacetCollapse(facetSection, true);
       }
     } else if (incompleteCount < 10) {
@@ -463,26 +475,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // Initialize collapsed state from sessionStorage
+  // Initialize collapsed state from sessionStorage (only in all-facet mode)
   const collapsedState = loadCollapsedState();
-  document.querySelectorAll('.facet-section').forEach(section => {
-    const facet = section.dataset.facet;
+  if (!window.selectedFacet) {
+    document.querySelectorAll('.facet-section').forEach(section => {
+      const facet = section.dataset.facet;
 
-    // Check if all items in this facet are completed or if facet is empty
-    const countSpan = section.querySelector('.facet-count');
-    const isAllComplete = countSpan && countSpan.textContent === '✅';
-    const isEmpty = countSpan && countSpan.textContent === '0️⃣';
+      // Check if all items in this facet are completed or if facet is empty
+      const countSpan = section.querySelector('.facet-count');
+      const isAllComplete = countSpan && countSpan.textContent === '✅';
+      const isEmpty = countSpan && countSpan.textContent === '0️⃣';
 
-    // Collapse if: (1) stored as collapsed, OR (2) all items are complete, OR (3) facet is empty
-    if (collapsedState[facet] || isAllComplete || isEmpty) {
-      section.classList.add('collapsed');
-      if ((isAllComplete || isEmpty) && !collapsedState[facet]) {
-        // Save the auto-collapsed state
-        collapsedState[facet] = true;
-        saveCollapsedState(collapsedState);
+      // Collapse if: (1) stored as collapsed, OR (2) all items are complete, OR (3) facet is empty
+      if (collapsedState[facet] || isAllComplete || isEmpty) {
+        section.classList.add('collapsed');
+        if ((isAllComplete || isEmpty) && !collapsedState[facet]) {
+          // Save the auto-collapsed state
+          collapsedState[facet] = true;
+          saveCollapsedState(collapsedState);
+        }
       }
-    }
-  });
+    });
+  }
 
   // Setup click handlers for facet headers
   document.querySelectorAll('.facet-header').forEach(header => {
