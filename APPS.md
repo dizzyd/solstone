@@ -65,7 +65,7 @@ apps/my_app/
 
 **Index route**: All apps are automatically served at `/app/{app_name}` via a shared handler. You don't need to define an index route in `routes.py`.
 
-See `apps/__init__.py` for discovery logic and `convey/__init__.py` for the shared route handler.
+See `apps/__init__.py` for discovery logic and route injection.
 
 ---
 
@@ -137,7 +137,7 @@ Override default icon, label, and facet support.
 
 **When to disable facets:** Set `"facets": false` for apps that don't use facet-based organization (e.g., system settings, dev tools).
 
-**Examples:** `apps/home/app.json`, `apps/todos/app.json`, `apps/inbox/app.json`
+**Examples:** `apps/home/app.json`, `apps/todos/app.json`, `apps/chat/app.json`
 
 ### 4. `app_bar.html` - Bottom Bar Controls
 
@@ -317,11 +317,6 @@ Available functions from the `think` module:
 - `get_todos(day, facet)` - Get todo list for day and facet
 - `TodoChecklist` class - Load and manipulate todo markdown files
 
-### Messages
-`think/messages.py`:
-- `get_unread_count()` - Count unread messages
-- `get_messages(limit, offset, status)` - Query messages with pagination
-
 ### Entities
 `think/entities.py`: `get_entities(facet)` - Get entities for facet
 
@@ -393,7 +388,7 @@ See **CALLOSUM.md** for complete event protocol.
 **See:** `convey/static/app.css` for implementation details
 
 **Examples:**
-- Standard: `apps/home/workspace.html`, `apps/todos/workspace.html`, `apps/inbox/workspace.html`
+- Standard: `apps/home/workspace.html`, `apps/todos/workspace.html`, `apps/chat/workspace.html`
 - Wide: `apps/search/workspace.html`, `apps/calendar/_month.html`, `apps/import/workspace.html`
 
 ### CSS Variables
@@ -501,7 +496,7 @@ Study these reference implementations:
 - **`apps/dev/`** - Simple app (no routes.py, custom styling, submenu)
 - **`apps/live/`** - Minimal app (no routes.py, event dashboard)
 - **`apps/todos/`** - Full-featured (routes, forms, AJAX, icon badge, facet badges)
-- **`apps/inbox/`** - API-driven (custom routes, message management)
+- **`apps/chat/`** - API-driven (custom routes, agent chat interface)
 - **`apps/search/`** - API-only (custom routes for search, no index route)
 - **`apps/tokens/`** - Navigation (index redirects to today, app bar with controls)
 
