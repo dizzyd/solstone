@@ -4,7 +4,7 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 
 ## Protocol
 
-**Transport:** Unix facet socket at `$JOURNAL_PATH/health/callosum.sock`
+**Transport:** Unix domain socket at `$JOURNAL_PATH/health/callosum.sock`
 
 **Format:** Newline-delimited JSON. Broadcast to all connected clients.
 
@@ -41,7 +41,8 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 
 ### `supervisor` - Process lifecycle management
 **Source:** `think/supervisor.py`
-**Events:** `request`, `started`, `stopped`, `restarting`, `status`
+**Events:** `started`, `stopped`, `restarting`, `status`
+**Listens for:** `request` (task spawn), `restart` (service restart)
 **Fields:** `ref`, `service`, `cmd`, `pid`, `exit_code`
 **Purpose:** Unified lifecycle events for all supervised processes (services and tasks)
 
@@ -57,7 +58,7 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 **Fields:**
 - `status`: Periodic state (every 5s, only when active)
   - From `observer.py`: `screencast`, `audio`, `activity` - Live capture state
-  - From `sense.py`: `describe`, `transcribe` - Processing pipeline state
+  - From `sense.py`: `describe`, `transcribe` - Processing pipeline state (with `running`/`queued` sub-fields)
 - `observing`: `segment`, `files` - Recording window boundary crossed with saved files
 - `detected`: `file`, `handler`, `ref` - File detected and handler spawned
 - `described`/`transcribed`/`reduced`: `input`, `output`, `duration_ms` - Processing complete
