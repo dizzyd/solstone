@@ -998,7 +998,6 @@ async def supervise(
     Subsystems manage their own timing (health checks every interval seconds,
     scheduled agents check continuously but only advance when ready).
     """
-    global shutdown_requested
     alert_mgr = AlertManager()
     last_day = datetime.now().date()
     last_health_check = 0.0
@@ -1195,7 +1194,7 @@ def main() -> None:
                 print(" done", flush=True)
             except subprocess.TimeoutExpired:
                 logging.warning(f"{name} did not terminate gracefully, killing...")
-                print(f" timeout, forcing kill...", flush=True)
+                print(" timeout, forcing kill...", flush=True)
                 try:
                     proc.kill()
                     proc.wait(timeout=1)
