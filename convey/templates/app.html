@@ -23,7 +23,7 @@
   {% if selected_facet and app_registry.apps[app].facets_enabled() %}
   {% set selected_facet_data = facets|selectattr("name", "equalto", selected_facet)|first %}
   {% if selected_facet_data and selected_facet_data.color %}
-  <style>
+  <style id="facet-theme">
     :root {
       --facet-color: {{ selected_facet_data.color }};
       --facet-bg: {{ selected_facet_data.color }}1a;  /* 10% opacity */

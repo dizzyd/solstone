@@ -74,6 +74,8 @@
       document.documentElement.style.setProperty('--facet-border', color);
     } else {
       // Clear facet variables to use defaults
+      // Remove server-rendered theme block so CSS defaults take over
+      document.getElementById('facet-theme')?.remove();
       document.documentElement.style.removeProperty('--facet-color');
       document.documentElement.style.removeProperty('--facet-bg');
       document.documentElement.style.removeProperty('--facet-border');
@@ -180,6 +182,8 @@
       document.documentElement.style.setProperty('--facet-border', color);
     } else {
       // Clear facet variables to use defaults (all-facet mode or no color)
+      // Remove server-rendered theme block so CSS defaults take over
+      document.getElementById('facet-theme')?.remove();
       document.documentElement.style.removeProperty('--facet-color');
       document.documentElement.style.removeProperty('--facet-bg');
       document.documentElement.style.removeProperty('--facet-border');
