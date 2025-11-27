@@ -162,6 +162,8 @@ def _launch_process(
     restart: bool = False,
     ref: str | None = None,
 ) -> ManagedProcess:
+    # NOTE: All child processes should include -v for verbose logging by default.
+    # This ensures their output is captured in logs for debugging.
     """Launch process with automatic output logging and restart policy tracking."""
     policy: RestartPolicy | None = None
     if restart:
@@ -307,7 +309,7 @@ async def run_dream() -> bool:
 async def run_facet_rescan() -> bool:
     """Run ``think-indexer --rescan-facets`` while mirroring output to a dedicated log."""
     return await run_subprocess_task(
-        "facet_rescan", ["think-indexer", "--rescan-facets"]
+        "facet_rescan", ["think-indexer", "-v", "--rescan-facets"]
     )
 
 
@@ -968,7 +970,7 @@ def _run_segment_dream(day: str, segment: str) -> None:
     from think.runner import run_task
 
     logging.info(f"Starting segment dream: {day}/{segment}")
-    success, exit_code = run_task(["think-dream", "--day", day, "--segment", segment])
+    success, exit_code = run_task(["think-dream", "-v", "--day", day, "--segment", segment])
 
     if success:
         logging.info(f"Segment dream completed: {day}/{segment}")
