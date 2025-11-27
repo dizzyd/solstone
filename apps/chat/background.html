@@ -5,40 +5,62 @@ AppServices.register('chat', {
   activeAgentId: null,
   facetCounts: {},
 
+  // Recent chats cache - sorted: unread first, then by timestamp
+  recentChats: [
+    {% if recent_chats %}
+    {% for chat in recent_chats %}
+    {
+      agent_id: '{{ chat.agent_id }}',
+      title: {{ chat.title|default('(untitled)')|tojson }},
+      ts: {{ chat.ts|default(0) }},
+      unread: {{ 'true' if chat.unread else 'false' }},
+      facet: {{ chat.facet|default(none)|tojson }}
+    }{{ ',' if not loop.last else '' }}
+    {% endfor %}
+    {% endif %}
+  ],
+
   initialize() {
-    // Set badge from server data
+    // Set badge from unread count
     if (this.unreadCount > 0) {
       AppServices.badges.app.set('chat', this.unreadCount);
     }
 
-    // Set submenu and build facet counts from server data
-    {% if unread_chats %}
-    AppServices.submenus.set('chat', [
-      {% for chat in unread_chats %}
-      {
-        id: '{{ chat.agent_id }}',
-        label: {{ chat.title|default('(untitled)')|tojson }},
-        href: '/app/chat#{{ chat.agent_id }}',
-        badge: '●',
-        order: {{ loop.index0 }},
-        facet: {{ chat.facet|default(none)|tojson }}
-      }{{ ',' if not loop.last else '' }}
-      {% endfor %}
-    ]);
+    // Build initial facet counts from unread chats
+    for (const chat of this.recentChats) {
+      if (chat.unread && chat.facet) {
+        this.facetCounts[chat.facet] = (this.facetCounts[chat.facet] || 0) + 1;
+      }
+    }
 
-    // Build initial facet counts
-    {% for chat in unread_chats %}
-    {% if chat.facet %}
-    this.facetCounts[{{ chat.facet|tojson }}] = (this.facetCounts[{{ chat.facet|tojson }}] || 0) + 1;
-    {% endif %}
-    {% endfor %}
-    {% endif %}
+    // Build initial submenu
+    this.rebuildSubmenu();
 
     // Update facet badges if chat app is active
     this.updateFacetBadges();
 
     // Listen for cortex events
     appEvents.listen('cortex', (e) => this.handleCortexEvent(e));
+  },
+
+  // Rebuild submenu from recentChats cache
+  // Shows top 5, sorted: unread first, then by timestamp
+  rebuildSubmenu() {
+    const sorted = [...this.recentChats]
+      .sort((a, b) => {
+        if (a.unread !== b.unread) return a.unread ? -1 : 1;
+        return b.ts - a.ts;
+      })
+      .slice(0, 5);
+
+    AppServices.submenus.set('chat', sorted.map((chat, i) => ({
+      id: chat.agent_id,
+      label: chat.title || '(untitled)',
+      href: `/app/chat#${chat.agent_id}`,
+      badge: chat.unread ? '●' : null,
+      order: i,
+      facet: chat.facet
+    })));
   },
 
   // Called by workspace to track which agent is being viewed
@@ -63,35 +85,51 @@ AppServices.register('chat', {
       // Skip if already processed (chat already has unread flag from send_message)
       if (chat.unread) return;
 
+      // Mark as unread for new completion
+      chat.unread = true;
+
       // Update state
       this.unreadCount++;
       if (chat.facet) {
         this.facetCounts[chat.facet] = (this.facetCounts[chat.facet] || 0) + 1;
       }
 
-      // Update app badge (always)
+      // Add to cache (or update if exists)
+      const existingIndex = this.recentChats.findIndex(c => c.agent_id === chat.agent_id);
+      const chatData = {
+        agent_id: chat.agent_id,
+        title: chat.title || '(untitled)',
+        ts: chat.ts || Date.now(),
+        unread: true,
+        facet: chat.facet
+      };
+
+      if (existingIndex >= 0) {
+        this.recentChats[existingIndex] = chatData;
+      } else {
+        this.recentChats.unshift(chatData);
+        // Keep cache bounded
+        if (this.recentChats.length > 20) {
+          this.recentChats = this.recentChats.slice(0, 20);
+        }
+      }
+
+      // Update app badge
       AppServices.badges.app.set('chat', this.unreadCount);
 
-      // Add to submenu (always)
-      const title = chat.title || '(untitled)';
-      AppServices.submenus.upsert('chat', {
-        id: chat.agent_id,
-        label: title,
-        href: `/app/chat#${chat.agent_id}`,
-        badge: '●',
-        facet: chat.facet
-      });
+      // Rebuild submenu
+      this.rebuildSubmenu();
 
       // Update facet badges if chat app is active
       this.updateFacetBadges();
 
-      // Show notification (always)
+      // Show notification
       const isError = e.event === 'error';
       AppServices.notifications.show({
         app: 'chat',
         icon: isError ? '❌' : '💬',
         title: isError ? 'Chat Error' : 'Chat Complete',
-        message: title,
+        message: chatData.title,
         action: `/app/chat#${chat.agent_id}`,
         facet: chat.facet,
         autoDismiss: 5000
@@ -117,11 +155,18 @@ AppServices.register('chat', {
 
   // Called from workspace when user views a chat
   markRead(agentId, facet) {
+    // Update unread count
     this.unreadCount = Math.max(0, this.unreadCount - 1);
 
     // Update facet count
     if (facet && this.facetCounts[facet]) {
       this.facetCounts[facet] = Math.max(0, this.facetCounts[facet] - 1);
+    }
+
+    // Update chat in cache (mark as read, don't remove)
+    const chat = this.recentChats.find(c => c.agent_id === agentId);
+    if (chat) {
+      chat.unread = false;
     }
 
     // Update app badge
@@ -131,8 +176,8 @@ AppServices.register('chat', {
       AppServices.badges.app.clear('chat');
     }
 
-    // Remove from submenu
-    AppServices.submenus.remove('chat', agentId);
+    // Rebuild submenu (chat moves down, loses badge)
+    this.rebuildSubmenu();
 
     // Update facet badges
     this.updateFacetBadges();

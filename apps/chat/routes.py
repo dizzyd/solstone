@@ -19,32 +19,40 @@ chat_bp = Blueprint(
 )
 
 
-@chat_bp.route("/")
-def index():
-    """Chat app index - computes unread data for background template."""
-    # Load unread chats for badge and submenu
+def get_chat_background_data() -> dict:
+    """Load chat data for background template (submenu, badges)."""
     chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
 
-    unread_chats = []
+    all_chats = []
     unread_count = 0
 
     if chats_dir.exists():
         for chat_file in chats_dir.glob("*.json"):
             chat_data = load_json(chat_file)
-            if chat_data and chat_data.get("unread"):
-                unread_chats.append(chat_data)
-                unread_count += 1
+            if chat_data:
+                all_chats.append(chat_data)
+                if chat_data.get("unread"):
+                    unread_count += 1
 
-    # Sort by timestamp desc, take top 10
-    unread_chats.sort(key=lambda c: c.get("ts", 0), reverse=True)
-    unread_chats = unread_chats[:10]
+    # Sort: unread first, then by timestamp desc
+    all_chats.sort(key=lambda c: (not c.get("unread", False), -c.get("ts", 0)))
 
-    return render_template(
-        "app.html",
-        app="chat",
-        unread_chats=unread_chats,
-        unread_count=unread_count,
-    )
+    return {
+        "recent_chats": all_chats[:10],
+        "unread_count": unread_count,
+    }
+
+
+@chat_bp.app_context_processor
+def inject_chat_data():
+    """Inject chat data into all templates for background service."""
+    return get_chat_background_data()
+
+
+@chat_bp.route("/")
+def index():
+    """Chat app index - context processor provides recent_chats and unread_count."""
+    return render_template("app.html", app="chat")
 
 
 TITLE_SYSTEM_INSTRUCTION = (
