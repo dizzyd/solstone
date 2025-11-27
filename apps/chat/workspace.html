@@ -350,7 +350,7 @@ function renderRecentChats() {
     for (const chat of chats) {
       const item = document.createElement('a');
       item.className = 'recent-chat-item';
-      item.href = `/app/chat?open=${chat.agent_id}`;
+      item.href = `#${chat.agent_id}`;
 
       if (chat.unread) {
         item.classList.add('unread');
@@ -369,8 +369,8 @@ function renderRecentChats() {
         }
       }
 
-      // Switch to chat's facet on click (like submenu behavior)
-      if (chat.facet) {
+      // Switch to chat's facet on click (hash change will load the chat)
+      if (chat.facet && chat.facet !== window.selectedFacet) {
         item.dataset.facet = chat.facet;
         item.addEventListener('click', () => {
           if (window.selectFacet) {
@@ -398,31 +398,6 @@ function renderRecentChats() {
   return panel;
 }
 
-// Load a recent chat and set up for continuation
-async function loadRecentChat(agentId) {
-  hideRecentChats();
-  await loadAgent(agentId);
-
-  // Mark as read on server
-  try {
-    await fetch(`/app/chat/api/chat/${agentId}/read`, { method: 'POST' });
-
-    // Update local state and get facet for badge update
-    const chat = allChats.find(c => c.agent_id === agentId);
-    const facet = chat?.facet;
-    if (chat) chat.unread = false;
-
-    // Decrement badge and remove from submenu
-    if (window.AppServices?.services?.chat) {
-      window.AppServices.services.chat.markRead(agentId, facet);
-    }
-  } catch (err) {
-    console.error('Failed to mark as read:', err);
-  }
-
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
 // Show recent chats panel
 function showRecentChats() {
   const existing = document.getElementById('recentChatsPanel');
@@ -445,10 +420,6 @@ async function fetchRecentChats() {
     if (response.ok) {
       const data = await response.json();
       allChats = data.chats || [];
-      // Show panel if no active chat
-      if (!currentAgentId) {
-        showRecentChats();
-      }
     }
   } catch (error) {
     console.error('Failed to fetch recent chats:', error);
@@ -456,18 +427,13 @@ async function fetchRecentChats() {
 }
 
 // Listen for facet changes - reset view to show recent chats for new facet
-document.addEventListener('facet.switch', () => {
-  currentAgentId = null;
-  isComplete = false;
-  messagesDiv.innerHTML = '';
-  messagesDiv.appendChild(activityIndicator);
-  forceHideActivityIndicator();
-  resetEventTracking();
-  showRecentChats();
-
-  // Clear active agent in background service
-  if (window.AppServices?.services?.chat) {
-    window.AppServices.services.chat.setActiveAgent(null);
+window.addEventListener('facet.switch', () => {
+  if (location.hash) {
+    // Currently viewing a chat - navigate to recent view
+    navigateTo(null);
+  } else {
+    // Already on recent view - just re-render with new facet filter
+    showRecentChatsView();
   }
 });
 
@@ -523,21 +489,9 @@ function initAppBarControls() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     initAppBarControls();
-    initUrlParams();
   });
 } else {
   initAppBarControls();
-  initUrlParams();
-}
-
-// Check for URL parameters like ?open=<agent_id>
-function initUrlParams() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const openAgentId = urlParams.get('open');
-  if (openAgentId) {
-    // Wait for chats to load, then open
-    setTimeout(() => loadRecentChat(openAgentId), 500);
-  }
 }
 
 // Deduplication using agent_id:ts as key
@@ -595,12 +549,202 @@ function enrichEvent(event) {
   return enriched;
 }
 
-// Parse URL parameters
-const urlParams = new URLSearchParams(window.location.search);
-
 // State management
 let currentAgentId = null;
 let isComplete = false;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUTER - Hash-based SPA navigation
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Continuation mode flag - set before navigation to preserve messages
+let continuationMode = false;
+
+/**
+ * Initialize hash-based router.
+ * Call once after allChats are fetched.
+ */
+function initRouter() {
+  window.addEventListener('hashchange', handleRouteChange);
+  handleRouteChange(); // Handle initial route
+}
+
+/**
+ * Parse hash and dispatch to appropriate view.
+ */
+function handleRouteChange() {
+  const hash = location.hash.slice(1);
+  const agentId = /^\d+$/.test(hash) ? hash : null;
+
+  if (agentId) {
+    // Avoid reloading same chat
+    if (currentAgentId !== agentId) {
+      loadChat(agentId);
+    }
+  } else {
+    // Recent chats view - show if not already on it or if first load
+    if (currentAgentId !== null || !document.getElementById('recentChatsPanel')) {
+      showRecentChatsView();
+    }
+  }
+}
+
+/**
+ * Navigate programmatically. Updates hash which triggers handleRouteChange.
+ * @param {string|null} agentId - Chat to open, or null for recent view
+ */
+function navigateTo(agentId) {
+  location.hash = agentId || '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VIEW FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Clear message area and reset UI state.
+ */
+function clearMessages() {
+  messagesDiv.innerHTML = '';
+  messagesDiv.appendChild(activityIndicator);
+  forceHideActivityIndicator();
+  Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
+  previousAgent = null;
+  resetEventTracking();
+}
+
+/**
+ * Load and display a chat conversation.
+ * Handles: event fetching, mark-as-read, badge updates, continuation.
+ * @param {string} agentId - The agent/chat ID to load
+ */
+async function loadChat(agentId) {
+  // Check continuation mode (set by form submit before navigation)
+  const isContinuation = continuationMode;
+  continuationMode = false;
+
+  // Update state
+  currentAgentId = agentId;
+  isComplete = false;
+  resetEventTracking();
+
+  // Notify background service
+  if (window.AppServices?.services?.chat) {
+    window.AppServices.services.chat.setActiveAgent(agentId);
+  }
+
+  // Prepare UI
+  if (!isContinuation) {
+    clearMessages();
+  } else {
+    // Continuation - keep existing messages, just reset tool tracking
+    Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
+  }
+
+  showActivityIndicator();
+
+  // Fetch events from server
+  const url = agentUrl.replace('AGENT_ID', agentId);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      showError(`Failed to load chat: ${response.statusText}`);
+      return;
+    }
+
+    const data = await response.json();
+    const events = data.events || [];
+    isComplete = data.is_complete || false;
+
+    // Process and render events
+    for (const event of events) {
+      const enriched = enrichEvent(event);
+      if (!shouldSkipEvent(enriched)) {
+        processEvent(enriched);
+      }
+    }
+
+    // Update UI based on completion
+    if (isComplete) {
+      forceHideActivityIndicator();
+      enableContinuation(agentId);
+    }
+
+    // Mark as read and update badges
+    await markChatRead(agentId);
+
+    // Scroll to bottom
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+  } catch (error) {
+    showError(`Failed to load chat: ${error.message}`);
+  }
+}
+
+/**
+ * Enable continuation input after chat completes.
+ * @param {string} agentId - The completed agent ID
+ */
+function enableContinuation(agentId) {
+  if (input) {
+    input.disabled = false;
+    input.placeholder = 'Continue conversation...';
+    input.dataset.continueAgent = agentId;
+  }
+}
+
+/**
+ * Mark chat as read and update all badge/submenu state.
+ * @param {string} agentId - The chat to mark read
+ */
+async function markChatRead(agentId) {
+  try {
+    // Server-side mark read
+    await fetch(`/app/chat/api/chat/${agentId}/read`, { method: 'POST' });
+
+    // Update local cache and get facet for badge update
+    const chat = allChats.find(c => c.agent_id === agentId);
+    if (chat && chat.unread) {
+      const facet = chat.facet;
+      chat.unread = false;
+
+      // Update badges via background service
+      if (window.AppServices?.services?.chat) {
+        window.AppServices.services.chat.markRead(agentId, facet);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to mark as read:', err);
+  }
+}
+
+/**
+ * Show recent chats view with proper state reset.
+ */
+function showRecentChatsView() {
+  // Reset state
+  currentAgentId = null;
+  isComplete = false;
+  clearMessages();
+
+  // Clear continue agent and reset input
+  if (input) {
+    delete input.dataset.continueAgent;
+    input.disabled = false;
+    input.placeholder = 'Send a message...';
+  }
+
+  // Notify background service
+  if (window.AppServices?.services?.chat) {
+    window.AppServices.services.chat.setActiveAgent(null);
+  }
+
+  // Render recent chats panel
+  const panel = renderRecentChats();
+  messagesDiv.appendChild(panel);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 
 // Create persistent activity indicator
 const activityIndicator = document.createElement('div');
@@ -752,76 +896,6 @@ function addThinkingCard(summary, model){
   messagesDiv.scrollTop=messagesDiv.scrollHeight;
 }
 
-// Agent loading function
-async function loadAgent(agentId, isContinuation = false) {
-  currentAgentId = agentId;
-  isComplete = false;
-  resetEventTracking();
-
-  // Tell background service which agent we're viewing
-  if (window.AppServices?.services?.chat) {
-    window.AppServices.services.chat.setActiveAgent(agentId);
-  }
-
-  if (isContinuation) {
-    // Continuation - preserve existing messages
-    Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
-  } else {
-    // New conversation - clear everything
-    messagesDiv.innerHTML = '';
-    messagesDiv.appendChild(activityIndicator);
-    Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
-    previousAgent = null;
-  }
-
-  // Fetch existing events from disk
-  const url = agentUrl.replace('AGENT_ID', agentId);
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      showError(`Failed to load agent: ${response.statusText}`);
-      return;
-    }
-
-    const data = await response.json();
-    const events = data.events || [];
-    isComplete = data.is_complete || false;
-
-    // Process historical events
-    for (const event of events) {
-      const enriched = enrichEvent(event);
-      if (!shouldSkipEvent(enriched)) {
-        processEvent(enriched);
-      }
-    }
-
-    // Show activity indicator if not complete
-    if (!isComplete) {
-      showActivityIndicator();
-    } else {
-      forceHideActivityIndicator();
-
-      // Check if we can continue the conversation
-      const finishEvent = events.find(e => e.event === 'finish');
-      const startEvent = events.find(e => e.event === 'start');
-      const appBar = document.querySelector('.app-bar');
-
-      if (finishEvent) {
-        // Agent completed - enable continuation
-        if (appBar) appBar.style.display = '';
-        if (input) {
-          input.disabled = false;
-          input.placeholder = 'Continue conversation...';
-          input.dataset.continueAgent = agentId;
-        }
-      }
-    }
-
-  } catch (error) {
-    showError(`Failed to load agent: ${error.message}`);
-  }
-}
-
 // Store raw markdown for each bot message
 const messageMarkdown = new WeakMap();
 
@@ -961,8 +1035,11 @@ function setupFormHandlers() {
 
     if (r.ok) {
       const d = await r.json();
-      // Load agent - preserve messages if continuing
-      await loadAgent(d.agent_id, !!continueAgentId);
+      // Set continuation mode before navigation to preserve messages
+      if (continueAgentId) {
+        continuationMode = true;
+      }
+      navigateTo(d.agent_id);
     } else {
       input.disabled = false;
       let err = 'Error';
@@ -1194,12 +1271,8 @@ function createResourceCard(uri) {
   });
 })();
 
-// Load agent from URL parameter if present
-const agentParam = urlParams.get('agent');
-if (agentParam && /^\d+$/.test(agentParam)) {
-  loadAgent(agentParam);
-} else {
-  // No agent specified - show recent chats
-  fetchRecentChats();
-}
+// Initialize: fetch chats then start router
+fetchRecentChats().then(() => {
+  initRouter();
+});
 </script>

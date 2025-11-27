@@ -18,7 +18,7 @@ AppServices.register('chat', {
       {
         id: '{{ chat.agent_id }}',
         label: {{ chat.title|default('(untitled)')|tojson }},
-        href: '/app/chat?open={{ chat.agent_id }}',
+        href: '/app/chat#{{ chat.agent_id }}',
         badge: '●',
         order: {{ loop.index0 }},
         facet: {{ chat.facet|default(none)|tojson }}
@@ -77,7 +77,7 @@ AppServices.register('chat', {
       AppServices.submenus.upsert('chat', {
         id: chat.agent_id,
         label: title,
-        href: `/app/chat?open=${chat.agent_id}`,
+        href: `/app/chat#${chat.agent_id}`,
         badge: '●',
         facet: chat.facet
       });
@@ -92,7 +92,7 @@ AppServices.register('chat', {
         icon: isError ? '❌' : '💬',
         title: isError ? 'Chat Error' : 'Chat Complete',
         message: title,
-        action: `/app/chat?open=${chat.agent_id}`,
+        action: `/app/chat#${chat.agent_id}`,
         facet: chat.facet,
         autoDismiss: 5000
       });
