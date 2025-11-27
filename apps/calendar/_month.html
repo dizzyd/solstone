@@ -245,8 +245,9 @@ function renderMonth(ym) {
     const dateStr = ym + String(day).padStart(2,'0');
     const count = getDayCount(dateStr);
 
-    // Set heat map intensity (0-1)
-    const intensity = maxCount > 0 ? count / maxCount : 0;
+    // Set heat map intensity (0.2-1 for days with events, 0 for empty)
+    const rawIntensity = maxCount > 0 ? count / maxCount : 0;
+    const intensity = count > 0 ? 0.2 + (rawIntensity * 0.8) : 0;
     td.style.setProperty('--intensity', intensity);
 
     // Mark empty cells (no events or no journal data)
