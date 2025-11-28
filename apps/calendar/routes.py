@@ -20,50 +20,21 @@ calendar_bp = Blueprint(
 
 @calendar_bp.route("/<day>")
 def calendar_day(day: str) -> str:
+    """Render events timeline for a specific day."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
         return "", 404
-    from think.utils import get_insights
 
-    insights = get_insights()
-    files = []
-    insights_dir = os.path.join(day_dir, "insights")
-    if os.path.isdir(insights_dir):
-        for name in sorted(os.listdir(insights_dir)):
-            base, ext = os.path.splitext(name)
-            if ext != ".md" or base not in insights:
-                continue
-            path = os.path.join(insights_dir, name)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    text = f.read()
-            except Exception:
-                continue
-            try:
-                import markdown  # type: ignore
-
-                html = markdown.markdown(text, extensions=["extra"])
-            except Exception:
-                html = "<p>Error loading file.</p>"
-            label = base.replace("_", " ").title()
-            files.append(
-                {
-                    "label": label,
-                    "html": html,
-                    "topic": base,
-                    "color": insights[base]["color"],
-                }
-            )
     title = format_date(day)
     prev_day, next_day = adjacent_days(state.journal_root, day)
+
     return render_template(
         "app.html",
         app="calendar",
         view="day",
         title=title,
-        files=files,
         prev_day=prev_day,
         next_day=next_day,
         day=day,
