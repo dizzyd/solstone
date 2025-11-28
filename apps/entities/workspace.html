@@ -29,6 +29,28 @@
   background: #f8f9fa;
 }
 
+/* Pending entity row (in-flight addition) */
+.entity-row-pending {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.entity-row-pending .star-button {
+  cursor: not-allowed;
+}
+
+.entity-row-pending .entity-desc-text {
+  font-style: italic;
+}
+
+.entity-row-error {
+  background: #fff5f5;
+}
+
+.entity-row-error .entity-desc-text {
+  color: #dc3545;
+}
+
 .entity-type {
   width: 120px;
   font-weight: 500;
@@ -62,15 +84,31 @@
   color: #ffc107;
 }
 
+/* Show trash icon on hover for starred (attached) entities */
+.star-button.starred .star-icon-hover {
+  display: none;
+}
+
+.star-button.starred:hover .star-icon-default {
+  display: none;
+}
+
+.star-button.starred:hover .star-icon-hover {
+  display: inline;
+  font-size: 0.7em;
+}
+
+.star-button.starred:hover {
+  color: inherit;
+}
+
 .star-button.unstarred {
   color: #ccc;
 }
 
-
 .star-button.unstarred:hover {
   color: #ffc107;
 }
-
 
 .entities-section {
   margin-bottom: 2em;
@@ -130,254 +168,55 @@
   background: #c82333;
 }
 
-/* Description modal styling */
-.description-modal {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.6);
+/* Inline description editing */
+.entity-desc-text {
+  cursor: text;
 }
 
-.description-modal-content {
-  background: white;
-  margin: 5% auto;
-  padding: 0;
-  width: 90%;
-  max-width: 600px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-50px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.description-modal-header {
-  padding: 1.5em;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.description-modal-header h3 {
-  margin: 0;
-  font-size: 1.25em;
-}
-
-.description-close {
-  color: #aaa;
-  font-size: 28px;
-  font-weight: bold;
-  cursor: pointer;
-  line-height: 20px;
-}
-
-.description-close:hover {
-  color: #000;
-}
-
-.description-modal-body {
-  padding: 1.5em;
-}
-
-.description-modal-body textarea {
-  width: 100%;
-  min-height: 150px;
-  padding: 12px;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
+.entity-desc-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid #667eea;
+  border-radius: 4px;
+  font-size: inherit;
   font-family: inherit;
-  font-size: 14px;
-  resize: vertical;
-  box-sizing: border-box;
+  color: #111827;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.description-buttons {
-  margin-top: 1em;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.button-group {
-  display: flex;
-  gap: 0.5em;
-}
-
-.generate-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.generate-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.generate-btn.generating {
-  opacity: 0.6;
+.entity-desc-input:disabled {
+  background: #f8f9fa;
   cursor: not-allowed;
 }
 
-.generate-icon {
-  font-size: 16px;
-}
-
-.cancel-btn {
-  padding: 8px 16px;
-  background: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 6px;
+.generate-inline-btn {
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.cancel-btn:hover {
-  background: #5a6268;
-}
-
-.save-btn {
-  padding: 8px 16px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.save-btn:hover {
-  background: #5568d3;
-}
-
-/* Entity description edit button */
-.entity-edit-btn {
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
   margin-left: 8px;
+  font-size: 1.1em;
+  transition: transform 0.2s;
 }
 
-.entity-desc:hover .entity-edit-btn {
-  opacity: 0.6;
+.generate-inline-btn:hover {
+  transform: scale(1.2);
 }
 
-.entity-edit-btn:hover {
-  opacity: 1 !important;
+.generate-inline-btn.generating {
+  animation: spin 1s linear infinite;
 }
 
 .no-entity-desc {
   color: #999;
   font-style: italic;
-  cursor: pointer;
+  cursor: text;
 }
 
 .no-entity-desc:hover {
   color: #667eea;
-  text-decoration: underline;
 }
 
-/* Delete modal styling */
-.delete-modal {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.6);
-}
-
-.delete-modal-content {
-  background: white;
-  margin: 10% auto;
-  padding: 0;
-  width: 90%;
-  max-width: 500px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-}
-
-.delete-modal-header {
-  padding: 1.5em;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.delete-modal-header h3 {
-  margin: 0;
-  color: #dc3545;
-}
-
-.delete-modal-body {
-  padding: 1.5em;
-}
-
-.delete-warning {
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 1em;
-  color: #856404;
-}
-
-.delete-days-list {
-  max-height: 200px;
-  overflow-y: auto;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  padding: 12px;
-  margin-top: 8px;
-}
-
-.delete-day-item {
-  padding: 6px 0;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.delete-day-item:last-child {
-  border-bottom: none;
-}
-
-.delete-buttons {
-  margin-top: 1.5em;
-  display: flex;
-  gap: 0.5em;
-  justify-content: flex-end;
-}
-
-/* Entity edit modal */
+/* Modal styling (shared) */
 .modal {
   display: none;
   position: fixed;
@@ -407,9 +246,26 @@
   justify-content: space-between;
 }
 
-.modal-header h2 {
+.modal-header h2,
+.modal-header h3 {
   margin: 0;
   font-size: 1.25em;
+}
+
+.modal-header.danger h3 {
+  color: #dc3545;
+}
+
+.modal-body {
+  padding: 1.5em;
+}
+
+.modal-footer {
+  padding: 1.5em;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  gap: 0.5em;
+  justify-content: flex-end;
 }
 
 .close {
@@ -422,6 +278,35 @@
 
 .close:hover {
   color: #000;
+}
+
+/* Delete modal specific */
+.delete-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 1em;
+  color: #856404;
+}
+
+.delete-days-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.delete-day-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.delete-day-item:last-child {
+  border-bottom: none;
 }
 
 .form-group {
@@ -451,18 +336,9 @@
   font-size: 0.875em;
 }
 
-.form-actions {
-  margin-top: 1.5em;
-  display: flex;
-  gap: 0.5em;
-  justify-content: flex-end;
-  padding: 1.5em;
-  border-top: 1px solid #e9ecef;
-}
-
 #entityEditError {
   padding: 12px;
-  margin: 1em 1.5em 0;
+  margin: 0 1.5em;
   background: #f8d7da;
   border: 1px solid #f5c6cb;
   border-radius: 6px;
@@ -470,17 +346,27 @@
   display: none;
 }
 
-/* Entity delete button */
+/* Entity delete button - floats over description cell */
+.entity-desc {
+  position: relative;
+}
+
 .entity-delete-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.2s;
-  margin-left: 8px;
-  font-size: 1.1em;
+  font-size: 1em;
+  background: white;
+  padding: 2px 4px;
+  border-radius: 4px;
 }
 
-.entity-desc:hover .entity-delete-btn {
-  opacity: 0.5;
+tr:hover .entity-delete-btn {
+  opacity: 0.6;
 }
 
 .entity-delete-btn:hover {
@@ -588,52 +474,27 @@
   </div>
 </div>
 
-<!-- Description Editor Modal -->
-<div id="descriptionModal" class="description-modal">
-  <div class="description-modal-content">
-    <span class="description-close">&times;</span>
-    <div class="description-modal-header">
-      <h3 id="modal-title">Edit Description</h3>
-    </div>
-    <div class="description-modal-body">
-      <textarea id="descriptionText" placeholder="Enter description..."></textarea>
-      <div class="description-buttons">
-        <button id="generateBtn" class="generate-btn" title="Generate description with AI">
-          <span class="generate-icon">✨</span>
-          <span class="generate-text">Generate</span>
-        </button>
-        <div class="button-group">
-          <button id="cancelBtn" class="cancel-btn">Cancel</button>
-          <button id="saveBtn" class="save-btn">Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Delete Entity Confirmation Modal -->
-<div id="deleteModal" class="delete-modal">
-  <div class="delete-modal-content">
-    <div class="delete-modal-header">
+<div id="deleteModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header danger">
       <h3>Delete Detected Entity</h3>
       <span class="close" onclick="closeDeleteModal()">&times;</span>
     </div>
-    <div class="delete-modal-body">
+    <div class="modal-body">
       <div class="delete-warning">
         ⚠️ This will permanently remove this entity from all detected day files. This action cannot be undone.
       </div>
       <p>Entity: <strong id="deleteEntityName"></strong></p>
-      <div id="deleteLoadingMsg" style="text-align: center; padding: 20px; display: none;">
-        <p>Loading preview...</p>
-      </div>
       <div id="deleteDaysContainer" style="display: none;">
         <p>Found in <strong id="deleteDaysCount"></strong>:</p>
         <div class="delete-days-list" id="deleteDaysList"></div>
       </div>
-      <div class="delete-buttons">
-        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-        <button id="confirmDeleteBtn" class="btn btn-danger" onclick="confirmEntityDelete()">Delete</button>
-      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button id="confirmDeleteBtn" class="btn btn-danger" onclick="confirmEntityDelete()">Delete</button>
     </div>
   </div>
 </div>
@@ -645,9 +506,9 @@
       <h2>Edit Entity</h2>
       <span class="close" onclick="closeEntityEditModal()">&times;</span>
     </div>
-    <div id="entityEditError"></div>
     <form id="entityEditForm">
-      <div style="padding: 1.5em;">
+      <div id="entityEditError"></div>
+      <div class="modal-body">
         <div class="form-group">
           <label for="entityEditName">Name</label>
           <input type="text" id="entityEditName" name="name" required>
@@ -658,7 +519,7 @@
           <small>Comma-separated list of alternative names for audio transcription</small>
         </div>
       </div>
-      <div class="form-actions">
+      <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeEntityEditModal()">Cancel</button>
         <button type="submit" class="btn btn-primary" id="entityEditSaveBtn">Save</button>
       </div>
@@ -670,7 +531,8 @@
 let currentFacet = getSelectedFacet();
 let entitiesData = null;
 let currentEditEntity = null;
-let currentDescriptionEntity = null;
+const pendingEntities = new Map(); // agent_id → { name, row }
+const pendingAgentCallbacks = new Map(); // agent_id → callback function
 
 // Get selected facet from cookie
 function getSelectedFacet() {
@@ -717,34 +579,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Description modal events
-  const descModal = document.getElementById('descriptionModal');
-  const descCloseBtn = document.querySelector('.description-close');
-  const descCancelBtn = document.getElementById('cancelBtn');
-  const descSaveBtn = document.getElementById('saveBtn');
-  const descGenerateBtn = document.getElementById('generateBtn');
-
-  if (descCloseBtn) {
-    descCloseBtn.onclick = closeDescriptionEditor;
-  }
-  if (descCancelBtn) {
-    descCancelBtn.onclick = closeDescriptionEditor;
-  }
-  if (descSaveBtn) {
-    descSaveBtn.onclick = function() {
-      const textarea = document.getElementById('descriptionText');
-      saveDescription(textarea.value);
-    };
-  }
-  if (descGenerateBtn) {
-    descGenerateBtn.onclick = generateDescription;
-  }
-
   // Close modal when clicking outside
   window.onclick = function(event) {
-    if (event.target == descModal) {
-      closeDescriptionEditor();
-    }
     const deleteModal = document.getElementById('deleteModal');
     if (event.target == deleteModal) {
       closeDeleteModal();
@@ -763,6 +599,9 @@ document.addEventListener('DOMContentLoaded', function() {
       saveEntityEdit();
     });
   }
+
+  // Set up shared cortex event listener for pending entities
+  setupCortexListener();
 });
 
 function loadEntities() {
@@ -793,35 +632,26 @@ function loadEntities() {
         return;
       }
 
-      // Transform new API format {attached, detected} to old format {all_entities}
-      const all_entities = [];
-
-      // Add attached entities with starred=true
-      if (data.attached) {
-        data.attached.forEach(entity => {
-          all_entities.push({
-            type: entity.type,
-            name: entity.name,
-            desc: entity.description,
-            starred: true,
-            aka: entity.aka || []
-          });
-        });
-      }
-
-      // Add detected entities with starred=false
-      if (data.detected) {
-        data.detected.forEach(entity => {
-          all_entities.push({
-            type: entity.type,
-            name: entity.name,
-            desc: entity.description,
-            starred: false,
-            count: entity.count,
-            last_seen: entity.last_seen
-          });
-        });
-      }
+      // Normalize API data into unified format for simpler rendering
+      // - attached entities get starred=true, detected get starred=false
+      // - 'description' → 'desc' for consistency
+      const all_entities = [
+        ...(data.attached || []).map(e => ({
+          type: e.type,
+          name: e.name,
+          desc: e.description,
+          starred: true,
+          aka: e.aka || []
+        })),
+        ...(data.detected || []).map(e => ({
+          type: e.type,
+          name: e.name,
+          desc: e.description,
+          starred: false,
+          count: e.count,
+          last_seen: e.last_seen
+        }))
+      ];
 
       entitiesData = { all_entities };
       renderEntities();
@@ -838,6 +668,211 @@ function loadEntities() {
     });
 }
 
+// Set up shared cortex event listener for all agent operations
+function setupCortexListener() {
+  if (!window.appEvents) {
+    console.warn('appEvents not available, pending entities will not update automatically');
+    return;
+  }
+
+  window.appEvents.listen('cortex', (msg) => {
+    const agentId = msg.agent_id;
+    if (!agentId) return;
+
+    // Handle pending entity additions
+    if (pendingEntities.has(agentId)) {
+      if (msg.event === 'tool_end' && msg.tool === 'entity_attach') {
+        const result = msg.result;
+        if (result && result.entity) {
+          updatePendingEntity(agentId, result.entity);
+        }
+      } else if (msg.event === 'finish') {
+        completePendingEntity(agentId, msg.result);
+      } else if (msg.event === 'error') {
+        failPendingEntity(agentId, msg.error || 'Unknown error');
+      }
+    }
+
+    // Handle one-off agent callbacks (e.g., description generation)
+    if (pendingAgentCallbacks.has(agentId)) {
+      if (msg.event === 'finish') {
+        const callback = pendingAgentCallbacks.get(agentId);
+        pendingAgentCallbacks.delete(agentId);
+        callback({ success: true, response: msg.result });
+      } else if (msg.event === 'error') {
+        const callback = pendingAgentCallbacks.get(agentId);
+        pendingAgentCallbacks.delete(agentId);
+        callback({ success: false, error: msg.error });
+      }
+    }
+  });
+}
+
+// Create a pending entity row (placeholder while agent runs)
+function createPendingEntityRow(name, agentId) {
+  const row = document.createElement('tr');
+  row.className = 'entity-row-pending';
+  row.dataset.agentId = agentId;
+
+  // Star cell (disabled)
+  const starCell = document.createElement('td');
+  const starButton = document.createElement('button');
+  starButton.className = 'star-button starred';
+  starButton.innerHTML = '★';
+  starButton.disabled = true;
+  starCell.appendChild(starButton);
+
+  // Type cell (placeholder)
+  const typeCell = document.createElement('td');
+  typeCell.className = 'entity-type';
+  typeCell.textContent = '—';
+
+  // Name cell
+  const nameCell = document.createElement('td');
+  nameCell.className = 'entity-name';
+  nameCell.textContent = name;
+
+  // Description cell (loading state)
+  const descCell = document.createElement('td');
+  descCell.className = 'entity-desc';
+  const descSpan = document.createElement('span');
+  descSpan.className = 'entity-desc-text';
+  descSpan.textContent = 'Adding...';
+  descCell.appendChild(descSpan);
+
+  row.appendChild(starCell);
+  row.appendChild(typeCell);
+  row.appendChild(nameCell);
+  row.appendChild(descCell);
+
+  return row;
+}
+
+// Update pending entity row with real data from tool result
+function updatePendingEntity(agentId, entity) {
+  const pending = pendingEntities.get(agentId);
+  if (!pending) return;
+
+  const row = pending.row;
+
+  // Update type
+  const typeCell = row.querySelector('.entity-type');
+  if (typeCell) typeCell.textContent = entity.type || '—';
+
+  // Update name (in case agent normalized it)
+  const nameCell = row.querySelector('.entity-name');
+  if (nameCell) nameCell.textContent = entity.name || pending.name;
+
+  // Update description
+  const descCell = row.querySelector('.entity-desc');
+  if (descCell) {
+    descCell.innerHTML = '';
+    const descSpan = document.createElement('span');
+    descSpan.className = 'entity-desc-text';
+    descSpan.textContent = entity.description || '—';
+    descCell.appendChild(descSpan);
+  }
+
+  // Store entity data for later
+  pending.entity = entity;
+}
+
+// Complete pending entity - fetch entity data and make interactive
+function completePendingEntity(agentId, agentMessage) {
+  const pending = pendingEntities.get(agentId);
+  if (!pending) return;
+
+  // If we already have entity data from tool_end, use it
+  if (pending.entity) {
+    finalizePendingEntity(agentId, pending.entity);
+    return;
+  }
+
+  // No entity_attach was called - fetch from backend to check if it was added anyway
+  fetch(`api/${encodeURIComponent(currentFacet)}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.attached) {
+        // Find entity by name (case-insensitive partial match)
+        const entity = data.attached.find(e =>
+          e.name.toLowerCase().includes(pending.name.toLowerCase()) ||
+          pending.name.toLowerCase().includes(e.name.toLowerCase())
+        );
+        if (entity) {
+          finalizePendingEntity(agentId, entity);
+          return;
+        }
+      }
+      // Entity not found - agent finished without attaching, show agent's message
+      failPendingEntity(agentId, agentMessage || 'Entity was not added');
+    })
+    .catch(error => {
+      console.error('Error fetching entity:', error);
+      failPendingEntity(agentId, agentMessage || 'Failed to verify entity');
+    });
+}
+
+// Finalize a pending entity with actual data
+function finalizePendingEntity(agentId, entity) {
+  const pending = pendingEntities.get(agentId);
+  if (!pending) return;
+
+  const row = pending.row;
+
+  // Add to local data
+  if (entitiesData && entitiesData.all_entities) {
+    // Check if already exists (avoid duplicates)
+    const exists = entitiesData.all_entities.some(e =>
+      e.type === entity.type && e.name === entity.name && e.starred
+    );
+    if (!exists) {
+      entitiesData.all_entities.unshift({
+        type: entity.type,
+        name: entity.name,
+        desc: entity.description,
+        starred: true,
+        aka: entity.aka || []
+      });
+    }
+  }
+
+  // Replace with proper interactive row
+  const newRow = createEntityRow({
+    type: entity.type,
+    name: entity.name,
+    desc: entity.description,
+    starred: true,
+    aka: entity.aka || []
+  }, true);
+  row.replaceWith(newRow);
+
+  pendingEntities.delete(agentId);
+}
+
+// Handle failed entity addition
+function failPendingEntity(agentId, error) {
+  const pending = pendingEntities.get(agentId);
+  if (!pending) return;
+
+  const row = pending.row;
+
+  // Show error state (persists until page reload)
+  row.classList.remove('entity-row-pending');
+  row.classList.add('entity-row-error');
+
+  // Update description to show error
+  const descCell = row.querySelector('.entity-desc');
+  if (descCell) {
+    descCell.innerHTML = '';
+    const descSpan = document.createElement('span');
+    descSpan.className = 'entity-desc-text';
+    descSpan.textContent = `Error: ${error}`;
+    descCell.appendChild(descSpan);
+  }
+
+  pendingEntities.delete(agentId);
+}
+
 function renderEntities(searchTerm = '') {
   if (!entitiesData) return;
 
@@ -845,13 +880,21 @@ function renderEntities(searchTerm = '') {
   const allTbody = document.getElementById('all-entities-tbody');
   const noFacetEntities = document.getElementById('no-facet-entities');
 
+  // Preserve pending entity rows before clearing
+  const pendingRows = Array.from(facetTbody.querySelectorAll('.entity-row-pending, .entity-row-error'));
+
   // Clear existing content
   facetTbody.innerHTML = '';
   allTbody.innerHTML = '';
 
+  // Re-insert pending rows at the top
+  pendingRows.forEach(row => facetTbody.appendChild(row));
+
   // Render facet entities
   const starredEntities = entitiesData.all_entities.filter(e => e.starred);
-  if (starredEntities.length === 0) {
+  const hasPendingOrStarred = pendingRows.length > 0 || starredEntities.length > 0;
+
+  if (!hasPendingOrStarred) {
     noFacetEntities.style.display = 'block';
     document.getElementById('facet-entities-section').querySelector('table').style.display = 'none';
   } else {
@@ -894,8 +937,15 @@ function createEntityRow(entity, isFacetSection) {
   const starCell = document.createElement('td');
   const starButton = document.createElement('button');
   starButton.className = `star-button ${entity.starred ? 'starred' : 'unstarred'}`;
-  starButton.innerHTML = entity.starred ? '★' : '☆';
-  starButton.onclick = () => toggleEntityStar(entity, starButton);
+  if (entity.starred) {
+    starButton.innerHTML = '<span class="star-icon-default">★</span><span class="star-icon-hover">🗑️</span>';
+    starButton.title = 'Remove from facet';
+    starButton.onclick = () => removeAttachedEntity(entity, row);
+  } else {
+    starButton.innerHTML = '☆';
+    starButton.title = 'Add to facet';
+    starButton.onclick = () => attachDetectedEntity(entity, starButton);
+  }
   starCell.appendChild(starButton);
 
   const typeCell = document.createElement('td');
@@ -934,15 +984,32 @@ function createEntityRow(entity, isFacetSection) {
 
   const descCell = document.createElement('td');
   descCell.className = 'entity-desc';
-  if (entity.desc) {
-    descCell.innerHTML = `<span class="entity-desc-text">${entity.desc}</span> <span class="entity-edit-btn" onclick="openEntityDescriptionEditor('${entity.type}', '${entity.name.replace(/'/g, "\\'")}', '${(entity.desc || '').replace(/'/g, "\\'")}')" title="Edit description">✏️</span>`;
-    descCell.classList.add('has-entity-desc');
+  if (isFacetSection) {
+    // Attached entities: double-click to edit inline
+    const descSpan = document.createElement('span');
+    descSpan.className = entity.desc ? 'entity-desc-text' : 'no-entity-desc';
+    descSpan.textContent = entity.desc || 'Add description...';
+    descSpan.addEventListener('dblclick', () => startInlineDescriptionEdit(entity, descCell));
+    descCell.appendChild(descSpan);
   } else {
-    descCell.innerHTML = `<span class="no-entity-desc" onclick="openEntityDescriptionEditor('${entity.type}', '${entity.name.replace(/'/g, "\\'")}', '')">Add description...</span> <span class="entity-edit-btn" onclick="openEntityDescriptionEditor('${entity.type}', '${entity.name.replace(/'/g, "\\'")}', '')" title="Add description">✨</span>`;
-    descCell.classList.add('no-entity-desc-cell');
+    // Detected entities: read-only
+    const descSpan = document.createElement('span');
+    descSpan.className = 'entity-desc-text';
+    if (entity.desc) {
+      descSpan.textContent = entity.desc;
+    } else {
+      descSpan.textContent = '—';
+      descSpan.style.cssText = 'color: #999; font-style: italic;';
+    }
+    descCell.appendChild(descSpan);
   }
 
-  // Add delete button only for detected entities (not facet section)
+  row.appendChild(starCell);
+  row.appendChild(typeCell);
+  row.appendChild(nameCell);
+  row.appendChild(descCell);
+
+  // Add delete button for detected entities (floats over description)
   if (!isFacetSection) {
     const deleteBtn = document.createElement('span');
     deleteBtn.className = 'entity-delete-btn';
@@ -955,26 +1022,52 @@ function createEntityRow(entity, isFacetSection) {
     descCell.appendChild(deleteBtn);
   }
 
-  row.appendChild(starCell);
-  row.appendChild(typeCell);
-  row.appendChild(nameCell);
-  row.appendChild(descCell);
-
   return row;
 }
 
-function toggleEntityStar(entity, starButton) {
-  const wasStarred = entity.starred;
+function removeAttachedEntity(entity, row) {
+  // Optimistic UI update - remove row immediately
+  row.style.opacity = '0.5';
+  row.style.pointerEvents = 'none';
 
+  fetch(`api/${encodeURIComponent(currentFacet)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: entity.type,
+      name: entity.name
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Remove from local data
+      if (entitiesData && entitiesData.all_entities) {
+        entitiesData.all_entities = entitiesData.all_entities.filter(e =>
+          !(e.type === entity.type && e.name === entity.name && e.starred)
+        );
+      }
+      // Remove row
+      row.remove();
+    } else {
+      throw new Error(data.error || 'Failed to remove entity');
+    }
+  })
+  .catch(error => {
+    console.error('Error removing entity:', error);
+    // Restore row on error
+    row.style.opacity = '1';
+    row.style.pointerEvents = '';
+  });
+}
+
+function attachDetectedEntity(entity, starButton) {
   // Disable button during request
   starButton.disabled = true;
   starButton.style.opacity = '0.5';
 
-  const method = wasStarred ? 'DELETE' : 'POST';
-  const url = `api/${encodeURIComponent(currentFacet)}`;
-
-  fetch(url, {
-    method: method,
+  fetch(`api/${encodeURIComponent(currentFacet)}`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       type: entity.type,
@@ -985,130 +1078,172 @@ function toggleEntityStar(entity, starButton) {
   .then(response => response.json())
   .then(data => {
     if (data.success) {
-      // Update entity state
-      entity.starred = !wasStarred;
-
-      // Re-render to move entity between sections
+      // Update entity state and re-render
+      entity.starred = true;
       renderEntities(document.getElementById('entity-search').value.trim());
     } else {
-      throw new Error(data.error || 'Failed to toggle entity');
+      throw new Error(data.error || 'Failed to attach entity');
     }
   })
   .catch(error => {
-    console.error('Error toggling entity star:', error);
+    console.error('Error attaching entity:', error);
     alert('Error: ' + error.message);
-
-    // Re-enable button
     starButton.disabled = false;
     starButton.style.opacity = '1';
   });
 }
 
-function openEntityDescriptionEditor(entityType, entityName, currentDescription) {
-  currentDescriptionEntity = { type: entityType, name: entityName };
+function startInlineDescriptionEdit(entity, descCell) {
+  const originalDesc = entity.desc || '';
 
-  const modal = document.getElementById('descriptionModal');
-  const textarea = document.getElementById('descriptionText');
-  const title = document.getElementById('modal-title');
+  // Clear cell and create edit UI
+  descCell.innerHTML = '';
 
-  title.textContent = `Edit Description: ${entityName}`;
-  textarea.value = currentDescription || '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'entity-desc-input';
+  input.value = originalDesc;
+  input.placeholder = 'Enter description...';
 
-  modal.style.display = 'block';
-}
+  const generateBtn = document.createElement('span');
+  generateBtn.className = 'generate-inline-btn';
+  generateBtn.textContent = '✨';
+  generateBtn.title = 'Generate description with AI';
 
-function closeDescriptionEditor() {
-  const modal = document.getElementById('descriptionModal');
-  modal.style.display = 'none';
-  currentDescriptionEntity = null;
-}
+  descCell.appendChild(input);
+  descCell.appendChild(generateBtn);
 
-function saveDescription(description) {
-  if (!currentDescriptionEntity) return;
+  input.focus();
+  input.select();
 
-  const saveBtn = document.getElementById('saveBtn');
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving...';
+  let isEditing = true;
 
-  fetch(`api/${encodeURIComponent(currentFacet)}/description`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: currentDescriptionEntity.type,
-      name: currentDescriptionEntity.name,
-      description: description
+  // Save function
+  const save = (newDesc) => {
+    if (!isEditing) return;
+    isEditing = false;
+
+    const trimmedDesc = newDesc.trim();
+
+    // Update local data optimistically
+    entity.desc = trimmedDesc;
+
+    // Restore display mode
+    restoreDescDisplay();
+
+    // Save in background
+    fetch(`api/${encodeURIComponent(currentFacet)}/description`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: entity.type,
+        name: entity.name,
+        description: trimmedDesc
+      })
     })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      // Update local data
-      const entity = entitiesData.all_entities.find(e =>
-        e.type === currentDescriptionEntity.type && e.name === currentDescriptionEntity.name
-      );
-      if (entity) {
-        entity.desc = description;
+    .then(response => response.json())
+    .then(data => {
+      if (!data.success) {
+        // Revert on failure
+        entity.desc = originalDesc;
+        restoreDescDisplay();
+        console.error('Failed to save description:', data.error);
       }
-
-      // Re-render entities
-      renderEntities(document.getElementById('entity-search').value.trim());
-      closeDescriptionEditor();
-    } else {
-      throw new Error(data.error || 'Failed to save description');
-    }
-  })
-  .catch(error => {
-    console.error('Error saving description:', error);
-    alert('Error: ' + error.message);
-  })
-  .finally(() => {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save';
-  });
-}
-
-function generateDescription() {
-  if (!currentDescriptionEntity) return;
-
-  const generateBtn = document.getElementById('generateBtn');
-  const textarea = document.getElementById('descriptionText');
-
-  generateBtn.disabled = true;
-  generateBtn.classList.add('generating');
-  generateBtn.querySelector('.generate-text').textContent = 'Generating...';
-
-  fetch(`api/${encodeURIComponent(currentFacet)}/generate-description`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: currentDescriptionEntity.type,
-      name: currentDescriptionEntity.name,
-      current_description: textarea.value
     })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success && data.agent_id) {
-      // Listen for agent completion
-      listenForAgentCompletion(data.agent_id, (result) => {
-        if (result.success && result.response) {
-          textarea.value = result.response;
-        }
-        generateBtn.disabled = false;
-        generateBtn.classList.remove('generating');
-        generateBtn.querySelector('.generate-text').textContent = 'Generate';
-      });
-    } else {
-      throw new Error(data.error || 'Failed to start generation');
+    .catch(error => {
+      // Revert on error
+      entity.desc = originalDesc;
+      restoreDescDisplay();
+      console.error('Error saving description:', error);
+    });
+  };
+
+  // Cancel function
+  const cancel = () => {
+    if (!isEditing) return;
+    isEditing = false;
+    restoreDescDisplay();
+  };
+
+  // Restore display mode
+  const restoreDescDisplay = () => {
+    descCell.innerHTML = '';
+    const descSpan = document.createElement('span');
+    descSpan.className = entity.desc ? 'entity-desc-text' : 'no-entity-desc';
+    descSpan.textContent = entity.desc || 'Add description...';
+    descSpan.addEventListener('dblclick', () => startInlineDescriptionEdit(entity, descCell));
+    descCell.appendChild(descSpan);
+  };
+
+  // Generate with AI
+  const generate = () => {
+    input.disabled = true;
+    generateBtn.classList.add('generating');
+
+    fetch(`api/${encodeURIComponent(currentFacet)}/generate-description`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: entity.type,
+        name: entity.name,
+        current_description: input.value
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success && data.agent_id) {
+        listenForAgentCompletion(data.agent_id, (result) => {
+          if (result.success && result.response) {
+            // Save the generated description and exit edit mode
+            save(result.response);
+          } else {
+            // Re-enable input on failure
+            input.disabled = false;
+            generateBtn.classList.remove('generating');
+          }
+        });
+      } else {
+        throw new Error(data.error || 'Failed to start generation');
+      }
+    })
+    .catch(error => {
+      console.error('Error generating description:', error);
+      input.disabled = false;
+      generateBtn.classList.remove('generating');
+    });
+  };
+
+  // Event handlers
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save(input.value);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
     }
-  })
-  .catch(error => {
-    console.error('Error generating description:', error);
-    alert('Error: ' + error.message);
-    generateBtn.disabled = false;
-    generateBtn.classList.remove('generating');
-    generateBtn.querySelector('.generate-text').textContent = 'Generate';
   });
+
+  input.addEventListener('blur', (e) => {
+    // Don't cancel if clicking generate button
+    if (e.relatedTarget === generateBtn) return;
+    setTimeout(() => {
+      if (isEditing && !input.disabled) {
+        cancel();
+      }
+    }, 100);
+  });
+
+  generateBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!input.disabled) {
+      generate();
+    }
+  });
+
+  // Make generate button focusable for blur handling
+  generateBtn.tabIndex = 0;
 }
 
 function listenForAgentCompletion(agentId, callback) {
@@ -1116,31 +1251,46 @@ function listenForAgentCompletion(agentId, callback) {
     callback({ success: false, error: 'Events not available' });
     return;
   }
-
-  const cleanup = window.appEvents.listen('cortex', (msg) => {
-    if (msg.event === 'agent_complete' && msg.agent_id === agentId) {
-      cleanup();
-      callback({ success: true, response: msg.response });
-    } else if (msg.event === 'agent_error' && msg.agent_id === agentId) {
-      cleanup();
-      callback({ success: false, error: msg.error });
-    }
-  });
+  // Register callback with shared listener
+  pendingAgentCallbacks.set(agentId, callback);
 }
 
 function submitEntityAssist() {
   const input = document.getElementById('entity-assist-input');
   const name = input.value.trim();
 
-  if (!name) {
+  if (!name || !currentFacet) {
     return;
   }
 
-  // Disable input during processing
-  input.disabled = true;
-  const originalPlaceholder = input.placeholder;
-  input.placeholder = 'Processing...';
+  // Clear input immediately for rapid add
+  input.value = '';
+  input.focus();
 
+  // Create placeholder row immediately
+  const tempId = `temp-${Date.now()}`;
+  const row = createPendingEntityRow(name, tempId);
+
+  // Insert at top of facet entities table
+  const facetTbody = document.getElementById('facet-entities-tbody');
+  const noFacetEntities = document.getElementById('no-facet-entities');
+
+  // Show table if it was hidden
+  if (noFacetEntities) noFacetEntities.style.display = 'none';
+  const facetTable = document.getElementById('facet-entities-section')?.querySelector('table');
+  if (facetTable) facetTable.style.display = 'table';
+
+  // Insert row at top
+  if (facetTbody.firstChild) {
+    facetTbody.insertBefore(row, facetTbody.firstChild);
+  } else {
+    facetTbody.appendChild(row);
+  }
+
+  // Track with temp ID initially
+  pendingEntities.set(tempId, { name, row });
+
+  // Spawn agent
   fetch(`api/${encodeURIComponent(currentFacet)}/assist`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1149,53 +1299,51 @@ function submitEntityAssist() {
   .then(response => response.json())
   .then(data => {
     if (data.success && data.agent_id) {
-      input.value = '';
-
-      // Listen for agent completion to refresh entities
-      listenForAgentCompletion(data.agent_id, (result) => {
-        if (result.success) {
-          // Reload entities to show the newly added entity
-          loadEntities();
-        }
-        input.disabled = false;
-        input.placeholder = originalPlaceholder;
-      });
+      // Update tracking with real agent ID
+      const pending = pendingEntities.get(tempId);
+      if (pending) {
+        pendingEntities.delete(tempId);
+        pendingEntities.set(data.agent_id, pending);
+        pending.row.dataset.agentId = data.agent_id;
+      }
     } else {
       throw new Error(data.error || 'Failed to start assistant');
     }
   })
   .catch(error => {
     console.error('Error with entity assistant:', error);
-    alert('Error: ' + error.message);
-    input.disabled = false;
-    input.placeholder = originalPlaceholder;
+    // Show error on the pending row
+    failPendingEntity(tempId, error.message);
   });
 }
 
 function previewEntityDelete(entityName) {
-  const modal = document.getElementById('deleteModal');
-  const nameEl = document.getElementById('deleteEntityName');
-  const loadingMsg = document.getElementById('deleteLoadingMsg');
-  const daysContainer = document.getElementById('deleteDaysContainer');
-  const deleteBtn = document.getElementById('confirmDeleteBtn');
-
-  nameEl.textContent = entityName;
-  loadingMsg.style.display = 'block';
-  daysContainer.style.display = 'none';
-  deleteBtn.disabled = true;
-
-  modal.style.display = 'block';
-
+  // First fetch preview to check how many days
   fetch(`api/${encodeURIComponent(currentFacet)}/detected/preview?name=${encodeURIComponent(entityName)}`)
     .then(response => response.json())
     .then(data => {
-      loadingMsg.style.display = 'none';
-
       if (data.success && data.days) {
+        // If only one detection, delete directly without confirmation
+        if (data.days.length === 1) {
+          removeEntityFromUI(entityName);
+          deleteEntity(entityName, true).catch(error => {
+            console.error('Error deleting entity:', error);
+            // Reload to restore state on error
+            loadEntities();
+          });
+          return;
+        }
+
+        // Multiple detections: show confirmation modal
+        const modal = document.getElementById('deleteModal');
+        const nameEl = document.getElementById('deleteEntityName');
+        const daysContainer = document.getElementById('deleteDaysContainer');
+        const deleteBtn = document.getElementById('confirmDeleteBtn');
         const daysList = document.getElementById('deleteDaysList');
         const daysCount = document.getElementById('deleteDaysCount');
 
-        daysCount.textContent = data.days.length === 1 ? '1 day' : `${data.days.length} days`;
+        nameEl.textContent = entityName;
+        daysCount.textContent = `${data.days.length} days`;
 
         daysList.innerHTML = '';
         data.days.forEach(item => {
@@ -1208,13 +1356,14 @@ function previewEntityDelete(entityName) {
         daysContainer.style.display = 'block';
         deleteBtn.disabled = false;
         deleteBtn.dataset.entityName = entityName;
+        modal.style.display = 'block';
       } else {
         throw new Error(data.error || 'Failed to preview');
       }
     })
     .catch(error => {
       console.error('Error previewing delete:', error);
-      loadingMsg.innerHTML = `<p style="color: #dc3545;">Error: ${error.message}</p>`;
+      alert('Error: ' + error.message);
     });
 }
 
@@ -1223,16 +1372,8 @@ function closeDeleteModal() {
   modal.style.display = 'none';
 }
 
-function confirmEntityDelete() {
-  const deleteBtn = document.getElementById('confirmDeleteBtn');
-  const entityName = deleteBtn.dataset.entityName;
-
-  if (!entityName) return;
-
-  deleteBtn.disabled = true;
-  deleteBtn.textContent = 'Deleting...';
-
-  fetch(`api/${encodeURIComponent(currentFacet)}/detected`, {
+function deleteEntity(entityName, skipReload = false) {
+  return fetch(`api/${encodeURIComponent(currentFacet)}/detected`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: entityName })
@@ -1240,18 +1381,40 @@ function confirmEntityDelete() {
   .then(response => response.json())
   .then(data => {
     if (data.success) {
-      closeDeleteModal();
-      // Reload entities to reflect deletion
-      loadEntities();
+      if (!skipReload) {
+        loadEntities();
+      }
     } else {
       throw new Error(data.error || 'Failed to delete entity');
     }
-  })
-  .catch(error => {
+  });
+}
+
+function removeEntityFromUI(entityName) {
+  // Remove from local data
+  if (entitiesData && entitiesData.all_entities) {
+    entitiesData.all_entities = entitiesData.all_entities.filter(e =>
+      e.starred || e.name !== entityName
+    );
+  }
+  // Re-render without reload
+  renderEntities(document.getElementById('entity-search').value.trim());
+}
+
+function confirmEntityDelete() {
+  const deleteBtn = document.getElementById('confirmDeleteBtn');
+  const entityName = deleteBtn.dataset.entityName;
+
+  if (!entityName) return;
+
+  // Optimistic UI update
+  closeDeleteModal();
+  removeEntityFromUI(entityName);
+
+  deleteEntity(entityName, true).catch(error => {
     console.error('Error deleting entity:', error);
-    alert('Error: ' + error.message);
-    deleteBtn.disabled = false;
-    deleteBtn.textContent = 'Delete';
+    // Reload to restore state on error
+    loadEntities();
   });
 }
 
