@@ -121,9 +121,10 @@
         pill.appendChild(emojiContainer);
       }
 
-      const title = document.createElement('span');
-      title.textContent = facet.title;
-      pill.appendChild(title);
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = facet.title;
+      pill.appendChild(label);
 
       // Apply color styling (only if facets enabled)
       if (!facetsDisabled && facet.color) {
@@ -521,69 +522,6 @@
     }, { passive: true });
   }
 
-  // Collapse facet pills when container is too narrow
-  let collapseTimeout = null;
-  let isCollapsing = false;
-
-  function collapseFacetPills() {
-    // Prevent re-entrant calls (avoid infinite loop)
-    if (isCollapsing) return;
-
-    const container = document.querySelector('.facet-pills-container');
-    if (!container) return;
-
-    const pills = Array.from(container.querySelectorAll('.facet-pill'));
-    if (pills.length === 0) return;
-
-    isCollapsing = true;
-
-    // Reset all pills to full display
-    pills.forEach(pill => pill.classList.remove('icon-only'));
-
-    // Force a reflow to get accurate measurements
-    container.offsetWidth;
-
-    // Check if we're overflowing
-    const containerWidth = container.clientWidth;
-    let totalWidth = 0;
-
-    pills.forEach(pill => {
-      totalWidth += pill.offsetWidth + 8; // Include margin
-    });
-
-    // If overflowing, collapse pills from right to left
-    if (totalWidth > containerWidth) {
-      // Start from the end (right side) and collapse until we fit
-      for (let i = pills.length - 1; i >= 0; i--) {
-        const pill = pills[i];
-
-        pill.classList.add('icon-only');
-
-        // Force reflow and recalculate
-        container.offsetWidth;
-
-        totalWidth = 0;
-        pills.forEach(p => {
-          totalWidth += p.offsetWidth + 8;
-        });
-
-        // If we fit now, stop collapsing
-        if (totalWidth <= containerWidth) break;
-      }
-    }
-
-    // Release lock after DOM has settled
-    setTimeout(() => {
-      isCollapsing = false;
-    }, 100);
-  }
-
-  // Debounced version for ResizeObserver
-  function debouncedCollapseFacetPills() {
-    clearTimeout(collapseTimeout);
-    collapseTimeout = setTimeout(collapseFacetPills, 50);
-  }
-
   // App starring state
   let starredApps = [];
 
@@ -712,19 +650,8 @@
     // Load starred apps
     loadStarredApps();
 
-    // Set up ResizeObserver to collapse pills when container width changes
-    const facetPillsContainer = document.querySelector('.facet-pills-container');
-    if (facetPillsContainer) {
-      const resizeObserver = new ResizeObserver(() => {
-        debouncedCollapseFacetPills();
-      });
-      resizeObserver.observe(facetPillsContainer);
-    }
-
-    // Initial collapse check after DOM settles
-    setTimeout(debouncedCollapseFacetPills, 0);
-
     // Setup facet pill drag-and-drop
+    const facetPillsContainer = document.querySelector('.facet-pills-container');
     if (facetPillsContainer) {
       setupDragDrop({
         container: facetPillsContainer,

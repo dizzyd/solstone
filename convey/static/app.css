@@ -261,21 +261,10 @@ body.menu-full .facet-bar::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow-x: auto;
-  overflow-y: visible;
-  white-space: nowrap;
-  scrollbar-width: thin;
+  overflow: hidden;
   padding-top: 4px;
   padding-bottom: 4px;
-}
-
-.facet-bar .facet-pills-container::-webkit-scrollbar {
-  height: 6px;
-}
-
-.facet-bar .facet-pills-container::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 3px;
+  min-width: 0;  /* Allow container to shrink below content size */
 }
 
 /* Menu Bar (left sidebar) */
@@ -588,7 +577,7 @@ body.menu-all .menu-bar {
 }
 
 .facet-pill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   padding: 8px 16px;
   margin-right: 8px;
@@ -600,18 +589,18 @@ body.menu-all .menu-bar {
   transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   user-select: none;
   position: relative;
+  min-width: 0;        /* Allow pill to shrink below content size */
+  flex-shrink: 1;      /* Allow shrinking when space is tight */
 }
 
-.facet-pill.icon-only {
-  padding: 8px;
-}
-
-.facet-pill.icon-only > span:not(.emoji-container) {
-  display: none;
-}
-
-.facet-pill.icon-only .emoji-container {
-  margin-right: 0;
+.facet-pill .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;        /* Can shrink to zero width */
+  flex-shrink: 1;
+  user-select: none;
+  pointer-events: none;
 }
 
 .facet-pill:hover {
@@ -635,6 +624,7 @@ body.menu-all .menu-bar {
   align-items: center;
   user-select: none;
   pointer-events: none;
+  flex-shrink: 0;      /* Never shrink the emoji */
 }
 
 .facet-pill .emoji {
@@ -659,11 +649,6 @@ body.menu-all .menu-bar {
   justify-content: center;
   padding: 0 3px;
   line-height: 1;
-  user-select: none;
-  pointer-events: none;
-}
-
-.facet-pill > span {
   user-select: none;
   pointer-events: none;
 }
