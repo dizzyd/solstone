@@ -273,18 +273,26 @@ body.menu-full .facet-bar::after {
   top: var(--facet-bar-height);
   left: 0;
   width: var(--menu-bar-width-minimal);
-  bottom: 0;
+  max-height: calc(100vh - var(--facet-bar-height));
   background: white;
   border-right: none; /* No border on container - items have their own borders */
-  z-index: var(--z-bars);
+  z-index: calc(var(--z-bars) + 1);  /* Above app bar */
   transition: width 0.3s ease, background 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease;
   overflow: hidden; /* Clip all content to rounded corner */
   border-bottom-right-radius: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* When app bar is present, menu needs to stay above it */
-body.has-app-bar .menu-bar {
-  bottom: var(--app-bar-height);
+/* Scrollable container for menu items */
+.menu-bar .menu-items {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;  /* Firefox */
+}
+
+.menu-bar .menu-items::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Edge */
 }
 
 body.menu-full .menu-bar {
@@ -308,6 +316,7 @@ body.menu-full .menu-bar {
   white-space: nowrap;
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;  /* Don't compress - let container scroll instead */
 }
 
 
@@ -550,6 +559,7 @@ body.menu-full .menu-bar .menu-item .drag-handle:active {
   user-select: none;
   position: relative;
   border-bottom-right-radius: 12px;
+  flex-shrink: 0;  /* Never shrink - always visible at bottom */
 }
 
 

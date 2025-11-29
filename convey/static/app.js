@@ -757,7 +757,8 @@
     }
 
     // App ordering via drag-and-drop
-    if (menuBar) {
+    const menuItemsContainer = document.querySelector('.menu-bar .menu-items');
+    if (menuItemsContainer) {
       // Helper: Save app order to config with starred/unstarred grouping
       async function saveAppOrder(order) {
         try {
@@ -795,7 +796,7 @@
 
       // Setup drag-and-drop using shared helper with boundary constraints
       setupDragDrop({
-        container: menuBar,
+        container: menuItemsContainer,
         itemSelector: '.menu-item',
         dataAttribute: 'appName',
         preventDefault: true,

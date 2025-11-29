@@ -1,5 +1,6 @@
 <!-- Menu Bar Component (left sidebar) -->
 <div class="menu-bar">
+  <div class="menu-items">
   {%- set app_names = apps.keys() | list -%}
   {%- set last_starred_index = -1 -%}
   {%- for i in range(app_names | length) -%}
@@ -18,5 +19,6 @@
     <span class="drag-handle" draggable="true">⋮</span>
   </a>
   {% endfor %}
+  </div>
   <div class="menu-expander">⏷</div>
 </div>
