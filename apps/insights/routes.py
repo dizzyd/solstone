@@ -11,7 +11,7 @@ import markdown
 from flask import Blueprint, redirect, render_template, url_for
 
 from convey import state
-from convey.utils import DATE_RE, adjacent_days, format_date
+from convey.utils import DATE_RE, adjacent_days, format_date, format_date_short
 from think.utils import day_path, get_insights
 
 insights_bp = Blueprint(
@@ -70,4 +70,5 @@ def insights_day(day: str) -> str:
         prev_day=prev_day,
         next_day=next_day,
         day=day,
+        day_formatted=format_date_short(day),
     )

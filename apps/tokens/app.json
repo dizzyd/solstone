@@ -1,4 +1,5 @@
 {
   "icon": "💰",
-  "label": "Tokens"
+  "label": "Tokens",
+  "date_nav": true
 }

@@ -8,7 +8,7 @@ from typing import Any
 from flask import Blueprint, jsonify, render_template
 
 from convey import state
-from convey.utils import DATE_RE, adjacent_days, format_date
+from convey.utils import DATE_RE, adjacent_days, format_date, format_date_short
 from think.utils import day_dirs, day_path
 
 calendar_bp = Blueprint(
@@ -38,6 +38,7 @@ def calendar_day(day: str) -> str:
         prev_day=prev_day,
         next_day=next_day,
         day=day,
+        day_formatted=format_date_short(day),
     )
 
 
@@ -169,6 +170,7 @@ def _dev_calendar_screens_list(day: str) -> str:
         day=day,
         prev_day=prev_day,
         next_day=next_day,
+        day_formatted=format_date_short(day),
     )
 
 
@@ -204,6 +206,7 @@ def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
         timestamp=timestamp,
         prev_day=prev_day,
         next_day=next_day,
+        day_formatted=format_date_short(day),
     )
 
 

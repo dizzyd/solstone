@@ -62,6 +62,9 @@ class App:
     #   - muted: Include facets marked as disabled in facet.json
     facets_config: bool | dict = field(default_factory=dict)
 
+    # Date navigation (renders date nav below facet bar)
+    date_nav: bool = False
+
     def facets_enabled(self) -> bool:
         """Check if facets are enabled for this app."""
         if isinstance(self.facets_config, bool):
@@ -75,6 +78,10 @@ class App:
         if isinstance(self.facets_config, dict):
             return self.facets_config.get("muted", False)
         return False
+
+    def date_nav_enabled(self) -> bool:
+        """Check if date nav is enabled for this app."""
+        return self.date_nav
 
     def get_blueprint(self) -> Optional[Blueprint]:
         """Return Flask Blueprint with app routes, or None if app has no custom routes."""
@@ -165,6 +172,9 @@ class AppRegistry:
         else:
             facets_config = {}
 
+        # Date navigation
+        date_nav = metadata.get("date_nav", False)
+
         # Import routes module and get blueprint (optional)
         blueprint = None
         routes_module = None
@@ -233,6 +243,7 @@ class AppRegistry:
             app_bar_template=app_bar_template,
             background_template=background_template,
             facets_config=facets_config,
+            date_nav=date_nav,
         )
 
     def _load_metadata(self, app_path: Path) -> dict[str, Any]:

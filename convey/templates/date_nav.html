@@ -1,111 +1,19 @@
-<style>
-.date-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.date-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 0.75rem;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #374151;
-  font-size: 1rem;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.date-nav-btn:hover {
-  background: #e5e7eb;
-  border-color: #9ca3af;
-}
-
-.date-nav-btn:active {
-  transform: scale(0.98);
-}
-
-.date-nav-btn.today {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: white;
-  font-weight: 600;
-}
-
-.date-nav-btn.today:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-}
-
-.date-nav-btn.today.current {
-  background: #9ca3af;
-  border-color: #9ca3af;
-  cursor: default;
-  opacity: 0.7;
-}
-
-.date-nav-btn.today.current:hover {
-  background: #9ca3af;
-  border-color: #9ca3af;
-}
-
-.date-nav-picker {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.date-nav-picker input[type="date"] {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-}
-
-.date-nav-picker .date-nav-btn {
-  pointer-events: none;
-}
-</style>
-
-<div class="date-nav" id="date-nav">
-  <button class="date-nav-btn prev" id="date-nav-prev" title="Previous day (←)">←</button>
-  <div class="date-nav-picker" title="Pick date">
-    <input type="date" id="date-nav-picker">
-    <span class="date-nav-btn">🗓️</span>
-  </div>
-  <button class="date-nav-btn today" id="date-nav-today" title="Today (t)">Today</button>
-  <button class="date-nav-btn next" id="date-nav-next" title="Next day (→)">→</button>
+{# Date Nav - renders below facet bar when app has date_nav enabled #}
+{# Requires: day (YYYYMMDD), day_formatted ("Sat Nov 29"), app (app name) #}
+{% if day %}
+<div class="date-nav">
+  <button class="date-nav-arrow" id="date-nav-prev" title="Previous day (&#8592)">&#8249;</button>
+  <span class="date-nav-label" id="date-nav-label" title="Pick date">{{ day_formatted }}</span>
+  <input type="date" id="date-nav-input">
+  <button class="date-nav-arrow" id="date-nav-next" title="Next day (&#8594)">&#8250;</button>
 </div>
 
 <script>
 (function() {
-  // Get day from template context or URL
-  const pathParts = window.location.pathname.split('/');
-  let currentDay = '{{ day | default("") }}';
+  const currentDay = '{{ day }}';
+  const app = '{{ app }}';
+  const baseUrl = `/app/${app}/`;
 
-  // Fallback: try to parse from URL if not provided
-  if (!currentDay || !/^\d{8}$/.test(currentDay)) {
-    const lastPart = pathParts[pathParts.length - 1];
-    if (/^\d{8}$/.test(lastPart)) {
-      currentDay = lastPart;
-    } else {
-      // Default to today
-      currentDay = new Date().toISOString().split('T')[0].replace(/-/g, '');
-    }
-  }
-
-  // Get base URL from app context
-  const app = '{{ app | default("") }}';
-  const baseUrl = app ? `/app/${app}/` : pathParts.slice(0, -1).join('/') + '/';
-
-  // Date utilities
   function toInputFormat(day) {
     return `${day.substring(0, 4)}-${day.substring(4, 6)}-${day.substring(6, 8)}`;
   }
@@ -120,54 +28,32 @@
     const dayNum = parseInt(day.substring(6, 8));
     const date = new Date(year, month, dayNum);
     date.setDate(date.getDate() + delta);
-
-    const newYear = date.getFullYear();
-    const newMonth = String(date.getMonth() + 1).padStart(2, '0');
-    const newDay = String(date.getDate()).padStart(2, '0');
-    return `${newYear}${newMonth}${newDay}`;
+    return date.getFullYear() +
+      String(date.getMonth() + 1).padStart(2, '0') +
+      String(date.getDate()).padStart(2, '0');
   }
 
   function getTodayDay() {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}${month}${day}`;
+    return now.getFullYear() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0');
   }
 
-  function isToday(day) {
-    return day === getTodayDay();
-  }
-
-  // Navigation
   function navigate(day) {
     window.location.href = `${baseUrl}${day}`;
   }
 
-  // Initialize
-  const picker = document.getElementById('date-nav-picker');
-  const todayBtn = document.getElementById('date-nav-today');
-  const prevBtn = document.getElementById('date-nav-prev');
-  const nextBtn = document.getElementById('date-nav-next');
+  const picker = document.getElementById('date-nav-input');
+  const label = document.getElementById('date-nav-label');
 
   // Set initial picker value
   picker.value = toInputFormat(currentDay);
 
-  // Mark today button as current if applicable
-  if (isToday(currentDay)) {
-    todayBtn.classList.add('current');
-  }
+  // Click label to open date picker
+  label.addEventListener('click', () => picker.showPicker());
 
-  // Event handlers
-  prevBtn.addEventListener('click', () => navigate(adjustDay(currentDay, -1)));
-  nextBtn.addEventListener('click', () => navigate(adjustDay(currentDay, 1)));
-
-  todayBtn.addEventListener('click', () => {
-    if (!isToday(currentDay)) {
-      navigate(getTodayDay());
-    }
-  });
-
+  // Date picker change handler
   picker.addEventListener('change', (e) => {
     const newDay = fromInputFormat(e.target.value);
     if (newDay && newDay !== currentDay) {
@@ -175,9 +61,12 @@
     }
   });
 
+  // Button handlers
+  document.getElementById('date-nav-prev').addEventListener('click', () => navigate(adjustDay(currentDay, -1)));
+  document.getElementById('date-nav-next').addEventListener('click', () => navigate(adjustDay(currentDay, 1)));
+
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    // Don't trigger when typing in inputs
     if (e.target.matches('input, textarea, select')) return;
 
     if (e.key === 'ArrowLeft') {
@@ -195,3 +84,4 @@
   });
 })();
 </script>
+{% endif %}

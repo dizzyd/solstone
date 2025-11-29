@@ -53,6 +53,11 @@
   <div class="status-icon">🟢</div>
 </div>
 
+<!-- Date Nav (centered below facet bar) -->
+{% if app_registry.apps[app].date_nav_enabled() and day %}
+  {% include "date_nav.html" %}
+{% endif %}
+
 <!-- Status Pane -->
 {% include "status_pane.html" %}
 

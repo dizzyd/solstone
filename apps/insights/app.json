@@ -1,4 +1,5 @@
 {
   "icon": "📝",
-  "label": "Insights"
+  "label": "Insights",
+  "date_nav": true
 }

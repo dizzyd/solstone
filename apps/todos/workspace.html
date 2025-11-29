@@ -1,13 +1,4 @@
 <style>
-.todo-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 1.5rem 0;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
 .facet-section {
   margin-bottom: 1.5rem;
 }
@@ -225,8 +216,6 @@
 </style>
 
 <div class="workspace-content">
-  <h1 class="todo-title">{{ title }}</h1>
-
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <div class="flash-messages">

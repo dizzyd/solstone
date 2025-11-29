@@ -38,6 +38,43 @@ def format_date(date_str: str) -> str:
         return date_str
 
 
+def format_date_short(date_str: str) -> str:
+    """Convert YYYYMMDD to smart relative/short format.
+
+    Returns:
+        - "Today", "Yesterday", "Tomorrow" for those days
+        - Day name (e.g., "Wednesday") for dates within the past 6 days
+        - "Sat Nov 29" for other dates in current/recent year
+        - "Sat Nov 29 '24" for dates >6 months ago in a different year
+    """
+    try:
+        date_obj = datetime.strptime(date_str, "%Y%m%d")
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        date_normalized = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+        delta_days = (date_normalized - today).days
+
+        # Today, Yesterday, Tomorrow
+        if delta_days == 0:
+            return "Today"
+        elif delta_days == -1:
+            return "Yesterday"
+        elif delta_days == 1:
+            return "Tomorrow"
+        # Within past 6 days - use day name
+        elif -6 <= delta_days < 0:
+            return date_obj.strftime("%A")
+        # Default short format
+        else:
+            short = date_obj.strftime("%a %b %-d")
+            # Add year suffix if >6 months ago AND different year
+            months_ago = (today.year - date_obj.year) * 12 + (today.month - date_obj.month)
+            if months_ago > 6 and date_obj.year != today.year:
+                short += date_obj.strftime(" '%y")
+            return short
+    except ValueError:
+        return date_str
+
+
 def time_since(epoch: int) -> str:
     """Return short human readable age for ``epoch`` seconds."""
     seconds = int(time.time() - epoch)

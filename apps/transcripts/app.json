@@ -1,4 +1,5 @@
 {
   "icon": "📜",
-  "label": "Transcripts"
+  "label": "Transcripts",
+  "date_nav": true
 }

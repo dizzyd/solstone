@@ -1,4 +1,5 @@
 {
   "icon": "✅",
-  "label": "Todos"
+  "label": "Todos",
+  "date_nav": true
 }
