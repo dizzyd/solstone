@@ -98,6 +98,25 @@ def test_agent_context_includes_entities_by_facet(fixture_journal):
     )
 
 
+def test_agent_context_with_facet_focus(fixture_journal):
+    """Test that get_agent with facet parameter uses focused single-facet context."""
+    config = get_agent("default", facet="full-featured")
+
+    extra_context = config.get("extra_context", "")
+
+    # Should have Facet Focus section instead of Available Facets
+    assert "## Facet Focus" in extra_context
+    assert "Available Facets" not in extra_context
+
+    # Should include the focused facet's details
+    assert "Full Featured Facet" in extra_context
+    assert "A facet for testing all features" in extra_context
+
+    # Should include full entity details from the focused facet
+    assert "## Entities" in extra_context
+    assert "Entity 1" in extra_context or "First test entity" in extra_context
+
+
 def test_agent_priority_ordering(fixture_journal):
     """Test that entity agents have correct priority ordering."""
     detection_config = get_agent("entities")

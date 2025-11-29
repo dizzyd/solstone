@@ -512,7 +512,7 @@ def get_insights() -> dict[str, dict[str, object]]:
     return insights
 
 
-def get_agent(persona: str = "default") -> dict:
+def get_agent(persona: str = "default", facet: str | None = None) -> dict:
     """Return complete agent configuration for a persona.
 
     Loads JSON configuration and instruction text, merges with runtime context.
@@ -521,6 +521,10 @@ def get_agent(persona: str = "default") -> dict:
     ----------
     persona:
         Name of the persona to load from agents/ directory.
+    facet:
+        Optional facet name to focus on. When provided, includes detailed
+        information for just this facet (with full entity details) instead
+        of summaries of all facets.
 
     Returns
     -------
@@ -545,15 +549,23 @@ def get_agent(persona: str = "default") -> dict:
     # Add runtime context (facets with entities)
     extra_parts = []
 
-    # Add facets with their entities using unified summary
+    # Add facet context - either focused single facet or all facets summary
     journal = os.getenv("JOURNAL_PATH")
     if journal:
         try:
-            from think.facets import facet_summaries
+            if facet:
+                # Focused mode: detailed view of single facet with full entities
+                from think.facets import facet_summary
 
-            facets_summary = facet_summaries()
-            if facets_summary and facets_summary != "No facets found.":
-                extra_parts.append(facets_summary)
+                detailed = facet_summary(facet)
+                extra_parts.append(f"## Facet Focus\n{detailed}")
+            else:
+                # General mode: summary of all facets
+                from think.facets import facet_summaries
+
+                facets_summary = facet_summaries()
+                if facets_summary and facets_summary != "No facets found.":
+                    extra_parts.append(facets_summary)
         except Exception:
             pass  # Ignore if facets can't be loaded
 

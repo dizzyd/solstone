@@ -30,6 +30,9 @@ def get_chat_background_data() -> dict:
         for chat_file in chats_dir.glob("*.json"):
             chat_data = load_json(chat_file)
             if chat_data:
+                # Normalize: ensure chat_id is available (handles legacy records)
+                if "chat_id" not in chat_data:
+                    chat_data["chat_id"] = chat_data.get("agent_id", chat_file.stem)
                 all_chats.append(chat_data)
                 if chat_data.get("unread"):
                     unread_count += 1
@@ -85,11 +88,21 @@ def send_message() -> Any:
     message = payload.get("message", "")
     attachments = payload.get("attachments", [])
     backend = payload.get("backend", state.chat_backend)
-    continue_from = payload.get("continue_from")
+    continue_chat = payload.get("continue_chat")  # chat_id to continue
 
+    # For continuation, we need to find the last agent in the thread
     config: dict[str, Any] = {}
-    if continue_from:
-        config["continue_from"] = continue_from
+    chats_dir = get_app_storage_path("chat", "chats")
+    existing_chat = None
+
+    if continue_chat:
+        chat_file = chats_dir / f"{continue_chat}.json"
+        if chat_file.exists():
+            existing_chat = load_json(chat_file)
+            if existing_chat and existing_chat.get("thread"):
+                # Continue from the last agent in the thread
+                last_agent = existing_chat["thread"][-1]
+                config["continue_from"] = last_agent
 
     if backend == "openai":
         key_name = "OPENAI_API_KEY"
@@ -115,11 +128,9 @@ def send_message() -> Any:
         # Get selected facet for context and chat record
         facet = get_selected_facet()
 
-        # Enhance prompt with facet focus if selected
+        # Pass facet through config for system prompt enhancement
         if facet:
-            full_prompt = (
-                f"Focus on the `{facet}` facet and answer this request: {full_prompt}"
-            )
+            config["facet"] = facet
 
         # Create agent request - events will be broadcast by shared watcher
         agent_id = spawn_agent(
@@ -129,26 +140,30 @@ def send_message() -> Any:
             config=config,
         )
 
-        # Save chat metadata to app storage
         ts = int(time.time() * 1000)
 
-        # Generate title for new chats only (not continuations)
-        if continue_from:
-            title = None  # Don't update title for continuations
+        if existing_chat:
+            # Continuation: append new agent to existing chat's thread
+            existing_chat["thread"].append(agent_id)
+            existing_chat["updated_ts"] = ts
+            chat_file = chats_dir / f"{continue_chat}.json"
+            save_json(chat_file, existing_chat)
+            chat_id = continue_chat
         else:
+            # New chat: create record with thread array
+            chat_id = agent_id
             title = generate_chat_title(message)
+            chat_record = {
+                "chat_id": chat_id,
+                "thread": [agent_id],
+                "ts": ts,
+                "facet": facet,
+                "title": title,
+            }
+            chat_file = chats_dir / f"{chat_id}.json"
+            save_json(chat_file, chat_record)
 
-        chat_record = {
-            "agent_id": agent_id,
-            "ts": ts,
-            "facet": facet,
-            "title": title,
-        }
-        chats_dir = get_app_storage_path("chat", "chats")
-        chat_file = chats_dir / f"{agent_id}.json"
-        save_json(chat_file, chat_record)
-
-        return jsonify(agent_id=agent_id)
+        return jsonify(chat_id=chat_id, agent_id=agent_id)
     except Exception as e:
         resp = jsonify({"error": str(e)})
         resp.status_code = 500
@@ -167,6 +182,9 @@ def list_chats() -> Any:
         for chat_file in chats_dir.glob("*.json"):
             chat_data = load_json(chat_file)
             if chat_data:
+                # Normalize: ensure chat_id is available (handles legacy records)
+                if "chat_id" not in chat_data:
+                    chat_data["chat_id"] = chat_data.get("agent_id", chat_file.stem)
                 chats.append(chat_data)
                 if chat_data.get("unread", False):
                     unread_count += 1
@@ -177,24 +195,53 @@ def list_chats() -> Any:
     return jsonify(chats=chats, unread_count=unread_count)
 
 
-@chat_bp.route("/api/agent/<agent_id>")
-def agent_events(agent_id: str) -> Any:
-    """Return events from an agent run.
+@chat_bp.route("/api/chat/<chat_id>/events")
+def chat_events(chat_id: str) -> Any:
+    """Return all events from a chat thread.
 
-    Returns all events written to disk so far. For active agents, client
-    should subscribe to WebSocket for real-time updates.
+    Loads the chat record, then hydrates events from all agents in the thread.
+    For active chats, client should subscribe to WebSocket for real-time updates.
     """
     from muse.cortex_client import get_agent_status, read_agent_events
 
-    try:
-        events = read_agent_events(agent_id)
-        is_complete = get_agent_status(agent_id) == "completed"
+    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    chat_file = chats_dir / f"{chat_id}.json"
 
-        return jsonify(events=events, is_complete=is_complete)
+    if not chat_file.exists():
+        resp = jsonify({"error": f"Chat not found: {chat_id}"})
+        resp.status_code = 404
+        return resp
 
-    except FileNotFoundError:
-        # Agent file doesn't exist yet - return empty
-        return jsonify(events=[], is_complete=False)
+    chat = load_json(chat_file)
+    if not chat:
+        resp = jsonify({"error": f"Failed to load chat: {chat_id}"})
+        resp.status_code = 500
+        return resp
+
+    # Get thread from chat record, with fallback for legacy records
+    thread = chat.get("thread", [chat.get("agent_id", chat_id)])
+
+    # Hydrate events from all agents in the thread
+    all_events = []
+    for agent_id in thread:
+        try:
+            events = read_agent_events(agent_id)
+            all_events.extend(events)
+        except FileNotFoundError:
+            # Agent file might not exist yet for very new agents
+            pass
+
+    # Check if the last agent in the thread is complete
+    is_complete = False
+    if thread:
+        is_complete = get_agent_status(thread[-1]) == "completed"
+
+    return jsonify(
+        events=all_events,
+        chat=chat,
+        thread=thread,
+        is_complete=is_complete,
+    )
 
 
 @chat_bp.route("/api/clear", methods=["POST"])
@@ -204,49 +251,49 @@ def clear_history() -> Any:
     return jsonify(ok=True)
 
 
-@chat_bp.route("/api/chat/<agent_id>")
-def get_chat(agent_id: str) -> Any:
-    """Get chat metadata by agent_id.
+@chat_bp.route("/api/chat/<chat_id>")
+def get_chat(chat_id: str) -> Any:
+    """Get chat metadata by chat_id.
 
     Args:
-        agent_id: The agent/chat ID
+        chat_id: The chat ID
 
     Returns:
         Chat metadata JSON or 404 if not found
     """
     chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
-    chat_file = chats_dir / f"{agent_id}.json"
+    chat_file = chats_dir / f"{chat_id}.json"
 
     if not chat_file.exists():
-        resp = jsonify({"error": f"Chat not found: {agent_id}"})
+        resp = jsonify({"error": f"Chat not found: {chat_id}"})
         resp.status_code = 404
         return resp
 
     chat_data = load_json(chat_file)
     if not chat_data:
-        resp = jsonify({"error": f"Failed to load chat: {agent_id}"})
+        resp = jsonify({"error": f"Failed to load chat: {chat_id}"})
         resp.status_code = 500
         return resp
 
     return jsonify(chat_data)
 
 
-@chat_bp.route("/api/chat/<agent_id>/read", methods=["POST"])
-def mark_chat_read(agent_id: str) -> Any:
+@chat_bp.route("/api/chat/<chat_id>/read", methods=["POST"])
+def mark_chat_read(chat_id: str) -> Any:
     """Mark a chat as read by updating its metadata.
 
     Args:
-        agent_id: The agent/chat ID
+        chat_id: The chat ID
 
     Returns:
         Success status or error
     """
     try:
         chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
-        chat_file = chats_dir / f"{agent_id}.json"
+        chat_file = chats_dir / f"{chat_id}.json"
 
         if not chat_file.exists():
-            resp = jsonify({"error": f"Chat not found: {agent_id}"})
+            resp = jsonify({"error": f"Chat not found: {chat_id}"})
             resp.status_code = 404
             return resp
 

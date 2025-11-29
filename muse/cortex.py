@@ -301,7 +301,8 @@ class CortexService:
             from think.utils import get_agent
 
             persona = request.get("persona", "default")
-            config = get_agent(persona)
+            facet = request.get("facet")
+            config = get_agent(persona, facet=facet)
 
             # Merge request into config (request values override persona defaults)
             # Only override with non-None values from request to preserve persona defaults
