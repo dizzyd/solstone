@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 
 import sqlite_utils
 
-from think.utils import day_dirs, get_insights
+from think.utils import day_dirs, get_insight_topic, get_insights
 
 from .chunker import chunk_markdown, render_chunk
 from .core import _scan_files, get_index
@@ -16,9 +16,10 @@ from .core import _scan_files, get_index
 # Regex to match segment folder names (HHMMSS_LEN format)
 SEGMENT_RE = re.compile(r"^\d{6}_\d+$")
 
-# Sentence indexing helpers
-INSIGHTS_DIR = os.path.join(os.path.dirname(__file__), "..", "insights")
-INSIGHT_TYPES = sorted(get_insights().keys())
+
+def _get_insight_topics() -> set[str]:
+    """Return set of valid insight topic filenames (filesystem names)."""
+    return {get_insight_topic(key) for key in get_insights().keys()}
 
 
 def split_chunks(text: str) -> List[str]:
@@ -31,14 +32,16 @@ def find_insight_files(
 ) -> Dict[str, str]:
     """Map relative insight file path to full path filtered by ``exts``.
 
-    Scans four locations:
+    Scans five locations:
     - Daily insights: YYYYMMDD/insights/*.md
     - Segment insights: YYYYMMDD/HHMMSS_LEN/*.md
     - Import summaries: imports/*/summary.md
     - Facet news: facets/*/news/*.md
+    - App insights: apps/*/insights/*.md
     """
     files: Dict[str, str] = {}
     exts = exts or (".md", ".json")
+    insight_topics = _get_insight_topics()
 
     # Scan daily and segment insights
     for day, day_path in day_dirs().items():
@@ -47,7 +50,7 @@ def find_insight_files(
         if os.path.isdir(insights_dir):
             for name in os.listdir(insights_dir):
                 base, ext = os.path.splitext(name)
-                if ext in exts and base in INSIGHT_TYPES:
+                if ext in exts and base in insight_topics:
                     rel = os.path.join(day, "insights", name)
                     files[rel] = os.path.join(insights_dir, name)
 
@@ -60,7 +63,7 @@ def find_insight_files(
                 continue
             for name in os.listdir(segment_dir):
                 base, ext = os.path.splitext(name)
-                if ext in exts and base in INSIGHT_TYPES:
+                if ext in exts and base in insight_topics:
                     rel = os.path.join(day, entry, name)
                     files[rel] = os.path.join(segment_dir, name)
 
@@ -89,6 +92,19 @@ def find_insight_files(
                     rel = os.path.join("facets", facet_name, "news", name)
                     files[rel] = os.path.join(news_dir, name)
 
+    # Scan app insights (flat structure: apps/{app}/insights/*.md)
+    apps_dir = os.path.join(journal, "apps")
+    if os.path.isdir(apps_dir):
+        for app_name in os.listdir(apps_dir):
+            app_insights_dir = os.path.join(apps_dir, app_name, "insights")
+            if not os.path.isdir(app_insights_dir):
+                continue
+            for name in os.listdir(app_insights_dir):
+                base, ext = os.path.splitext(name)
+                if ext in exts:
+                    rel = os.path.join("apps", app_name, "insights", name)
+                    files[rel] = os.path.join(app_insights_dir, name)
+
     return files
 
 
@@ -107,6 +123,7 @@ def _index_chunks(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) 
     #   Segment: 20240101/143022_300/screen.md -> day=20240101, topic=screen
     #   Import: imports/20250115_093000/summary.md -> day=20250115, topic=import
     #   Facet news: facets/ml_research/news/20250118.md -> day=20250118, topic=news
+    #   App insight: apps/{app}/insights/{topic}.md -> day=None, topic={app}:{topic}
     parts = rel.split(os.sep)
 
     if parts[0] == "imports":
@@ -121,6 +138,14 @@ def _index_chunks(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) 
         filename = parts[-1]
         day = os.path.splitext(filename)[0]
         topic = "news"
+    elif parts[0] == "apps":
+        # App insight: apps/{app}/insights/{topic}.md
+        # No day association, topic is {app}:{basename}
+        app_name = parts[1]
+        filename = parts[-1]
+        base = os.path.splitext(filename)[0]
+        day = ""  # App insights may not have a day
+        topic = f"{app_name}:{base}"
     else:
         # Daily or segment insight
         day = parts[0]

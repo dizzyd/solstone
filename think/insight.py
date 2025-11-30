@@ -14,6 +14,7 @@ from think.utils import (
     PromptNotFoundError,
     day_log,
     day_path,
+    get_insight_topic,
     get_insights,
     load_prompt,
     setup_cli,
@@ -22,36 +23,37 @@ from think.utils import (
 COMMON_SYSTEM_INSTRUCTION = "You are an expert productivity analyst tasked with analyzing a full workday transcript containing both audio conversations and screen activity data, segmented into 5-minute chunks. You will be given the transcripts and then following that you will have a detailed user request for how to process them.  Please follow those instructions carefully. Take time to consider all of the nuance of the interactions from the day, deeply think through how best to prioritize the most important aspects and understandings, formulate the best approach for each step of the analysis."
 
 
-def _insight_basenames() -> list[str]:
-    """Return available insight basenames."""
+def _insight_keys() -> list[str]:
+    """Return available insight keys."""
     return sorted(get_insights().keys())
 
 
 def _output_paths(
-    day_dir: os.PathLike[str], basename: str, segment: str | None = None
+    day_dir: os.PathLike[str], key: str, segment: str | None = None
 ) -> tuple[Path, Path]:
-    """Return markdown and JSON output paths for ``basename`` in ``day_dir``.
+    """Return markdown and JSON output paths for insight ``key`` in ``day_dir``.
 
     Args:
         day_dir: Day directory path (YYYYMMDD)
-        basename: Insight basename
+        key: Insight key (e.g., "activity" or "chat:sentiment")
         segment: Optional segment key (HHMMSS_LEN)
 
     Returns:
         (md_path, json_path) tuple
-        - Daily: YYYYMMDD/insights/{basename}.md
-        - Segment: YYYYMMDD/{segment}/{basename}.md
+        - Daily: YYYYMMDD/insights/{topic}.md (where topic = get_insight_topic(key))
+        - Segment: YYYYMMDD/{segment}/{topic}.md
     """
     day = Path(day_dir)
+    topic = get_insight_topic(key)
 
     if segment:
         # Segment insights go directly in segment directory
         segment_dir = day / segment
-        return segment_dir / f"{basename}.md", segment_dir / f"{basename}.json"
+        return segment_dir / f"{topic}.md", segment_dir / f"{topic}.json"
     else:
         # Daily insights go in insights/ subdirectory
         insights_dir = day / "insights"
-        return insights_dir / f"{basename}.md", insights_dir / f"{basename}.json"
+        return insights_dir / f"{topic}.md", insights_dir / f"{topic}.json"
 
 
 def scan_day(day: str) -> dict[str, list[str]]:
@@ -59,8 +61,8 @@ def scan_day(day: str) -> dict[str, list[str]]:
     day_dir = day_path(day)
     processed: list[str] = []
     pending: list[str] = []
-    for base in _insight_basenames():
-        md_path, _ = _output_paths(day_dir, base)
+    for key in _insight_keys():
+        md_path, _ = _output_paths(day_dir, key)
         if md_path.exists():
             processed.append(os.path.join("insights", md_path.name))
         else:
@@ -220,7 +222,7 @@ def main() -> None:
         "--prompt",
         dest="topic",
         required=True,
-        help="Topic file to use (required)",
+        help="Insight key (e.g., 'activity', 'chat:sentiment') or path to .txt file",
     )
     parser.add_argument(
         "-p",
@@ -245,17 +247,41 @@ def main() -> None:
     )
     args = setup_cli(parser)
 
+    # Resolve insight key or path to metadata
+    all_insights = get_insights()
+    topic_arg = args.topic
+
+    # Check if it's a known insight key first
+    if topic_arg in all_insights:
+        insight_key = topic_arg
+        insight_meta = all_insights[insight_key]
+        insight_path = Path(insight_meta["path"])
+    elif Path(topic_arg).exists():
+        # Fall back to treating it as a file path (backwards compat)
+        insight_path = Path(topic_arg)
+        # Try to find matching key by path
+        insight_key = insight_path.stem
+        for key, meta in all_insights.items():
+            if meta.get("path") == str(insight_path):
+                insight_key = key
+                break
+        insight_meta = all_insights.get(insight_key, {})
+    else:
+        parser.error(
+            f"Insight not found: {topic_arg}. "
+            f"Available: {', '.join(sorted(all_insights.keys()))}"
+        )
+
+    extra_occ = insight_meta.get("occurrences")
+    skip_occ = extra_occ is False
+    success = False
+
     # Choose clustering function based on mode
     if args.segment:
         markdown, file_count = cluster_period(args.day, args.segment)
     else:
         markdown, file_count = cluster(args.day)
     day_dir = str(day_path(args.day))
-    insight_basename = Path(args.topic).stem
-    insight_meta = get_insights().get(insight_basename, {})
-    extra_occ = insight_meta.get("occurrences")
-    skip_occ = extra_occ is False
-    success = False
 
     try:
 
@@ -266,7 +292,6 @@ def main() -> None:
         if not api_key:
             parser.error("GOOGLE_API_KEY not found in environment")
 
-        insight_path = Path(args.topic)
         try:
             insight_prompt = load_prompt(
                 insight_path.stem, base_dir=insight_path.parent, include_journal=True
@@ -281,16 +306,14 @@ def main() -> None:
         size_kb = len(markdown.encode("utf-8")) / 1024
 
         print(
-            f"Topic: {args.topic} | Model: {model} | Day: {day} | Files: {file_count} | Size: {size_kb:.1f}KB"
+            f"Topic: {insight_key} | Model: {model} | Day: {day} | Files: {file_count} | Size: {size_kb:.1f}KB"
         )
 
         if args.count:
             count_tokens(markdown, prompt, api_key, model)
             return
 
-        md_path, json_path = _output_paths(
-            day_dir, insight_basename, segment=args.segment
-        )
+        md_path, json_path = _output_paths(day_dir, insight_key, segment=args.segment)
         # Use cache key scoped to day or segment
         if args.segment:
             cache_display_name = f"{day}_{args.segment}"
@@ -424,7 +447,7 @@ def main() -> None:
         success = True
 
     finally:
-        msg = f"insight {insight_basename} {'ok' if success else 'failed'}"
+        msg = f"insight {insight_key} {'ok' if success else 'failed'}"
         if args.force:
             msg += " --force"
         day_log(args.day, msg)

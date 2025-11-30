@@ -267,6 +267,26 @@ from muse.mcp import register_tool, HINTS
 
 ---
 
+### 7. `insights/` - App Insights
+
+Define custom insight prompts that integrate with Sunstone's insight generation system.
+
+**Key Points:**
+- Create `insights/` directory with `.txt` (prompt) + `.json` (metadata) file pairs
+- App insights are automatically discovered alongside system insights
+- Keys are namespaced as `{app}:{topic}` (e.g., `my_app:weekly_summary`)
+- Outputs go to `JOURNAL/YYYYMMDD/insights/_<app>_<topic>.md`
+
+**Metadata format:** Same schema as system insights in `think/insights/*.json` - includes `title`, `description`, `color`, `frequency`, and `occurrences` fields.
+
+**App-data insights:** For insights from app-specific data (not transcripts), store in `JOURNAL/apps/{app}/insights/*.md` - these are automatically indexed.
+
+**Reference implementations:**
+- System insight templates: `think/insights/*.txt` and `*.json`
+- Discovery logic: `think/utils.py` - `get_insights()`, `get_insight_topic()`
+
+---
+
 ## Flask Utilities
 
 Available in `convey/utils.py`:

@@ -476,39 +476,108 @@ def setup_cli(parser: argparse.ArgumentParser, *, parse_known: bool = False):
     return (args, extra) if parse_known else args
 
 
+def get_insight_topic(key: str) -> str:
+    """Convert insight key to filesystem-safe basename (no extension).
+
+    Parameters
+    ----------
+    key:
+        Insight key in format "topic" (system) or "app:topic" (app).
+
+    Returns
+    -------
+    str
+        Filesystem-safe name: "topic" or "_app_topic".
+
+    Examples
+    --------
+    >>> get_insight_topic("activity")
+    'activity'
+    >>> get_insight_topic("chat:sentiment")
+    '_chat_sentiment'
+    """
+    if ":" in key:
+        app, topic = key.split(":", 1)
+        return f"_{app}_{topic}"
+    return key
+
+
+def _load_insight_metadata(txt_path: Path) -> dict[str, object]:
+    """Load insight metadata from .txt and optional .json file.
+
+    Parameters
+    ----------
+    txt_path:
+        Path to the .txt prompt file.
+
+    Returns
+    -------
+    dict
+        Metadata dict with path, mtime, color, and any JSON fields.
+    """
+    mtime = int(txt_path.stat().st_mtime)
+    info: dict[str, object] = {
+        "path": str(txt_path),
+        "mtime": mtime,
+    }
+    json_path = txt_path.with_suffix(".json")
+    if json_path.exists():
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                info.update(data)
+                if "color" not in info:
+                    info["color"] = "#6c757d"
+        except Exception as exc:  # pragma: no cover - metadata optional
+            logging.debug("Error reading %s: %s", json_path, exc)
+            info["color"] = "#6c757d"
+    else:
+        info["color"] = "#6c757d"
+    return info
+
+
 def get_insights() -> dict[str, dict[str, object]]:
     """Return available insights with metadata.
 
-    Each key is the insight name. The value contains the ``path`` to the
-    ``.txt`` file, the ``color`` from the metadata JSON, the file
-    ``mtime`` and any keys loaded from a matching ``.json`` metadata file.
-    """
+    Scans both system insights (think/insights/) and app insights
+    (apps/*/insights/). Each key is the insight name:
+    - System: "activity", "meetings"
+    - App: "app:topic" (e.g., "chat:sentiment")
 
-    insights_dir = Path(__file__).parent / "insights"
+    The value contains the ``path`` to the ``.txt`` file, the ``color``
+    from the metadata JSON, the file ``mtime``, a ``source`` field
+    ("system" or "app"), and any keys loaded from a matching ``.json``
+    metadata file.
+    """
     insights: dict[str, dict[str, object]] = {}
-    for txt_path in sorted(insights_dir.glob("*.txt")):
+
+    # System insights from think/insights/
+    system_dir = Path(__file__).parent / "insights"
+    for txt_path in sorted(system_dir.glob("*.txt")):
         name = txt_path.stem
-        mtime = int(txt_path.stat().st_mtime)
-        info: dict[str, object] = {
-            "path": str(txt_path),
-            "mtime": mtime,
-        }
-        json_path = txt_path.with_suffix(".json")
-        if json_path.exists():
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    info.update(data)
-                    # Ensure color exists, fallback to a default if missing
-                    if "color" not in info:
-                        info["color"] = "#6c757d"  # Default gray color
-            except Exception as exc:  # pragma: no cover - metadata optional
-                logging.debug("Error reading %s: %s", json_path, exc)
-                info["color"] = "#6c757d"  # Default gray color
-        else:
-            info["color"] = "#6c757d"  # Default gray color
+        info = _load_insight_metadata(txt_path)
+        info["source"] = "system"
         insights[name] = info
+
+    # App insights from apps/*/insights/
+    apps_dir = Path(__file__).parent.parent / "apps"
+    if apps_dir.is_dir():
+        for app_path in sorted(apps_dir.iterdir()):
+            if not app_path.is_dir() or app_path.name.startswith("_"):
+                continue
+            app_insights_dir = app_path / "insights"
+            if not app_insights_dir.is_dir():
+                continue
+            app_name = app_path.name
+            for txt_path in sorted(app_insights_dir.glob("*.txt")):
+                topic = txt_path.stem
+                key = f"{app_name}:{topic}"
+                info = _load_insight_metadata(txt_path)
+                info["source"] = "app"
+                info["app"] = app_name
+                insights[key] = info
+
     return insights
 
 

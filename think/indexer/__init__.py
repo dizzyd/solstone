@@ -33,8 +33,6 @@ from .events import (
 
 # Import from insights
 from .insights import (
-    INSIGHT_TYPES,
-    INSIGHTS_DIR,
     find_insight_files,
     scan_insights,
     search_insights,
@@ -60,8 +58,6 @@ __all__ = [
     "get_index",
     "reset_index",
     # Insights
-    "INSIGHT_TYPES",
-    "INSIGHTS_DIR",
     "find_insight_files",
     "scan_insights",
     "search_insights",

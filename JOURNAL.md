@@ -581,9 +581,10 @@ Post-processing generates day-level insights that synthesize all segments:
 - `insights/flow.md` – day overview and work rhythm analysis
 - `insights/knowledge_graph.md` – entity relationships and knowledge network
 - `insights/meetings.md` – meeting list used by the calendar web UI
+- `insights/_<app>_<topic>.md` – app-registered insights (e.g., `_chat_sentiment.md`)
 - Additional topic-based insights as configured in `think/insights/`
 
-Each insight type has a corresponding template in `think/insights/{name}.txt` that defines how the AI synthesizes extracts into narrative form.
+Each insight type has a corresponding template in `think/insights/{name}.txt` (system) or `apps/{app}/insights/{name}.txt` (app) that defines how the AI synthesizes extracts into narrative form.
 
 #### Provenance
 
