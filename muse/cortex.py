@@ -606,7 +606,12 @@ class CortexService:
                 stripped = line.strip()
                 if stripped:
                     stderr_lines.append(stripped)
-                    self.logger.debug(f"Agent {agent.agent_id} stderr: {stripped}")
+                    # Pass through to cortex stderr with agent prefix for traceability
+                    print(
+                        f"[agent:{agent.agent_id}:stderr] {stripped}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
         except Exception as e:
             self.logger.error(
