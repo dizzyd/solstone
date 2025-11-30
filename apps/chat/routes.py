@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import logging
 import os
 import time
 from typing import Any
@@ -11,6 +11,8 @@ from apps.utils import get_app_storage_path
 from convey.config import get_selected_facet
 from convey.utils import load_json, save_json
 from think.models import GEMINI_LITE, gemini_generate
+
+logger = logging.getLogger(__name__)
 
 chat_bp = Blueprint(
     "app:chat",
@@ -309,3 +311,96 @@ def mark_chat_read(chat_id: str) -> Any:
         resp = jsonify({"error": str(e)})
         resp.status_code = 500
         return resp
+
+
+@chat_bp.route("/api/chat/<chat_id>/bookmark", methods=["POST"])
+def toggle_bookmark(chat_id: str) -> Any:
+    """Toggle bookmark status for a chat.
+
+    Creates/removes a symlink in the bookmarks directory and updates
+    the chat's 'bookmarked' field with a timestamp.
+
+    Args:
+        chat_id: The chat ID
+
+    Returns:
+        JSON with 'bookmarked' timestamp (or null if unbookmarked)
+    """
+    try:
+        chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+        bookmarks_dir = get_app_storage_path("chat", "bookmarks")
+
+        chat_file = chats_dir / f"{chat_id}.json"
+        bookmark_link = bookmarks_dir / f"{chat_id}.json"
+
+        if not chat_file.exists():
+            resp = jsonify({"error": f"Chat not found: {chat_id}"})
+            resp.status_code = 404
+            return resp
+
+        chat_data = load_json(chat_file)
+        if not chat_data:
+            resp = jsonify({"error": f"Failed to load chat: {chat_id}"})
+            resp.status_code = 500
+            return resp
+
+        if chat_data.get("bookmarked"):
+            # Unbookmark: remove field and symlink
+            del chat_data["bookmarked"]
+            if bookmark_link.is_symlink() or bookmark_link.exists():
+                bookmark_link.unlink()
+            bookmarked = None
+            logger.info(f"Unbookmarked chat {chat_id}")
+        else:
+            # Bookmark: add timestamp and create symlink
+            bookmarked = int(time.time() * 1000)
+            chat_data["bookmarked"] = bookmarked
+            # Create relative symlink
+            if not bookmark_link.exists():
+                bookmark_link.symlink_to(f"../chats/{chat_id}.json")
+            logger.info(f"Bookmarked chat {chat_id}")
+
+        save_json(chat_file, chat_data)
+        return jsonify({"bookmarked": bookmarked})
+
+    except Exception as e:
+        logger.exception(f"Error toggling bookmark for chat {chat_id}")
+        resp = jsonify({"error": str(e)})
+        resp.status_code = 500
+        return resp
+
+
+@chat_bp.route("/api/bookmarks")
+def list_bookmarks() -> Any:
+    """Return all bookmarked chats, optionally filtered by facet.
+
+    Query params:
+        facet: Optional facet name to filter by
+
+    Returns:
+        JSON with 'bookmarks' list sorted by bookmarked timestamp (newest first)
+    """
+    bookmarks_dir = get_app_storage_path("chat", "bookmarks", ensure_exists=False)
+    facet = request.args.get("facet")
+
+    bookmarks = []
+
+    if bookmarks_dir.exists():
+        for link in bookmarks_dir.glob("*.json"):
+            if link.is_symlink():
+                target = link.resolve()
+                if target.exists():
+                    chat_data = load_json(target)
+                    if chat_data:
+                        # Filter by facet if specified
+                        if facet is not None and chat_data.get("facet") != facet:
+                            continue
+                        # Normalize chat_id
+                        if "chat_id" not in chat_data:
+                            chat_data["chat_id"] = link.stem
+                        bookmarks.append(chat_data)
+
+    # Sort by bookmarked timestamp, newest first
+    bookmarks.sort(key=lambda c: c.get("bookmarked", 0), reverse=True)
+
+    return jsonify({"bookmarks": bookmarks})

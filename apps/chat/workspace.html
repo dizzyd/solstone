@@ -287,7 +287,6 @@ a.recent-chat-item {
 <script>
 const sendUrl = '{{ url_for('app:chat.send_message') }}';
 const clearUrl = '{{ url_for('app:chat.clear_history') }}';
-const agentUrl = '{{ url_for('app:chat.agent_events', agent_id='AGENT_ID') }}';
 const chatsUrl = '{{ url_for('app:chat.list_chats') }}';
 const messagesDiv = document.getElementById('messages');
 const searchBase = '{{ url_for('app:search.index') }}';
@@ -348,9 +347,10 @@ function renderRecentChats() {
     list.className = 'recent-chats-list';
 
     for (const chat of chats) {
+      const chatId = chat.chat_id || chat.agent_id;  // Support legacy records
       const item = document.createElement('a');
       item.className = 'recent-chat-item';
-      item.href = `#${chat.agent_id}`;
+      item.href = `#${chatId}`;
 
       if (chat.unread) {
         item.classList.add('unread');
@@ -481,6 +481,29 @@ function initAppBarControls() {
     backendToggle.textContent = backends[currentBackend].label;
   });
 
+  // Bookmark toggle
+  const bookmarkToggle = document.getElementById('chatBookmarkToggle');
+  if (bookmarkToggle) {
+    bookmarkToggle.addEventListener('click', async () => {
+      if (!currentChatId) return;
+
+      try {
+        const resp = await fetch(`/app/chat/api/chat/${currentChatId}/bookmark`, { method: 'POST' });
+        if (resp.ok) {
+          const data = await resp.json();
+          updateStarButton(data.bookmarked);
+          // Update allChats cache if present
+          const chat = allChats.find(c => c.chat_id === currentChatId);
+          if (chat) {
+            chat.bookmarked = data.bookmarked;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to toggle bookmark:', err);
+      }
+    });
+  }
+
   setupFormHandlers();
   input.focus();
 }
@@ -550,15 +573,14 @@ function enrichEvent(event) {
 }
 
 // State management
-let currentAgentId = null;
+let currentChatId = null;   // The chat being viewed (stable across continuations)
+let currentThread = [];     // Agent IDs in the current thread (for WebSocket filtering)
 let isComplete = false;
+let currentBookmarked = null;  // Bookmark timestamp or null
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROUTER - Hash-based SPA navigation
 // ═══════════════════════════════════════════════════════════════════════════
-
-// Continuation mode flag - set before navigation to preserve messages
-let continuationMode = false;
 
 /**
  * Initialize hash-based router.
@@ -574,27 +596,54 @@ function initRouter() {
  */
 function handleRouteChange() {
   const hash = location.hash.slice(1);
-  const agentId = /^\d+$/.test(hash) ? hash : null;
 
-  if (agentId) {
-    // Avoid reloading same chat
-    if (currentAgentId !== agentId) {
-      loadChat(agentId);
-    }
+  if (hash === 'saved') {
+    // Saved chats view
+    showSavedChatsView();
   } else {
-    // Recent chats view - show if not already on it or if first load
-    if (currentAgentId !== null || !document.getElementById('recentChatsPanel')) {
-      showRecentChatsView();
+    const chatId = /^\d+$/.test(hash) ? hash : null;
+
+    if (chatId) {
+      // Avoid reloading same chat
+      if (currentChatId !== chatId) {
+        loadChat(chatId);
+      }
+    } else {
+      // Recent chats view - show if not already on it or if first load
+      if (currentChatId !== null || !document.getElementById('recentChatsPanel')) {
+        showRecentChatsView();
+      }
     }
   }
 }
 
 /**
  * Navigate programmatically. Updates hash which triggers handleRouteChange.
- * @param {string|null} agentId - Chat to open, or null for recent view
+ * @param {string|null} chatId - Chat to open, or null for recent view
  */
-function navigateTo(agentId) {
-  location.hash = agentId || '';
+function navigateTo(chatId) {
+  location.hash = chatId || '';
+}
+
+/**
+ * Update star button state based on bookmark status.
+ * @param {number|null} bookmarked - Bookmark timestamp or null
+ */
+function updateStarButton(bookmarked) {
+  const btn = document.getElementById('chatBookmarkToggle');
+  if (!btn) return;
+
+  currentBookmarked = bookmarked;
+
+  if (currentChatId) {
+    btn.style.display = 'inline';
+    btn.textContent = bookmarked ? '★' : '☆';
+    btn.classList.toggle('bookmarked', !!bookmarked);
+    btn.classList.toggle('unbookmarked', !bookmarked);
+    btn.title = bookmarked ? 'Remove bookmark' : 'Bookmark this chat';
+  } else {
+    btn.style.display = 'none';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -614,39 +663,28 @@ function clearMessages() {
 }
 
 /**
- * Load and display a chat conversation.
- * Handles: event fetching, mark-as-read, badge updates, continuation.
- * @param {string} agentId - The agent/chat ID to load
+ * Load and display a chat conversation (full thread).
+ * @param {string} chatId - The chat ID to load
  */
-async function loadChat(agentId) {
-  // Check continuation mode (set by form submit before navigation)
-  const isContinuation = continuationMode;
-  continuationMode = false;
-
+async function loadChat(chatId) {
   // Update state
-  currentAgentId = agentId;
+  currentChatId = chatId;
+  currentThread = [];
   isComplete = false;
   resetEventTracking();
 
   // Notify background service
   if (window.AppServices?.services?.chat) {
-    window.AppServices.services.chat.setActiveAgent(agentId);
+    window.AppServices.services.chat.setActiveAgent(chatId);
   }
 
-  // Prepare UI
-  if (!isContinuation) {
-    clearMessages();
-  } else {
-    // Continuation - keep existing messages, just reset tool tracking
-    Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
-  }
-
+  // Prepare UI - always clear and load full thread
+  clearMessages();
   showActivityIndicator();
 
-  // Fetch events from server
-  const url = agentUrl.replace('AGENT_ID', agentId);
+  // Fetch full thread events from server
   try {
-    const response = await fetch(url);
+    const response = await fetch(`/app/chat/api/chat/${chatId}/events`);
     if (!response.ok) {
       showError(`Failed to load chat: ${response.statusText}`);
       return;
@@ -654,9 +692,13 @@ async function loadChat(agentId) {
 
     const data = await response.json();
     const events = data.events || [];
+    currentThread = data.thread || [chatId];
     isComplete = data.is_complete || false;
 
-    // Process and render events
+    // Update star button based on chat's bookmark status
+    updateStarButton(data.chat?.bookmarked || null);
+
+    // Process and render all events from the thread
     for (const event of events) {
       const enriched = enrichEvent(event);
       if (!shouldSkipEvent(enriched)) {
@@ -667,11 +709,11 @@ async function loadChat(agentId) {
     // Update UI based on completion
     if (isComplete) {
       forceHideActivityIndicator();
-      enableContinuation(agentId);
+      enableContinuation(chatId);
     }
 
     // Mark as read and update badges
-    await markChatRead(agentId);
+    await markChatRead(chatId);
 
     // Scroll to bottom
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -683,34 +725,34 @@ async function loadChat(agentId) {
 
 /**
  * Enable continuation input after chat completes.
- * @param {string} agentId - The completed agent ID
+ * @param {string} chatId - The chat ID to continue
  */
-function enableContinuation(agentId) {
+function enableContinuation(chatId) {
   if (input) {
     input.disabled = false;
     input.placeholder = 'Continue conversation...';
-    input.dataset.continueAgent = agentId;
+    input.dataset.continueChat = chatId;
   }
 }
 
 /**
  * Mark chat as read and update all badge/submenu state.
- * @param {string} agentId - The chat to mark read
+ * @param {string} chatId - The chat to mark read
  */
-async function markChatRead(agentId) {
+async function markChatRead(chatId) {
   try {
     // Server-side mark read
-    await fetch(`/app/chat/api/chat/${agentId}/read`, { method: 'POST' });
+    await fetch(`/app/chat/api/chat/${chatId}/read`, { method: 'POST' });
 
     // Update local cache and get facet for badge update
-    const chat = allChats.find(c => c.agent_id === agentId);
+    const chat = allChats.find(c => c.chat_id === chatId);
     if (chat && chat.unread) {
       const facet = chat.facet;
       chat.unread = false;
 
       // Update badges via background service
       if (window.AppServices?.services?.chat) {
-        window.AppServices.services.chat.markRead(agentId, facet);
+        window.AppServices.services.chat.markRead(chatId, facet);
       }
     }
   } catch (err) {
@@ -723,13 +765,17 @@ async function markChatRead(agentId) {
  */
 function showRecentChatsView() {
   // Reset state
-  currentAgentId = null;
+  currentChatId = null;
+  currentThread = [];
   isComplete = false;
   clearMessages();
 
-  // Clear continue agent and reset input
+  // Hide star button (no chat selected)
+  updateStarButton(null);
+
+  // Clear continue chat and reset input
   if (input) {
-    delete input.dataset.continueAgent;
+    delete input.dataset.continueChat;
     input.disabled = false;
     input.placeholder = 'Send a message...';
   }
@@ -741,6 +787,116 @@ function showRecentChatsView() {
 
   // Render recent chats panel
   const panel = renderRecentChats();
+  messagesDiv.appendChild(panel);
+}
+
+/**
+ * Show saved/bookmarked chats view.
+ */
+async function showSavedChatsView() {
+  // Reset state
+  currentChatId = null;
+  currentThread = [];
+  isComplete = false;
+  clearMessages();
+
+  // Hide star button (no chat selected)
+  updateStarButton(null);
+
+  // Clear continue chat and reset input
+  if (input) {
+    delete input.dataset.continueChat;
+    input.disabled = false;
+    input.placeholder = 'Send a message...';
+  }
+
+  // Notify background service
+  if (window.AppServices?.services?.chat) {
+    window.AppServices.services.chat.setActiveAgent(null);
+  }
+
+  // Fetch bookmarks from API
+  let bookmarks = [];
+  try {
+    const facet = window.selectedFacet;
+    const url = facet !== null
+      ? `/app/chat/api/bookmarks?facet=${encodeURIComponent(facet)}`
+      : '/app/chat/api/bookmarks';
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      bookmarks = data.bookmarks || [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch bookmarks:', error);
+  }
+
+  // Render saved chats panel
+  const panel = document.createElement('div');
+  panel.className = 'recent-chats-panel';
+  panel.id = 'savedChatsPanel';
+
+  const title = document.createElement('h3');
+  title.textContent = 'Saved Chats';
+  panel.appendChild(title);
+
+  if (bookmarks.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'recent-chats-empty';
+    empty.textContent = 'No saved chats';
+    panel.appendChild(empty);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'recent-chats-list';
+
+    const facet = window.selectedFacet;
+    for (const chat of bookmarks) {
+      const chatId = chat.chat_id;
+      const item = document.createElement('a');
+      item.className = 'recent-chat-item';
+      item.href = `#${chatId}`;
+
+      // Facet color indicator in all-facets mode
+      if (facet === null && chat.facet) {
+        const facetData = (window.facetsData || []).find(f => f.name === chat.facet);
+        if (facetData?.color) {
+          item.style.borderLeftColor = facetData.color;
+          item.style.borderLeftWidth = '3px';
+          item.style.borderLeftStyle = 'solid';
+        }
+      }
+
+      // Switch to chat's facet on click
+      if (chat.facet && chat.facet !== window.selectedFacet) {
+        item.dataset.facet = chat.facet;
+        item.addEventListener('click', () => {
+          if (window.selectFacet) {
+            window.selectFacet(chat.facet);
+          }
+        });
+      }
+
+      const time = document.createElement('div');
+      time.className = 'recent-chat-time';
+      time.textContent = formatRelativeTime(chat.ts);
+      item.appendChild(time);
+
+      const preview = document.createElement('div');
+      preview.className = 'recent-chat-preview';
+      // Show star indicator for bookmarked items
+      const star = document.createElement('span');
+      star.textContent = '★ ';
+      star.style.color = '#ffc107';
+      preview.appendChild(star);
+      preview.appendChild(document.createTextNode(chat.title || '(no title)'));
+      item.appendChild(preview);
+
+      list.appendChild(item);
+    }
+
+    panel.appendChild(list);
+  }
+
   messagesDiv.appendChild(panel);
 }
 
@@ -980,7 +1136,8 @@ function reuseMessage(messageDiv) {
   Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
   messagesDiv.appendChild(activityIndicator);
   previousAgent = null;
-  currentAgentId = null;
+  currentChatId = null;
+  currentThread = [];
   isComplete = false;
   forceHideActivityIndicator();
   resetEventTracking();
@@ -992,6 +1149,7 @@ function reuseMessage(messageDiv) {
   if(input) {
     input.disabled = false;
     input.placeholder = 'Send a message...';
+    delete input.dataset.continueChat;
     input.value = text;
     input.focus();
 
@@ -1022,24 +1180,28 @@ function setupFormHandlers() {
     input.value = '';
     input.disabled = true;
 
-    // Check if continuing from previous agent
-    const continueAgentId = input.dataset.continueAgent;
-    delete input.dataset.continueAgent;
+    // Check if continuing existing chat
+    const continueChatId = input.dataset.continueChat;
+    delete input.dataset.continueChat;
 
     const payload = { message: text, backend: currentBackend };
-    if (continueAgentId) {
-      payload['continue_from'] = continueAgentId;
+    if (continueChatId) {
+      payload['continue_chat'] = continueChatId;
     }
 
     const r = await fetch(sendUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
     if (r.ok) {
       const d = await r.json();
-      // Set continuation mode before navigation to preserve messages
-      if (continueAgentId) {
-        continuationMode = true;
+      if (continueChatId) {
+        // Continuation: reload same chat to get new agent's events
+        // Can't use navigateTo() - hash is already set, won't trigger hashchange
+        // Directly call loadChat to fetch the updated thread
+        loadChat(continueChatId);
+      } else {
+        // New chat: navigate to it
+        navigateTo(d.chat_id);
       }
-      navigateTo(d.agent_id);
     } else {
       input.disabled = false;
       let err = 'Error';
@@ -1081,11 +1243,11 @@ function processEvent(event) {
       isComplete = true;
       forceHideActivityIndicator();
 
-      // Re-enable input and enable continuation
-      if(input){
+      // Re-enable input and enable continuation using current chat ID
+      if(input && currentChatId){
         input.disabled = false;
         input.placeholder = 'Continue conversation...';
-        input.dataset.continueAgent = event.agent_id;
+        input.dataset.continueChat = currentChatId;
       }
       break;
 
@@ -1251,8 +1413,8 @@ function createResourceCard(uri) {
 
   // Global WebSocket listener for cortex events
   appEvents.listen('cortex', e => {
-    // Only process events for our current agent
-    if (!currentAgentId || e.agent_id !== currentAgentId) {
+    // Only process events for agents in our current thread
+    if (!currentChatId || !currentThread.includes(e.agent_id)) {
       return;
     }
 

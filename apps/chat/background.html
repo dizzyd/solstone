@@ -2,7 +2,7 @@
 
 AppServices.register('chat', {
   unreadCount: {{ unread_count|default(0) }},
-  activeAgentId: null,
+  activeChatId: null,
   facetCounts: {},
 
   // Recent chats cache - sorted: unread first, then by timestamp
@@ -10,7 +10,7 @@ AppServices.register('chat', {
     {% if recent_chats %}
     {% for chat in recent_chats %}
     {
-      agent_id: '{{ chat.agent_id }}',
+      chat_id: '{{ chat.chat_id or chat.agent_id }}',
       title: {{ chat.title|default('(untitled)')|tojson }},
       ts: {{ chat.ts|default(0) }},
       unread: {{ 'true' if chat.unread else 'false' }},
@@ -44,7 +44,7 @@ AppServices.register('chat', {
   },
 
   // Rebuild submenu from recentChats cache
-  // Shows top 5, sorted: unread first, then by timestamp
+  // Shows fixed nav items at top, then top 5 recent chats
   rebuildSubmenu() {
     const sorted = [...this.recentChats]
       .sort((a, b) => {
@@ -53,34 +53,44 @@ AppServices.register('chat', {
       })
       .slice(0, 5);
 
-    AppServices.submenus.set('chat', sorted.map((chat, i) => ({
-      id: chat.agent_id,
-      label: chat.title || '(untitled)',
-      href: `/app/chat#${chat.agent_id}`,
-      badge: chat.unread ? '●' : null,
-      order: i,
-      facet: chat.facet
-    })));
+    const items = [
+      // Fixed navigation items
+      { id: 'new', label: 'New Chat', href: '/app/chat#', order: -2 },
+      { id: 'saved', label: 'Saved', href: '/app/chat#saved', order: -1, badge: '★' },
+      // Recent chats
+      ...sorted.map((chat, i) => ({
+        id: chat.chat_id,
+        label: chat.title || '(untitled)',
+        href: `/app/chat#${chat.chat_id}`,
+        badge: chat.unread ? '●' : null,
+        order: i,
+        facet: chat.facet
+      }))
+    ];
+
+    AppServices.submenus.set('chat', items);
   },
 
-  // Called by workspace to track which agent is being viewed
-  setActiveAgent(agentId) {
-    this.activeAgentId = agentId;
+  // Called by workspace to track which chat is being viewed
+  setActiveAgent(chatId) {
+    this.activeChatId = chatId;
   },
 
   // Handle cortex finish/error events
   async handleCortexEvent(e) {
     if (e.event !== 'finish' && e.event !== 'error') return;
 
-    // Skip if user is actively viewing this agent
-    if (this.activeAgentId === e.agent_id) return;
+    // Skip if user is actively viewing this chat
+    // Note: for new chats, agent_id = chat_id; for continuations, user is viewing so we skip
+    if (this.activeChatId === e.agent_id) return;
 
-    // Check if this is a chat agent
+    // Check if this is a chat (for new chats, agent_id = chat_id)
     try {
       const resp = await fetch(`/app/chat/api/chat/${e.agent_id}`);
-      if (!resp.ok) return; // Not a chat agent
+      if (!resp.ok) return; // Not a chat or continuation agent
 
       const chat = await resp.json();
+      const chatId = chat.chat_id || chat.agent_id;
 
       // Skip if already processed (chat already has unread flag from send_message)
       if (chat.unread) return;
@@ -95,9 +105,9 @@ AppServices.register('chat', {
       }
 
       // Add to cache (or update if exists)
-      const existingIndex = this.recentChats.findIndex(c => c.agent_id === chat.agent_id);
+      const existingIndex = this.recentChats.findIndex(c => c.chat_id === chatId);
       const chatData = {
-        agent_id: chat.agent_id,
+        chat_id: chatId,
         title: chat.title || '(untitled)',
         ts: chat.ts || Date.now(),
         unread: true,
@@ -130,7 +140,7 @@ AppServices.register('chat', {
         icon: isError ? '❌' : '💬',
         title: isError ? 'Chat Error' : 'Chat Complete',
         message: chatData.title,
-        action: `/app/chat#${chat.agent_id}`,
+        action: `/app/chat#${chatId}`,
         facet: chat.facet,
         autoDismiss: 5000
       });
@@ -154,7 +164,7 @@ AppServices.register('chat', {
   },
 
   // Called from workspace when user views a chat
-  markRead(agentId, facet) {
+  markRead(chatId, facet) {
     // Update unread count
     this.unreadCount = Math.max(0, this.unreadCount - 1);
 
@@ -164,7 +174,7 @@ AppServices.register('chat', {
     }
 
     // Update chat in cache (mark as read, don't remove)
-    const chat = this.recentChats.find(c => c.agent_id === agentId);
+    const chat = this.recentChats.find(c => c.chat_id === chatId);
     if (chat) {
       chat.unread = false;
     }
