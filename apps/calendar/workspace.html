@@ -1,10 +1,8 @@
 {# Calendar app workspace - routes to different views based on view parameter #}
 
-{% set view = view|default('month') %}
+{% set view = view|default('day') %}
 
-{% if view == 'month' %}
-  {% include 'calendar/_month.html' %}
-{% elif view == 'day' %}
+{% if view == 'day' %}
   {% include 'calendar/_day.html' %}
 {% elif view == '_dev_screens_list' %}
   {% include 'calendar/_dev_screens_list.html' %}

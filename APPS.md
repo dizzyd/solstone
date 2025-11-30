@@ -157,18 +157,31 @@ For apps with day-based navigation, include the shared date navigator:
 {% include 'date_nav.html' %}
 ```
 
-This provides a unified `← 🗓️ Today →` control with:
+This provides a unified `← Date →` control with:
 - Previous/next day buttons
-- Native date picker (calendar icon)
-- Today button (disabled when viewing current day)
+- Month picker dropdown (click date label)
 - Keyboard shortcuts: ←/→ arrows, `t` for today
 
 The component reads `day` and `app` from template context to construct navigation URLs.
 
-**Reference implementations:**
-- Date navigation: `apps/todos/app_bar.html`, `apps/tokens/app_bar.html`, `apps/calendar/app_bar.html`
+**Month Picker:**
 
-**Implementation source:** `convey/templates/date_nav.html`
+Apps with `date_nav: true` get a month picker dropdown when clicking the date label. To show day-level data indicators (heat map):
+
+```javascript
+MonthPicker.registerDataProvider('my_app', async (month, facet) => {
+  // Return {YYYYMMDD: count} for days with data
+  const resp = await fetch(`/app/my_app/api/stats/${month}`);
+  return resp.json();
+});
+```
+
+Without a provider, the picker shows a plain calendar grid.
+
+**Reference implementations:**
+- Date navigation: `apps/todos/app_bar.html`, `apps/tokens/app_bar.html`
+
+**Implementation source:** `convey/templates/date_nav.html`, `convey/static/month-picker.js`
 
 ### 5. `background.html` - Background Service
 

@@ -2,25 +2,18 @@
 {# Requires: day (YYYYMMDD), day_formatted ("Sat Nov 29"), app (app name) #}
 {% if day %}
 <div class="date-nav">
-  <button class="date-nav-arrow" id="date-nav-prev" title="Previous day (&#8592)">&#8249;</button>
+  <button class="date-nav-arrow" id="date-nav-prev" title="Previous day (←)">‹</button>
   <span class="date-nav-label" id="date-nav-label" title="Pick date">{{ day_formatted }}</span>
-  <input type="date" id="date-nav-input">
-  <button class="date-nav-arrow" id="date-nav-next" title="Next day (&#8594)">&#8250;</button>
+  <button class="date-nav-arrow" id="date-nav-next" title="Next day (→)">›</button>
+  <div class="month-picker"></div>
 </div>
 
+<script src="{{ url_for('root.static', filename='month-picker.js') }}"></script>
 <script>
 (function() {
   const currentDay = '{{ day }}';
   const app = '{{ app }}';
   const baseUrl = `/app/${app}/`;
-
-  function toInputFormat(day) {
-    return `${day.substring(0, 4)}-${day.substring(4, 6)}-${day.substring(6, 8)}`;
-  }
-
-  function fromInputFormat(str) {
-    return str.replace(/-/g, '');
-  }
 
   function adjustDay(day, delta) {
     const year = parseInt(day.substring(0, 4));
@@ -44,26 +37,50 @@
     window.location.href = `${baseUrl}${day}`;
   }
 
-  const picker = document.getElementById('date-nav-input');
-  const label = document.getElementById('date-nav-label');
+  // Register calendar data provider (if calendar app)
+  if (app === 'calendar') {
+    MonthPicker.registerDataProvider('calendar', async (month, facet) => {
+      const resp = await fetch(`/app/calendar/api/stats/${month}`);
+      if (!resp.ok) return {};
+      const raw = await resp.json();
+      const result = {};
+      for (const [day, facetCounts] of Object.entries(raw)) {
+        result[day] = facet
+          ? (facetCounts[facet] || 0)
+          : Object.values(facetCounts).reduce((a, b) => a + b, 0);
+      }
+      return result;
+    });
+  }
 
-  // Set initial picker value
-  picker.value = toInputFormat(currentDay);
+  // Initialize month picker
+  MonthPicker.init({
+    app: app,
+    currentDay: currentDay,
+    container: '.month-picker'
+  });
 
-  // Click label to open date picker
-  label.addEventListener('click', () => picker.showPicker());
+  // Click label to toggle month picker
+  document.getElementById('date-nav-label').addEventListener('click', () => {
+    MonthPicker.toggle();
+  });
 
-  // Date picker change handler
-  picker.addEventListener('change', (e) => {
-    const newDay = fromInputFormat(e.target.value);
-    if (newDay && newDay !== currentDay) {
-      navigate(newDay);
+  // Arrow buttons: day nav when closed, month nav when open
+  document.getElementById('date-nav-prev').addEventListener('click', () => {
+    if (MonthPicker.isOpen()) {
+      MonthPicker.navigateMonth(-1);
+    } else {
+      navigate(adjustDay(currentDay, -1));
     }
   });
 
-  // Button handlers
-  document.getElementById('date-nav-prev').addEventListener('click', () => navigate(adjustDay(currentDay, -1)));
-  document.getElementById('date-nav-next').addEventListener('click', () => navigate(adjustDay(currentDay, 1)));
+  document.getElementById('date-nav-next').addEventListener('click', () => {
+    if (MonthPicker.isOpen()) {
+      MonthPicker.navigateMonth(1);
+    } else {
+      navigate(adjustDay(currentDay, 1));
+    }
+  });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -71,11 +88,19 @@
 
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      navigate(adjustDay(currentDay, -1));
+      if (MonthPicker.isOpen()) {
+        MonthPicker.navigateMonth(-1);
+      } else {
+        navigate(adjustDay(currentDay, -1));
+      }
     }
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      navigate(adjustDay(currentDay, 1));
+      if (MonthPicker.isOpen()) {
+        MonthPicker.navigateMonth(1);
+      } else {
+        navigate(adjustDay(currentDay, 1));
+      }
     }
     if (e.key === 't' || e.key === 'T') {
       e.preventDefault();

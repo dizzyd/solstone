@@ -231,8 +231,8 @@ body.menu-full .facet-bar::after {
   top: var(--facet-bar-height);  /* Sits directly below facet bar */
   left: 50%;
   transform: translateX(-50%);
-  width: 210px;
-  height: 36px;
+  width: 300px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -325,6 +325,118 @@ body.menu-full .facet-bar::after {
 ::view-transition-old(date-nav),
 ::view-transition-new(date-nav) {
   animation: none;
+}
+
+/* When picker is open, remove bottom border radius for seamless connection */
+.date-nav.picker-open {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.date-nav.picker-open::before {
+  border-radius: 0;
+}
+
+/* Month Picker Dropdown */
+.month-picker {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--facet-border, #e0e0e0);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 1;
+
+  /* Closed state */
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+}
+
+/* Facet tint background */
+.month-picker::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--facet-bg, transparent);
+  border-radius: 0 0 12px 12px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.month-picker.open {
+  max-height: 280px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mp-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 8px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  padding: 4px 8px 8px;
+}
+
+.mp-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+
+  /* Heat map: intensity controls facet color opacity */
+  background: color-mix(in srgb, var(--facet-color) calc(var(--intensity, 0) * 30%), transparent);
+}
+
+.mp-day:hover:not(.mp-other) {
+  background: color-mix(in srgb, var(--facet-color) 40%, transparent);
+}
+
+/* Empty days - striped pattern */
+.mp-day.mp-empty {
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px),
+    color-mix(in srgb, var(--facet-color) calc(var(--intensity, 0) * 30%), transparent);
+  color: #999;
+}
+
+/* Other month days (leading/trailing) */
+.mp-day.mp-other {
+  visibility: hidden;
+}
+
+/* Today indicator */
+.mp-day.mp-today {
+  box-shadow: inset 0 0 0 2px #007bff;
+}
+
+/* Selected day */
+.mp-day.mp-selected {
+  background: var(--facet-color, #3b82f6);
+  color: white;
+  font-weight: 600;
+}
+
+.mp-day.mp-selected:hover {
+  background: var(--facet-color, #3b82f6);
 }
 
 /* Status Pane */
