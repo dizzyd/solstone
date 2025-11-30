@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from muse.mcp import entity_attach, entity_detect
+from apps.entities.tools import entity_attach, entity_detect
 
 
 @pytest.fixture

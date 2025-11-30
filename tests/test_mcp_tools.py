@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-import muse.mcp as mcp_tools
+from apps.entities import tools as entity_tools
 
 
 def test_entity_add_aka_success():
@@ -16,13 +16,13 @@ def test_entity_add_aka_success():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
+        result = entity_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
 
     mock_validate.assert_called_once_with("Tool")
     mock_load.assert_called_once_with("work", day=None)
@@ -52,13 +52,13 @@ def test_entity_add_aka_duplicate():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
+        result = entity_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
 
     # Should not call save since aka already exists
     mock_save.assert_not_called()
@@ -80,13 +80,15 @@ def test_entity_add_aka_initialize_aka_list():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka("personal", "Person", "Alice Johnson", "Ali")
+        result = entity_tools.entity_add_aka(
+            "personal", "Person", "Alice Johnson", "Ali"
+        )
 
     mock_save.assert_called_once()
 
@@ -103,9 +105,9 @@ def test_entity_add_aka_initialize_aka_list():
 
 def test_entity_add_aka_invalid_type():
     """Test adding aka with invalid entity type."""
-    with patch("muse.tools.entities.is_valid_entity_type") as mock_validate:
+    with patch("apps.entities.tools.is_valid_entity_type") as mock_validate:
         mock_validate.return_value = False
-        result = mcp_tools.entity_add_aka("work", "XY", "PostgreSQL", "PG")
+        result = entity_tools.entity_add_aka("work", "XY", "PostgreSQL", "PG")
 
     assert "error" in result
     assert "Invalid entity type 'XY'" in result["error"]
@@ -119,12 +121,12 @@ def test_entity_add_aka_entity_not_found():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
+        result = entity_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
 
     assert "error" in result
     assert "not found in attached entities" in result["error"]
@@ -134,12 +136,12 @@ def test_entity_add_aka_entity_not_found():
 def test_entity_add_aka_runtime_error():
     """Test entity_add_aka when JOURNAL_PATH not set."""
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.side_effect = RuntimeError("JOURNAL_PATH not set")
-        result = mcp_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
+        result = entity_tools.entity_add_aka("work", "Tool", "PostgreSQL", "PG")
 
     assert "error" in result
     assert "JOURNAL_PATH not set" in result["error"]
@@ -157,13 +159,13 @@ def test_entity_add_aka_skip_first_word():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka(
+        result = entity_tools.entity_add_aka(
             "personal", "Person", "Jeremie Miller", "Jeremie"
         )
 
@@ -187,13 +189,13 @@ def test_entity_add_aka_skip_first_word_case_insensitive():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka(
+        result = entity_tools.entity_add_aka(
             "work", "Organization", "Anthropic PBC", "anthropic"
         )
 
@@ -213,13 +215,13 @@ def test_entity_add_aka_skip_first_word_with_parens():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka(
+        result = entity_tools.entity_add_aka(
             "personal", "Person", "Alice Johnson (AJ)", "Alice"
         )
 
@@ -239,13 +241,15 @@ def test_entity_add_aka_not_first_word():
     ]
 
     with (
-        patch("muse.tools.entities.load_entities") as mock_load,
-        patch("muse.tools.entities.save_entities") as mock_save,
-        patch("muse.tools.entities.is_valid_entity_type") as mock_validate,
+        patch("apps.entities.tools.load_entities") as mock_load,
+        patch("apps.entities.tools.save_entities") as mock_save,
+        patch("apps.entities.tools.is_valid_entity_type") as mock_validate,
     ):
         mock_validate.return_value = True
         mock_load.return_value = mock_entities
-        result = mcp_tools.entity_add_aka("personal", "Person", "Jeremie Miller", "Jer")
+        result = entity_tools.entity_add_aka(
+            "personal", "Person", "Jeremie Miller", "Jer"
+        )
 
     # Should save since "Jer" is not the first word "Jeremie"
     mock_save.assert_called_once()

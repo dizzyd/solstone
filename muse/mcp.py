@@ -47,32 +47,18 @@ TOOL_PACKS: dict[str, list[str]] = {
     "facets": [
         "facet_news",
     ],
-    "entities": [
-        "entity_list",
-        "entity_detect",
-        "entity_attach",
-        "entity_update",
-        "entity_add_aka",
-    ],
     "apps": [],  # Auto-populated with all app-discovered tools
 }
 
 
 # Import and register tool modules
 # These imports trigger the registration of tools via the @register_tool decorator
-from muse.tools import entities, facets, search
+from muse.tools import facets, search
 
 # Register search tools
 search_insights = register_tool(annotations=HINTS)(search.search_insights)
 search_transcripts = register_tool(annotations=HINTS)(search.search_transcripts)
 search_events = register_tool(annotations=HINTS)(search.search_events)
-
-# Register entity tools
-entity_list = register_tool(annotations=HINTS)(entities.entity_list)
-entity_detect = register_tool(annotations=HINTS)(entities.entity_detect)
-entity_attach = register_tool(annotations=HINTS)(entities.entity_attach)
-entity_update = register_tool(annotations=HINTS)(entities.entity_update)
-entity_add_aka = register_tool(annotations=HINTS)(entities.entity_add_aka)
 
 # Register facet tools
 get_facet = register_tool(annotations=HINTS)(facets.get_facet)

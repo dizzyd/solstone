@@ -108,7 +108,7 @@ def spawn_agent(
 
     Args:
         prompt: The task or question for the agent
-        persona: Agent persona from muse/agents/*.txt
+        persona: Agent persona - system (e.g., "default") or app-qualified (e.g., "entities:entity_assist")
         backend: AI backend - openai, google, anthropic, or claude
         config: Backend-specific configuration (model, max_tokens, facet, continue, etc.)
 

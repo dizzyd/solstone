@@ -282,8 +282,8 @@ from muse.mcp import register_tool, HINTS
 **Reference implementations:**
 - Discovery logic: `muse/mcp.py` - `_discover_app_tools()` function
 - Testing: `tests/integration/test_app_tool_discovery.py` - Error handling and edge cases
-- App tool example: `apps/todos/tools.py` - Tool and resource implementation patterns
-- Core tool examples: `muse/tools/search.py`, `muse/tools/entities.py` - Tool implementation patterns
+- App tool examples: `apps/todos/tools.py`, `apps/entities/tools.py` - Tool implementation patterns
+- Core tool example: `muse/tools/search.py` - Search tool implementation
 
 ---
 

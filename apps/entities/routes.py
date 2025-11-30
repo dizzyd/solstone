@@ -385,7 +385,7 @@ def assist_add(facet_name: str) -> Any:
         # Create agent request - entity_assist persona already has backend configured
         agent_id = spawn_agent(
             prompt=prompt,
-            persona="entity_assist",
+            persona="entities:entity_assist",
         )
 
         return jsonify({"success": True, "agent_id": agent_id})

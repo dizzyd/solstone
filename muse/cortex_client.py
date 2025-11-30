@@ -27,7 +27,7 @@ def cortex_request(
 
     Args:
         prompt: The task or question for the agent
-        persona: Agent persona from think/agents/*.txt
+        persona: Agent persona - system (e.g., "default") or app-qualified (e.g., "entities:entity_assist")
         backend: AI backend - openai, google, anthropic, or claude
         handoff_from: Previous agent ID if this is a handoff request
         config: Backend-specific configuration (model, max_tokens, facet for Claude)

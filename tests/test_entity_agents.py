@@ -17,10 +17,11 @@ def fixture_journal():
 
 def test_entities_agent_config(fixture_journal):
     """Test detection agent configuration loads correctly."""
-    config = get_agent("entities")
+    # Entity agents are now in apps/entities/agents/ so use app-qualified name
+    config = get_agent("entities:entities")
 
     # Verify required fields
-    assert config["persona"] == "entities"
+    assert config["persona"] == "entities:entities"
     assert "instruction" in config
     assert len(config["instruction"]) > 0
 
@@ -34,10 +35,11 @@ def test_entities_agent_config(fixture_journal):
 
 def test_entities_review_agent_config(fixture_journal):
     """Test review agent configuration loads correctly."""
-    config = get_agent("entities_review")
+    # Entity agents are now in apps/entities/agents/ so use app-qualified name
+    config = get_agent("entities:entities_review")
 
     # Verify required fields
-    assert config["persona"] == "entities_review"
+    assert config["persona"] == "entities:entities_review"
     assert "instruction" in config
     assert len(config["instruction"]) > 0
 
@@ -51,7 +53,7 @@ def test_entities_review_agent_config(fixture_journal):
 
 def test_entities_agent_instruction_content(fixture_journal):
     """Test detection agent instruction contains expected sections."""
-    config = get_agent("entities")
+    config = get_agent("entities:entities")
     instruction = config["instruction"]
 
     # Check for key sections in the prompt
@@ -64,7 +66,7 @@ def test_entities_agent_instruction_content(fixture_journal):
 
 def test_entities_review_agent_instruction_content(fixture_journal):
     """Test review agent instruction contains expected sections."""
-    config = get_agent("entities_review")
+    config = get_agent("entities:entities_review")
     instruction = config["instruction"]
 
     # Check for key sections in the prompt
@@ -77,7 +79,7 @@ def test_entities_review_agent_instruction_content(fixture_journal):
 
 def test_agent_context_includes_entities_by_facet(fixture_journal):
     """Test that agent context includes entities grouped by facet."""
-    config = get_agent("entities")
+    config = get_agent("entities:entities")
 
     # extra_context should contain facet summaries with entities
     extra_context = config.get("extra_context", "")
@@ -119,8 +121,8 @@ def test_agent_context_with_facet_focus(fixture_journal):
 
 def test_agent_priority_ordering(fixture_journal):
     """Test that entity agents have correct priority ordering."""
-    detection_config = get_agent("entities")
-    review_config = get_agent("entities_review")
+    detection_config = get_agent("entities:entities")
+    review_config = get_agent("entities:entities_review")
 
     detection_priority = detection_config.get("priority", 50)
     review_priority = review_config.get("priority", 50)
