@@ -907,6 +907,7 @@ window.AppServices = {
    */
   notifications: {
     _stack: [],
+    _history: JSON.parse(localStorage.getItem('sunstone:notification_history') || '[]'),
     _nextId: 1,
     _container: null,
 
@@ -931,6 +932,7 @@ window.AppServices = {
       };
 
       this._stack.push(notif);
+      this._addToHistory(notif);
       this._render();
 
       // Browser notification if permitted
@@ -995,6 +997,46 @@ window.AppServices = {
 
       Object.assign(notif, options);
       this._render();
+    },
+
+    /**
+     * Get notification history (most recent first)
+     * @returns {Array} Array of notification objects
+     */
+    getHistory() {
+      return [...this._history].reverse();
+    },
+
+    /**
+     * Add notification to history and persist
+     * @private
+     */
+    _addToHistory(notif) {
+      // Store minimal data for history (exclude runtime fields)
+      const historyEntry = {
+        app: notif.app,
+        icon: notif.icon,
+        title: notif.title,
+        message: notif.message,
+        action: notif.action,
+        facet: notif.facet,
+        timestamp: notif.timestamp
+      };
+
+      this._history.push(historyEntry);
+
+      // Cap at 10 items
+      if (this._history.length > 10) {
+        this._history = this._history.slice(-10);
+      }
+
+      // Persist to localStorage
+      try {
+        localStorage.setItem('sunstone:notification_history', JSON.stringify(this._history));
+      } catch (e) {
+        // localStorage may be full or disabled
+        console.warn('[Notifications] Failed to persist history:', e);
+      }
     },
 
     /**
@@ -1098,7 +1140,7 @@ window.AppServices = {
         <div class="notification-header">
           <span class="notification-app-icon">${n.icon}</span>
           <span class="notification-app-name">${window.AppServices._escapeHtml(n.app)}</span>
-          ${n.dismissible ? `<button class="notification-close" onclick="window.AppServices.notifications.dismiss(${n.id}); event.stopPropagation();">×</button>` : ''}
+          ${n.dismissible ? `<button class="notification-close" onclick="event.preventDefault(); event.stopPropagation(); window.AppServices.notifications.dismiss(${n.id});">×</button>` : ''}
         </div>
         <div class="notification-body">
           <div class="notification-title">${window.AppServices._escapeHtml(n.title)}</div>
