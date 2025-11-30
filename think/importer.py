@@ -198,7 +198,11 @@ def split_audio(path: str, out_dir: str, start: dt.datetime) -> list[str]:
             "-y",  # Overwrite output files
             dest,
         ]
-        subprocess.run(cmd, check=True)
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"ffmpeg failed for segment {idx}: {e.stderr}")
+            raise
         logger.info(f"Added audio segment to journal: {dest}")
         created_files.append(dest)
 
