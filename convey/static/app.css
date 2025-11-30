@@ -85,6 +85,7 @@ html {
   --menu-bar-width-minimal: 60px;
   --menu-bar-width-full: 200px;
   --app-bar-height: 60px;
+  --date-nav-height: 40px;
 
   /* Z-index hierarchy (increasing order) */
   --z-bars: 100;          /* Facet bar, menu bar, app bar */
@@ -108,6 +109,11 @@ body {
 /* Add bottom margin when app-bar is present */
 body.has-app-bar .workspace {
   margin-bottom: var(--app-bar-height);
+}
+
+/* Add extra top margin when date-nav is present */
+body.has-date-nav .workspace {
+  margin-top: calc(var(--facet-bar-height) + var(--date-nav-height));
 }
 
 /* Standard workspace containers */
@@ -232,7 +238,7 @@ body.menu-full .facet-bar::after {
   left: 50%;
   transform: translateX(-50%);
   width: 300px;
-  height: 40px;
+  height: var(--date-nav-height);
   display: flex;
   align-items: center;
   justify-content: space-between;

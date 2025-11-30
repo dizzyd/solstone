@@ -33,7 +33,10 @@
   {% endif %}
   {% endif %}
 </head>
-<body{% if app_registry.apps[app].get_app_bar_template() %} class="has-app-bar"{% endif %}>
+{% set body_classes = [] %}
+{% if app_registry.apps[app].get_app_bar_template() %}{% set _ = body_classes.append('has-app-bar') %}{% endif %}
+{% if app_registry.apps[app].date_nav_enabled() and day %}{% set _ = body_classes.append('has-date-nav') %}{% endif %}
+<body{% if body_classes %} class="{{ body_classes|join(' ') }}"{% endif %}>
 <!-- Corner Tags (screen region detection) -->
 <div class="corner-tags">
   <div class="corner-tag corner-tag-tl"></div>
