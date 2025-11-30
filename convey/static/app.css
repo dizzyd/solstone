@@ -174,13 +174,18 @@ body.has-date-nav .workspace {
   right: 0;
   height: 1px;
   background: var(--facet-border, #e0e0e0);
-  transition: left 0.3s ease, background-color 0.3s ease;
+  transition: left 0.3s ease, background-color 0.3s ease;  /* right is instant */
   pointer-events: none;
 }
 
 /* When sidebar open, border only where workspace is visible */
 body.menu-full .facet-bar::after {
   left: var(--menu-bar-width-full);
+}
+
+/* When status pane open, stop border before it */
+body:has(.status-pane.visible) .facet-bar::after {
+  right: 280px;  /* Status pane width */
 }
 
 .facet-bar #hamburger {
@@ -435,27 +440,48 @@ body.menu-full .facet-bar::after {
   background: var(--facet-color, #3b82f6);
 }
 
-/* Status Pane */
+/* Status Pane - slides down from facet bar on right (mirrors menu bar on left) */
 .status-pane {
   position: fixed;
-  top: calc(var(--facet-bar-height) + 4px);
-  right: 16px;
+  top: var(--facet-bar-height);
+  right: 0;
+  width: 280px;
   background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  min-width: 280px;
-  max-width: 400px;
-  display: none;
-  z-index: var(--z-notifications);
+  border-left: 1px solid var(--facet-border, #e0e0e0);
+  border-bottom: 1px solid var(--facet-border, #e0e0e0);
+  border-radius: 0 0 0 12px;  /* Only bottom-left rounded */
+  /* Shadow only on left and bottom - offset down to avoid top bleed */
+  box-shadow: -4px 4px 8px -2px rgba(0, 0, 0, 0.1);
+  z-index: var(--z-bars);
+  overflow: hidden;  /* Clip content during animation */
+
+  /* Slide animation */
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.2s ease;
 }
 
 .status-pane.visible {
-  display: block;
+  max-height: 400px;
+  opacity: 1;
 }
+
+/* Facet-colored background tint */
+.status-pane::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--facet-bg, transparent);
+  border-radius: 0 0 0 12px;
+  pointer-events: none;
+  z-index: -1;
+}
+
 
 .status-pane-content {
   padding: 16px;
+  max-height: 380px;
+  overflow-y: auto;
 }
 
 .status-pane-content h3 {
