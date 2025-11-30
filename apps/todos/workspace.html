@@ -938,6 +938,15 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.textContent = '✅';
         btn.classList.remove('generating');
         btn.classList.add('completed');
+
+        // Reload to show new todos if still viewing the same day/facet
+        const agentDay = btn.dataset.day;
+        const agentFacet = btn.dataset.facet;
+        const viewingTargetDay = (agentDay === currentDay);
+        const viewingTargetFacet = (window.selectedFacet === null || window.selectedFacet === agentFacet);
+        if (viewingTargetDay && viewingTargetFacet) {
+          window.location.reload();
+        }
       } else if (msg.event === 'error') {
         // Agent failed
         btn.textContent = '✨';
