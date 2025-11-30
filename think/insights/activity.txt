@@ -44,6 +44,7 @@ Write free-form markdown in whatever style best captures the segment. This could
 - Bulleted lists of parallel activities
 - Structured sections if multiple distinct focuses exist
 - Brief notes if the segment is straightforward
+- Separate and group things by facet where possible
 
 Adapt your format to the content. What matters is capturing the synthesis clearly and making the segment discoverable.
 

@@ -67,7 +67,9 @@ def format_date_short(date_str: str) -> str:
         else:
             short = date_obj.strftime("%a %b %-d")
             # Add year suffix if >6 months ago AND different year
-            months_ago = (today.year - date_obj.year) * 12 + (today.month - date_obj.month)
+            months_ago = (today.year - date_obj.year) * 12 + (
+                today.month - date_obj.month
+            )
             if months_ago > 6 and date_obj.year != today.year:
                 short += date_obj.strftime(" '%y")
             return short

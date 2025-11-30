@@ -970,7 +970,9 @@ def _run_segment_dream(day: str, segment: str) -> None:
     from think.runner import run_task
 
     logging.info(f"Starting segment dream: {day}/{segment}")
-    success, exit_code = run_task(["think-dream", "-v", "--day", day, "--segment", segment])
+    success, exit_code = run_task(
+        ["think-dream", "-v", "--day", day, "--segment", segment]
+    )
 
     if success:
         logging.info(f"Segment dream completed: {day}/{segment}")
