@@ -21,11 +21,14 @@ chat_bp = Blueprint(
 )
 
 
-def get_chat_background_data() -> dict:
-    """Load chat data for background template (submenu, badges)."""
-    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+def _load_all_chats() -> tuple[list[dict], int]:
+    """Load and normalize all chat records.
 
-    all_chats = []
+    Returns:
+        Tuple of (chats list, unread count). Each chat dict has chat_id normalized.
+    """
+    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    chats = []
     unread_count = 0
 
     if chats_dir.exists():
@@ -35,9 +38,16 @@ def get_chat_background_data() -> dict:
                 # Normalize: ensure chat_id is available (handles legacy records)
                 if "chat_id" not in chat_data:
                     chat_data["chat_id"] = chat_data.get("agent_id", chat_file.stem)
-                all_chats.append(chat_data)
+                chats.append(chat_data)
                 if chat_data.get("unread"):
                     unread_count += 1
+
+    return chats, unread_count
+
+
+def get_chat_background_data() -> dict:
+    """Load chat data for background template (submenu, badges)."""
+    all_chats, unread_count = _load_all_chats()
 
     # Sort: unread first, then by timestamp desc
     all_chats.sort(key=lambda c: (not c.get("unread", False), -c.get("ts", 0)))
@@ -175,21 +185,7 @@ def send_message() -> Any:
 @chat_bp.route("/api/chats")
 def list_chats() -> Any:
     """Return all saved chat metadata, sorted by timestamp descending."""
-    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
-
-    chats = []
-    unread_count = 0
-
-    if chats_dir.exists():
-        for chat_file in chats_dir.glob("*.json"):
-            chat_data = load_json(chat_file)
-            if chat_data:
-                # Normalize: ensure chat_id is available (handles legacy records)
-                if "chat_id" not in chat_data:
-                    chat_data["chat_id"] = chat_data.get("agent_id", chat_file.stem)
-                chats.append(chat_data)
-                if chat_data.get("unread", False):
-                    unread_count += 1
+    chats, unread_count = _load_all_chats()
 
     # Sort by timestamp descending (most recent first)
     chats.sort(key=lambda c: c.get("ts", 0), reverse=True)
@@ -244,13 +240,6 @@ def chat_events(chat_id: str) -> Any:
         thread=thread,
         is_complete=is_complete,
     )
-
-
-@chat_bp.route("/api/clear", methods=["POST"])
-def clear_history() -> Any:
-    """No-op since we use one-shot pattern with no persistent state."""
-
-    return jsonify(ok=True)
 
 
 @chat_bp.route("/api/chat/<chat_id>")

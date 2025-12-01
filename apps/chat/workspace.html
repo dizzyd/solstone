@@ -188,15 +188,6 @@
 .activity-indicator span:nth-child(1) { animation-delay: -0.32s; }
 .activity-indicator span:nth-child(2) { animation-delay: -0.16s; }
 
-/* Completion message for finished chats */
-.completion-message {
-  text-align: center;
-  padding: 1em;
-  color: #888;
-  font-size: 0.85em;
-  font-style: italic;
-}
-
 /* Recent chats panel */
 .recent-chats-panel {
   display: flex;
@@ -286,7 +277,6 @@ a.recent-chat-item {
 <script src="{{ vendor_lib('marked') }}"></script>
 <script>
 const sendUrl = '{{ url_for('app:chat.send_message') }}';
-const clearUrl = '{{ url_for('app:chat.clear_history') }}';
 const chatsUrl = '{{ url_for('app:chat.list_chats') }}';
 const messagesDiv = document.getElementById('messages');
 const searchBase = '{{ url_for('app:search.index') }}';
@@ -396,15 +386,6 @@ function renderRecentChats() {
   }
 
   return panel;
-}
-
-// Show recent chats panel
-function showRecentChats() {
-  const existing = document.getElementById('recentChatsPanel');
-  if (existing) existing.remove();
-
-  const panel = renderRecentChats();
-  messagesDiv.appendChild(panel);
 }
 
 // Hide recent chats panel
@@ -761,31 +742,31 @@ async function markChatRead(chatId) {
 }
 
 /**
- * Show recent chats view with proper state reset.
+ * Reset to list view state (no active chat).
  */
-function showRecentChatsView() {
-  // Reset state
+function resetToListView() {
   currentChatId = null;
   currentThread = [];
   isComplete = false;
   clearMessages();
-
-  // Hide star button (no chat selected)
   updateStarButton(null);
 
-  // Clear continue chat and reset input
   if (input) {
     delete input.dataset.continueChat;
     input.disabled = false;
     input.placeholder = 'Send a message...';
   }
 
-  // Notify background service
   if (window.AppServices?.services?.chat) {
     window.AppServices.services.chat.setActiveAgent(null);
   }
+}
 
-  // Render recent chats panel
+/**
+ * Show recent chats view with proper state reset.
+ */
+function showRecentChatsView() {
+  resetToListView();
   const panel = renderRecentChats();
   messagesDiv.appendChild(panel);
 }
@@ -794,26 +775,7 @@ function showRecentChatsView() {
  * Show saved/bookmarked chats view.
  */
 async function showSavedChatsView() {
-  // Reset state
-  currentChatId = null;
-  currentThread = [];
-  isComplete = false;
-  clearMessages();
-
-  // Hide star button (no chat selected)
-  updateStarButton(null);
-
-  // Clear continue chat and reset input
-  if (input) {
-    delete input.dataset.continueChat;
-    input.disabled = false;
-    input.placeholder = 'Send a message...';
-  }
-
-  // Notify background service
-  if (window.AppServices?.services?.chat) {
-    window.AppServices.services.chat.setActiveAgent(null);
-  }
+  resetToListView();
 
   // Fetch bookmarks from API
   let bookmarks = [];
@@ -1131,7 +1093,7 @@ function reuseMessage(messageDiv) {
   const text = messageMarkdown.get(messageDiv);
   if(!text) return;
 
-  // Clear the current chat
+  // Clear the current chat and reset to new chat state
   messagesDiv.innerHTML='';
   Object.keys(toolPlacards).forEach(key => delete toolPlacards[key]);
   messagesDiv.appendChild(activityIndicator);
@@ -1142,8 +1104,8 @@ function reuseMessage(messageDiv) {
   forceHideActivityIndicator();
   resetEventTracking();
 
-  // Clear backend history
-  fetch(clearUrl, {method:'POST'}).catch(err => console.error('Failed to clear history:', err));
+  // Clear URL hash to match state
+  location.hash = '';
 
   // Enable the form and pre-fill
   if(input) {
@@ -1194,10 +1156,11 @@ function setupFormHandlers() {
     if (r.ok) {
       const d = await r.json();
       if (continueChatId) {
-        // Continuation: reload same chat to get new agent's events
-        // Can't use navigateTo() - hash is already set, won't trigger hashchange
-        // Directly call loadChat to fetch the updated thread
-        loadChat(continueChatId);
+        // Continuation: add new agent to thread and keep listening
+        // Don't reload - that clears UI and causes race conditions with WebSocket events
+        currentThread.push(d.agent_id);
+        isComplete = false;
+        showActivityIndicator();
       } else {
         // New chat: navigate to it
         navigateTo(d.chat_id);
