@@ -11,6 +11,7 @@ window.MonthPicker = (function() {
   let app = null;               // Current app name
   let availableDays = new Set();
   let isVisible = false;
+  let allowFutureDates = false; // Whether future dates without data are clickable
 
   // External elements (set during init)
   let labelEl = null;
@@ -30,6 +31,10 @@ window.MonthPicker = (function() {
     return now.getFullYear() +
       String(now.getMonth() + 1).padStart(2, '0') +
       String(now.getDate()).padStart(2, '0');
+  }
+
+  function isFutureDay(dateStr) {
+    return dateStr > TODAY;
   }
 
   function parseYM(ym) {
@@ -147,11 +152,19 @@ window.MonthPicker = (function() {
       const dateStr = currentMonth + String(d).padStart(2, '0');
       const count = data[dateStr] || 0;
       const exists = availableDays.has(dateStr);
+      const isFuture = isFutureDay(dateStr);
 
       const classes = ['mp-day'];
       if (dateStr === TODAY) classes.push('mp-today');
       if (dateStr === selectedDay) classes.push('mp-selected');
-      if (count === 0 || !exists) classes.push('mp-empty');
+
+      // Future days without data: clickable if allowFutureDates, styled differently
+      // Historical days without data: disabled (mp-empty)
+      if (isFuture && !exists && allowFutureDates) {
+        classes.push('mp-future');
+      } else if (count === 0 || !exists) {
+        classes.push('mp-empty');
+      }
 
       const rawIntensity = maxCount > 0 ? count / maxCount : 0;
       const intensity = count > 0 ? 0.2 + (rawIntensity * 0.8) : 0;
@@ -230,6 +243,7 @@ window.MonthPicker = (function() {
     app = options.app;
     selectedDay = options.currentDay;
     currentMonth = selectedDay ? selectedDay.slice(0, 6) : CURRENT_MONTH;
+    allowFutureDates = options.allowFutureDates || false;
 
     container = document.querySelector(options.container || '.month-picker');
     labelEl = document.getElementById('date-nav-label');

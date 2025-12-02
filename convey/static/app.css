@@ -406,7 +406,7 @@ body:has(.status-pane.visible) .facet-bar::after {
   background: color-mix(in srgb, var(--facet-color) calc(var(--intensity, 0) * 30%), transparent);
 }
 
-.mp-day:hover:not(.mp-other):not(.mp-empty) {
+.mp-day:hover:not(.mp-other):not(.mp-empty):not(.mp-future) {
   background: color-mix(in srgb, var(--facet-color) 40%, transparent);
 }
 
@@ -417,6 +417,15 @@ body:has(.status-pane.visible) .facet-bar::after {
     color-mix(in srgb, var(--facet-color) calc(var(--intensity, 0) * 30%), transparent);
   color: #999;
   cursor: default;
+}
+
+/* Future days without data - clickable but muted appearance */
+.mp-day.mp-future {
+  color: #999;
+}
+
+.mp-day.mp-future:hover {
+  background: color-mix(in srgb, var(--facet-color) 20%, transparent);
 }
 
 /* Other month days (leading/trailing) - same striped pattern */

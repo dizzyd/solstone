@@ -104,7 +104,8 @@
   MonthPicker.init({
     app: app,
     currentDay: currentDay,
-    container: '.month-picker'
+    container: '.month-picker',
+    allowFutureDates: {{ app_registry.apps[app].allow_future_dates|tojson }}
   });
 
   // Click label to toggle month picker

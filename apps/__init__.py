@@ -65,6 +65,9 @@ class App:
     # Date navigation (renders date nav below facet bar)
     date_nav: bool = False
 
+    # Allow clicking future dates in month picker (for todos)
+    allow_future_dates: bool = False
+
     def facets_enabled(self) -> bool:
         """Check if facets are enabled for this app."""
         if isinstance(self.facets_config, bool):
@@ -175,6 +178,9 @@ class AppRegistry:
         # Date navigation
         date_nav = metadata.get("date_nav", False)
 
+        # Allow future dates in month picker
+        allow_future_dates = metadata.get("allow_future_dates", False)
+
         # Import routes module and get blueprint (optional)
         blueprint = None
         routes_module = None
@@ -244,6 +250,7 @@ class AppRegistry:
             background_template=background_template,
             facets_config=facets_config,
             date_nav=date_nav,
+            allow_future_dates=allow_future_dates,
         )
 
     def _load_metadata(self, app_path: Path) -> dict[str, Any]:
