@@ -793,6 +793,296 @@ class CortexService:
             }
 
 
+def format_agent(
+    entries: list[dict],
+    context: dict | None = None,
+) -> tuple[list[dict], dict]:
+    """Format agent JSONL entries to markdown chunks.
+
+    This is the formatter function used by the formatters registry.
+
+    Args:
+        entries: Raw JSONL entries (agent events)
+        context: Optional context dict
+
+    Returns:
+        Tuple of (chunks, meta) where:
+            - chunks: List of {"timestamp": int, "markdown": str} dicts
+            - meta: Dict with optional "header" and "error" keys
+    """
+    from datetime import datetime
+    from typing import Any
+
+    ctx = context or {}
+    meta: dict[str, Any] = {}
+    chunks: list[dict[str, Any]] = []
+    skipped_count = 0
+
+    # Track tool_start events by call_id for pairing
+    pending_tools: dict[str, dict] = {}
+
+    # Extract request/start events for header
+    request_event: dict | None = None
+    start_event: dict | None = None
+    agent_id: str | None = None
+
+    def ts_to_time(ts: int) -> str:
+        """Convert millisecond timestamp to HH:MM:SS."""
+        return datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S")
+
+    def truncate_result(text: str, max_len: int = 500) -> str:
+        """Truncate text and note how many chars were truncated."""
+        if len(text) <= max_len:
+            return text
+        truncated = len(text) - max_len
+        return f"{text[:max_len]}... ({truncated} chars truncated)"
+
+    for entry in entries:
+        event_type = entry.get("event")
+        if not event_type:
+            skipped_count += 1
+            continue
+
+        ts = entry.get("ts", 0)
+
+        if event_type == "request":
+            request_event = entry
+            agent_id = entry.get("agent_id") or str(ts)
+            continue
+
+        if event_type == "start":
+            start_event = entry
+            if not agent_id:
+                agent_id = entry.get("agent_id") or str(ts)
+            continue
+
+        if event_type == "agent_updated":
+            agent_name = entry.get("agent")
+            if agent_name:
+                chunks.append({
+                    "timestamp": ts,
+                    "markdown": f"*Switched to agent: {agent_name}*\n",
+                })
+            continue
+
+        if event_type == "thinking":
+            content = entry.get("content", "")
+            if content:
+                lines = [
+                    f"### {ts_to_time(ts)} - Thinking\n",
+                    "",
+                ]
+                # Format as blockquote
+                for line in content.split("\n"):
+                    lines.append(f"> {line}")
+                lines.append("")
+                chunks.append({
+                    "timestamp": ts,
+                    "markdown": "\n".join(lines),
+                })
+            continue
+
+        if event_type == "tool_start":
+            call_id = entry.get("call_id")
+            if call_id:
+                pending_tools[call_id] = entry
+            else:
+                # No call_id - emit as standalone
+                tool_name = entry.get("tool", "unknown")
+                args = entry.get("args", {})
+                lines = [
+                    f"### {ts_to_time(ts)} - Tool: {tool_name}\n",
+                    "",
+                    "**Args:**",
+                    "```json",
+                    json.dumps(args, indent=2),
+                    "```",
+                    "",
+                    "*Tool call in progress...*",
+                    "",
+                ]
+                chunks.append({
+                    "timestamp": ts,
+                    "markdown": "\n".join(lines),
+                })
+            continue
+
+        if event_type == "tool_end":
+            call_id = entry.get("call_id")
+            result_str = entry.get("result", "")
+
+            # Try to find matching tool_start
+            start_entry = pending_tools.pop(call_id, None) if call_id else None
+
+            if start_entry:
+                # Paired tool call
+                tool_name = start_entry.get("tool", "unknown")
+                args = start_entry.get("args", {})
+                start_ts = start_entry.get("ts", ts)
+            else:
+                # Unpaired tool_end
+                tool_name = entry.get("tool", "unknown")
+                args = entry.get("args") or {}
+                start_ts = ts
+
+            lines = [
+                f"### {ts_to_time(start_ts)} - Tool: {tool_name}\n",
+                "",
+            ]
+
+            if args:
+                lines.extend([
+                    "**Args:**",
+                    "```json",
+                    json.dumps(args, indent=2),
+                    "```",
+                    "",
+                ])
+
+            if result_str:
+                truncated = truncate_result(result_str)
+                lines.extend([
+                    "**Result:**",
+                    "```",
+                    truncated,
+                    "```",
+                    "",
+                ])
+
+            chunks.append({
+                "timestamp": start_ts,
+                "markdown": "\n".join(lines),
+            })
+            continue
+
+        if event_type == "error":
+            error_msg = entry.get("error", "Unknown error")
+            trace = entry.get("trace", "")
+            lines = [
+                f"### {ts_to_time(ts)} - Error\n",
+                "",
+                f"> **Error:** {error_msg}",
+                "",
+            ]
+            if trace:
+                lines.extend([
+                    "**Trace:**",
+                    "```",
+                    trace[:1000] if len(trace) > 1000 else trace,
+                    "```",
+                    "",
+                ])
+            chunks.append({
+                "timestamp": ts,
+                "markdown": "\n".join(lines),
+            })
+            continue
+
+        if event_type == "info":
+            message = entry.get("message", "")
+            if message:
+                chunks.append({
+                    "timestamp": ts,
+                    "markdown": f"*{ts_to_time(ts)} - Info:* {message}\n",
+                })
+            continue
+
+        if event_type == "finish":
+            result = entry.get("result", "")
+            lines = [
+                f"### {ts_to_time(ts)} - Result\n",
+                "",
+                result,
+                "",
+            ]
+            chunks.append({
+                "timestamp": ts,
+                "markdown": "\n".join(lines),
+            })
+            continue
+
+        if event_type == "continue":
+            to_agent = entry.get("to", "unknown")
+            chunks.append({
+                "timestamp": ts,
+                "markdown": f"*Continued in agent: {to_agent}*\n",
+            })
+            continue
+
+        # Unknown event type - skip
+        skipped_count += 1
+
+    # Handle any unpaired tool_start events (agent crashed mid-tool)
+    for call_id, start_entry in pending_tools.items():
+        tool_name = start_entry.get("tool", "unknown")
+        args = start_entry.get("args", {})
+        start_ts = start_entry.get("ts", 0)
+        lines = [
+            f"### {ts_to_time(start_ts)} - Tool: {tool_name}\n",
+            "",
+        ]
+        if args:
+            lines.extend([
+                "**Args:**",
+                "```json",
+                json.dumps(args, indent=2),
+                "```",
+                "",
+            ])
+        lines.append("*Tool call did not complete*\n")
+        chunks.append({
+            "timestamp": start_ts,
+            "markdown": "\n".join(lines),
+        })
+
+    # Build header from request/start events
+    header_lines = []
+    if agent_id:
+        header_lines.append(f"# Agent Run: {agent_id}\n")
+    else:
+        header_lines.append("# Agent Run\n")
+
+    if request_event:
+        prompt = request_event.get("prompt", "")
+        if prompt:
+            # Truncate long prompts in header
+            if len(prompt) > 200:
+                prompt = prompt[:200] + "..."
+            header_lines.append(f"**Prompt:** {prompt}\n")
+
+        persona = request_event.get("persona", "default")
+        backend = request_event.get("backend", "")
+        model = start_event.get("model", "") if start_event else ""
+
+        meta_parts = [f"**Persona:** {persona}"]
+        if backend:
+            meta_parts.append(f"**Backend:** {backend}")
+        if model:
+            meta_parts.append(f"**Model:** {model}")
+        header_lines.append(" | ".join(meta_parts) + "\n")
+
+        # Continuation/handoff info
+        continue_from = request_event.get("continue_from")
+        handoff_from = request_event.get("handoff_from")
+        if continue_from:
+            header_lines.append(f"*Continued from:* {continue_from}\n")
+        if handoff_from:
+            header_lines.append(f"*Handoff from:* {handoff_from}\n")
+
+    if start_event:
+        start_ts = start_event.get("ts", 0)
+        if start_ts:
+            header_lines.append(f"**Started:** {ts_to_time(start_ts)}\n")
+
+    meta["header"] = "\n".join(header_lines)
+
+    # Report skipped entries
+    if skipped_count > 0:
+        meta["error"] = f"Skipped {skipped_count} entries missing 'event' field"
+
+    return chunks, meta
+
+
 def main() -> None:
     """CLI entry point for the Cortex service."""
     import argparse

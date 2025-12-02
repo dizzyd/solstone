@@ -32,7 +32,9 @@ from dotenv import load_dotenv
 # Registry mapping glob patterns to (module_path, function_name)
 # Patterns are matched against journal-relative paths
 # Order matters: first match wins, so place specific patterns before general ones
+# Note: agents/*_active.jsonl is excluded - only completed agents are formatted
 FORMATTERS: dict[str, tuple[str, str]] = {
+    "agents/*.jsonl": ("muse.cortex", "format_agent"),
     "*/screen.jsonl": ("observe.reduce", "format_screen"),
     "*/*_audio.jsonl": ("observe.hear", "format_audio"),
     "*/audio.jsonl": ("observe.hear", "format_audio"),
@@ -96,7 +98,7 @@ def format_file(
         ValueError: If no formatter found for file path
         FileNotFoundError: If file doesn't exist
     """
-    file_path = Path(file_path)
+    file_path = Path(file_path).resolve()
 
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
@@ -104,9 +106,10 @@ def format_file(
     # Get journal-relative path for pattern matching
     load_dotenv()
     journal = os.getenv("JOURNAL_PATH", "")
+    journal_path = Path(journal).resolve() if journal else None
 
-    if journal and str(file_path).startswith(journal):
-        rel_path = str(file_path.relative_to(journal))
+    if journal_path and file_path.is_relative_to(journal_path):
+        rel_path = str(file_path.relative_to(journal_path))
     else:
         # Fall back to just the filename parts for matching
         rel_path = str(file_path)
@@ -126,6 +129,8 @@ def format_file(
 
 def main() -> None:
     """CLI entry point for think-formatter."""
+    from think.utils import setup_cli
+
     parser = argparse.ArgumentParser(
         description="Convert JSONL files to formatted markdown"
     )
@@ -140,7 +145,7 @@ def main() -> None:
         type=str,
         help="JSON string of context to pass to formatter",
     )
-    args = parser.parse_args()
+    args = setup_cli(parser)
 
     try:
         context = json.loads(args.context) if args.context else None
