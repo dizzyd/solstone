@@ -7,7 +7,6 @@ from typing import Dict, List
 from think.utils import journal_log, setup_cli
 
 from .core import reset_index
-from .entities import scan_entities, search_entities
 from .events import scan_events, search_events
 from .insights import scan_insights, search_insights
 from .transcripts import scan_transcripts, search_transcripts
@@ -31,7 +30,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--index",
-        choices=["insights", "events", "transcripts", "entities"],
+        choices=["insights", "events", "transcripts"],
         help="Which index to operate on",
     )
     parser.add_argument(
@@ -42,12 +41,7 @@ def main() -> None:
     parser.add_argument(
         "--rescan-all",
         action="store_true",
-        help="Scan journal and update all indexes",
-    )
-    parser.add_argument(
-        "--rescan-facets",
-        action="store_true",
-        help="Scan facets/ directory and update entity index",
+        help="Scan journal and update all indexes (insights, events, transcripts)",
     )
     parser.add_argument(
         "--reset",
@@ -76,25 +70,23 @@ def main() -> None:
 
     args = setup_cli(parser)
 
-    # Require either --rescan, --rescan-all, --rescan-facets, --reset, or -q
+    # Require either --rescan, --rescan-all, --reset, or -q
     if (
         not args.rescan
         and not args.rescan_all
-        and not args.rescan_facets
         and not args.reset
         and args.query is None
     ):
         parser.print_help()
         return
 
-    # Validate --index is required unless using --rescan-all or --rescan-facets
+    # Validate --index is required unless using --rescan-all
     if (
         not args.rescan_all
-        and not args.rescan_facets
         and not args.index
         and (args.rescan or args.reset or args.query is not None)
     ):
-        parser.error("--index is required unless using --rescan-all or --rescan-facets")
+        parser.error("--index is required unless using --rescan-all")
 
     # Validate --segment requires --day
     if args.segment and not args.day:
@@ -109,7 +101,7 @@ def main() -> None:
 
     if args.rescan_all:
         # Rescan all indexes
-        indexes = ["insights", "events", "transcripts", "entities"]
+        indexes = ["insights", "events", "transcripts"]
         for index_name in indexes:
             if index_name == "transcripts":
                 changed = scan_transcripts(journal, verbose=args.verbose)
@@ -123,16 +115,6 @@ def main() -> None:
                 changed = scan_insights(journal, verbose=args.verbose)
                 if changed:
                     journal_log(f"indexer {index_name} rescan ok")
-            elif index_name == "entities":
-                changed = scan_entities(journal, verbose=args.verbose)
-                if changed:
-                    journal_log(f"indexer {index_name} rescan ok")
-
-    if args.rescan_facets:
-        # Rescan only facet-based indexes
-        changed = scan_entities(journal, verbose=args.verbose)
-        if changed:
-            journal_log("indexer entities rescan ok")
 
     if args.rescan:
         if args.index == "transcripts":
@@ -149,10 +131,6 @@ def main() -> None:
             changed = scan_insights(journal, verbose=args.verbose)
             if changed:
                 journal_log("indexer insights rescan ok")
-        elif args.index == "entities":
-            changed = scan_entities(journal, verbose=args.verbose)
-            if changed:
-                journal_log("indexer entities rescan ok")
 
     # Handle query argument
     if args.query is not None:
@@ -165,9 +143,6 @@ def main() -> None:
         elif args.index == "events":
             search_func = search_events
             query_kwargs = {}
-        elif args.index == "entities":
-            search_func = search_entities
-            query_kwargs = {"day": args.day}
         else:
             search_func = search_insights
             query_kwargs = {}

@@ -33,7 +33,6 @@ DB_NAMES = {
     "insights": "insights.sqlite",
     "events": "events.sqlite",
     "transcripts": "transcripts.sqlite",
-    "entities": "entities.sqlite",
 }
 
 # SQL statements to create required tables per index
@@ -75,19 +74,6 @@ SCHEMAS = {
         """
         CREATE VIRTUAL TABLE IF NOT EXISTS transcripts_text USING fts5(
             content, path UNINDEXED, day UNINDEXED, time UNINDEXED, type UNINDEXED, source UNINDEXED
-        )
-        """,
-    ],
-    "entities": [
-        "CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, mtime INTEGER)",
-        """
-        CREATE VIRTUAL TABLE IF NOT EXISTS entities USING fts5(
-            name,
-            description,
-            facet UNINDEXED,
-            day UNINDEXED,
-            type UNINDEXED,
-            attached UNINDEXED
         )
         """,
     ],

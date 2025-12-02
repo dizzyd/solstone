@@ -11,7 +11,6 @@ from flask import Blueprint, jsonify, render_template, request
 from convey import state
 from convey.utils import format_date
 from think.indexer import (
-    search_entities,
     search_events,
     search_insights,
     search_transcripts,
@@ -147,66 +146,6 @@ def search_transcripts_api() -> Any:
                 "preview": preview,
             }
         )
-
-    return jsonify({"total": total, "results": results})
-
-
-@search_bp.route("/api/entities")
-def search_entities_api() -> Any:
-    query = request.args.get("q", "").strip()
-    # Allow empty query to return all entities
-
-    try:
-        limit = int(request.args.get("limit", 20))
-    except ValueError:
-        limit = 20
-    try:
-        offset = int(request.args.get("offset", 0))
-    except ValueError:
-        offset = 0
-
-    # Extract parameters specific to entities search
-    facet = request.args.get("facet")
-    day = request.args.get("day")
-    etype = request.args.get("type")
-    name = request.args.get("name")
-    attached_param = request.args.get("attached")
-    attached = (
-        None
-        if attached_param is None
-        else (attached_param.lower() in ["true", "1", "yes"])
-    )
-    order = request.args.get("order", "rank")
-
-    total, rows = search_entities(
-        query,
-        limit,
-        offset,
-        facet=facet,
-        day=day,
-        etype=etype,
-        name=name,
-        attached=attached,
-        order=order,
-    )
-    results = []
-    for r in rows:
-        meta = r.get("metadata", {})
-        text = r.get("text", "")
-
-        result = {
-            "id": r.get("id", ""),
-            "text": text,
-            "name": meta.get("name", ""),
-            "type": meta.get("type", ""),
-            "facet": meta.get("facet", ""),
-            "day": meta.get("day"),
-            "date": format_date(meta.get("day", "")) if meta.get("day") else "",
-            "attached": meta.get("attached", False),
-            "score": r.get("score", 0.0),
-        }
-
-        results.append(result)
 
     return jsonify({"total": total, "results": results})
 

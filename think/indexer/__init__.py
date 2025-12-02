@@ -1,4 +1,4 @@
-"""Indexer package for insights, events, transcripts, and entities.
+"""Indexer package for insights, events, and transcripts.
 
 This module provides backward compatibility by re-exporting all the main
 functions from the sub-modules.
@@ -16,14 +16,6 @@ from .core import (
     get_index,
     reset_index,
     sanitize_fts_query,
-)
-
-# Import from entities
-from .entities import (
-    find_entity_files,
-    parse_entities,
-    scan_entities,
-    search_entities,
 )
 
 # Import from events
@@ -73,11 +65,6 @@ __all__ = [
     "find_transcript_files",
     "scan_transcripts",
     "search_transcripts",
-    # Entities
-    "find_entity_files",
-    "parse_entities",
-    "scan_entities",
-    "search_entities",
     # CLI
     "main",
 ]

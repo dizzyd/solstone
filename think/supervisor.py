@@ -76,7 +76,6 @@ _scheduled_state = {
     "pending_groups": [],  # List of (priority, [(persona_id, config, yesterday)])
     "active_files": [],  # List of Path objects for current priority group
     "start_time": 0,  # When current group started
-    "rescan_pending": False,  # Whether facet rescan needs to run
 }
 
 # State for task execution
@@ -306,13 +305,6 @@ async def run_dream() -> bool:
     return await run_subprocess_task("dream", ["think-dream", "-v"])
 
 
-async def run_facet_rescan() -> bool:
-    """Run ``think-indexer --rescan-facets`` while mirroring output to a dedicated log."""
-    return await run_subprocess_task(
-        "facet_rescan", ["think-indexer", "-v", "--rescan-facets"]
-    )
-
-
 def spawn_scheduled_agents() -> None:
     """Prepare scheduled agents grouped by priority for sequential execution."""
     try:
@@ -338,7 +330,6 @@ def spawn_scheduled_agents() -> None:
         ]
         _scheduled_state["active_files"] = []
         _scheduled_state["start_time"] = 0
-        _scheduled_state["rescan_pending"] = True
 
         total_agents = sum(
             len(agents_list) for _, agents_list in _scheduled_state["pending_groups"]
@@ -361,14 +352,6 @@ async def check_scheduled_agents() -> None:
 
     # Nothing to do if no pending groups and no active agents
     if not state["pending_groups"] and not state["active_files"]:
-        # Check if facet rescan is pending
-        if state["rescan_pending"]:
-            logging.info("All agent groups completed, running facet rescan...")
-            state["rescan_pending"] = False
-            if await run_facet_rescan():
-                logging.info("Facet rescan completed successfully")
-            else:
-                logging.warning("Facet rescan failed or exited with error")
         return
 
     # Check if current priority group is done
@@ -401,7 +384,6 @@ async def check_scheduled_agents() -> None:
     if shutdown_requested:
         state["pending_groups"] = []
         state["active_files"] = []
-        state["rescan_pending"] = False
         return
 
     # Spawn next priority group

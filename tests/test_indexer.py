@@ -73,17 +73,6 @@ def test_parse_entity_line():
     pass
 
 
-def test_parse_entities(tmp_path):
-    indexer = importlib.import_module("think.indexer")
-    jsonl = tmp_path / "entities.jsonl"
-    jsonl.write_text('{"type": "Person", "name": "Jane", "description": "info"}\n')
-    result = indexer.parse_entities(str(tmp_path))
-    assert len(result) == 1
-    assert result[0]["type"] == "Person"
-    assert result[0]["name"] == "Jane"
-    assert result[0]["description"] == "info"
-
-
 def test_occurrence_index(tmp_path):
     mod = importlib.import_module("think.indexer")
     journal = tmp_path
