@@ -6,6 +6,19 @@ import sqlite3
 import time
 from typing import Callable, Dict, List, Union
 
+
+def sanitize_fts_query(query: str) -> str:
+    """Sanitize query for FTS5: keep alphanumeric, spaces, quotes, apostrophes, and *.
+
+    This allows FTS5 operators (OR, AND, NOT), quoted phrases, and prefix
+    matching while preventing syntax errors from special characters.
+    """
+    result = re.sub(r"[^a-zA-Z0-9\s\"'*]", " ", query)
+    # Remove all quotes if unbalanced
+    if result.count('"') % 2:
+        result = result.replace('"', "")
+    return result
+
 from think.utils import day_dirs, day_path
 
 # Common regex patterns

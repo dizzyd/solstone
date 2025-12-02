@@ -8,11 +8,9 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List
 
-import sqlite_utils
-
 from think.utils import day_dirs
 
-from .core import _scan_files, get_index
+from .core import _scan_files, get_index, sanitize_fts_query
 
 # Transcript file pattern matchers
 AUDIO_RE = re.compile(r"^(?P<time>\d{6}).*_audio\.jsonl$")
@@ -285,16 +283,17 @@ def search_transcripts(
             days = all_days
     for d in days:
         conn, _ = get_index(index="transcripts", day=d)
-        db = sqlite_utils.Database(conn)
-        quoted = db.quote(query)
+        sanitized = sanitize_fts_query(query)
 
         # Build WHERE clause with optional source filter
-        where_clause = f"transcripts_text MATCH {quoted}"
+        where_clause = f"transcripts_text MATCH '{sanitized}'"
+        params: List[str] = []
         if source:
-            where_clause += f" AND source = {db.quote(source)}"
+            where_clause += " AND source = ?"
+            params.append(source)
 
         total += conn.execute(
-            f"SELECT count(*) FROM transcripts_text WHERE {where_clause}"
+            f"SELECT count(*) FROM transcripts_text WHERE {where_clause}", params
         ).fetchone()[0]
 
         order_clause = "time" if day else "rank"
@@ -302,7 +301,8 @@ def search_transcripts(
             f"""
             SELECT content, path, day, time, type, source, bm25(transcripts_text) as rank
             FROM transcripts_text WHERE {where_clause} ORDER BY {order_clause}
-            """
+            """,
+            params,
         )
 
         for (

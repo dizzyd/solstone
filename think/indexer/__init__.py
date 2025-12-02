@@ -15,6 +15,7 @@ from .core import (
     SCHEMAS,
     get_index,
     reset_index,
+    sanitize_fts_query,
 )
 
 # Import from entities
@@ -57,6 +58,7 @@ __all__ = [
     "SCHEMAS",
     "get_index",
     "reset_index",
+    "sanitize_fts_query",
     # Insights
     "find_insight_files",
     "scan_insights",

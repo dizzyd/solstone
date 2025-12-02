@@ -6,12 +6,10 @@ import re
 import sqlite3
 from typing import Dict, List, Tuple
 
-import sqlite_utils
-
 from think.utils import day_dirs, get_insight_topic, get_insights
 
 from .chunker import chunk_markdown, render_chunk
-from .core import _scan_files, get_index
+from .core import _scan_files, get_index, sanitize_fts_query
 
 # Regex to match segment folder names (HHMMSS_LEN format)
 SEGMENT_RE = re.compile(r"^\d{6}_\d+$")
@@ -193,10 +191,9 @@ def search_insights(
     """Search the insight sentence index and return total count and results."""
 
     conn, _ = get_index(index="insights")
-    db = sqlite_utils.Database(conn)
-    quoted = db.quote(query)
+    sanitized = sanitize_fts_query(query)
 
-    where_clause = f"insights_text MATCH {quoted}"
+    where_clause = f"insights_text MATCH '{sanitized}'"
     params: List[str] = []
 
     if day:

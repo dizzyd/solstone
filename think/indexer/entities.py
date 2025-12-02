@@ -5,9 +5,7 @@ import os
 import sqlite3
 from typing import Any, Dict, List
 
-import sqlite_utils
-
-from .core import _scan_files, get_index
+from .core import _scan_files, get_index, sanitize_fts_query
 
 
 def parse_entities(path: str) -> list[dict[str, Any]]:
@@ -208,25 +206,24 @@ def search_entities(
         Total count and list of result dictionaries
     """
     conn, _ = get_index(index="entities")
-    db = sqlite_utils.Database(conn)
 
     # Build FTS query combining query and name
     fts_parts = []
     if query:
-        fts_parts.append(query)
+        fts_parts.append(sanitize_fts_query(query))
     if name:
-        # FTS5 column-specific search: escape double quotes and wrap in double quotes
-        escaped_name = name.replace('"', '""')
+        # FTS5 column-specific search: sanitize and use column prefix
+        # Keep only alphanumeric, spaces, apostrophes for name search
+        sanitized_name = sanitize_fts_query(name).replace('"', "")
         # Add wildcard for prefix matching to support partial name searches
-        fts_parts.append(f'name:"{escaped_name}"*')
+        fts_parts.append(f'name:"{sanitized_name}"*')
 
     where_clause = "1"
     params: List[Any] = []
 
     if fts_parts:
-        # Use db.quote to properly escape the entire FTS5 query
-        quoted = db.quote(" AND ".join(fts_parts))
-        where_clause = f"entities MATCH {quoted}"
+        fts_query = " AND ".join(fts_parts)
+        where_clause = f"entities MATCH '{fts_query}'"
 
     if facet:
         where_clause += " AND facet=?"

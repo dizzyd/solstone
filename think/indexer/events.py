@@ -6,7 +6,7 @@ import os
 import sqlite3
 from typing import Any, Dict, List
 
-from .core import _scan_files, get_index
+from .core import _scan_files, get_index, sanitize_fts_query
 from .insights import find_insight_files
 
 
@@ -88,15 +88,8 @@ def search_events(
 
     # Only use FTS MATCH if query is non-empty
     if query:
-        # For FTS5, we need to properly escape the query
-        # If query contains special FTS5 characters, wrap in double quotes
-        # Special chars include: : . ( ) " * @
-        if any(c in query for c in ':.()"*@'):
-            fts_query = f'"{query}"'
-        else:
-            fts_query = query
-        where_clause = "events_text MATCH ?"
-        params.append(fts_query)
+        sanitized = sanitize_fts_query(query)
+        where_clause = f"events_text MATCH '{sanitized}'"
     else:
         # No search query, just filter by metadata
         where_clause = "1=1"
