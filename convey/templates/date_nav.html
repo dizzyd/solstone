@@ -37,13 +37,20 @@
     window.location.href = `${baseUrl}${day}`;
   }
 
-  // Register per-app data providers for month picker
-  if (app === 'calendar') {
-    MonthPicker.registerDaysEndpoint('/app/calendar/api/days');
-    MonthPicker.registerDataProvider('calendar', async (month, facet) => {
-      const resp = await fetch(`/app/calendar/api/stats/${month}`);
-      if (!resp.ok) return {};
-      const raw = await resp.json();
+  // Auto-register provider for current app using convention:
+  // Apps with date_nav:true must provide /app/{app}/api/stats/{month}
+  // Response format is auto-detected:
+  //   - Facet-aware: {day: {facet: count}} - filtered by selected facet
+  //   - Simple: {day: count} - returned as-is
+  MonthPicker.registerDataProvider(app, async (month, facet) => {
+    const resp = await fetch(`${baseUrl}api/stats/${month}`);
+    if (!resp.ok) return {};
+    const raw = await resp.json();
+
+    // Auto-detect format: if first value is an object, it's facet-aware
+    const values = Object.values(raw);
+    if (values.length > 0 && typeof values[0] === 'object' && values[0] !== null) {
+      // Facet-aware: {day: {facet: count}}
       const result = {};
       for (const [day, facetCounts] of Object.entries(raw)) {
         result[day] = facet
@@ -51,54 +58,9 @@
           : Object.values(facetCounts).reduce((a, b) => a + b, 0);
       }
       return result;
-    });
-  }
-
-  if (app === 'todos') {
-    MonthPicker.registerDaysEndpoint('/app/todos/api/days');
-    MonthPicker.registerDataProvider('todos', async (month, facet) => {
-      const resp = await fetch(`/app/todos/api/stats/${month}`);
-      if (!resp.ok) return {};
-      const raw = await resp.json();
-      const result = {};
-      for (const [day, facetCounts] of Object.entries(raw)) {
-        result[day] = facet
-          ? (facetCounts[facet] || 0)
-          : Object.values(facetCounts).reduce((a, b) => a + b, 0);
-      }
-      return result;
-    });
-  }
-
-  if (app === 'tokens') {
-    MonthPicker.registerDaysEndpoint('/app/tokens/api/days');
-    MonthPicker.registerDataProvider('tokens', async (month, facet) => {
-      // Tokens is not facet-aware, returns {day: cost}
-      const resp = await fetch(`/app/tokens/api/stats/${month}`);
-      if (!resp.ok) return {};
-      return await resp.json();
-    });
-  }
-
-  if (app === 'insights') {
-    MonthPicker.registerDaysEndpoint('/app/insights/api/days');
-    MonthPicker.registerDataProvider('insights', async (month, facet) => {
-      // Insights is not facet-aware, returns {day: insight_count}
-      const resp = await fetch(`/app/insights/api/stats/${month}`);
-      if (!resp.ok) return {};
-      return await resp.json();
-    });
-  }
-
-  if (app === 'transcripts') {
-    MonthPicker.registerDaysEndpoint('/app/transcripts/api/days');
-    MonthPicker.registerDataProvider('transcripts', async (month, facet) => {
-      // Transcripts is not facet-aware, returns {day: range_count}
-      const resp = await fetch(`/app/transcripts/api/stats/${month}`);
-      if (!resp.ok) return {};
-      return await resp.json();
-    });
-  }
+    }
+    return raw;
+  });
 
   // Initialize month picker
   MonthPicker.init({

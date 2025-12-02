@@ -78,29 +78,6 @@ def badge_count():
     return jsonify({"count": total})
 
 
-@todos_bp.route("/api/days")
-def api_days():
-    """Return list of days that have todo files across all facets."""
-    days_set = set()
-
-    try:
-        facet_map = get_facets()
-    except Exception:
-        facet_map = {}
-
-    journal_root = Path(state.journal_root)
-    for facet_name in facet_map.keys():
-        todos_dir = journal_root / "facets" / facet_name / "todos"
-        if todos_dir.exists():
-            for todo_file in todos_dir.glob("*.md"):
-                # Extract day from filename (YYYYMMDD.md)
-                day = todo_file.stem
-                if DATE_RE.fullmatch(day):
-                    days_set.add(day)
-
-    return jsonify(sorted(days_set))
-
-
 @todos_bp.route("/api/stats/<month>")
 def api_stats(month: str):
     """Return todo counts per facet for a specific month.

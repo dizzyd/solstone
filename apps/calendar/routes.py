@@ -98,14 +98,6 @@ def calendar_day_occurrences(day: str) -> Any:
     return jsonify(occurrences)
 
 
-@calendar_bp.route("/api/days")
-def calendar_days() -> Any:
-    """Return list of available day folders."""
-
-    days = sorted(day_dirs().keys())
-    return jsonify(days)
-
-
 @calendar_bp.route("/api/stats/<month>")
 def calendar_stats(month: str) -> Any:
     """Return event counts per facet for a specific month.

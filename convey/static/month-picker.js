@@ -1,6 +1,10 @@
 /**
  * Month Picker Widget
  * Dropdown calendar for date navigation with per-app heat map support.
+ *
+ * Day clickability is derived from stats data - if a day has data in the
+ * stats response (count > 0), it's clickable. Future dates can be clickable
+ * via allowFutureDates option even without data.
  */
 window.MonthPicker = (function() {
   // State
@@ -9,7 +13,6 @@ window.MonthPicker = (function() {
   let selectedDay = null;       // YYYYMMDD from date-nav
   let dayLabel = null;          // Original day label text
   let app = null;               // Current app name
-  let availableDays = new Set();
   let isVisible = false;
   let allowFutureDates = false; // Whether future dates without data are clickable
 
@@ -19,7 +22,6 @@ window.MonthPicker = (function() {
   // Cache: {YYYYMM: {data, facet}}
   const cache = {};
   const providers = {};
-  let daysEndpoint = null;  // Per-app endpoint for available days
 
   // Constants
   const TODAY = getToday();
@@ -73,19 +75,6 @@ window.MonthPicker = (function() {
   }
 
   // Data fetching
-  async function fetchAvailableDays() {
-    if (!daysEndpoint) return;
-    try {
-      const resp = await fetch(daysEndpoint);
-      if (resp.ok) {
-        const days = await resp.json();
-        availableDays = new Set(days || []);
-      }
-    } catch (e) {
-      console.warn('[MonthPicker] Failed to fetch available days:', e);
-    }
-  }
-
   async function fetchMonthData(ym) {
     const provider = providers[app];
     if (!provider) return null;
@@ -151,7 +140,7 @@ window.MonthPicker = (function() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = currentMonth + String(d).padStart(2, '0');
       const count = data[dateStr] || 0;
-      const exists = availableDays.has(dateStr);
+      const hasData = dateStr in data && count > 0;
       const isFuture = isFutureDay(dateStr);
 
       const classes = ['mp-day'];
@@ -160,9 +149,9 @@ window.MonthPicker = (function() {
 
       // Future days without data: clickable if allowFutureDates, styled differently
       // Historical days without data: disabled (mp-empty)
-      if (isFuture && !exists && allowFutureDates) {
+      if (isFuture && !hasData && allowFutureDates) {
         classes.push('mp-future');
-      } else if (count === 0 || !exists) {
+      } else if (!hasData) {
         classes.push('mp-empty');
       }
 
@@ -262,10 +251,8 @@ window.MonthPicker = (function() {
     document.addEventListener('click', handleClickOutside);
     window.addEventListener('facet.switch', handleFacetSwitch);
 
-    // Prefetch data
-    fetchAvailableDays().then(() => {
-      getMonthData(currentMonth);
-    });
+    // Prefetch current month data
+    getMonthData(currentMonth);
   }
 
   function show() {
@@ -296,10 +283,6 @@ window.MonthPicker = (function() {
     providers[appName] = fn;
   }
 
-  function registerDaysEndpoint(endpoint) {
-    daysEndpoint = endpoint;
-  }
-
   return {
     init,
     show,
@@ -307,7 +290,6 @@ window.MonthPicker = (function() {
     toggle,
     isOpen: () => isVisible,
     navigateMonth,
-    registerDataProvider,
-    registerDaysEndpoint
+    registerDataProvider
   };
 })();

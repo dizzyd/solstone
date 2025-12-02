@@ -379,21 +379,6 @@ def download_audio(day: str) -> Any:
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
 
-@transcripts_bp.route("/api/days")
-def api_days():
-    """Return list of days that have transcript data."""
-    from think.cluster import cluster_scan
-
-    days_with_transcripts = []
-
-    for day_name in day_dirs().keys():
-        audio_ranges, screen_ranges = cluster_scan(day_name)
-        if audio_ranges or screen_ranges:
-            days_with_transcripts.append(day_name)
-
-    return jsonify(sorted(days_with_transcripts))
-
-
 @transcripts_bp.route("/api/stats/<month>")
 def api_stats(month: str):
     """Return transcript range counts for each day in a specific month.

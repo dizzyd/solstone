@@ -106,22 +106,6 @@ def insights_day(day: str) -> str:
     )
 
 
-@insights_bp.route("/api/days")
-def api_days():
-    """Return list of days that have insight files."""
-    days_with_insights = []
-
-    for day_name, day_dir in day_dirs().items():
-        insights_dir = os.path.join(day_dir, "insights")
-        if os.path.isdir(insights_dir):
-            # Check if there are any .md files
-            md_files = [f for f in os.listdir(insights_dir) if f.endswith(".md")]
-            if md_files:
-                days_with_insights.append(day_name)
-
-    return jsonify(sorted(days_with_insights))
-
-
 @insights_bp.route("/api/stats/<month>")
 def api_stats(month: str):
     """Return insight counts for each day in a specific month.

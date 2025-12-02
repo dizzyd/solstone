@@ -324,24 +324,6 @@ def api_usage():
     return jsonify(data)
 
 
-@tokens_bp.route("/api/days")
-def api_days():
-    """API endpoint to get list of days with token data."""
-    tokens_dir = Path(state.journal_root) / "tokens"
-
-    if not tokens_dir.exists():
-        return jsonify([])
-
-    days = []
-    for log_file in tokens_dir.glob("*.jsonl"):
-        day = log_file.stem
-        if DATE_RE.fullmatch(day):
-            days.append(day)
-
-    days.sort()
-    return jsonify(days)
-
-
 @tokens_bp.route("/api/stats/<month>")
 def api_stats(month: str):
     """Return token cost for each day in a specific month.

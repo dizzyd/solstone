@@ -149,15 +149,6 @@ def api_summary(day: str):
     return jsonify(data)
 
 
-@home_bp.route("/api/days")
-def api_days():
-    """Return list of days with any journal data."""
-    from think.utils import day_dirs
-
-    days = sorted(day_dirs().keys())
-    return jsonify(days)
-
-
 @home_bp.route("/api/stats/<month>")
 def api_stats(month: str):
     """Return activity indicator for each day in a month.
