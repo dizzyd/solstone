@@ -458,31 +458,80 @@ def load_transcript(
         )
 
 
-def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) -> str:
-    """Format transcript metadata and entries as human-readable text.
+def format_audio(
+    entries: list[dict],
+    context: dict | None = None,
+) -> tuple[list[dict], dict]:
+    """Format audio transcript entries to markdown chunks.
 
-    Internal helper for load_transcript().
+    This is the formatter function used by the formatters registry.
+
+    Args:
+        entries: Raw JSONL entries (first line is metadata, rest are transcript entries)
+        context: Optional context with:
+            - file_path: Path to JSONL file (for extracting base timestamp)
+
+    Returns:
+        Tuple of (chunks, meta) where:
+            - chunks: List of {"timestamp": int, "markdown": str} dicts
+            - meta: Dict with optional "header" and "error" keys
     """
     import re
     from datetime import datetime
+    from pathlib import Path
+    from typing import Any
+
+    ctx = context or {}
+    file_path = ctx.get("file_path")
+
+    # Separate metadata from transcript entries
+    # Only first entry can be metadata (has no "start" key)
+    metadata = {}
+    transcript_entries = []
+    skipped_count = 0
+    for i, entry in enumerate(entries):
+        if i == 0 and "start" not in entry:
+            metadata = entry
+        elif "start" in entry:
+            transcript_entries.append(entry)
+        else:
+            skipped_count += 1
+
+    # Build meta dict with optional error
+    meta: dict[str, Any] = {}
+    if skipped_count > 0:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        error_msg = f"Skipped {skipped_count} entries missing 'start' field"
+        if file_path:
+            error_msg += f" in {file_path}"
+        meta["error"] = error_msg
+        logger.info(error_msg)
+
+    chunks: list[dict[str, Any]] = []
 
     # Parse day and time from path structure
-    # Expected format: YYYYMMDD/HHMMSS/audio.jsonl or YYYYMMDD/HHMMSS/imported_audio.jsonl
-    parts = path.parts
+    # Expected format: YYYYMMDD/HHMMSS_LEN/audio.jsonl
     day_str = None
     start_time = None
+    base_timestamp = 0
 
-    # Try to find YYYYMMDD and HHMMSS in path
-    for i, part in enumerate(reversed(parts)):
-        if re.match(r"^\d{8}$", part):
-            day_str = part
-            # Check if previous part (parent dir) is HHMMSS segment
-            if i > 0:
-                from think.utils import segment_parse
+    if file_path:
+        file_path = Path(file_path)
+        parts = file_path.parts
 
-                prev_part = list(reversed(parts))[i - 1]
-                start_time, _ = segment_parse(prev_part)
-            break
+        # Try to find YYYYMMDD and HHMMSS in path
+        for i, part in enumerate(reversed(parts)):
+            if re.match(r"^\d{8}$", part):
+                day_str = part
+                # Check if previous part (parent dir) is HHMMSS segment
+                if i > 0:
+                    from think.utils import segment_parse
+
+                    prev_part = list(reversed(parts))[i - 1]
+                    start_time, _ = segment_parse(prev_part)
+                break
 
     # Build header line
     header_parts = []
@@ -495,6 +544,8 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
             # Format as "2024-06-15 10:05a"
             time_formatted = dt.strftime("%Y-%m-%d %I:%M%p").lower()
             header_parts.append(f"Start: {time_formatted}")
+            # Calculate base timestamp for entries
+            base_timestamp = int(dt.timestamp())
         except ValueError:
             pass
 
@@ -522,19 +573,25 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
         if "id" in imported:
             header_parts.append(f"Import ID: {imported['id']}")
 
-    # Build output
-    output_lines = []
+    # Build header from metadata parts
     if header_parts:
-        output_lines.append(" ".join(header_parts))
+        meta["header"] = " ".join(header_parts)
 
-    # Format entries
-    for entry in entries:
+    # Format transcript entries
+    for entry in transcript_entries:
         entry_parts = []
 
         # Timestamp
         start = entry.get("start", "")
+        entry_timestamp = base_timestamp
         if start:
             entry_parts.append(f"[{start}]")
+            # Parse timestamp for chunk ordering (HH:MM:SS format)
+            try:
+                h, m, s = map(int, start.split(":"))
+                entry_timestamp = base_timestamp + h * 3600 + m * 60 + s
+            except (ValueError, AttributeError):
+                pass
 
         # Source (mic/sys)
         source = entry.get("source", "")
@@ -551,11 +608,33 @@ def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) 
         # Text
         text = entry.get("text", "")
 
-        # Combine and add to output
+        # Combine into markdown
         prefix = " ".join(entry_parts).strip()
         if prefix:
-            output_lines.append(f"{prefix} {text}" if text else prefix)
+            markdown = f"{prefix} {text}" if text else prefix
         elif text:
-            output_lines.append(text)
+            markdown = text
+        else:
+            continue  # Skip empty entries
 
-    return "\n".join(output_lines)
+        chunks.append({"timestamp": entry_timestamp, "markdown": markdown})
+
+    return chunks, meta
+
+
+def _format_transcript_entries(path: Path, metadata: dict, entries: list[dict]) -> str:
+    """Format transcript metadata and entries as human-readable text.
+
+    This is a convenience wrapper around format_audio() that returns
+    a single concatenated string.
+    """
+    # Reconstruct full entries list with metadata as first entry
+    # (format_audio expects raw JSONL entries with metadata on first line)
+    full_entries = [metadata] + entries
+    context = {"file_path": path}
+    chunks, meta = format_audio(full_entries, context)
+    parts = []
+    if meta.get("header"):
+        parts.append(meta["header"])
+    parts.extend(chunk["markdown"] for chunk in chunks)
+    return "\n".join(parts)

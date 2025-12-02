@@ -104,6 +104,9 @@ def add_module_stubs(request, monkeypatch):
         dotenv_mod.load_dotenv = load_dotenv
         dotenv_mod.dotenv_values = dotenv_values
         sys.modules["dotenv"] = dotenv_mod
+    # Import real observe package first to avoid shadowing with stubs
+    if "observe" not in sys.modules:
+        importlib.import_module("observe")
     if "observe.detect" not in sys.modules:
         detect_mod = types.ModuleType("observe.detect")
 
@@ -113,70 +116,12 @@ def add_module_stubs(request, monkeypatch):
         detect_mod.input_detect = input_detect
         sys.modules["observe.detect"] = detect_mod
         observe_pkg = sys.modules.get("observe")
-        if observe_pkg is None:
-            observe_pkg = types.ModuleType("observe")
-            sys.modules["observe"] = observe_pkg
         setattr(observe_pkg, "detect", detect_mod)
     if "observe.hear" not in sys.modules:
-        hear_mod = types.ModuleType("observe.hear")
-
-        def load_transcript(file_path):
-            """Stub for load_transcript that reads JSONL format."""
-            import json
-            from pathlib import Path
-
-            try:
-                path = Path(file_path)
-                if not path.exists():
-                    return (
-                        {"error": f"File not found: {file_path}"},
-                        None,
-                        "Error loading transcript: File not found",
-                    )
-
-                content = path.read_text(encoding="utf-8").strip()
-                if not content:
-                    return (
-                        {"error": "File is empty"},
-                        None,
-                        "Error loading transcript: File is empty",
-                    )
-
-                lines = content.split("\n")
-
-                # Parse metadata from first line
-                metadata = json.loads(lines[0])
-                if not isinstance(metadata, dict):
-                    return (
-                        {"error": "First line must be a JSON object"},
-                        None,
-                        "Error loading transcript: First line must be a JSON object",
-                    )
-
-                # Parse entries from remaining lines
-                entries = []
-                for line in lines[1:]:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    entry = json.loads(line)
-                    entries.append(entry)
-
-                # Stub: return empty formatted text
-                return metadata, entries, ""
-            except Exception as e:
-                return (
-                    {"error": f"Failed to load transcript: {e}"},
-                    None,
-                    f"Error loading transcript: {e}",
-                )
-
-        hear_mod.load_transcript = load_transcript
+        # Import the real module for format_audio and load_transcript
+        hear_mod = importlib.import_module("observe.hear")
         sys.modules["observe.hear"] = hear_mod
         observe_pkg = sys.modules.get("observe")
-        if observe_pkg is None:
-            observe_pkg = types.ModuleType("observe")
-            sys.modules["observe"] = observe_pkg
         setattr(observe_pkg, "hear", hear_mod)
     if "observe.sense" not in sys.modules:
         sense_mod = types.ModuleType("observe.sense")
@@ -245,23 +190,19 @@ def add_module_stubs(request, monkeypatch):
         sense_mod.scan_day = scan_day
         sys.modules["observe.sense"] = sense_mod
         observe_pkg = sys.modules.get("observe")
-        if observe_pkg is None:
-            observe_pkg = types.ModuleType("observe")
-            sys.modules["observe"] = observe_pkg
         setattr(observe_pkg, "sense", sense_mod)
     if "observe.utils" not in sys.modules:
-        utils_mod = types.ModuleType("observe.utils")
-
-        def load_analysis_frames(path):
-            return []
-
-        utils_mod.load_analysis_frames = load_analysis_frames
+        # Import the real module
+        utils_mod = importlib.import_module("observe.utils")
         sys.modules["observe.utils"] = utils_mod
         observe_pkg = sys.modules.get("observe")
-        if observe_pkg is None:
-            observe_pkg = types.ModuleType("observe")
-            sys.modules["observe"] = observe_pkg
         setattr(observe_pkg, "utils", utils_mod)
+    if "observe.reduce" not in sys.modules:
+        # Import the real module for format_screen and assemble_markdown
+        reduce_mod = importlib.import_module("observe.reduce")
+        sys.modules["observe.reduce"] = reduce_mod
+        observe_pkg = sys.modules.get("observe")
+        setattr(observe_pkg, "reduce", reduce_mod)
     if "gi" not in sys.modules:
         gi_mod = types.ModuleType("gi")
         gi_mod.require_version = lambda *a, **k: None

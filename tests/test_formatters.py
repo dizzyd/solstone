@@ -1,0 +1,448 @@
+"""Tests for the formatters framework."""
+
+import json
+import os
+import tempfile
+from pathlib import Path
+
+import pytest
+
+# Set JOURNAL_PATH to fixtures for tests
+os.environ["JOURNAL_PATH"] = str(Path(__file__).parent.parent / "fixtures" / "journal")
+
+
+class TestRegistry:
+    """Tests for the formatter registry."""
+
+    def test_get_formatter_screen(self):
+        """Test pattern matching for screen.jsonl."""
+        from think.formatters import get_formatter
+
+        formatter = get_formatter("20240102/234567/screen.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_screen"
+
+    def test_get_formatter_audio(self):
+        """Test pattern matching for audio.jsonl."""
+        from think.formatters import get_formatter
+
+        formatter = get_formatter("20240101/123456/audio.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_audio"
+
+    def test_get_formatter_split_audio(self):
+        """Test pattern matching for *_audio.jsonl files (split, imported, etc.)."""
+        from think.formatters import get_formatter
+
+        # Split audio
+        formatter = get_formatter("20240101/123456/123456_audio.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_audio"
+
+        # Imported audio (matched by *_audio.jsonl pattern)
+        formatter = get_formatter("20240101/123456/imported_audio.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_audio"
+
+    def test_get_formatter_no_match(self):
+        """Test that unmatched patterns return None."""
+        from think.formatters import get_formatter
+
+        formatter = get_formatter("random/path/unknown.jsonl")
+        assert formatter is None
+
+
+class TestLoadJsonl:
+    """Tests for JSONL loading utility."""
+
+    def test_load_jsonl_basic(self):
+        """Test loading a basic JSONL file."""
+        from think.formatters import load_jsonl
+
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456/audio.jsonl"
+        entries = load_jsonl(path)
+
+        assert len(entries) == 6  # 1 metadata + 5 transcript entries
+        assert entries[0].get("raw") == "raw.flac"
+        assert entries[1].get("start") == "00:00:01"
+
+    def test_load_jsonl_empty_lines(self):
+        """Test that empty lines are skipped."""
+        from think.formatters import load_jsonl
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write('{"a": 1}\n')
+            f.write("\n")
+            f.write('{"b": 2}\n')
+            f.write("   \n")
+            f.write('{"c": 3}\n')
+            temp_path = f.name
+
+        try:
+            entries = load_jsonl(temp_path)
+            assert len(entries) == 3
+            assert entries[0]["a"] == 1
+            assert entries[1]["b"] == 2
+            assert entries[2]["c"] == 3
+        finally:
+            os.unlink(temp_path)
+
+    def test_load_jsonl_malformed_skipped(self):
+        """Test that malformed lines are skipped."""
+        from think.formatters import load_jsonl
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write('{"valid": 1}\n')
+            f.write("not json\n")
+            f.write('{"also_valid": 2}\n')
+            temp_path = f.name
+
+        try:
+            entries = load_jsonl(temp_path)
+            assert len(entries) == 2
+        finally:
+            os.unlink(temp_path)
+
+
+class TestFormatFile:
+    """Tests for the format_file end-to-end function."""
+
+    def test_format_file_screen(self):
+        """Test format_file with screen.jsonl."""
+        from think.formatters import format_file
+
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240102/234567/screen.jsonl"
+        chunks, meta = format_file(path)
+
+        assert len(chunks) > 0
+        # Header should contain Frame Analyses
+        assert "header" in meta
+        assert "Frame Analyses" in meta["header"]
+        # Should have chunks for frames
+        assert any("VSCode IDE" in c["markdown"] for c in chunks)
+
+    def test_format_file_audio(self):
+        """Test format_file with audio.jsonl."""
+        from think.formatters import format_file
+
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456/audio.jsonl"
+        chunks, meta = format_file(path)
+
+        assert len(chunks) > 0
+        # Should contain transcript entries
+        assert any("authentication module" in c["markdown"] for c in chunks)
+
+    def test_format_file_not_found(self):
+        """Test format_file raises on missing file."""
+        from think.formatters import format_file
+
+        with pytest.raises(FileNotFoundError):
+            format_file("/nonexistent/path/screen.jsonl")
+
+    def test_format_file_no_formatter(self):
+        """Test format_file raises when no formatter matches."""
+        from think.formatters import format_file
+
+        # Create a temp file that won't match any pattern
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, dir="/tmp"
+        ) as f:
+            f.write('{"test": 1}\n')
+            temp_path = f.name
+
+        try:
+            with pytest.raises(ValueError, match="No formatter found"):
+                format_file(temp_path)
+        finally:
+            os.unlink(temp_path)
+
+
+class TestFormatScreen:
+    """Tests for the screen formatter."""
+
+    def test_format_screen_basic(self):
+        """Test basic screen formatting."""
+        from observe.reduce import format_screen
+
+        entries = [
+            {
+                "timestamp": 5,
+                "analysis": {"visible": "code", "visual_description": "Python code"},
+                "extracted_text": "def hello():\n    pass",
+            }
+        ]
+
+        chunks, meta = format_screen(entries)
+
+        assert len(chunks) == 1  # 1 frame chunk
+        assert "header" in meta
+        assert "Frame Analyses" in meta["header"]
+        assert chunks[0]["timestamp"] == 5
+        assert "**Category:** code" in chunks[0]["markdown"]
+        assert "def hello()" in chunks[0]["markdown"]
+
+    def test_format_screen_with_entity_context(self):
+        """Test screen formatting with entity context."""
+        from observe.reduce import format_screen
+
+        entries = [{"timestamp": 0, "analysis": {"visible": "browser"}}]
+        context = {"entity_names": "Alice, Bob", "include_entity_context": True}
+
+        chunks, meta = format_screen(entries, context)
+
+        assert "header" in meta
+        assert "Entity Context" in meta["header"]
+        assert "Alice, Bob" in meta["header"]
+
+    def test_format_screen_without_entity_context(self):
+        """Test screen formatting without entity context."""
+        from observe.reduce import format_screen
+
+        entries = [{"timestamp": 0, "analysis": {"visible": "browser"}}]
+        context = {"include_entity_context": False}
+
+        chunks, meta = format_screen(entries, context)
+
+        assert "header" in meta
+        assert "Entity Context" not in meta["header"]
+
+    def test_format_screen_multiple_monitors(self):
+        """Test screen formatting with multiple monitors."""
+        from observe.reduce import format_screen
+
+        entries = [
+            {"timestamp": 0, "monitor": "0", "analysis": {}},
+            {"timestamp": 5, "monitor": "1", "monitor_position": "left", "analysis": {}},
+        ]
+
+        chunks, meta = format_screen(entries)
+
+        # Should include monitor info in headers
+        assert "(Monitor 0)" in chunks[0]["markdown"]
+        assert "(Monitor 1 - left)" in chunks[1]["markdown"]
+
+    def test_format_screen_meeting_analysis(self):
+        """Test screen formatting with meeting analysis."""
+        from observe.reduce import format_screen
+
+        entries = [
+            {
+                "timestamp": 0,
+                "analysis": {},
+                "meeting_analysis": {"participants": ["Alice", "Bob"]},
+            }
+        ]
+
+        chunks, meta = format_screen(entries)
+
+        assert "Meeting Analysis" in chunks[0]["markdown"]
+        assert "Alice" in chunks[0]["markdown"]
+
+    def test_format_screen_extracts_metadata(self):
+        """Test that metadata line is extracted and not treated as a frame."""
+        from observe.reduce import format_screen
+
+        entries = [
+            {"raw": "screen.webm"},  # Metadata line
+            {"timestamp": 5, "analysis": {"visible": "code"}},
+        ]
+
+        chunks, meta = format_screen(entries)
+
+        # Should only have 1 frame chunk (metadata is extracted)
+        assert len(chunks) == 1
+        assert chunks[0]["timestamp"] == 5
+
+    def test_format_screen_skipped_entries_error(self):
+        """Test that skipped entries are reported in meta.error."""
+        from observe.reduce import format_screen
+
+        entries = [
+            {"raw": "screen.webm"},  # Metadata
+            {"timestamp": 5, "analysis": {}},  # Valid
+            {"invalid": "no timestamp"},  # Skipped
+            {"also_invalid": True},  # Skipped
+        ]
+
+        chunks, meta = format_screen(entries)
+
+        assert len(chunks) == 1
+        assert "error" in meta
+        assert "Skipped 2 entries" in meta["error"]
+        assert "timestamp" in meta["error"]
+
+
+class TestFormatAudio:
+    """Tests for the audio formatter."""
+
+    def test_format_audio_basic(self):
+        """Test basic audio formatting."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"start": "00:00:05", "source": "mic", "speaker": 1, "text": "Hello world"}
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        assert len(chunks) == 1
+        assert "[00:00:05]" in chunks[0]["markdown"]
+        assert "(mic)" in chunks[0]["markdown"]
+        assert "Speaker 1:" in chunks[0]["markdown"]
+        assert "Hello world" in chunks[0]["markdown"]
+
+    def test_format_audio_with_metadata(self):
+        """Test audio formatting extracts metadata from entries."""
+        from observe.hear import format_audio
+
+        # Metadata as first entry (like real JSONL)
+        entries = [
+            {"raw": "audio.flac", "setting": "office", "topics": ["work", "meeting"]},
+            {"start": "00:00:01", "text": "Test"},
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        # Header should contain metadata
+        assert "header" in meta
+        assert "Setting: office" in meta["header"]
+        assert "Topics: work, meeting" in meta["header"]
+        # Should have 1 transcript chunk
+        assert len(chunks) == 1
+        assert "Test" in chunks[0]["markdown"]
+
+    def test_format_audio_imported_metadata(self):
+        """Test audio formatting with imported metadata."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"imported": {"facet": "work", "id": "20250115_103045"}},
+            {"start": "00:00:01", "text": "Test"},
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        assert "header" in meta
+        assert "Facet: work" in meta["header"]
+        assert "Import ID: 20250115_103045" in meta["header"]
+
+    def test_format_audio_empty_entries_skipped(self):
+        """Test that entries missing 'start' field are skipped (after first line)."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"raw": "audio.flac"},  # Metadata (first entry without start)
+            {"start": "00:00:01", "text": "Valid"},
+            {"start": "00:00:05", "text": ""},  # Has start, keeps entry
+            {},  # Missing start, skipped and logged
+            {"start": "00:00:10", "text": "Also valid"},
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        # Should have 3 chunks (empty {} is skipped, but timestamp-only is kept)
+        assert len(chunks) == 3
+        assert "Valid" in chunks[0]["markdown"]
+        assert "[00:00:05]" in chunks[1]["markdown"]  # Timestamp-only entry
+        assert "Also valid" in chunks[2]["markdown"]
+        # Should report skipped entry in error
+        assert "error" in meta
+        assert "Skipped 1 entries" in meta["error"]
+
+    def test_format_audio_timestamp_ordering(self):
+        """Test that timestamps are calculated correctly."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"start": "00:00:30", "text": "First"},
+            {"start": "00:01:00", "text": "Second"},
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        # Second chunk should have higher timestamp
+        assert chunks[0]["timestamp"] < chunks[1]["timestamp"]
+
+    def test_format_audio_extracts_metadata(self):
+        """Test that metadata line is extracted and not treated as transcript."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"raw": "audio.flac", "model": "whisper-1"},  # Metadata line
+            {"start": "00:00:01", "text": "Hello"},
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        # Should only have 1 transcript chunk (metadata is extracted)
+        assert len(chunks) == 1
+        assert "Hello" in chunks[0]["markdown"]
+        # Metadata raw/model shouldn't appear in chunks
+        assert not any("audio.flac" in c["markdown"] for c in chunks)
+        assert not any("whisper" in c["markdown"] for c in chunks)
+
+    def test_format_audio_skipped_entries_error(self):
+        """Test that skipped entries are reported in meta.error."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"raw": "audio.flac"},  # Metadata
+            {"start": "00:00:01", "text": "Valid"},
+            {"invalid": "no start"},  # Skipped
+            {"also_invalid": True},  # Skipped
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        assert len(chunks) == 1
+        assert "error" in meta
+        assert "Skipped 2 entries" in meta["error"]
+        assert "start" in meta["error"]
+
+
+class TestAssembleMarkdownBackwardCompat:
+    """Tests for backward compatibility of assemble_markdown wrapper."""
+
+    def test_assemble_markdown_returns_string(self):
+        """Test that assemble_markdown still returns a string."""
+        from observe.reduce import assemble_markdown
+
+        frames = [
+            {"timestamp": 0, "analysis": {"visible": "code"}},
+            {"timestamp": 5, "analysis": {"visible": "browser"}},
+        ]
+
+        result = assemble_markdown(frames)
+
+        assert isinstance(result, str)
+        assert "Frame Analyses" in result
+        assert "**Category:** code" in result
+        assert "**Category:** browser" in result
+
+    def test_assemble_markdown_with_entity_names(self):
+        """Test assemble_markdown with entity_names parameter."""
+        from observe.reduce import assemble_markdown
+
+        frames = [{"timestamp": 0, "analysis": {}}]
+        result = assemble_markdown(frames, entity_names="Alice, Bob")
+
+        assert "Entity Context" in result
+        assert "Alice, Bob" in result
+
+
+class TestLoadTranscriptBackwardCompat:
+    """Tests for backward compatibility of load_transcript."""
+
+    def test_load_transcript_returns_tuple(self):
+        """Test that load_transcript still returns (metadata, entries, text) tuple."""
+        from observe.hear import load_transcript
+
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456/audio.jsonl"
+        metadata, entries, formatted_text = load_transcript(path)
+
+        assert isinstance(metadata, dict)
+        assert isinstance(entries, list)
+        assert isinstance(formatted_text, str)
+        assert "raw" in metadata
+        assert len(entries) == 5  # 5 transcript entries (not counting metadata)
+        assert "authentication module" in formatted_text
