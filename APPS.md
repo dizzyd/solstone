@@ -4,6 +4,8 @@
 
 Apps are the primary way to extend Sunstone's web interface (Convey). Each app is a self-contained module discovered automatically using **convention over configuration**—no base classes or manual registration required.
 
+> **How to use this document:** This guide serves as a catalog of patterns and references. Each section points to authoritative source files—read those files alongside this guide for complete details. When in doubt, the source code is the definitive reference.
+
 ---
 
 ## Quick Start
@@ -127,23 +129,20 @@ Define custom routes for your app (API endpoints, form handlers, navigation rout
 
 ### 3. `app.json` - Metadata
 
-Override default icon, label, and facet support.
+Override default icon, label, and other app settings.
 
-**Fields:**
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `icon` | string | "📦" | Emoji icon for menu bar |
-| `label` | string | Title-cased name | Display label in menu |
-| `facets` | boolean | `true` | Enable facet integration |
+**Authoritative source:** See the `App` dataclass in `apps/__init__.py` for all supported fields, types, and defaults.
 
-**Defaults:**
-- Icon: "📦"
-- Label: `app_name.replace("_", " ").title()` (e.g., "my_app" → "My App")
-- Facets: `true` (facet pills shown, selection enabled)
+**Common fields:**
+- `icon` - Emoji icon for menu bar (default: "📦")
+- `label` - Display label in menu (default: title-cased app name)
+- `facets` - Enable facet integration (default: true)
+- `date_nav` - Show date navigation bar (default: false)
+- `allow_future_dates` - Allow clicking future dates in month picker (default: false)
 
 **When to disable facets:** Set `"facets": false` for apps that don't use facet-based organization (e.g., system settings, dev tools).
 
-**Examples:** `apps/home/app.json`, `apps/todos/app.json`, `apps/chat/app.json`
+**Examples:** Browse `apps/*/app.json` for reference configurations.
 
 ### 4. `app_bar.html` - Bottom Bar Controls
 
@@ -185,7 +184,7 @@ MonthPicker.registerDataProvider('my_app', async (month, facet) => {
 Without a provider, the picker shows a plain calendar grid.
 
 **Reference implementations:**
-- Date navigation: `apps/todos/app_bar.html`, `apps/tokens/app_bar.html`
+- Date navigation: `apps/todos/app_bar.html`, `apps/transcripts/app_bar.html`
 
 **Implementation source:** `convey/templates/date_nav.html`, `convey/static/month-picker.js`
 
@@ -340,14 +339,12 @@ Apps can include their own tests that are discovered and run separately from cor
 apps/my_app/tests/
 ├── __init__.py
 ├── conftest.py      # Self-contained fixtures
-├── test_tools.py    # Tool tests
-└── test_routes.py   # Route tests
+└── test_*.py        # Test files
 ```
 
 **Reference implementations:**
 - Fixture patterns: `apps/todos/tests/conftest.py`
 - Tool testing: `apps/todos/tests/test_tools.py`
-- Logging tests: `apps/todos/tests/test_logging.py`
 
 ---
 
@@ -424,7 +421,7 @@ See **JOURNAL.md**, **CORTEX.md**, **CALLOSUM.md** for subsystem details.
 
 ### Global Variables
 
-Defined in `convey/templates/app.html` (lines 13-17):
+Defined in `convey/templates/app.html`:
 - `window.facetsData` - Array of facet objects `[{name, title, color, emoji}, ...]`
 - `window.selectedFacet` - Current facet name or null (see Facet Selection below)
 - `window.appFacetCounts` - Badge counts for current app `{"work": 5, "personal": 3}` (set via route's `facet_counts`)
@@ -485,7 +482,7 @@ See **CALLOSUM.md** for complete event protocol.
 
 **Examples:**
 - Standard: `apps/home/workspace.html`, `apps/todos/workspace.html`, `apps/chat/workspace.html`
-- Wide: `apps/search/workspace.html`, `apps/calendar/_month.html`, `apps/import/workspace.html`
+- Wide: `apps/search/workspace.html`, `apps/calendar/_day.html`, `apps/import/workspace.html`
 
 ### CSS Variables
 
@@ -505,7 +502,7 @@ Use these in your app-specific styles to respond to facet theme.
 
 **Best practice:** Scope styles with unique class prefix to avoid conflicts.
 
-**Example:** `apps/dev/workspace.html` (lines 1-145) shows scoped `.dev-*` classes for all custom styles.
+**Example:** `apps/dev/workspace.html` shows scoped `.dev-*` classes for all custom styles in its `<style>` block.
 
 ### Global Styles
 
@@ -586,15 +583,11 @@ Use `current_app.logger` from Flask for debugging. See `apps/todos/routes.py` fo
 
 ## Example Apps
 
-Study these reference implementations:
+Browse `apps/*/` directories for reference implementations. Apps range in complexity:
 
-- **`apps/home/`** - Minimal app (no routes.py, just workspace)
-- **`apps/dev/`** - Simple app (no routes.py, custom styling, submenu)
-- **`apps/live/`** - Minimal app (no routes.py, event dashboard)
-- **`apps/todos/`** - Full-featured (routes, forms, AJAX, icon badge, facet badges)
-- **`apps/chat/`** - API-driven (custom routes, agent chat interface)
-- **`apps/search/`** - API-only (custom routes for search, no index route)
-- **`apps/tokens/`** - Navigation (index redirects to today, app bar with controls)
+- **Minimal** - Just `workspace.html` (e.g., `apps/home/`, `apps/live/`)
+- **Styled** - Custom CSS, background services (e.g., `apps/dev/`)
+- **Full-featured** - Routes, forms, AJAX, badges, tools (e.g., `apps/todos/`, `apps/chat/`)
 
 ---
 

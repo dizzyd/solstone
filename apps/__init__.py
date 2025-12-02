@@ -9,6 +9,10 @@ Directory Structure:
       background.html      # Optional: Background service
       app_bar.html         # Optional: Bottom bar
       app.json             # Optional: Metadata overrides
+      tools.py             # Optional: MCP tool extensions
+      insights/            # Optional: Custom insight prompts
+      agents/              # Optional: Custom agent personas
+      tests/               # Optional: App-specific tests
 
 Naming Rules:
     - App directory names must use underscores (my_app), not hyphens (my-app)
@@ -18,11 +22,16 @@ Naming Rules:
       (e.g., Blueprint("app:home", ...), use url_for('app:home.index'))
     - URL prefix convention: /app/{app_name}
 
-app.json format (all optional):
+app.json fields (all optional):
     {
-      "icon": "🏠",
-      "label": "Custom Label"
+      "icon": "🏠",           # Emoji icon for menu bar (default: "📦")
+      "label": "Custom Label", # Display label (default: title-cased app name)
+      "facets": true,          # Enable facet integration (default: true)
+      "date_nav": true,        # Show date navigation bar (default: false)
+      "allow_future_dates": true  # Allow future dates in month picker (default: false)
     }
+
+    See the App dataclass below for the complete field list with types and defaults.
 
 Apps are automatically discovered and registered.
 All apps are served at /app/{name} via shared handler.
