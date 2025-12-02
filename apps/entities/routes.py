@@ -6,12 +6,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, request
 
 from apps.utils import log_app_action
 from convey import state
-from think.entities import load_entities, save_entities
-from think.indexer import search_entities
+from think.entities import load_detected_entities_recent, load_entities, save_entities
 
 entities_bp = Blueprint(
     "app:entities",
@@ -31,33 +30,8 @@ def get_facet_entities_data(facet_name: str) -> dict:
     # Load attached entities (already returns list of dicts)
     attached = load_entities(facet_name)
 
-    # Query detected entities from indexer
-    _, detected_results = search_entities(
-        "",
-        limit=1000,  # Get all detected entities
-        facet=facet_name,
-        attached=False,
-        order="day",  # Most recent first
-    )
-
-    # Aggregate detected entities by (type, name)
-    detected_map = {}
-    for result in detected_results:
-        meta = result["metadata"]
-        key = (meta["type"], meta["name"])
-
-        if key not in detected_map:
-            detected_map[key] = {
-                "type": meta["type"],
-                "name": meta["name"],
-                "description": result["text"],  # Most recent day's description
-                "count": 1,
-                "last_seen": meta["day"],
-            }
-        else:
-            detected_map[key]["count"] += 1
-
-    detected = list(detected_map.values())
+    # Load detected entities directly from files (excludes attached names/akas)
+    detected = load_detected_entities_recent(facet_name)
 
     return {"attached": attached, "detected": detected}
 

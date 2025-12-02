@@ -363,23 +363,38 @@ def load_entity_names(
 def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, Any]]:
     """Load detected entities from last N days, excluding attached entity names/akas.
 
+    Scans detected entity files in reverse chronological order (newest first),
+    aggregating by (type, name) to provide count and last_seen tracking.
+
     Args:
         facet: Facet name
         days: Number of days to look back (default: 30)
 
     Returns:
-        List of detected entity dictionaries, deduplicated by name,
-        excluding any names that match attached entities or their aka values
+        List of detected entity dictionaries with aggregation data:
+        - type: Entity type
+        - name: Entity name
+        - description: Description from most recent detection
+        - count: Number of days entity was detected
+        - last_seen: Most recent day (YYYYMMDD) entity was detected
+
+        Entities are excluded if their name matches an attached entity name or aka.
 
     Example:
         >>> load_detected_entities_recent("personal", days=30)
-        [{"type": "Person", "name": "Charlie", "description": "Met at coffee shop"}]
+        [{"type": "Person", "name": "Charlie", "description": "Met at coffee shop",
+          "count": 3, "last_seen": "20250115"}]
     """
     from datetime import datetime, timedelta
 
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+
     # Load attached entities and build exclusion set
     attached = load_entities(facet)
-    excluded_names = set()
+    excluded_names: set[str] = set()
     for entity in attached:
         name = entity.get("name", "")
         if name:
@@ -389,29 +404,53 @@ def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, 
         if isinstance(aka_list, list):
             excluded_names.update(aka_list)
 
-    # Calculate date range (last N days)
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
+    # Calculate date range cutoff
+    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_str = cutoff_date.strftime("%Y%m%d")
 
-    # Collect detected entities from date range
-    detected = []
-    seen_names = set()
+    # Get entities directory and find all day files
+    entities_dir = Path(journal) / "facets" / facet / "entities"
+    if not entities_dir.exists():
+        return []
 
-    current = start_date
-    while current <= end_date:
-        day_str = current.strftime("%Y%m%d")
-        try:
-            day_entities = load_entities(facet, day_str)
-            for entity in day_entities:
-                name = entity.get("name", "")
-                # Skip if already seen, or if matches attached/aka
-                if name and name not in seen_names and name not in excluded_names:
-                    seen_names.add(name)
-                    detected.append(entity)
-        except RuntimeError:
-            # File doesn't exist for this day, skip
-            pass
+    # Glob day files and sort descending (newest first)
+    day_files = sorted(entities_dir.glob("*.jsonl"), reverse=True)
 
-        current += timedelta(days=1)
+    # Aggregate entities by (type, name)
+    # Key: (type, name) -> {entity data with count, last_seen}
+    detected_map: dict[tuple[str, str], dict[str, Any]] = {}
 
-    return detected
+    for day_file in day_files:
+        day = day_file.stem  # YYYYMMDD
+
+        # Skip files outside date range
+        if day < cutoff_str:
+            continue
+
+        # Parse entities from this day
+        day_entities = parse_entity_file(str(day_file))
+
+        for entity in day_entities:
+            etype = entity.get("type", "")
+            name = entity.get("name", "")
+
+            # Skip if matches attached/aka
+            if name in excluded_names:
+                continue
+
+            key = (etype, name)
+
+            if key not in detected_map:
+                # First occurrence (most recent day) - store full entity
+                detected_map[key] = {
+                    "type": etype,
+                    "name": name,
+                    "description": entity.get("description", ""),
+                    "count": 1,
+                    "last_seen": day,
+                }
+            else:
+                # Subsequent occurrence - just increment count
+                detected_map[key]["count"] += 1
+
+    return list(detected_map.values())

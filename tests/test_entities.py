@@ -7,6 +7,7 @@ import pytest
 from think.entities import (
     entity_file_path,
     load_all_attached_entities,
+    load_detected_entities_recent,
     load_entities,
     save_entities,
 )
@@ -249,3 +250,206 @@ def test_aka_field_preservation(fixture_journal, tmp_path):
 
     postgres = next(e for e in loaded if e.get("name") == "PostgreSQL")
     assert postgres.get("aka") == ["Postgres", "PG"]
+
+
+# Tests for load_detected_entities_recent
+
+
+def test_load_detected_entities_recent_basic(fixture_journal):
+    """Test loading detected entities with count and last_seen."""
+    # Fixture has detected entities in 20250101 and 20250102
+    # But these dates are old (> 30 days from now), so we need to use a large days value
+    detected = load_detected_entities_recent("personal", days=36500)  # ~100 years
+
+    # Should have 4 detected entities (Charlie Brown, Home Renovation, City Fitness, Diana Prince)
+    # Note: excludes Alice Johnson, Bob Smith, Acme Corp which are attached
+    assert len(detected) == 4
+
+    # Check structure includes count and last_seen
+    for entity in detected:
+        assert "type" in entity
+        assert "name" in entity
+        assert "description" in entity
+        assert "count" in entity
+        assert "last_seen" in entity
+
+
+def test_load_detected_entities_recent_excludes_attached(fixture_journal, tmp_path):
+    """Test that attached entities and their akas are excluded from detected results."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity with aka
+    attached = [
+        {
+            "type": "Person",
+            "name": "Alice Johnson",
+            "description": "Attached person",
+            "aka": ["Ali", "AJ"],
+        }
+    ]
+    save_entities("test_facet", attached)
+
+    # Create detected entities including some that match attached/aka
+    detected_entities = [
+        {
+            "type": "Person",
+            "name": "Alice Johnson",
+            "description": "Should be excluded",
+        },
+        {"type": "Person", "name": "Ali", "description": "Should be excluded (aka)"},
+        {
+            "type": "Person",
+            "name": "Charlie Brown",
+            "description": "Should be included",
+        },
+    ]
+    save_entities("test_facet", detected_entities, "20250101")
+
+    # Load detected - should only get Charlie Brown
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    assert len(detected) == 1
+    assert detected[0]["name"] == "Charlie Brown"
+
+
+def test_load_detected_entities_recent_count_tracking(fixture_journal, tmp_path):
+    """Test that count tracks occurrences across multiple days."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create same entity across multiple days
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Charlie", "description": "Day 1 desc"}],
+        "20250101",
+    )
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Charlie", "description": "Day 2 desc"}],
+        "20250102",
+    )
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Charlie", "description": "Day 3 desc"}],
+        "20250103",
+    )
+
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    assert len(detected) == 1
+
+    charlie = detected[0]
+    assert charlie["name"] == "Charlie"
+    assert charlie["count"] == 3
+
+
+def test_load_detected_entities_recent_last_seen(fixture_journal, tmp_path):
+    """Test that last_seen is the most recent day and description is from that day."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create entity across multiple days with different descriptions
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Charlie", "description": "Oldest description"}],
+        "20250101",
+    )
+    save_entities(
+        "test_facet",
+        [
+            {
+                "type": "Person",
+                "name": "Charlie",
+                "description": "Most recent description",
+            }
+        ],
+        "20250103",
+    )
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Charlie", "description": "Middle description"}],
+        "20250102",
+    )
+
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    assert len(detected) == 1
+
+    charlie = detected[0]
+    assert charlie["last_seen"] == "20250103"
+    assert charlie["description"] == "Most recent description"
+
+
+def test_load_detected_entities_recent_days_filter(fixture_journal, tmp_path):
+    """Test that days parameter limits results to recent days."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    from datetime import datetime, timedelta
+
+    # Create entities at various dates relative to today
+    today = datetime.now()
+    recent_day = (today - timedelta(days=5)).strftime("%Y%m%d")
+    old_day = (today - timedelta(days=60)).strftime("%Y%m%d")
+
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Recent Person", "description": "Recent"}],
+        recent_day,
+    )
+    save_entities(
+        "test_facet",
+        [{"type": "Person", "name": "Old Person", "description": "Old"}],
+        old_day,
+    )
+
+    # With default 30 days, should only get recent person
+    detected = load_detected_entities_recent("test_facet", days=30)
+    assert len(detected) == 1
+    assert detected[0]["name"] == "Recent Person"
+
+    # With 90 days, should get both
+    detected = load_detected_entities_recent("test_facet", days=90)
+    assert len(detected) == 2
+
+
+def test_load_detected_entities_recent_empty_facet(fixture_journal, tmp_path):
+    """Test that empty or non-existent facet returns empty list."""
+    facet_path = tmp_path / "facets" / "empty_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # No entities directory
+    detected = load_detected_entities_recent("empty_facet")
+    assert detected == []
+
+
+def test_load_detected_entities_recent_type_name_key(fixture_journal, tmp_path):
+    """Test that deduplication is by (type, name) tuple, not just name."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Same name, different types - should be treated as separate entities
+    save_entities(
+        "test_facet",
+        [
+            {"type": "Person", "name": "Mercury", "description": "Roman god"},
+            {"type": "Project", "name": "Mercury", "description": "Space program"},
+        ],
+        "20250101",
+    )
+
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    assert len(detected) == 2
+
+    names_and_types = {(e["type"], e["name"]) for e in detected}
+    assert ("Person", "Mercury") in names_and_types
+    assert ("Project", "Mercury") in names_and_types
