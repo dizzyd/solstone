@@ -5,19 +5,19 @@
 
 /*
  * Layout context:
- * - No app-bar for transcripts app
- * - Just need to account for facet-bar-height at top
+ * - date_nav: true adds has-date-nav to body, which adds date-nav-height to workspace margin-top
+ * - Need to account for facet-bar + date-nav at top
  *
  * Height calculation:
  * - 100vh (viewport)
- * - minus 60px (facet-bar-height, workspace has margin-top for this)
- * - minus 32px (our padding: 16px top + 16px bottom)
+ * - minus 60px (facet-bar-height)
+ * - minus 40px (date-nav-height)
  */
 
 /* Lock workspace scrolling - content must fit, only .tr-panel scrolls */
-.workspace:has(.tr-wrap) {
+body.has-date-nav .workspace:has(.tr-wrap) {
   overflow: hidden;
-  height: calc(100vh - var(--facet-bar-height));
+  height: calc(100vh - var(--facet-bar-height) - var(--date-nav-height));
 }
 
 /* Main container */
@@ -90,14 +90,6 @@
   transform: translateY(-50%);
   font-size: 11px;
   color: #6b7280;
-}
-
-.tr-lane {
-  position: absolute;
-  left: 64px;
-  right: 0;
-  top: 12px;
-  bottom: 12px;
 }
 
 /* Selection box */
@@ -297,14 +289,6 @@
   right: 0;
 }
 
-.tr-zoom-lane {
-  position: absolute;
-  left: 40px;
-  right: 0;
-  top: 12px;
-  bottom: 12px;
-}
-
 .tr-zoom-segments {
   position: absolute;
   left: 44px;
@@ -397,7 +381,6 @@
     <div id="trTimeline" class="tr-timeline" aria-label="Day timeline (08:00-22:00)">
       <div class="tr-grid" id="trGrid"></div>
       <div class="tr-labels" id="trLabels"></div>
-      <div class="tr-lane"></div>
       <div class="tr-segments" id="trSegments"></div>
       <div class="tr-sel-wrap" id="trSelWrap">
         <div class="tr-sel" data-handle="move">
@@ -411,7 +394,6 @@
     <div class="tr-zoom" id="trZoom">
       <div class="tr-zoom-grid" id="trZoomGrid"></div>
       <div class="tr-zoom-labels" id="trZoomLabels"></div>
-      <div class="tr-zoom-lane"></div>
       <div class="tr-zoom-segments" id="trZoomSegments"></div>
     </div>
 
@@ -690,13 +672,7 @@
   }).observe(timeline);
 
   new ResizeObserver(() => {
-    zoomHeight = zoom.clientHeight - PADDING;
-    const rangeLen = range.end - range.start;
-    if (rangeLen > 0) {
-      zoomPpm = zoomHeight / rangeLen;
-      buildZoomGrid();
-      buildZoomSegments();
-    }
+    updateZoom();
   }).observe(zoom);
 
   // Initial render

@@ -10,7 +10,7 @@ from typing import Any
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 from convey import state
-from convey.utils import DATE_RE, adjacent_days, format_date, format_date_short
+from convey.utils import DATE_RE, format_date, format_date_short
 from think.utils import day_dirs, day_path
 
 transcripts_bp = Blueprint(
@@ -34,15 +34,12 @@ def transcripts_day(day: str) -> str:
         return "", 404
 
     title = format_date(day)
-    prev_day, next_day = adjacent_days(state.journal_root, day)
 
     return render_template(
         "app.html",
         app="transcripts",
         title=title,
         day=day,
-        prev_day=prev_day,
-        next_day=next_day,
         day_formatted=format_date_short(day),
     )
 
