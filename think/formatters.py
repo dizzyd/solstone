@@ -35,6 +35,8 @@ from dotenv import load_dotenv
 # Note: agents/*_active.jsonl is excluded - only completed agents are formatted
 FORMATTERS: dict[str, tuple[str, str]] = {
     "agents/*.jsonl": ("muse.cortex", "format_agent"),
+    "facets/*/entities/*.jsonl": ("think.entities", "format_entities"),
+    "facets/*/entities.jsonl": ("think.entities", "format_entities"),
     "*/screen.jsonl": ("observe.reduce", "format_screen"),
     "*/*_audio.jsonl": ("observe.hear", "format_audio"),
     "*/audio.jsonl": ("observe.hear", "format_audio"),

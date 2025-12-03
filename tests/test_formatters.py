@@ -212,7 +212,12 @@ class TestFormatScreen:
 
         entries = [
             {"timestamp": 0, "monitor": "0", "analysis": {}},
-            {"timestamp": 5, "monitor": "1", "monitor_position": "left", "analysis": {}},
+            {
+                "timestamp": 5,
+                "monitor": "1",
+                "monitor_position": "left",
+                "analysis": {},
+            },
         ]
 
         chunks, meta = format_screen(entries)
@@ -487,10 +492,21 @@ class TestFormatAgent:
         from muse.cortex import format_agent
 
         entries = [
-            {"event": "request", "ts": 1700000000000, "agent_id": "test123",
-             "prompt": "Hello world", "persona": "default", "backend": "openai"},
-            {"event": "start", "ts": 1700000000100, "agent_id": "test123",
-             "model": "gpt-4", "persona": "default"},
+            {
+                "event": "request",
+                "ts": 1700000000000,
+                "agent_id": "test123",
+                "prompt": "Hello world",
+                "persona": "default",
+                "backend": "openai",
+            },
+            {
+                "event": "start",
+                "ts": 1700000000100,
+                "agent_id": "test123",
+                "model": "gpt-4",
+                "persona": "default",
+            },
             {"event": "finish", "result": "Hello!", "ts": 1700000000200},
         ]
 
@@ -509,8 +525,11 @@ class TestFormatAgent:
 
         entries = [
             {"event": "start", "ts": 1700000000000, "agent_id": "test"},
-            {"event": "thinking", "content": "I should analyze this...",
-             "ts": 1700000000100},
+            {
+                "event": "thinking",
+                "content": "I should analyze this...",
+                "ts": 1700000000100,
+            },
             {"event": "finish", "result": "Done", "ts": 1700000000200},
         ]
 
@@ -528,10 +547,19 @@ class TestFormatAgent:
 
         entries = [
             {"event": "start", "ts": 1700000000000, "agent_id": "test"},
-            {"event": "tool_start", "tool": "search", "args": {"q": "test"},
-             "call_id": "call_1", "ts": 1700000000100},
-            {"event": "tool_end", "result": '{"results": []}',
-             "call_id": "call_1", "ts": 1700000000200},
+            {
+                "event": "tool_start",
+                "tool": "search",
+                "args": {"q": "test"},
+                "call_id": "call_1",
+                "ts": 1700000000100,
+            },
+            {
+                "event": "tool_end",
+                "result": '{"results": []}',
+                "call_id": "call_1",
+                "ts": 1700000000200,
+            },
             {"event": "finish", "result": "Done", "ts": 1700000000300},
         ]
 
@@ -552,10 +580,19 @@ class TestFormatAgent:
 
         entries = [
             {"event": "start", "ts": 1700000000000, "agent_id": "test"},
-            {"event": "tool_start", "tool": "fetch", "args": {},
-             "call_id": "call_1", "ts": 1700000000100},
-            {"event": "tool_end", "result": long_result,
-             "call_id": "call_1", "ts": 1700000000200},
+            {
+                "event": "tool_start",
+                "tool": "fetch",
+                "args": {},
+                "call_id": "call_1",
+                "ts": 1700000000100,
+            },
+            {
+                "event": "tool_end",
+                "result": long_result,
+                "call_id": "call_1",
+                "ts": 1700000000200,
+            },
             {"event": "finish", "result": "Done", "ts": 1700000000300},
         ]
 
@@ -573,8 +610,13 @@ class TestFormatAgent:
 
         entries = [
             {"event": "start", "ts": 1700000000000, "agent_id": "test"},
-            {"event": "tool_start", "tool": "slow_task", "args": {"x": 1},
-             "call_id": "call_orphan", "ts": 1700000000100},
+            {
+                "event": "tool_start",
+                "tool": "slow_task",
+                "args": {"x": 1},
+                "call_id": "call_orphan",
+                "ts": 1700000000100,
+            },
             # No tool_end - agent crashed
             {"event": "error", "error": "Agent timeout", "ts": 1700000000200},
         ]
@@ -594,8 +636,12 @@ class TestFormatAgent:
 
         entries = [
             {"event": "start", "ts": 1700000000000, "agent_id": "test"},
-            {"event": "error", "error": "Connection failed",
-             "trace": "Traceback:\n  File...", "ts": 1700000000100},
+            {
+                "event": "error",
+                "error": "Connection failed",
+                "trace": "Traceback:\n  File...",
+                "ts": 1700000000100,
+            },
         ]
 
         chunks, meta = format_agent(entries)
@@ -657,8 +703,13 @@ class TestFormatAgent:
         from muse.cortex import format_agent
 
         entries = [
-            {"event": "request", "ts": 1700000000000, "agent_id": "test",
-             "prompt": "Continue work", "handoff_from": "parent_123"},
+            {
+                "event": "request",
+                "ts": 1700000000000,
+                "agent_id": "test",
+                "prompt": "Continue work",
+                "handoff_from": "parent_123",
+            },
             {"event": "start", "ts": 1700000000100, "agent_id": "test"},
             {"event": "finish", "result": "Done", "ts": 1700000000200},
         ]
@@ -667,3 +718,208 @@ class TestFormatAgent:
 
         assert "Handoff from:" in meta["header"]
         assert "parent_123" in meta["header"]
+
+
+class TestFormatEntities:
+    """Tests for the entities formatter."""
+
+    def test_get_formatter_attached_entities(self):
+        """Test pattern matching for attached entities."""
+        from think.formatters import get_formatter
+
+        formatter = get_formatter("facets/personal/entities.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_entities"
+
+    def test_get_formatter_detected_entities(self):
+        """Test pattern matching for detected entities."""
+        from think.formatters import get_formatter
+
+        formatter = get_formatter("facets/personal/entities/20250101.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_entities"
+
+    def test_format_entities_attached_basic(self):
+        """Test basic attached entities formatting with fixture file."""
+        from think.formatters import format_file
+
+        path = Path(os.environ["JOURNAL_PATH"]) / "facets/personal/entities.jsonl"
+        chunks, meta = format_file(path)
+
+        assert len(chunks) == 3  # 3 entities in fixture
+        assert "header" in meta
+        assert "Attached Entities: personal" in meta["header"]
+        assert "3 entities" in meta["header"]
+
+    def test_format_entities_detected_basic(self):
+        """Test basic detected entities formatting with fixture file."""
+        from think.formatters import format_file
+
+        path = (
+            Path(os.environ["JOURNAL_PATH"])
+            / "facets/personal/entities/20250101.jsonl"
+        )
+        chunks, meta = format_file(path)
+
+        assert len(chunks) == 2  # 2 entities in fixture
+        assert "header" in meta
+        assert "Detected Entities: personal" in meta["header"]
+        assert "2025-01-01" in meta["header"]
+        assert "2 entities" in meta["header"]
+
+    def test_format_entities_direct(self):
+        """Test format_entities function directly."""
+        from think.entities import format_entities
+
+        entries = [
+            {"type": "Person", "name": "Alice", "description": "Friend from work"},
+            {"type": "Company", "name": "Acme Corp", "description": "Tech startup"},
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        assert len(chunks) == 2
+        assert "Person: Alice" in chunks[0]["markdown"]
+        assert "Friend from work" in chunks[0]["markdown"]
+        assert "Company: Acme Corp" in chunks[1]["markdown"]
+
+    def test_format_entities_no_description(self):
+        """Test that missing description shows placeholder."""
+        from think.entities import format_entities
+
+        entries = [{"type": "Person", "name": "Bob", "description": ""}]
+
+        chunks, meta = format_entities(entries)
+
+        assert len(chunks) == 1
+        assert "Person: Bob" in chunks[0]["markdown"]
+        assert "No description available" in chunks[0]["markdown"]
+
+    def test_format_entities_with_tags(self):
+        """Test formatting with tags field."""
+        from think.entities import format_entities
+
+        entries = [
+            {
+                "type": "Company",
+                "name": "Acme",
+                "description": "A company",
+                "tags": ["tech", "startup"],
+            }
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        assert "**Tags:** tech, startup" in chunks[0]["markdown"]
+
+    def test_format_entities_with_aka(self):
+        """Test formatting with aka field."""
+        from think.entities import format_entities
+
+        entries = [
+            {
+                "type": "Person",
+                "name": "Robert Smith",
+                "description": "Colleague",
+                "aka": ["Bob", "Bobby"],
+            }
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        assert "**Also known as:** Bob, Bobby" in chunks[0]["markdown"]
+
+    def test_format_entities_with_custom_fields(self):
+        """Test formatting with custom fields."""
+        from think.entities import format_entities
+
+        entries = [
+            {
+                "type": "Person",
+                "name": "Alice",
+                "description": "Friend",
+                "contact": "alice@example.com",
+                "since": "2020",
+            }
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        assert "**Contact:** alice@example.com" in chunks[0]["markdown"]
+        assert "**Since:** 2020" in chunks[0]["markdown"]
+
+    def test_format_entities_timestamp_updated_at(self):
+        """Test that updated_at is used for timestamp."""
+        from think.entities import format_entities
+
+        entries = [
+            {
+                "type": "Person",
+                "name": "Alice",
+                "description": "Friend",
+                "updated_at": 1700000000000,
+            }
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        assert chunks[0]["timestamp"] == 1700000000000
+
+    def test_format_entities_timestamp_attached_at_fallback(self):
+        """Test that attached_at is used when updated_at is missing."""
+        from think.entities import format_entities
+
+        entries = [
+            {
+                "type": "Person",
+                "name": "Alice",
+                "description": "Friend",
+                "attached_at": 1600000000000,
+            }
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        assert chunks[0]["timestamp"] == 1600000000000
+
+    def test_format_entities_timestamp_priority(self):
+        """Test that updated_at takes priority over attached_at."""
+        from think.entities import format_entities
+
+        entries = [
+            {
+                "type": "Person",
+                "name": "Alice",
+                "description": "Friend",
+                "updated_at": 1700000000000,
+                "attached_at": 1600000000000,
+            }
+        ]
+
+        chunks, meta = format_entities(entries)
+
+        # updated_at should take priority
+        assert chunks[0]["timestamp"] == 1700000000000
+
+    def test_format_entities_header_facet_from_path(self):
+        """Test that facet name is extracted from file path."""
+        from think.entities import format_entities
+
+        entries = [{"type": "Person", "name": "Test", "description": ""}]
+        context = {"file_path": "/journal/facets/work/entities.jsonl"}
+
+        chunks, meta = format_entities(entries, context)
+
+        assert "Attached Entities: work" in meta["header"]
+
+    def test_format_entities_detected_header_from_path(self):
+        """Test that detected entities include day in header."""
+        from think.entities import format_entities
+
+        entries = [{"type": "Person", "name": "Test", "description": ""}]
+        context = {"file_path": "/journal/facets/personal/entities/20251201.jsonl"}
+
+        chunks, meta = format_entities(entries, context)
+
+        assert "Detected Entities: personal" in meta["header"]
+        assert "2025-12-01" in meta["header"]
