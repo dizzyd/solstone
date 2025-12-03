@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, request
 
 from convey import state
 
@@ -205,53 +205,78 @@ def agent_content(agent_id: str) -> object:
     return jsonify(response), status
 
 
-@agents_bp.route("/api/live")
-def agents_live() -> object:
-    """Get list of only live/running agents."""
-    return _get_agents_list("live")
+@agents_bp.route("/api/run/<agent_id>")
+def agent_run(agent_id: str) -> object:
+    """Return formatted markdown for a completed agent run.
 
+    Locates the agent JSONL file and formats it using the formatters framework.
 
-@agents_bp.route("/api/historical")
-def agents_historical() -> object:
-    """Get list of only historical/completed agents."""
-    return _get_agents_list("historical")
+    Returns:
+        {
+            "header": str,       # Agent metadata header
+            "markdown": str,     # Full formatted markdown (header + chunks)
+            "error": str | None  # Optional error message
+        }
+    """
+    from pathlib import Path
+
+    from think.formatters import format_file
+
+    # Locate the agent JSONL file
+    journal_path = Path(state.journal_root)
+    agent_file = journal_path / "agents" / f"{agent_id}.jsonl"
+
+    if not agent_file.exists():
+        return jsonify({"error": f"Agent run {agent_id} not found"}), 404
+
+    try:
+        chunks, meta = format_file(agent_file)
+
+        # Build full markdown: header + all chunks
+        parts = []
+        header = meta.get("header", "")
+        if header:
+            parts.append(header)
+
+        for chunk in chunks:
+            parts.append(chunk.get("markdown", ""))
+
+        markdown = "\n".join(parts)
+
+        return jsonify(
+            {
+                "header": header,
+                "markdown": markdown,
+                "error": meta.get("error"),
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @agents_bp.route("/api/list")
 def agents_list() -> object:
-    # Get type parameter (live, historical, or all)
-    agent_type = request.args.get("type", "all")
-    return _get_agents_list(agent_type)
-
-
-def _get_agents_list(agent_type: str) -> object:
-    """Internal helper to get agents list."""
+    """Get list of completed agent runs with pagination."""
     from convey.utils import parse_pagination_params, time_since
     from muse.cortex_client import cortex_agents
     from think.utils import get_agents
 
-    # Default limit depends on agent type - 20 for historical, 10 for live
-    default_limit = 20 if agent_type == "historical" else 10
-    limit, offset = parse_pagination_params(default_limit=default_limit, max_limit=100)
+    limit, offset = parse_pagination_params(default_limit=20, max_limit=100)
 
-    # Get all agents using cortex_agents
-    response = cortex_agents(limit=limit, offset=offset, agent_type=agent_type)
+    # Get completed agents from journal
+    response = cortex_agents(limit=limit, offset=offset, agent_type="historical")
 
     # Load agent titles for display
     agents_meta = get_agents()
     persona_titles = {aid: a["title"] for aid, a in agents_meta.items()}
 
     # Format agents for display
-    agents = response.get("agents", [])
-    for agent in agents:
+    for agent in response.get("agents", []):
         persona_id = agent.get("persona", "default")
         agent["persona_title"] = persona_titles.get(persona_id, persona_id)
-        # Convert milliseconds to seconds for time_since
         agent["since"] = (
             time_since(agent["start"] / 1000) if agent.get("start") else "unknown"
         )
-        # Keep backward compatibility
-        agent["pid"] = None  # We don't track PIDs in the new system
 
     return jsonify(response)
 

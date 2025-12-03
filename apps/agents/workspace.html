@@ -1220,6 +1220,91 @@ tr a:hover {
   border: 1px solid #f5c6cb;
   border-radius: 4px;
 }
+
+/* Agent Run Modal - large modal for viewing execution transcripts */
+.agent-run-modal-content {
+  width: 85vw;
+  height: 85vh;
+  max-width: 1400px;
+  margin: 2.5% auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-run-modal-content .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.agent-run-content {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.agent-run-content h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #333;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 0.5rem;
+}
+
+.agent-run-content h2 {
+  font-size: 1.3rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #444;
+}
+
+.agent-run-content h3 {
+  font-size: 1.1rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.agent-run-content blockquote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-left: 4px solid #007bff;
+  color: #555;
+}
+
+.agent-run-content pre {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+}
+
+.agent-run-content code {
+  background: #f0f0f0;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.agent-run-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.agent-run-content em {
+  color: #666;
+}
+
+/* Clickable row for historical agents */
+tr.clickable-row {
+  cursor: pointer;
+}
+
+tr.clickable-row:hover {
+  background-color: #f0f7ff;
+}
 </style>
 
 <div class="agents-content">
@@ -1237,22 +1322,10 @@ tr a:hover {
 
     <!-- Log Tab -->
     <div id="logTab" class="main-tab-content active">
-      <!-- Live Agents Section -->
-      <div id="liveAgentsSection">
-        <div class="section-header">
-          <span>Live</span>
-          <span class="count" id="liveCount">0</span>
-        </div>
-        <table id="liveAgentTable"></table>
-        <div id="liveEmpty" class="empty-state" style="display: none;">
-          No agents currently running
-        </div>
-      </div>
-
-      <!-- Historical Agents Section -->
+      <!-- Completed Agents Section -->
       <div id="historicalAgentsSection">
         <div class="section-header">
-          <span>Completed</span>
+          <span>Completed Runs</span>
           <span class="count" id="historicalCount">0</span>
         </div>
         <table id="historicalAgentTable"></table>
@@ -1561,13 +1634,27 @@ tr a:hover {
   </div>
 </div>
 
+<!-- Agent Run Modal - displays formatted agent execution transcript -->
+<div id="agentRunModal" class="modal">
+  <div class="modal-content agent-run-modal-content">
+    <span class="close" onclick="closeAgentRunModal()">&times;</span>
+
+    <div class="modal-header">
+      <h3 id="agentRunModalTitle">Agent Run</h3>
+    </div>
+
+    <div class="modal-body">
+      <div id="agentRunContent" class="markdown-content agent-run-content"></div>
+    </div>
+  </div>
+</div>
+
 <script src="{{ vendor_lib('marked') }}"></script>
 <script>
 let availableAgents = [];
 let availableTopics = [];
 let availableTools = [];
 let toolPacks = {};
-let currentMainTab = 'log';
 let currentEditingItem = null;
 let currentEditingType = null; // 'agent' or 'topic'
 let isEditMode = false;
@@ -1590,24 +1677,18 @@ function switchMainTab(tabName) {
   });
   document.getElementById(tabName + 'Tab').classList.add('active');
 
-  currentMainTab = tabName;
-
   // Load data for the selected tab if needed
   if (tabName === 'log') {
     loadAgentSessions();
-    startAutoRefresh();
   } else if (tabName === 'agents') {
-    stopAutoRefresh();
     if (!document.getElementById('agentCards').children.length) {
       loadAvailableAgents();
     }
   } else if (tabName === 'topics') {
-    stopAutoRefresh();
     if (!document.getElementById('topicCards').children.length) {
       loadAvailableTopics();
     }
   } else if (tabName === 'tools') {
-    stopAutoRefresh();
     if (availableTools.length === 0) {
       loadAvailableTools();
     }
@@ -2317,90 +2398,74 @@ let currentPage = 0;
 let pageSize = 20;
 let totalAgents = 0;
 
-// Session history table functions
-function buildRow(a, isHistorical = false) {
+// Build table row for completed agent run
+function buildRow(a) {
   const tr = document.createElement('tr');
   const short = a.prompt.length > 80 ? a.prompt.slice(0, 80) + '…' : a.prompt;
-  const chatLink = `{{ url_for('app:chat.index') }}?agent=${a.id}`;
 
   // Status emoji
   const statusEmojis = {
-    'running': '▶️',
     'completed': '✅',
     'finished': '✅',
     'error': '❌',
     'interrupted': '⚠️',
     'unknown': '❓'
   };
-  const statusClass = `status-${a.status || 'unknown'}`;
   const statusEmoji = statusEmojis[a.status] || statusEmojis['unknown'];
-  const statusBadge = `<span class="status-badge ${statusClass}" title="${a.status || 'unknown'}">${statusEmoji}</span>`;
-
-  // PID indicator for running agents
-  const pidIndicator = a.pid ? ` (PID: ${a.pid})` : '';
+  const statusBadge = `<span class="status-badge" title="${a.status || 'unknown'}">${statusEmoji}</span>`;
 
   // Format runtime
   let runtimeDisplay = '';
   if (a.runtime_seconds !== undefined && a.runtime_seconds !== null) {
     const totalSeconds = Math.floor(a.runtime_seconds);
     const minutes = Math.floor(totalSeconds / 60);
-
-    if (totalSeconds > 59) {
-      // For 60 seconds or more, show just minutes
-      runtimeDisplay = `${minutes}m`;
-    } else {
-      // For less than 60 seconds, show as Xs
-      runtimeDisplay = `${totalSeconds}s`;
-    }
+    runtimeDisplay = totalSeconds > 59 ? `${minutes}m` : `${totalSeconds}s`;
   }
 
   tr.innerHTML = `
-    <td><a href="${chatLink}">${statusBadge}</a></td>
-    <td><a href="${chatLink}">${a.since}</a></td>
+    <td>${statusBadge}</td>
+    <td>${a.since}</td>
     <td>${runtimeDisplay}</td>
-    <td>${a.model}${pidIndicator}</td>
+    <td>${a.model || ''}</td>
     <td>${a.persona_title || a.persona}</td>
-    <td title="${a.prompt}"><a href="${chatLink}">${short}</a></td>
+    <td title="${a.prompt}">${short}</td>
   `;
 
-  // Add restart button cell for historical agents
-  if (isHistorical) {
-    const restartCell = document.createElement('td');
-    restartCell.style.textAlign = 'center';
-    restartCell.style.padding = '0';
+  // Add restart button cell
+  const restartCell = document.createElement('td');
+  restartCell.style.textAlign = 'center';
+  restartCell.style.padding = '0';
 
-    const restartBtn = document.createElement('button');
-    restartBtn.className = 'restart-btn';
-    restartBtn.title = 'Restart this agent';
-    restartBtn.innerHTML = '&#x21bb;';
-    restartBtn.dataset.agentId = a.id;
-    restartBtn.dataset.prompt = a.prompt;
-    restartBtn.dataset.persona = a.persona;
-    restartBtn.dataset.backend = a.model;
+  const restartBtn = document.createElement('button');
+  restartBtn.className = 'restart-btn';
+  restartBtn.title = 'Restart this agent';
+  restartBtn.innerHTML = '&#x21bb;';
+  restartBtn.dataset.agentId = a.id;
+  restartBtn.dataset.prompt = a.prompt;
+  restartBtn.dataset.persona = a.persona;
+  restartBtn.dataset.backend = a.model;
 
-    restartBtn.onclick = (e) => {
-      e.stopPropagation();
-      restartAgent(e.target);
-    };
-
-    restartCell.appendChild(restartBtn);
-    tr.appendChild(restartCell);
-  }
-
-  tr.style.cursor = 'pointer';
-  tr.onclick = (e) => {
-    // Don't navigate if clicking the restart button
-    if (e.target.classList.contains('restart-btn')) {
-      return;
-    }
-    window.location.href = chatLink;
+  restartBtn.onclick = (e) => {
+    e.stopPropagation();
+    restartAgent(e.target);
   };
+
+  restartCell.appendChild(restartBtn);
+  tr.appendChild(restartCell);
+
+  // Click row to open the run modal
+  tr.className = 'clickable-row';
+  tr.onclick = (e) => {
+    if (e.target.classList.contains('restart-btn')) return;
+    viewAgentRun(a.id);
+  };
+
   return tr;
 }
 
 function loadAgentSessions(page = 0) {
   const offset = page * pageSize;
-  fetch(`{{ url_for('app:agents.agents_list') }}?type=all&limit=${pageSize}&offset=${offset}`)
+  fetch(`{{ url_for('app:agents.agents_list') }}?limit=${pageSize}&offset=${offset}`)
     .then(r => {
       if (!r.ok) {
         throw new Error(`HTTP ${r.status}: ${r.statusText}`);
@@ -2408,45 +2473,24 @@ function loadAgentSessions(page = 0) {
       return r.json();
     })
     .then(data => {
-      // Check for API error response
       if (data.error) {
         throw new Error(data.error);
       }
 
       const agents = data.agents || [];
       const pagination = data.pagination;
-      const liveCount = data.live_count || 0;
-      const historicalCount = data.historical_count || 0;
+      const historicalCount = data.historical_count || agents.length;
 
-      // Separate live and historical agents
-      const liveAgents = agents.filter(a => a.status === 'running');
-      const historicalAgents = agents.filter(a => a.status !== 'running');
-
-      // Update counts
-      document.getElementById('liveCount').textContent = liveCount;
+      // Update count
       document.getElementById('historicalCount').textContent = historicalCount;
 
-      // Update live agents table
-      const liveTable = document.getElementById('liveAgentTable');
-      const liveEmpty = document.getElementById('liveEmpty');
-
-      if (liveAgents.length > 0) {
-        liveTable.innerHTML = '<tr><th></th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th></tr>';
-        liveAgents.forEach(a => liveTable.appendChild(buildRow(a, false)));
-        liveTable.style.display = 'table';
-        liveEmpty.style.display = 'none';
-      } else {
-        liveTable.style.display = 'none';
-        liveEmpty.style.display = 'block';
-      }
-
-      // Update historical agents table
+      // Update agents table
       const histTable = document.getElementById('historicalAgentTable');
       const histEmpty = document.getElementById('historicalEmpty');
 
-      if (historicalAgents.length > 0) {
-        histTable.innerHTML = '<tr><th></th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th><th>⚙️</th></tr>';
-        historicalAgents.forEach(a => histTable.appendChild(buildRow(a, true)));
+      if (agents.length > 0) {
+        histTable.innerHTML = '<tr><th></th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th><th></th></tr>';
+        agents.forEach(a => histTable.appendChild(buildRow(a)));
         histTable.style.display = 'table';
         histEmpty.style.display = 'none';
       } else {
@@ -2462,59 +2506,13 @@ function loadAgentSessions(page = 0) {
       } else {
         document.getElementById('pagination').style.display = 'none';
       }
-
-      // Hide any previous error warnings
-      hideConnectionWarning();
     })
     .catch(err => {
       console.error('Failed to load agents:', err);
-
-      // Still try to load historical agents even if cortex is down
-      fetch(`{{ url_for('app:agents.agents_list') }}?type=historical&limit=${pageSize}&offset=${offset}`)
-        .then(r => r.json())
-        .then(data => {
-          const historicalAgents = data.agents || [];
-          const historicalCount = data.historical_count || 0;
-
-          // Update historical count
-          document.getElementById('historicalCount').textContent = historicalCount;
-
-          // Clear live agents section
-          document.getElementById('liveCount').textContent = '0';
-          document.getElementById('liveAgentTable').style.display = 'none';
-          document.getElementById('liveEmpty').style.display = 'block';
-
-          // Update historical agents table
-          const histTable = document.getElementById('historicalAgentTable');
-          const histEmpty = document.getElementById('historicalEmpty');
-
-          if (historicalAgents.length > 0) {
-            histTable.innerHTML = '<tr><th></th><th>Started</th><th>Runtime</th><th>Model</th><th>Agent</th><th>Prompt</th><th>⚙️</th></tr>';
-            historicalAgents.forEach(a => histTable.appendChild(buildRow(a, true)));
-            histTable.style.display = 'table';
-            histEmpty.style.display = 'none';
-          } else {
-            histTable.style.display = 'none';
-            histEmpty.style.display = 'block';
-          }
-
-          // Update pagination
-          if (data.pagination && data.pagination.total > data.pagination.limit) {
-            updatePagination(data.pagination);
-          } else {
-            document.getElementById('pagination').style.display = 'none';
-          }
-        })
-        .catch(() => {
-          // Total failure - clear everything
-          document.getElementById('liveCount').textContent = '0';
-          document.getElementById('historicalCount').textContent = '0';
-          document.getElementById('liveAgentTable').style.display = 'none';
-          document.getElementById('liveEmpty').style.display = 'block';
-          document.getElementById('historicalAgentTable').style.display = 'none';
-          document.getElementById('historicalEmpty').style.display = 'block';
-          document.getElementById('pagination').style.display = 'none';
-        });
+      document.getElementById('historicalCount').textContent = '0';
+      document.getElementById('historicalAgentTable').style.display = 'none';
+      document.getElementById('historicalEmpty').style.display = 'block';
+      document.getElementById('pagination').style.display = 'none';
     });
 }
 
@@ -2543,28 +2541,6 @@ function changePage(delta) {
   const newPage = currentPage + delta;
   if (newPage >= 0) {
     loadAgentSessions(newPage);
-  }
-}
-
-// Connection warning functions
-function showConnectionWarning(message) {
-  let warning = document.getElementById('connectionWarning');
-  if (!warning) {
-    warning = document.createElement('div');
-    warning.id = 'connectionWarning';
-    warning.style.cssText = 'background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:0.75rem;margin:1rem 0;border-radius:4px;text-align:center;';
-    const container = document.querySelector('.agents-content');
-    const firstChild = container.children[1]; // Insert after h1
-    container.insertBefore(warning, firstChild);
-  }
-  warning.innerHTML = `⚠️ <strong>Cortex Service Unavailable:</strong> ${message}`;
-  warning.style.display = 'block';
-}
-
-function hideConnectionWarning() {
-  const warning = document.getElementById('connectionWarning');
-  if (warning) {
-    warning.style.display = 'none';
   }
 }
 
@@ -2890,37 +2866,6 @@ window.onclick = function(event) {
   }
 };
 
-// Auto-refresh live agents
-let refreshInterval = null;
-
-function startAutoRefresh() {
-  // Refresh every 5 seconds if on the log tab
-  if (currentMainTab === 'log' && !refreshInterval) {
-    refreshInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        // Only refresh the current page
-        loadAgentSessions(currentPage);
-      }
-    }, 5000);
-  }
-}
-
-function stopAutoRefresh() {
-  if (refreshInterval) {
-    clearInterval(refreshInterval);
-    refreshInterval = null;
-  }
-}
-
-// Start/stop refresh based on tab
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    stopAutoRefresh();
-  } else if (currentMainTab === 'log') {
-    startAutoRefresh();
-  }
-});
-
 // Handle tools dropdown change for modal
 document.addEventListener('DOMContentLoaded', () => {
   const toolsSelect = document.getElementById('modalTools');
@@ -3244,9 +3189,77 @@ function closeAgentPreviewModal() {
   document.getElementById('agentPreviewModal').style.display = 'none';
 }
 
-// Initialize - The Log tab is shown by default now
+// Agent Run Modal Functions - view completed agent execution transcripts
+function viewAgentRun(agentId) {
+  const modal = document.getElementById('agentRunModal');
+  const title = document.getElementById('agentRunModalTitle');
+  const content = document.getElementById('agentRunContent');
+
+  // Show modal with loading state
+  title.textContent = `Agent Run: ${agentId}`;
+  content.innerHTML = '<div class="loading-spinner">Loading agent transcript...</div>';
+  modal.style.display = 'block';
+
+  // Fetch formatted agent run
+  fetch(`/app/agents/api/run/${agentId}`)
+    .then(r => {
+      if (!r.ok) {
+        return r.json().then(data => {
+          throw new Error(data.error || `HTTP ${r.status}`);
+        });
+      }
+      return r.json();
+    })
+    .then(data => {
+      if (data.error && !data.markdown) {
+        content.innerHTML = `<div class="error-message">${data.error}</div>`;
+        return;
+      }
+
+      // Render markdown
+      const markdown = data.markdown || '';
+      content.innerHTML = marked.parse(markdown, {
+        breaks: true,
+        gfm: true
+      });
+
+      // Show warning if there were skipped entries
+      if (data.error) {
+        const warning = document.createElement('div');
+        warning.className = 'error-message';
+        warning.style.marginTop = '1rem';
+        warning.textContent = data.error;
+        content.appendChild(warning);
+      }
+    })
+    .catch(err => {
+      content.innerHTML = `<div class="error-message">Error loading agent run: ${err.message}</div>`;
+    });
+}
+
+function closeAgentRunModal() {
+  document.getElementById('agentRunModal').style.display = 'none';
+}
+
+// Close agent run modal on ESC key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const runModal = document.getElementById('agentRunModal');
+    if (runModal && runModal.style.display === 'block') {
+      closeAgentRunModal();
+    }
+  }
+});
+
+// Close agent run modal when clicking outside
+document.getElementById('agentRunModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeAgentRunModal();
+  }
+});
+
+// Initialize - Load completed runs on page load
 setTimeout(() => {
   loadAgentSessions();
-  startAutoRefresh();
 }, 100);
 </script>
