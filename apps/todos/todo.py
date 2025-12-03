@@ -1,14 +1,19 @@
-"""Todo checklist utilities shared across think components."""
+"""Todo checklist utilities shared across think components.
+
+Todos are stored as JSONL files with one JSON object per line. Line number (1-indexed)
+serves as the stable todo ID since todos are never removed, only cancelled.
+"""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -19,21 +24,15 @@ __all__ = [
     "TodoItem",
     "TodoError",
     "TodoLineNumberError",
-    "TodoGuardMismatchError",
     "TodoEmptyTextError",
     "get_todos",
     "todo_file_path",
-    "format_numbered",
-    "parse_entry",
     "validate_line_number",
-    "parse_item",
-    "parse_items",
     "upcoming",
     "get_facets_with_todos",
 ]
 
-TODO_ENTRY_RE = re.compile(r"^- \[( |x|X)\]\s?(.*)$")
-LEADING_MARKUP_RE = re.compile(r"\*\*([^*]+)\*\*:\s*(.*)")
+# Regex for extracting time annotation from text
 TIME_RE = re.compile(r"\((\d{1,2}:[0-5]\d)\)\s*$")
 
 
@@ -50,19 +49,72 @@ class TodoLineNumberError(TodoError):
         self.received = received
 
 
-class TodoGuardMismatchError(TodoError):
-    """Raised when guard text does not match the current todo line."""
-
-    def __init__(self, expected: str) -> None:
-        super().__init__("guard text does not match current todo")
-        self.expected = expected
-
-
 class TodoEmptyTextError(TodoError):
     """Raised when attempting to add an empty todo entry."""
 
     def __init__(self) -> None:
         super().__init__("todo text cannot be empty")
+
+
+@dataclass(slots=True)
+class TodoItem:
+    """Structured representation of a todo entry."""
+
+    index: int
+    text: str
+    time: str | None
+    completed: bool
+    cancelled: bool
+
+    def as_dict(self) -> dict[str, object]:
+        """Return the item as a JSON-serializable dictionary."""
+        return {
+            "index": self.index,
+            "text": self.text,
+            "time": self.time,
+            "completed": self.completed,
+            "cancelled": self.cancelled,
+        }
+
+    def to_jsonl(self) -> dict[str, Any]:
+        """Return the item as a JSONL-compatible dictionary for storage."""
+        data: dict[str, Any] = {"text": self.text}
+        if self.time:
+            data["time"] = self.time
+        if self.completed:
+            data["completed"] = True
+        if self.cancelled:
+            data["cancelled"] = True
+        return data
+
+    @classmethod
+    def from_jsonl(cls, data: dict[str, Any], index: int) -> "TodoItem":
+        """Create a TodoItem from a JSONL dictionary."""
+        return cls(
+            index=index,
+            text=data.get("text", ""),
+            time=data.get("time"),
+            completed=data.get("completed", False),
+            cancelled=data.get("cancelled", False),
+        )
+
+    def display_line(self) -> str:
+        """Return human-readable display format for this todo."""
+        if self.cancelled:
+            checkbox = "[cancelled]"
+        elif self.completed:
+            checkbox = "[x]"
+        else:
+            checkbox = "[ ]"
+
+        text = self.text
+        if self.time:
+            text = f"{text} ({self.time})"
+
+        if self.cancelled:
+            return f"~~{checkbox} {text}~~"
+
+        return f"{checkbox} {text}"
 
 
 @dataclass(slots=True)
@@ -72,27 +124,21 @@ class TodoChecklist:
     day: str
     facet: str
     path: Path
-    entries: list[str]
+    items: list[TodoItem]
     exists: bool
 
-    def _validated_body(self, text: str) -> str:
+    def _validated_text(self, text: str) -> str:
+        """Validate and clean todo text."""
         body = text.strip()
         if not body:
             raise TodoEmptyTextError()
         return body
 
-    def _entry_components(
-        self, line_number: int, guard: str
-    ) -> tuple[int, str, bool, str]:
-        validate_line_number(line_number, len(self.entries))
-
+    def _get_item(self, line_number: int) -> tuple[int, TodoItem]:
+        """Get item by line number, returning (index, item)."""
+        validate_line_number(line_number, len(self.items))
         index = line_number - 1
-        entry = self.entries[index]
-        completed, body = parse_entry(entry)
-        if guard and guard != entry:
-            raise TodoGuardMismatchError(entry)
-
-        return index, entry, completed, body
+        return index, self.items[index]
 
     @classmethod
     def load(cls, day: str, facet: str) -> "TodoChecklist":
@@ -103,118 +149,206 @@ class TodoChecklist:
             facet: Facet name (e.g., "personal", "work").
 
         Returns:
-            TodoChecklist instance with entries loaded from disk, or empty if file doesn't exist.
+            TodoChecklist instance with items loaded from disk, or empty if file doesn't exist.
         """
-
         path = todo_file_path(day, facet)
-
         exists = path.is_file()
-        if not exists:
-            entries: list[str] = []
-        else:
-            text = path.read_text(encoding="utf-8")
-            entries = [line.rstrip("\n") for line in text.splitlines() if line.strip()]
+        items: list[TodoItem] = []
 
-        return cls(day=day, facet=facet, path=path, entries=entries, exists=exists)
+        if exists:
+            try:
+                text = path.read_text(encoding="utf-8")
+                item_index = 0
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    item_index += 1
+                    try:
+                        data = json.loads(line)
+                        items.append(TodoItem.from_jsonl(data, item_index))
+                    except json.JSONDecodeError:
+                        logging.debug(
+                            "Skipping malformed JSONL line %d in %s", item_index, path
+                        )
+                        continue
+            except OSError as exc:
+                logging.debug("Failed reading todos from %s: %s", path, exc)
+                exists = False
+
+        return cls(day=day, facet=facet, path=path, items=items, exists=exists)
 
     def save(self) -> None:
         """Persist the checklist back to disk, creating parent directories if needed."""
-
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        content = "\n".join(self.entries)
-        if self.entries:
+
+        lines = []
+        for item in self.items:
+            lines.append(json.dumps(item.to_jsonl(), ensure_ascii=False))
+
+        content = "\n".join(lines)
+        if lines:
             content += "\n"
         self.path.write_text(content, encoding="utf-8")
+        self.exists = True
 
-    def numbered(self) -> str:
-        """Return checklist entries formatted with ``1:`` numbering."""
+    def display(self) -> str:
+        """Return checklist formatted for display with line numbers.
 
-        return format_numbered(self.entries)
+        All items are included. Cancelled items are shown with ~~strikethrough~~.
+        """
+        if not self.items:
+            return "0: (no todos)"
 
-    def add_entry(self, line_number: int, text: str) -> None:
-        """Append a new unchecked todo entry."""
+        lines = [f"{item.index}: {item.display_line()}" for item in self.items]
+        return "\n".join(lines)
 
-        expected = len(self.entries) + 1
+    def add_entry(
+        self, line_number: int, text: str, time: str | None = None
+    ) -> TodoItem:
+        """Append a new unchecked todo entry.
+
+        Args:
+            line_number: Expected next line value; must be ``current_count + 1``.
+            text: Body of the todo item.
+            time: Optional scheduled time in "HH:MM" format.
+
+        Returns:
+            The newly created TodoItem.
+        """
+        expected = len(self.items) + 1
         if line_number != expected:
             raise TodoLineNumberError(expected, line_number)
 
-        self.append_entry(text)
+        return self.append_entry(text, time)
 
-    def append_entry(self, text: str) -> None:
-        """Append a new unchecked todo entry without line validation."""
+    def append_entry(self, text: str, time: str | None = None) -> TodoItem:
+        """Append a new unchecked todo entry without line validation.
 
-        body = self._validated_body(text)
-        entry_line = f"- [ ] {body}"
+        Args:
+            text: Body of the todo item.
+            time: Optional scheduled time in "HH:MM" format. If not provided,
+                  will be extracted from text if present as (HH:MM) suffix.
 
-        # Validate that the entry can be parsed correctly
-        item = parse_item(entry_line, len(self.entries) + 1)
-        if item is None:
-            raise TodoError(f"Failed to create valid todo entry from: {body}")
+        Returns:
+            The newly created TodoItem.
+        """
+        body = self._validated_text(text)
 
-        self.entries.append(entry_line)
+        # Extract time from text if not explicitly provided
+        if time is None:
+            time_match = TIME_RE.search(body)
+            if time_match:
+                hour_str = time_match.group(1).split(":", 1)[0]
+                try:
+                    if 0 <= int(hour_str) <= 23:
+                        time = time_match.group(1)
+                        body = body[: time_match.start()].rstrip()
+                except ValueError:
+                    pass
+
+        item = TodoItem(
+            index=len(self.items) + 1,
+            text=body,
+            time=time,
+            completed=False,
+            cancelled=False,
+        )
+
+        self.items.append(item)
         self.save()
+        return item
 
-    def remove_entry(self, line_number: int, guard: str) -> None:
-        """Remove a todo entry after validating guard text."""
+    def cancel_entry(self, line_number: int) -> TodoItem:
+        """Cancel a todo entry (soft delete).
 
-        index, _, _, _ = self._entry_components(line_number, guard)
+        Args:
+            line_number: 1-based index of the entry to cancel.
 
-        del self.entries[index]
+        Returns:
+            The cancelled TodoItem.
+        """
+        index, item = self._get_item(line_number)
+
+        item.cancelled = True
         self.save()
+        return item
 
-    def mark_done(self, line_number: int, guard: str) -> None:
-        """Mark a todo entry complete."""
+    def mark_done(self, line_number: int) -> TodoItem:
+        """Mark a todo entry complete.
 
-        index, _, _, body = self._entry_components(line_number, guard)
+        Args:
+            line_number: 1-based index of the entry to mark as done.
 
-        self.entries[index] = f"- [x] {body}"
+        Returns:
+            The updated TodoItem.
+        """
+        index, item = self._get_item(line_number)
+
+        item.completed = True
         self.save()
+        return item
 
-    def mark_undone(self, line_number: int, guard: str) -> None:
-        """Mark a todo entry incomplete."""
+    def mark_undone(self, line_number: int) -> TodoItem:
+        """Mark a todo entry incomplete.
 
-        index, _, _, body = self._entry_components(line_number, guard)
+        Args:
+            line_number: 1-based index of the entry to mark as not done.
 
-        self.entries[index] = f"- [ ] {body}"
+        Returns:
+            The updated TodoItem.
+        """
+        index, item = self._get_item(line_number)
+
+        item.completed = False
         self.save()
+        return item
 
-    def update_entry_text(self, line_number: int, guard: str, text: str) -> None:
-        """Replace the body text of an entry while keeping its completion state."""
+    def update_entry_text(self, line_number: int, text: str) -> TodoItem:
+        """Replace the body text of an entry while keeping its completion state.
 
-        index, _, completed, _ = self._entry_components(line_number, guard)
-        body = self._validated_body(text)
+        Args:
+            line_number: 1-based index of the entry to update.
+            text: New text for the todo item.
 
-        checkbox = "[x]" if completed else "[ ]"
-        self.entries[index] = f"- {checkbox} {body}"
+        Returns:
+            The updated TodoItem.
+        """
+        index, item = self._get_item(line_number)
+        body = self._validated_text(text)
+
+        # Extract time from new text
+        time: str | None = None
+        time_match = TIME_RE.search(body)
+        if time_match:
+            hour_str = time_match.group(1).split(":", 1)[0]
+            try:
+                if 0 <= int(hour_str) <= 23:
+                    time = time_match.group(1)
+                    body = body[: time_match.start()].rstrip()
+            except ValueError:
+                pass
+
+        item.text = body
+        item.time = time
         self.save()
+        return item
 
+    def get_item(self, line_number: int) -> TodoItem:
+        """Get a todo item by line number.
 
-@dataclass(slots=True)
-class TodoItem:
-    """Structured representation of a todo entry."""
+        Args:
+            line_number: 1-based index of the entry.
 
-    index: int
-    raw: str
-    text: str
-    time: str | None
-    completed: bool
-    cancelled: bool
-
-    def as_dict(self) -> dict[str, object]:
-        """Return the item as a JSON-serializable dictionary."""
-
-        return {
-            "index": self.index,
-            "raw": self.raw,
-            "text": self.text,
-            "time": self.time,
-            "completed": self.completed,
-            "cancelled": self.cancelled,
-        }
+        Returns:
+            The TodoItem at that line number.
+        """
+        _, item = self._get_item(line_number)
+        return item
 
 
 def todo_file_path(day: str, facet: str) -> Path:
-    """Return the absolute path to ``facets/{facet}/todos/{day}.md``.
+    """Return the absolute path to ``facets/{facet}/todos/{day}.jsonl``.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
@@ -223,113 +357,15 @@ def todo_file_path(day: str, facet: str) -> Path:
     Returns:
         Path to the facet-scoped todo file for the specified day.
     """
-
     load_dotenv()
     journal = os.getenv("JOURNAL_PATH", "journal")
-    return Path(journal) / "facets" / facet / "todos" / f"{day}.md"
-
-
-def format_numbered(entries: Sequence[str]) -> str:
-    """Return ``entries`` formatted with ``1:`` style numbering."""
-
-    if not entries:
-        return "0: (no todos)"
-
-    return "\n".join(f"{idx}: {line}" for idx, line in enumerate(entries, start=1))
-
-
-def parse_entry(entry: str) -> tuple[bool, str]:
-    """Parse a markdown todo entry and return completion flag and body text."""
-
-    match = TODO_ENTRY_RE.match(entry)
-    if not match:
-        raise ValueError("entry is not a markdown checklist item")
-
-    completed = match.group(1).lower() == "x"
-    text = match.group(2)
-    return completed, text
+    return Path(journal) / "facets" / facet / "todos" / f"{day}.jsonl"
 
 
 def validate_line_number(line_number: int, max_line: int) -> None:
     """Ensure ``line_number`` is within ``[1, max_line]`` inclusive."""
-
     if line_number < 1 or line_number > max_line:
         raise IndexError(f"line number {line_number} is out of range (1..{max_line})")
-
-
-def parse_item(line: str, index: int) -> TodoItem | None:
-    """Parse a single todo line into a structured :class:`TodoItem` object.
-
-    Args:
-        line: The raw todo line text to parse.
-        index: The 1-based index for this item.
-
-    Returns:
-        A TodoItem object if the line is valid, None otherwise.
-    """
-
-    stripped = line.strip()
-    if not stripped or not stripped.startswith("- ["):
-        return None
-
-    match_state = TODO_ENTRY_RE.match(stripped)
-    if not match_state:
-        return None
-
-    completed = match_state.group(1).lower() == "x"
-    remainder = match_state.group(2).strip()
-
-    cancelled = False
-    cleaned = remainder
-    if cleaned.startswith("~~"):
-        close_idx = cleaned.find("~~", 2)
-        if close_idx > 0:
-            cancelled = True
-            inner = cleaned[2:close_idx].strip()
-            tail = cleaned[close_idx + 2 :].strip()
-            cleaned = inner + (f" {tail}" if tail else "")
-
-    description = cleaned
-
-    markup_match = LEADING_MARKUP_RE.match(cleaned)
-    if markup_match:
-        description = markup_match.group(2).strip()
-
-    time: str | None = None
-    time_match = TIME_RE.search(description)
-    if time_match:
-        hour_str = time_match.group(1).split(":", 1)[0]
-        try:
-            if 0 <= int(hour_str) <= 23:
-                time = time_match.group(1)
-                description = description[: time_match.start()].rstrip()
-        except ValueError:
-            pass
-
-    return TodoItem(
-        index=index,
-        raw=stripped,
-        text=description,
-        time=time,
-        completed=completed,
-        cancelled=cancelled,
-    )
-
-
-def parse_items(entries: Iterable[str]) -> list[TodoItem]:
-    """Parse todo ``entries`` into structured :class:`TodoItem` objects."""
-
-    items: list[TodoItem] = []
-    index = 0
-
-    for raw in entries:
-        item = parse_item(raw, index + 1)
-        if item:
-            index += 1
-            item.index = index  # Update with actual sequential index
-            items.append(item)
-
-    return items
 
 
 def get_todos(day: str, facet: str) -> list[dict[str, Any]] | None:
@@ -343,7 +379,6 @@ def get_todos(day: str, facet: str) -> list[dict[str, Any]] | None:
         List of parsed todo entries or ``None`` when the checklist does not
         exist or cannot be read.
     """
-
     try:
         checklist = TodoChecklist.load(day, facet)
     except OSError as exc:  # pragma: no cover - filesystem failure
@@ -353,7 +388,7 @@ def get_todos(day: str, facet: str) -> list[dict[str, Any]] | None:
     if not checklist.exists:
         return None
 
-    return [item.as_dict() for item in parse_items(checklist.entries)]
+    return [item.as_dict() for item in checklist.items]
 
 
 def upcoming(
@@ -368,10 +403,9 @@ def upcoming(
 
     Returns:
         Markdown with sections per facet and day. Format is ``### {Facet Title}: YYYYMMDD``
-        followed by raw todo checklist lines. When no upcoming items exist the string
+        followed by todo display lines. When no upcoming items exist the string
         ``"No upcoming todos."`` is returned.
     """
-
     if limit <= 0:
         return "No upcoming todos."
 
@@ -401,7 +435,7 @@ def upcoming(
         return "No upcoming todos."
 
     # Collect all todos across facets
-    all_todos: list[tuple[str, str, list[str]]] = []  # (facet, day, lines)
+    all_todos: list[tuple[str, str, list[str]]] = []  # (facet, day, display_lines)
 
     for facet_name, facet_path in facet_paths:
         todos_dir = facet_path / "todos"
@@ -413,7 +447,7 @@ def upcoming(
                 f.stem
                 for f in todos_dir.iterdir()
                 if f.is_file()
-                and f.suffix == ".md"
+                and f.suffix == ".jsonl"
                 and len(f.stem) == 8
                 and f.stem.isdigit()
                 and f.stem > today_str
@@ -421,20 +455,14 @@ def upcoming(
         except OSError:  # pragma: no cover - filesystem failure
             continue
 
-        for day in todo_files:
-            todo_path = todos_dir / f"{day}.md"
-            try:
-                lines = [
-                    line.rstrip("\n")
-                    for line in todo_path.read_text(encoding="utf-8").splitlines()
-                    if line.strip()
-                ]
-            except OSError:  # pragma: no cover - filesystem failure
-                continue
-
-            items = parse_items(lines)
-            if items:
-                all_todos.append((facet_name, day, [item.raw for item in items]))
+        for day_str in todo_files:
+            checklist = TodoChecklist.load(day_str, facet_name)
+            # Filter to non-cancelled items for display
+            display_lines = [
+                item.display_line() for item in checklist.items if not item.cancelled
+            ]
+            if display_lines:
+                all_todos.append((facet_name, day_str, display_lines))
 
     if not all_todos:
         return "No upcoming todos."
@@ -446,7 +474,7 @@ def upcoming(
     remaining = limit
     sections: list[str] = []
 
-    for facet_name, day, lines in all_todos:
+    for facet_name, day_str, lines in all_todos:
         # Get facet title for better display
         try:
             facets = get_facets()
@@ -462,7 +490,7 @@ def upcoming(
                 break
 
         if day_lines:
-            section = "\n".join([f"### {facet_title}: {day}"] + day_lines)
+            section = "\n".join([f"### {facet_title}: {day_str}"] + day_lines)
             sections.append(section)
 
         if remaining == 0:
@@ -484,7 +512,6 @@ def get_facets_with_todos(day: str) -> list[str]:
         List of facet names that have todo files for the specified day.
         Returns empty list if no facets have todos or if journal path is invalid.
     """
-
     journal = os.getenv("JOURNAL_PATH", "journal")
     root = Path(journal)
     facets_dir = root / "facets"
@@ -499,7 +526,7 @@ def get_facets_with_todos(day: str) -> list[str]:
             if not facet_dir.is_dir():
                 continue
 
-            todo_path = facet_dir / "todos" / f"{day}.md"
+            todo_path = facet_dir / "todos" / f"{day}.jsonl"
             if todo_path.is_file():
                 facets_with_todos.append(facet_dir.name)
     except OSError:  # pragma: no cover - filesystem failure

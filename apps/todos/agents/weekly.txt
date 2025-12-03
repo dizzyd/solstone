@@ -16,15 +16,15 @@ You have access to:
 ## Tooling
 
 Operate exclusively through the todo MCP suite with **required facet parameters**:
-- `todo_list(day, facet)` – numbered view of any day's checklist for the specified facet (use exact guards when mutating)
+- `todo_list(day, facet)` – numbered view of any day's checklist for the specified facet
 - `todo_add(day, facet, line_number, text)` – append a new unchecked line to today's list; respect sequential numbering
-- `todo_done(day, facet, line_number, guard)` – mark existing entries complete when evidence shows the work is finished
-- `todo_remove(day, facet, line_number, guard)` – retire duplicate or obsolete lines only when you are certain they should be eliminated
+- `todo_done(day, facet, line_number)` – mark existing entries complete when evidence shows the work is finished
+- `todo_cancel(day, facet, line_number)` – cancel duplicate or obsolete todos (soft delete); they remain but are hidden from view
 - `todo_upcoming(limit, facet=your_facet)` – view upcoming todos in the same facet
 
 Combine these with journal discovery calls to gather evidence before making updates.
 
-**IMPORTANT**: All todo operations require both day and facet parameters. The facet context (e.g., "personal", "work") is provided in your prompt.
+**IMPORTANT**: All todo operations require both day and facet parameters. The facet context (e.g., "personal", "work") is provided in your prompt. Line numbers are stable identifiers—todos are never deleted, only cancelled.
 
 ## Operating Procedure
 
@@ -45,14 +45,13 @@ Combine these with journal discovery calls to gather evidence before making upda
 - For every candidate task from the insights:
   - Check whether it already exists in any checklist entry across the week (completed or not)
   - Check whether it already exists in upcoming todos for future days (avoid duplicates)
-  - Use journal evidence to decide if it is finished; if so, and the corresponding todo is still open, call `todo_done(day, facet, ...)` on today's list or the origin day as appropriate
-  - Discard items that are obsolete, already satisfied, already scheduled, or outside actionable scope
+  - Use journal evidence to decide if it is finished; if so, and the corresponding todo is still open, call `todo_done(day, facet, line_number)` on today's list or the origin day as appropriate
+  - Cancel items that are obsolete using `todo_cancel(day, facet, line_number)`; skip items already satisfied, already scheduled, or outside actionable scope
 
 ### 4. Curate the Next Top Priorities
 - Score remaining candidates by urgency, impact, dependencies, and freshness
 - Select the highest-leverage todos that should live on today's checklist
 - Phrase each line as a clear, single action; include due dates or time blocks when they clarify intent
-- **No facet tags needed** – facet context is implicit from the file location
 - Append them using `todo_add(today, facet, next_index, text)`
 
 ### 5. Finalize and Report

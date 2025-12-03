@@ -17,7 +17,6 @@ from flask import (
 from apps.todos.todo import (
     TodoChecklist,
     TodoEmptyTextError,
-    TodoGuardMismatchError,
     TodoLineNumberError,
     get_todos,
 )
@@ -34,14 +33,17 @@ def _compute_badge_counts(day: str, facet: str) -> dict:
     """Compute badge counts for a specific facet and total for today.
 
     Returns dict with 'facet_count' and 'total_count'.
+    Excludes cancelled todos from counts.
     """
     today = date.today().strftime("%Y%m%d")
 
-    # Get count for the specific facet
+    # Get count for the specific facet (exclude cancelled)
     facet_todos = get_todos(day, facet)
     facet_count = 0
     if facet_todos:
-        facet_count = sum(1 for t in facet_todos if not t.get("completed"))
+        facet_count = sum(
+            1 for t in facet_todos if not t.get("completed") and not t.get("cancelled")
+        )
 
     # Get total count across all facets for today (for app icon badge)
     total_count = 0
@@ -54,7 +56,11 @@ def _compute_badge_counts(day: str, facet: str) -> dict:
         for facet_name in facet_map.keys():
             todos = get_todos(today, facet_name)
             if todos:
-                total_count += sum(1 for t in todos if not t.get("completed"))
+                total_count += sum(
+                    1
+                    for t in todos
+                    if not t.get("completed") and not t.get("cancelled")
+                )
 
     return {"facet_count": facet_count, "total_count": total_count}
 
@@ -73,7 +79,11 @@ def badge_count():
     for facet_name in facet_map.keys():
         facet_todos = get_todos(today, facet_name)
         if facet_todos:
-            total += sum(1 for todo in facet_todos if not todo.get("completed"))
+            total += sum(
+                1
+                for todo in facet_todos
+                if not todo.get("completed") and not todo.get("cancelled")
+            )
 
     return jsonify({"count": total})
 
@@ -87,7 +97,7 @@ def api_stats(month: str):
 
     Returns:
         JSON dict mapping day (YYYYMMDD) to facet counts dict.
-        Count is number of todos (both complete and incomplete) for that day.
+        Count is number of non-cancelled todos for that day.
     """
     import re
 
@@ -107,24 +117,25 @@ def api_stats(month: str):
         if not todos_dir.exists():
             continue
 
-        for todo_file in todos_dir.glob(f"{month}*.md"):
+        for todo_file in todos_dir.glob(f"{month}*.jsonl"):
             day = todo_file.stem
             if not DATE_RE.fullmatch(day):
                 continue
 
-            # Count todos in file
+            # Count non-cancelled todos in file
             facet_todos = get_todos(day, facet_name)
             if facet_todos:
-                count = len(facet_todos)
-                if day not in stats:
-                    stats[day] = {}
-                stats[day][facet_name] = count
+                count = sum(1 for t in facet_todos if not t.get("cancelled"))
+                if count > 0:
+                    if day not in stats:
+                        stats[day] = {}
+                    stats[day][facet_name] = count
 
     return jsonify(stats)
 
 
 def _todo_path(day: str, facet: str) -> Path:
-    return Path(state.journal_root) / "facets" / facet / "todos" / f"{day}.md"
+    return Path(state.journal_root) / "facets" / facet / "todos" / f"{day}.jsonl"
 
 
 @todos_bp.route("/")
@@ -183,38 +194,27 @@ def todos_day(day: str):  # type: ignore[override]
                 if not error_message:
                     try:
                         checklist = TodoChecklist.load(day, facet)
-                        checklist.append_entry(text)
-
-                        new_index = len(checklist.entries)
-                        new_guard = checklist.entries[new_index - 1]
+                        item = checklist.append_entry(text)
 
                         log_app_action(
                             app="todos",
                             facet=facet,
                             action="todo_add",
-                            params={"text": text, "line_number": new_index},
+                            params={"text": item.text, "line_number": item.index},
                             day=day,
                         )
 
                         # If AJAX request, return JSON with new todo data
                         if is_ajax:
-                            # Extract time if present (e.g., "14:30")
-                            import re as time_re
-
-                            time_match = time_re.search(
-                                r"\((\d{1,2}:\d{2})\)", new_guard
-                            )
-                            time_str = time_match.group(1) if time_match else None
                             counts = _compute_badge_counts(day, facet)
                             return jsonify(
                                 {
                                     "status": "ok",
                                     "todo": {
                                         "facet": facet,
-                                        "index": new_index,
-                                        "guard": new_guard,
-                                        "text": text,
-                                        "time": time_str,
+                                        "index": item.index,
+                                        "text": item.text,
+                                        "time": item.time,
                                         "completed": False,
                                     },
                                     **counts,
@@ -240,7 +240,6 @@ def todos_day(day: str):  # type: ignore[override]
         # Get facet and index for other actions
         facet = request.form.get("facet", "personal")
         index_str = request.form.get("index")
-        guard = request.form.get("guard", "").strip()
 
         try:
             index = int(index_str) if index_str else None
@@ -261,40 +260,31 @@ def todos_day(day: str):  # type: ignore[override]
             return redirect(url_for("app:todos.todos_day", day=day))
 
         try:
-            # Extract text from guard for logging (guard format: "- [ ] text" or "- [x] text")
-            guard_text = guard[6:] if len(guard) > 6 else guard
-
             if action == "complete":
-                checklist.mark_done(index, guard)
+                item = checklist.mark_done(index)
                 log_app_action(
                     app="todos",
                     facet=facet,
                     action="todo_complete",
-                    params={"line_number": index, "text": guard_text},
+                    params={"line_number": index, "text": item.text},
                     day=day,
                 )
             elif action == "uncomplete":
-                checklist.mark_undone(index, guard)
+                item = checklist.mark_undone(index)
                 log_app_action(
                     app="todos",
                     facet=facet,
                     action="todo_uncomplete",
-                    params={"line_number": index, "text": guard_text},
+                    params={"line_number": index, "text": item.text},
                     day=day,
                 )
-            elif action == "remove":
-                # Capture completed status before removal
-                completed = guard.startswith("- [x]")
-                checklist.remove_entry(index, guard)
+            elif action == "cancel":
+                item = checklist.cancel_entry(index)
                 log_app_action(
                     app="todos",
                     facet=facet,
-                    action="todo_remove",
-                    params={
-                        "line_number": index,
-                        "text": guard_text,
-                        "completed": completed,
-                    },
+                    action="todo_cancel",
+                    params={"line_number": index, "text": item.text},
                     day=day,
                 )
             elif action == "edit":
@@ -325,25 +315,21 @@ def todos_day(day: str):  # type: ignore[override]
                         flash(f"Facet #{new_facet} does not exist", "error")
                         return redirect(url_for("app:todos.todos_day", day=day))
 
-                    # If facet changed, move the todo
+                    # If facet changed, move the todo (cancel source, add to target)
                     if new_facet != facet:
-                        # Get the completed status before moving
-                        _, source_entry, completed, _ = checklist._entry_components(
-                            index, guard
-                        )
+                        source_item = checklist.get_item(index)
+                        old_text = source_item.text
 
                         # Add to new facet
                         new_checklist = TodoChecklist.load(day, new_facet)
-                        new_checklist.append_entry(text)
-                        new_index = len(new_checklist.entries)
-                        new_guard = new_checklist.entries[new_index - 1]
+                        new_item = new_checklist.append_entry(text)
 
                         # Preserve completed status
-                        if completed:
-                            new_checklist.mark_done(new_index, new_guard)
+                        if source_item.completed:
+                            new_checklist.mark_done(new_item.index)
 
-                        # Remove from old facet
-                        checklist.remove_entry(index, source_entry)
+                        # Cancel from old facet
+                        checklist.cancel_entry(index)
 
                         log_app_action(
                             app="todos",
@@ -351,7 +337,7 @@ def todos_day(day: str):  # type: ignore[override]
                             action="todo_edit",
                             params={
                                 "line_number": index,
-                                "old_text": guard_text,
+                                "old_text": old_text,
                                 "new_text": text,
                                 "old_facet": facet,
                                 "new_facet": new_facet,
@@ -362,14 +348,15 @@ def todos_day(day: str):  # type: ignore[override]
                         return redirect(url_for("app:todos.todos_day", day=day))
 
                 # No facet change, just update text
-                checklist.update_entry_text(index, guard, text)
+                old_text = checklist.get_item(index).text
+                checklist.update_entry_text(index, text)
                 log_app_action(
                     app="todos",
                     facet=facet,
                     action="todo_edit",
                     params={
                         "line_number": index,
-                        "old_text": guard_text,
+                        "old_text": old_text,
                         "new_text": text,
                     },
                     day=day,
@@ -379,7 +366,7 @@ def todos_day(day: str):  # type: ignore[override]
                 return redirect(url_for("app:todos.todos_day", day=day))
         except TodoEmptyTextError:
             flash("Cannot update todo to empty text", "error")
-        except (TodoGuardMismatchError, TodoLineNumberError, IndexError, ValueError):
+        except (TodoLineNumberError, IndexError):
             flash("Todo list changed, please refresh and try again", "error")
 
         # If AJAX request, return JSON with updated counts
@@ -399,12 +386,13 @@ def todos_day(day: str):  # type: ignore[override]
         current_app.logger.debug("Failed to load facet metadata: %s", exc)
         facet_map = {}
 
-    # Collect todos from each facet (including empty facets)
+    # Collect todos from each facet (excluding cancelled, including empty facets)
     todos_by_facet = {}
     for facet_name in facet_map.keys():
         facet_todos = get_todos(day, facet_name)
         if facet_todos:
-            # Add facet info to each todo
+            # Filter out cancelled todos and add facet info
+            facet_todos = [t for t in facet_todos if not t.get("cancelled")]
             for todo in facet_todos:
                 todo["facet"] = facet_name
         else:
@@ -456,6 +444,7 @@ def todos_day(day: str):  # type: ignore[override]
 
 @todos_bp.route("/<day>/move", methods=["POST"])
 def move_todo(day: str):  # type: ignore[override]
+    """Move a todo to a different day by cancelling source and adding to target."""
     if not DATE_RE.fullmatch(day):
         return "", 404
 
@@ -463,7 +452,6 @@ def move_todo(day: str):  # type: ignore[override]
     target_day = (payload.get("target_day") or "").strip()
     facet = (payload.get("facet") or "personal").strip()
     index_value = payload.get("index")
-    guard = (payload.get("guard") or "").strip()
 
     if not DATE_RE.fullmatch(target_day):
         return jsonify({"error": "Please pick a valid target day."}), 400
@@ -475,9 +463,6 @@ def move_todo(day: str):  # type: ignore[override]
 
     if index <= 0:
         return jsonify({"error": "Todo index must be positive."}), 400
-
-    if not guard:
-        return jsonify({"error": "Todo guard value is required."}), 400
 
     if target_day == day:
         return jsonify(
@@ -508,48 +493,31 @@ def move_todo(day: str):  # type: ignore[override]
         return jsonify({"error": "Unable to access target day."}), 500
 
     try:
-        _, source_entry, completed, body = source_checklist._entry_components(
-            index, guard
-        )
-    except (TodoLineNumberError, TodoGuardMismatchError, IndexError, ValueError) as exc:
+        source_item = source_checklist.get_item(index)
+    except (IndexError, TodoLineNumberError) as exc:
         current_app.logger.debug("Failed to locate todo %s on %s: %s", index, day, exc)
         return (
             jsonify({"error": "Todo list changed, please refresh and try again."}),
             409,
         )
 
+    # Add to target day
     try:
-        target_checklist.append_entry(body)
+        # Reconstruct text with time if present
+        text = source_item.text
+        if source_item.time:
+            text = f"{text} ({source_item.time})"
+        new_item = target_checklist.append_entry(text)
     except TodoEmptyTextError as exc:
         current_app.logger.debug("Failed to append todo to %s: %s", target_day, exc)
         return jsonify({"error": "Unable to move todo to the selected day."}), 400
 
-    new_index = len(target_checklist.entries)
-    new_guard = target_checklist.entries[new_index - 1]
+    # Preserve completed status
+    if source_item.completed:
+        target_checklist.mark_done(new_item.index)
 
-    if completed:
-        try:
-            target_checklist.mark_done(new_index, new_guard)
-            new_guard = target_checklist.entries[new_index - 1]
-        except (TodoGuardMismatchError, TodoLineNumberError, IndexError) as exc:
-            current_app.logger.debug(
-                "Failed to mark moved todo complete on %s: %s", target_day, exc
-            )
-
-    try:
-        source_checklist.remove_entry(index, source_entry)
-    except (TodoGuardMismatchError, TodoLineNumberError, IndexError) as exc:
-        current_app.logger.debug(
-            "Failed to remove todo %s from %s after move: %s", index, day, exc
-        )
-        try:
-            target_checklist.remove_entry(new_index, new_guard)
-        except Exception:  # pragma: no cover - best effort cleanup
-            current_app.logger.debug("Failed to roll back moved todo on %s", target_day)
-        return (
-            jsonify({"error": "Todo list changed, please refresh and try again."}),
-            409,
-        )
+    # Cancel from source day
+    source_checklist.cancel_entry(index)
 
     log_app_action(
         app="todos",
@@ -559,8 +527,8 @@ def move_todo(day: str):  # type: ignore[override]
             "source_day": day,
             "target_day": target_day,
             "line_number": index,
-            "text": body,
-            "completed": completed,
+            "text": source_item.text,
+            "completed": source_item.completed,
         },
         day=day,
     )
@@ -601,12 +569,12 @@ def generate_todos(day: str):  # type: ignore[override]
 Current date/time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 Target day: {day_date.strftime('%Y-%m-%d')}
 Target facet: {facet}
-Target file: facets/{facet}/todos/{day}.md
+Target file: facets/{facet}/todos/{day}.jsonl
 
 Yesterday's todos content:
 {yesterday_content if yesterday_content else "(No todos recorded yesterday)"}
 
-Write the generated checklist to facets/{facet}/todos/{day}.md"""
+Write the generated checklist to facets/{facet}/todos/{day}.jsonl"""
 
     try:
         from convey.utils import spawn_agent
@@ -688,7 +656,7 @@ def generate_weekly_todos(day: str, facet: str):  # type: ignore[override]
 Current date/time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 Target day: {day_date.strftime('%Y-%m-%d')}
 Target facet: {facet}
-Target file: facets/{facet}/todos/{day}.md
+Target file: facets/{facet}/todos/{day}.jsonl
 
 Focus on surfacing the most important unfinished work from the past 7 days."""
 

@@ -154,7 +154,7 @@
   opacity: 0.5;
 }
 
-.todo-action-btn.remove:hover {
+.todo-action-btn.cancel:hover {
   color: #ef4444;
 }
 
@@ -261,13 +261,11 @@
                 <input type="hidden" name="action" value="{{ 'uncomplete' if item.completed else 'complete' }}">
                 <input type="hidden" name="facet" value="{{ facet_name }}">
                 <input type="hidden" name="index" value="{{ item.index }}">
-                <input type="hidden" name="guard" value="{{ item.raw }}">
                 <input
                   type="checkbox"
                   class="todo-checkbox"
                   {% if item.completed %}checked{% endif %}
                   data-index="{{ item.index }}"
-                  data-guard="{{ item.raw }}"
                   data-facet="{{ facet_name }}"
                   data-completed="{{ 'true' if item.completed else 'false' }}"
                 >
@@ -278,7 +276,6 @@
                   class="todo-text"
                   title="{{ item.text }}"
                   data-index="{{ item.index }}"
-                  data-guard="{{ item.raw }}"
                   data-facet="{{ facet_name }}"
                 >{{ item.text }}</span>
                 {% if item.time %}
@@ -292,7 +289,6 @@
                   class="todo-action-btn move"
                   title="Move to another day"
                   data-index="{{ item.index }}"
-                  data-guard="{{ item.raw }}"
                   data-facet="{{ facet_name }}"
                   data-current-day="{{ day }}"
                 >
@@ -301,10 +297,9 @@
 
                 <button
                   type="button"
-                  class="todo-action-btn remove"
-                  title="Remove"
+                  class="todo-action-btn cancel"
+                  title="Cancel"
                   data-index="{{ item.index }}"
-                  data-guard="{{ item.raw }}"
                   data-facet="{{ facet_name }}"
                 >
                   🗑️
@@ -507,24 +502,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return inputValue ? inputValue.replace(/-/g, '') : '';
   }
 
-  // Utility function to update all guard values in a todo row
-  function updateRowGuards(todoRow, newGuard) {
-    if (!newGuard) return;
-
-    // Update all elements with data-guard in this row
-    const elementsWithGuard = todoRow.querySelectorAll('[data-guard]');
-    elementsWithGuard.forEach(el => {
-      el.dataset.guard = newGuard;
-    });
-
-    // Also update the hidden input if present
-    const guardInput = todoRow.querySelector('input[name="guard"]');
-    if (guardInput) {
-      guardInput.value = newGuard;
-    }
-  }
-
-  async function moveTodo(targetDay, facet, index, guard, button) {
+  async function moveTodo(targetDay, facet, index, button) {
     if (!targetDay) return;
 
     const originalText = button.textContent;
@@ -537,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const response = await fetch(moveEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_day: targetDay, facet, index, guard })
+        body: JSON.stringify({ target_day: targetDay, facet, index })
       });
 
       const data = await response.json();
@@ -582,9 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
     button.addEventListener('click', (e) => {
       e.stopPropagation();
 
-      // Read values fresh from dataset (they may have been updated after a delete)
       const index = parseInt(button.dataset.index, 10);
-      const guard = button.dataset.guard;
       const facet = button.dataset.facet;
       const currentDay = button.dataset.currentDay;
 
@@ -607,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
       dateInput.addEventListener('change', () => {
         const targetDay = inputValueToDay(dateInput.value);
         if (targetDay && targetDay !== currentDay) {
-          moveTodo(targetDay, facet, index, guard, button);
+          moveTodo(targetDay, facet, index, button);
         }
         dateInput.remove();
       });
@@ -632,14 +608,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Setup remove functionality with AJAX
-  document.querySelectorAll('.todo-action-btn.remove').forEach(button => {
+  // Setup cancel functionality with AJAX
+  document.querySelectorAll('.todo-action-btn.cancel').forEach(button => {
     button.addEventListener('click', async (e) => {
       e.stopPropagation();
 
-      // Read values fresh from dataset (they may have been updated after a delete)
       const index = parseInt(button.dataset.index, 10);
-      const guard = button.dataset.guard;
       const facet = button.dataset.facet;
 
       const todoRow = button.closest('[data-todo-row]');
@@ -648,10 +622,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
       try {
         const form = new FormData();
-        form.append('action', 'remove');
+        form.append('action', 'cancel');
         form.append('facet', facet);
         form.append('index', index);
-        form.append('guard', guard);
 
         const response = await fetch(window.location.href, {
           method: 'POST',
@@ -662,38 +635,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (response.ok) {
           // Remove the todo item from the DOM with a fade-out animation
+          // (cancelled items are hidden from view)
           todoRow.style.transition = 'opacity 0.2s ease-out';
           todoRow.style.opacity = '0';
           setTimeout(() => {
             const facetSection = todoRow.closest('.facet-section');
-            const removedIndex = index;
-
             todoRow.remove();
 
-            // Update indices of all subsequent items in this facet
-            if (facetSection) {
-              const allRows = Array.from(facetSection.querySelectorAll('[data-todo-row]'));
-              allRows.forEach(row => {
-                const elementsWithIndex = row.querySelectorAll('[data-index]');
-                elementsWithIndex.forEach(el => {
-                  const currentIndex = parseInt(el.dataset.index, 10);
-                  if (currentIndex > removedIndex) {
-                    el.dataset.index = (currentIndex - 1).toString();
-                  }
-                });
-
-                // Also update hidden input
-                const indexInput = row.querySelector('input[name="index"]');
-                if (indexInput) {
-                  const currentIndex = parseInt(indexInput.value, 10);
-                  if (currentIndex > removedIndex) {
-                    indexInput.value = (currentIndex - 1).toString();
-                  }
-                }
-              });
-            }
-
-            // Update the count emoji (facet will now show ➕ if empty)
+            // Update the count emoji
             if (facetSection) {
               updateFacetCount(facetSection);
             }
@@ -702,7 +651,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateBadgesFromResponse(data, facet);
           }, 200);
         } else {
-          alert('Failed to remove todo - please refresh and try again');
+          alert('Failed to cancel todo - please refresh and try again');
           button.disabled = false;
           button.textContent = originalText;
         }
@@ -721,9 +670,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkbox.addEventListener('change', async (e) => {
       e.preventDefault();
 
-      // Read values fresh from dataset (they may have been updated after a delete)
       const index = parseInt(checkbox.dataset.index, 10);
-      const guard = checkbox.dataset.guard;
       const facet = checkbox.dataset.facet;
 
       const todoRow = checkbox.closest('[data-todo-row]');
@@ -737,7 +684,6 @@ document.addEventListener('DOMContentLoaded', function() {
         form.append('action', isCompleted ? 'uncomplete' : 'complete');
         form.append('facet', facet);
         form.append('index', index);
-        form.append('guard', guard);
 
         const response = await fetch(window.location.href, {
           method: 'POST',
@@ -761,18 +707,6 @@ document.addEventListener('DOMContentLoaded', function() {
           // Update form action for next click
           const actionInput = checkbox.form.querySelector('input[name="action"]');
           actionInput.value = isCompleted ? 'uncomplete' : 'complete';
-
-          // Update guard by flipping the checkbox marker
-          const oldGuard = guard;
-          let newGuard;
-          if (isCompleted) {
-            // Changed from [ ] to [x]
-            newGuard = oldGuard.replace('- [ ]', '- [x]');
-          } else {
-            // Changed from [x] to [ ]
-            newGuard = oldGuard.replace('- [x]', '- [ ]');
-          }
-          updateRowGuards(todoRow, newGuard);
 
           // Update facet count emoji
           const facetSection = todoRow.closest('.facet-section');
@@ -838,9 +772,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         isEditing = false;
 
-        // Read values fresh from dataset (they may have been updated after a delete)
         const index = parseInt(span.dataset.index, 10);
-        const guard = span.dataset.guard;
         const facet = span.dataset.facet;
 
         // Check if text contains a facet hashtag
@@ -852,7 +784,6 @@ document.addEventListener('DOMContentLoaded', function() {
         form.append('action', 'edit');
         form.append('facet', facet);
         form.append('index', index);
-        form.append('guard', guard);
         form.append('text', newText);
 
         try {
@@ -871,19 +802,6 @@ document.addEventListener('DOMContentLoaded', function() {
               span.textContent = cleanText;
               span.title = cleanText;
               content.replaceChild(span, input);
-
-              // Update guard by replacing the text portion
-              const todoRow = span.closest('[data-todo-row]');
-              if (todoRow) {
-                const oldGuard = guard;
-                // Extract the prefix (e.g., "- [ ] " or "- [x] ")
-                const match = oldGuard.match(/^(- \[[x ]\] )/);
-                if (match) {
-                  const prefix = match[1];
-                  const newGuard = prefix + cleanText;
-                  updateRowGuards(todoRow, newGuard);
-                }
-              }
             }
           } else {
             alert('Failed to update todo - please refresh and try again');
@@ -1012,7 +930,6 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
 
         const index = parseInt(checkbox.dataset.index, 10);
-        const guard = checkbox.dataset.guard;
         const facet = checkbox.dataset.facet;
         const wasChecked = checkbox.checked;
 
@@ -1023,7 +940,6 @@ document.addEventListener('DOMContentLoaded', function() {
           form.append('action', isCompleted ? 'uncomplete' : 'complete');
           form.append('facet', facet);
           form.append('index', index);
-          form.append('guard', guard);
 
           const response = await fetch(window.location.href, {
             method: 'POST',
@@ -1045,15 +961,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const actionInput = checkbox.form.querySelector('input[name="action"]');
             actionInput.value = isCompleted ? 'uncomplete' : 'complete';
 
-            const oldGuard = guard;
-            let newGuard;
-            if (isCompleted) {
-              newGuard = oldGuard.replace('- [ ]', '- [x]');
-            } else {
-              newGuard = oldGuard.replace('- [x]', '- [ ]');
-            }
-            updateRowGuards(todoRow, newGuard);
-
             if (facetSection) {
               updateFacetCount(facetSection);
             }
@@ -1073,25 +980,23 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
-    // Setup remove button handler
-    const removeBtn = todoRow.querySelector('.todo-action-btn.remove');
-    if (removeBtn) {
-      removeBtn.addEventListener('click', async (e) => {
+    // Setup cancel button handler
+    const cancelBtn = todoRow.querySelector('.todo-action-btn.cancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
 
-        const index = parseInt(removeBtn.dataset.index, 10);
-        const guard = removeBtn.dataset.guard;
-        const facet = removeBtn.dataset.facet;
-        const originalText = removeBtn.textContent;
+        const index = parseInt(cancelBtn.dataset.index, 10);
+        const facet = cancelBtn.dataset.facet;
+        const originalText = cancelBtn.textContent;
 
-        removeBtn.disabled = true;
+        cancelBtn.disabled = true;
 
         try {
           const form = new FormData();
-          form.append('action', 'remove');
+          form.append('action', 'cancel');
           form.append('facet', facet);
           form.append('index', index);
-          form.append('guard', guard);
 
           const response = await fetch(window.location.href, {
             method: 'POST',
@@ -1104,29 +1009,9 @@ document.addEventListener('DOMContentLoaded', function() {
             todoRow.style.transition = 'opacity 0.2s ease-out';
             todoRow.style.opacity = '0';
             setTimeout(() => {
-              const removedIndex = index;
               todoRow.remove();
 
               if (facetSection) {
-                const allRows = Array.from(facetSection.querySelectorAll('[data-todo-row]'));
-                allRows.forEach(row => {
-                  const elementsWithIndex = row.querySelectorAll('[data-index]');
-                  elementsWithIndex.forEach(el => {
-                    const currentIndex = parseInt(el.dataset.index, 10);
-                    if (currentIndex > removedIndex) {
-                      el.dataset.index = (currentIndex - 1).toString();
-                    }
-                  });
-
-                  const indexInput = row.querySelector('input[name="index"]');
-                  if (indexInput) {
-                    const currentIndex = parseInt(indexInput.value, 10);
-                    if (currentIndex > removedIndex) {
-                      indexInput.value = (currentIndex - 1).toString();
-                    }
-                  }
-                });
-
                 updateFacetCount(facetSection);
               }
 
@@ -1134,14 +1019,14 @@ document.addEventListener('DOMContentLoaded', function() {
               updateBadgesFromResponse(data, facet);
             }, 200);
           } else {
-            alert('Failed to remove todo - please refresh and try again');
-            removeBtn.disabled = false;
-            removeBtn.textContent = originalText;
+            alert('Failed to cancel todo - please refresh and try again');
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = originalText;
           }
         } catch (error) {
           alert('Network error - please try again');
-          removeBtn.disabled = false;
-          removeBtn.textContent = originalText;
+          cancelBtn.disabled = false;
+          cancelBtn.textContent = originalText;
         }
       });
     }
@@ -1153,7 +1038,6 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
 
         const index = parseInt(moveBtn.dataset.index, 10);
-        const guard = moveBtn.dataset.guard;
         const facet = moveBtn.dataset.facet;
         const btnCurrentDay = moveBtn.dataset.currentDay;
 
@@ -1173,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dateInput.addEventListener('change', () => {
           const targetDay = inputValueToDay(dateInput.value);
           if (targetDay && targetDay !== btnCurrentDay) {
-            moveTodo(targetDay, facet, index, guard, moveBtn);
+            moveTodo(targetDay, facet, index, moveBtn);
           }
           dateInput.remove();
         });
@@ -1233,7 +1117,6 @@ document.addEventListener('DOMContentLoaded', function() {
           isEditing = false;
 
           const index = parseInt(span.dataset.index, 10);
-          const guard = span.dataset.guard;
           const facet = span.dataset.facet;
 
           const facetMatch = newText.match(/#([a-z][a-z0-9_-]*)/i);
@@ -1243,7 +1126,6 @@ document.addEventListener('DOMContentLoaded', function() {
           form.append('action', 'edit');
           form.append('facet', facet);
           form.append('index', index);
-          form.append('guard', guard);
           form.append('text', newText);
 
           try {
@@ -1260,14 +1142,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 span.textContent = cleanText;
                 span.title = cleanText;
                 content.replaceChild(span, input);
-
-                const oldGuard = guard;
-                const match = oldGuard.match(/^(- \[[x ]\] )/);
-                if (match) {
-                  const prefix = match[1];
-                  const newGuard = prefix + cleanText;
-                  updateRowGuards(todoRow, newGuard);
-                }
               }
             } else {
               alert('Failed to update todo - please refresh and try again');
@@ -1340,12 +1214,10 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="hidden" name="action" value="complete">
         <input type="hidden" name="facet" value="${facetName}">
         <input type="hidden" name="index" value="${todo.index}">
-        <input type="hidden" name="guard" value="${todo.guard.replace(/"/g, '&quot;')}">
         <input
           type="checkbox"
           class="todo-checkbox"
           data-index="${todo.index}"
-          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
           data-facet="${facetName}"
           data-completed="false"
         >
@@ -1356,7 +1228,6 @@ document.addEventListener('DOMContentLoaded', function() {
           class="todo-text"
           title="${todo.text.replace(/"/g, '&quot;')}"
           data-index="${todo.index}"
-          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
           data-facet="${facetName}"
         >${todo.text}</span>
         ${todo.time ? `<span class="todo-time">${todo.time}</span>` : ''}
@@ -1368,7 +1239,6 @@ document.addEventListener('DOMContentLoaded', function() {
           class="todo-action-btn move"
           title="Move to another day"
           data-index="${todo.index}"
-          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
           data-facet="${facetName}"
           data-current-day="${currentDay}"
         >
@@ -1377,10 +1247,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         <button
           type="button"
-          class="todo-action-btn remove"
-          title="Remove"
+          class="todo-action-btn cancel"
+          title="Cancel"
           data-index="${todo.index}"
-          data-guard="${todo.guard.replace(/"/g, '&quot;')}"
           data-facet="${facetName}"
         >
           🗑️

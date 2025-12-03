@@ -286,60 +286,54 @@ This allows for future automation of news gathering while maintaining manual cur
 
 ## Facet-Scoped Todos
 
-Todos are organized by facet in `facets/{facet}/todos/{day}.md` where each file stores a simple markdown checklist. Todos belong to a specific facet (e.g., "personal", "work", "research") and are completely separated by scope.
+Todos are organized by facet in `facets/{facet}/todos/{day}.jsonl` where each file stores todo items as JSON Lines. Todos belong to a specific facet (e.g., "personal", "work", "research") and are completely separated by scope.
 
 **File path pattern:**
 ```
-facets/personal/todos/20250110.md
-facets/work/todos/20250110.md
-facets/research/todos/20250112.md
+facets/personal/todos/20250110.jsonl
+facets/work/todos/20250110.jsonl
+facets/research/todos/20250112.jsonl
 ```
 
-Each file is a flat list—no sections or headers—so the tools can treat every line as a single actionable entry.
+Each file contains one JSON object per line, with the line number (1-indexed) serving as the stable todo ID.
 
-```markdown
-- [ ] Draft standup update
-- [ ] Review PR #1234 for indexing tweaks (14:30)
-- [x] Morning planning session notes
-- [ ] ~~Cancel meeting with vendor~~
+```jsonl
+{"text": "Draft standup update"}
+{"text": "Review PR #1234 for indexing tweaks", "time": "14:30"}
+{"text": "Morning planning session notes", "completed": true}
+{"text": "Cancel meeting with vendor", "cancelled": true}
 ```
 
 ### Format Specification
 
-**Line structure:**
+**JSONL structure:**
 
-```
-- [checkbox] task description with optional time annotation
-```
-
-**Components:**
-- `- [ ]` – Uncompleted task checkbox
-- `- [x]` – Completed task checkbox (lower- or upper-case `x` accepted)
-- `task description` – Free-form markdown content describing the task
-- `(HH:MM)` – Optional time annotation for scheduled work (e.g., `(14:30)`)
-- `~~text~~` – Wrap any portion of the line to mark cancellation while keeping the original wording visible
+Each line is a JSON object with the following fields:
+- `text` (required) – Task description
+- `time` (optional) – Scheduled time in `HH:MM` format (e.g., `"14:30"`)
+- `completed` (optional) – Set to `true` when task is done
+- `cancelled` (optional) – Set to `true` for soft-deleted tasks
 
 **Facet context:**
 - Facet is determined by the file location, not inline tags
 - Each facet has its own independent todo list for each day
 - Work todos (`facets/work/todos/`) are completely separate from personal todos (`facets/personal/todos/`)
-- No `#facet` tags are needed in the content since the facet context comes from the file path
 
 **Rules:**
-- Every checklist line becomes the source of truth for agent tools; external callers provide numbered views on demand rather than storing numbering in the file
-- Append new todos at the end of the file to maintain stable numbering semantics for concurrent tooling
-- Keep completed items in place by switching the checkbox to `[x]`
-- Use consistent phrasing so guard checks (which compare the full line) remain reliable
+- Line number is the stable todo ID (1-indexed); todos are never removed, only cancelled
+- Append new todos at the end of the file to maintain stable line numbering
+- Mark completed items with `"completed": true`
+- Cancel items with `"cancelled": true` (soft delete preserves line numbers)
 
 **MCP Tool Access:**
 All todo operations require both `day` and `facet` parameters:
 - `todo_list(day, facet)` – view numbered checklist for a specific facet
-- `todo_add(day, facet, line_number, text)` – add new todo
-- `todo_done(day, facet, line_number, guard)` – mark complete
-- `todo_remove(day, facet, line_number, guard)` – remove entry
+- `todo_add(day, facet, line_number, text)` – add new todo (line_number must match next available)
+- `todo_done(day, facet, line_number)` – mark complete
+- `todo_cancel(day, facet, line_number)` – cancel entry (soft delete)
 - `todo_upcoming(limit, facet=None)` – view upcoming todos (optionally filtered by facet)
 
-This facet-scoped structure provides true separation of concerns while keeping manual editing simple and enabling automated tools to manage tasks deterministically.
+This facet-scoped structure provides true separation of concerns while enabling automated tools to manage tasks deterministically.
 
 ## Token Usage
 

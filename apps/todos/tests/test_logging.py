@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from apps.todos.tools import todo_add, todo_done, todo_remove
+from apps.todos.tools import todo_add, todo_cancel, todo_done
 
 
 def read_log_entries(journal_path: Path, facet: str, day: str) -> list[dict]:
@@ -45,22 +45,22 @@ def test_todo_add_logging(facet_env):
     assert "agent_id" not in entries[0]
 
 
-def test_todo_remove_logging(facet_env):
-    """Test that todo_remove creates an audit log entry."""
+def test_todo_cancel_logging(facet_env):
+    """Test that todo_cancel creates an audit log entry."""
     journal, facet = facet_env()
     day = datetime.now().strftime("%Y%m%d")
 
-    # Add and remove a todo
+    # Add and cancel a todo
     todo_add(day, facet, 1, "Test task")
-    result = todo_remove(day, facet, 1, "- [ ] Test task")
+    result = todo_cancel(day, facet, 1)
     assert "error" not in result
 
     # Check both log entries exist
     entries = read_log_entries(journal, facet, day)
     assert len(entries) == 2
-    assert entries[1]["action"] == "todo_remove"
+    assert entries[1]["action"] == "todo_cancel"
     assert entries[1]["params"]["line_number"] == 1
-    assert entries[1]["params"]["text"] == "- [ ] Test task"
+    assert entries[1]["params"]["text"] == "Test task"
 
 
 def test_todo_done_logging(facet_env):
@@ -70,7 +70,7 @@ def test_todo_done_logging(facet_env):
 
     # Add and complete a todo
     todo_add(day, facet, 1, "Test task")
-    result = todo_done(day, facet, 1, "- [ ] Test task")
+    result = todo_done(day, facet, 1)
     assert "error" not in result
 
     # Check both log entries exist
@@ -78,7 +78,7 @@ def test_todo_done_logging(facet_env):
     assert len(entries) == 2
     assert entries[1]["action"] == "todo_done"
     assert entries[1]["params"]["line_number"] == 1
-    assert entries[1]["params"]["text"] == "- [ ] Test task"
+    assert entries[1]["params"]["text"] == "Test task"
 
 
 def test_multiple_todo_actions_same_day(facet_env):
@@ -89,7 +89,7 @@ def test_multiple_todo_actions_same_day(facet_env):
     # Perform multiple actions
     todo_add(day, facet, 1, "Task 1")
     todo_add(day, facet, 2, "Task 2")
-    todo_done(day, facet, 1, "- [ ] Task 1")
+    todo_done(day, facet, 1)
 
     # Check all log entries exist
     entries = read_log_entries(journal, facet, day)

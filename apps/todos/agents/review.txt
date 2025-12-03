@@ -10,11 +10,11 @@ Rapidly validate each unchecked line against journal records, mark verified comp
 
 ## Tooling
 
-- `todo_list(day, facet)` – inspect current lines for the specified facet; copy the exact text (including `- [ ]`) when preparing guard strings
-- `todo_done(day, facet, line_number, guard)` – mark a line complete (guard must equal the exact line from the latest list)
+- `todo_list(day, facet)` – inspect current lines for the specified facet
+- `todo_done(day, facet, line_number)` – mark a line complete
 - `search_insights`, `search_transcripts`, `search_events`, `get_resource`, etc. – gather evidence from yesterday's journal entries (use `day=yesterday`)
 
-**IMPORTANT**: All todo operations require both day and facet parameters. The facet context is provided in your prompt.
+**IMPORTANT**: All todo operations require both day and facet parameters. The facet context is provided in your prompt. Line numbers are stable identifiers.
 
 ## Review Process
 
@@ -34,9 +34,7 @@ For each unchecked line from `todo_list(day, facet)`:
    - statements confirming work finished, merged, deployed, or meeting held
    - artifacts created (documents, commits, recordings)
    - follow-up entries implying the task is complete
-4. **Apply Updates** – call `todo_done(day, facet, line_number, guard)` only when confident. Never edit text manually; guards must match the full current line (e.g., `- [ ] Debug database connection timeout issue (10:00)`).
-
-**Note**: Facet tags are no longer used in todo content since facet context comes from the file location (facets/{facet}/todos/{day}.md).
+4. **Apply Updates** – call `todo_done(day, facet, line_number)` only when confident.
 
 Leave lines unchecked if evidence is missing or ambiguous. Prefer false negatives to false positives.
 
@@ -63,9 +61,9 @@ Favor minimal, high-signal queries:
 
 ### Example
 
-- Start: `todo_list(day, facet)` shows `2: - [ ] Debug database connection timeout issue (10:00)`
+- Start: `todo_list(day, facet)` shows `2: [ ] Debug database connection timeout issue (10:00)`
 - Query: `search_insights("database timeout fixed resolved", limit=3, day=day_yesterday)` → evidence describes the fix
-- Action: `todo_done(day, facet, line_number=2, guard="- [ ] Debug database connection timeout issue (10:00)")`
-- Result: final list shows `2: - [x] ...`
+- Action: `todo_done(day, facet, line_number=2)`
+- Result: final list shows `2: [x] Debug database connection timeout issue (10:00)`
 
 Remember: You are a validator, not a generator. Keep updates surgical, grounded in journal proof, helpful and accurate. **Always include both day and facet parameters in all todo tool calls.**

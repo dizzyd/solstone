@@ -21,12 +21,15 @@ def todo_env(tmp_path, monkeypatch):
 
     Usage:
         def test_example(todo_env):
-            day, facet, todo_path = todo_env(["- [ ] First item"])
+            day, facet, todo_path = todo_env([
+                {"text": "First item"},
+                {"text": "Second item", "completed": True}
+            ])
             # Now JOURNAL_PATH is set and todo file exists
     """
 
     def _create(
-        entries: list[str] | None = None,
+        entries: list[dict] | None = None,
         day: str | None = None,
         facet: str = "personal",
     ):
@@ -34,9 +37,10 @@ def todo_env(tmp_path, monkeypatch):
             day = datetime.now().strftime("%Y%m%d")
         todos_dir = tmp_path / "facets" / facet / "todos"
         todos_dir.mkdir(parents=True, exist_ok=True)
-        todo_path = todos_dir / f"{day}.md"
+        todo_path = todos_dir / f"{day}.jsonl"
         if entries is not None:
-            todo_path.write_text("\n".join(entries) + "\n", encoding="utf-8")
+            lines = [json.dumps(e, ensure_ascii=False) for e in entries]
+            todo_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
         return day, facet, todo_path
 

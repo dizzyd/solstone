@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from apps.todos.todo import (
+    TodoChecklist,
+    TodoItem,
     get_facets_with_todos,
     get_todos,
-    parse_item,
-    parse_items,
     upcoming,
 )
 
@@ -22,11 +23,12 @@ def journal_root(tmp_path):
     return path
 
 
-def _write_todos(root: Path, facet: str, day: str, lines: list[str]) -> Path:
-    """Write todos to facets/{facet}/todos/{day}.md"""
+def _write_todos(root: Path, facet: str, day: str, items: list[dict]) -> Path:
+    """Write todos to facets/{facet}/todos/{day}.jsonl"""
     todos_dir = root / "facets" / facet / "todos"
     todos_dir.mkdir(parents=True, exist_ok=True)
-    todo_path = todos_dir / f"{day}.md"
+    todo_path = todos_dir / f"{day}.jsonl"
+    lines = [json.dumps(item, ensure_ascii=False) for item in items]
     todo_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return todo_path
 
@@ -43,9 +45,9 @@ def test_get_todos_parses_basic_fields(monkeypatch, journal_root):
         "personal",
         "20240102",
         [
-            "- [ ] **Review**: Merge analytics PR (10:30)",
-            "- [x] **Meeting**: Project sync",  # no time
-            "- [ ] Write retrospective notes",
+            {"text": "Merge analytics PR", "time": "10:30"},
+            {"text": "Project sync", "completed": True},  # no time
+            {"text": "Write retrospective notes"},
         ],
     )
 
@@ -58,7 +60,6 @@ def test_get_todos_parses_basic_fields(monkeypatch, journal_root):
     assert first["time"] == "10:30"
     assert first["completed"] is False
     assert first["text"] == "Merge analytics PR"
-    assert "facet" not in first  # facet field removed
 
     second = todos[1]
     assert second["completed"] is True
@@ -70,17 +71,16 @@ def test_get_todos_parses_basic_fields(monkeypatch, journal_root):
     assert third["index"] == 3
 
 
-def test_get_todos_handles_strikethrough_and_spacing(monkeypatch, journal_root):
+def test_get_todos_handles_cancelled(monkeypatch, journal_root):
     monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
     _write_todos(
         journal_root,
         "work",
         "20240103",
         [
-            "- [ ] ~~**Task**: Optional experiment if time allows~~",
-            "  - [ ]  **Fix**: Address bug  (14:45)  ",
-            "not a todo line",
-            "- [x] **Research**: Draft report",
+            {"text": "Optional experiment", "cancelled": True},
+            {"text": "Address bug", "time": "14:45"},
+            {"text": "Draft report", "completed": True},
         ],
     )
 
@@ -90,7 +90,7 @@ def test_get_todos_handles_strikethrough_and_spacing(monkeypatch, journal_root):
 
     cancelled = todos[0]
     assert cancelled["cancelled"] is True
-    assert cancelled["text"] == "Optional experiment if time allows"
+    assert cancelled["text"] == "Optional experiment"
 
     second = todos[1]
     assert second["time"] == "14:45"
@@ -103,90 +103,81 @@ def test_get_todos_handles_strikethrough_and_spacing(monkeypatch, journal_root):
 
 def test_get_todos_ignores_blank_lines(monkeypatch, journal_root):
     monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
-    _write_todos(
-        journal_root,
-        "personal",
-        "20240104",
-        [
-            "",
-            "- [ ] First",
-            "# comment line",
-            "- [ ] Second",
-        ],
+    # Write with blank lines mixed in
+    todos_dir = journal_root / "facets" / "personal" / "todos"
+    todos_dir.mkdir(parents=True, exist_ok=True)
+    todo_path = todos_dir / "20240104.jsonl"
+    todo_path.write_text(
+        '\n{"text": "First"}\n\n{"text": "Second"}\n',
+        encoding="utf-8",
     )
 
     todos = get_todos("20240104", "personal")
     assert [item["index"] for item in todos] == [1, 2]
 
 
-def test_parse_item_valid_todo():
-    item = parse_item("- [ ] Simple todo", 1)
-    assert item is not None
+def test_todo_item_display_line():
+    """Test TodoItem.display_line() formatting."""
+    item = TodoItem(
+        index=1, text="Simple task", time=None, completed=False, cancelled=False
+    )
+    assert item.display_line() == "[ ] Simple task"
+
+    item_done = TodoItem(
+        index=2, text="Done task", time=None, completed=True, cancelled=False
+    )
+    assert item_done.display_line() == "[x] Done task"
+
+    item_cancelled = TodoItem(
+        index=3, text="Cancelled task", time=None, completed=False, cancelled=True
+    )
+    assert item_cancelled.display_line() == "~~[cancelled] Cancelled task~~"
+
+    item_with_time = TodoItem(
+        index=4, text="Meeting", time="14:30", completed=False, cancelled=False
+    )
+    assert item_with_time.display_line() == "[ ] Meeting (14:30)"
+
+    item_cancelled_done = TodoItem(
+        index=5, text="Was done", time=None, completed=True, cancelled=True
+    )
+    assert item_cancelled_done.display_line() == "~~[cancelled] Was done~~"
+
+
+def test_todo_item_to_jsonl():
+    """Test TodoItem.to_jsonl() serialization."""
+    item = TodoItem(index=1, text="Task", time=None, completed=False, cancelled=False)
+    assert item.to_jsonl() == {"text": "Task"}
+
+    item_full = TodoItem(
+        index=2, text="Full task", time="10:00", completed=True, cancelled=False
+    )
+    assert item_full.to_jsonl() == {
+        "text": "Full task",
+        "time": "10:00",
+        "completed": True,
+    }
+
+    item_cancelled = TodoItem(
+        index=3, text="Cancelled", time=None, completed=False, cancelled=True
+    )
+    assert item_cancelled.to_jsonl() == {"text": "Cancelled", "cancelled": True}
+
+
+def test_todo_item_from_jsonl():
+    """Test TodoItem.from_jsonl() parsing."""
+    item = TodoItem.from_jsonl({"text": "Simple"}, 1)
     assert item.index == 1
-    assert item.text == "Simple todo"
+    assert item.text == "Simple"
     assert item.completed is False
     assert item.cancelled is False
     assert item.time is None
 
-
-def test_parse_item_completed_todo():
-    item = parse_item("- [x] Completed task", 2)
-    assert item is not None
-    assert item.completed is True
-    assert item.text == "Completed task"
-
-
-def test_parse_item_with_time():
-    item = parse_item("- [ ] Meeting at (14:30)", 3)
-    assert item is not None
-    assert item.time == "14:30"
-    assert item.text == "Meeting at"
-
-
-def test_parse_item_cancelled():
-    item = parse_item("- [ ] ~~Cancelled task~~", 4)
-    assert item is not None
-    assert item.cancelled is True
-    assert item.text == "Cancelled task"
-
-
-def test_parse_item_with_markup():
-    item = parse_item("- [ ] **Task**: Do something", 5)
-    assert item is not None
-    assert item.text == "Do something"
-
-
-def test_parse_item_complex():
-    item = parse_item("- [x] **Review**: Merge PR (10:30)", 6)
-    assert item is not None
-    assert item.completed is True
-    assert item.time == "10:30"
-    assert item.text == "Merge PR"
-
-
-def test_parse_item_invalid_lines():
-    assert parse_item("", 1) is None
-    assert parse_item("Not a todo", 2) is None
-    assert parse_item("# Comment", 3) is None
-    assert parse_item("   ", 4) is None
-
-
-def test_parse_items_maintains_sequential_index():
-    lines = [
-        "- [ ] First",
-        "",
-        "Not a todo",
-        "- [x] Second",
-        "- [ ] Third",
-    ]
-    items = parse_items(lines)
-    assert len(items) == 3
-    assert items[0].index == 1
-    assert items[0].text == "First"
-    assert items[1].index == 2
-    assert items[1].text == "Second"
-    assert items[2].index == 3
-    assert items[2].text == "Third"
+    item_full = TodoItem.from_jsonl(
+        {"text": "Full", "time": "10:00", "completed": True, "cancelled": False}, 2
+    )
+    assert item_full.time == "10:00"
+    assert item_full.completed is True
 
 
 def test_upcoming_groups_future_days(monkeypatch, journal_root):
@@ -202,8 +193,8 @@ def test_upcoming_groups_future_days(monkeypatch, journal_root):
         "personal",
         "20240105",
         [
-            "- [ ] First future task",
-            "- [x] Completed future task",
+            {"text": "First future task"},
+            {"text": "Completed future task", "completed": True},
         ],
     )
     _write_todos(
@@ -211,7 +202,7 @@ def test_upcoming_groups_future_days(monkeypatch, journal_root):
         "personal",
         "20240106",
         [
-            "- [ ] Another future task",
+            {"text": "Another future task"},
         ],
     )
     _write_todos(
@@ -219,7 +210,7 @@ def test_upcoming_groups_future_days(monkeypatch, journal_root):
         "personal",
         "20240103",
         [
-            "- [ ] Past task",
+            {"text": "Past task"},
         ],
     )
 
@@ -227,10 +218,10 @@ def test_upcoming_groups_future_days(monkeypatch, journal_root):
 
     expected = (
         "### Personal: 20240105\n"
-        "- [ ] First future task\n"
-        "- [x] Completed future task\n\n"
+        "[ ] First future task\n"
+        "[x] Completed future task\n\n"
         "### Personal: 20240106\n"
-        "- [ ] Another future task"
+        "[ ] Another future task"
     )
 
     assert result == expected
@@ -249,17 +240,43 @@ def test_upcoming_respects_limit(monkeypatch, journal_root):
         "work",
         "20240105",
         [
-            "- [ ] Task one",
-            "- [ ] Task two",
-            "- [ ] Task three",
+            {"text": "Task one"},
+            {"text": "Task two"},
+            {"text": "Task three"},
         ],
     )
 
     result = upcoming(limit=2, today="20240104")
 
-    expected = "### Work: 20240105\n" "- [ ] Task one\n" "- [ ] Task two"
+    expected = "### Work: 20240105\n" "[ ] Task one\n" "[ ] Task two"
 
     assert result == expected
+
+
+def test_upcoming_excludes_cancelled(monkeypatch, journal_root):
+    """Cancelled todos should not appear in upcoming view."""
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal").mkdir(parents=True)
+    (journal_root / "facets" / "personal" / "facet.json").write_text(
+        '{"title": "Personal"}', encoding="utf-8"
+    )
+
+    _write_todos(
+        journal_root,
+        "personal",
+        "20240105",
+        [
+            {"text": "Active task"},
+            {"text": "Cancelled task", "cancelled": True},
+            {"text": "Another active"},
+        ],
+    )
+
+    result = upcoming(today="20240104")
+
+    assert "Active task" in result
+    assert "Another active" in result
+    assert "Cancelled task" not in result
 
 
 def test_upcoming_when_no_future_todos(monkeypatch, journal_root):
@@ -271,7 +288,7 @@ def test_upcoming_when_no_future_todos(monkeypatch, journal_root):
         "personal",
         "20240102",
         [
-            "- [ ] Existing task",
+            {"text": "Existing task"},
         ],
     )
 
@@ -290,8 +307,8 @@ def test_upcoming_filters_by_facet(monkeypatch, journal_root):
             f'{{"title": "{facet_name.title()}"}}', encoding="utf-8"
         )
 
-    _write_todos(journal_root, "personal", "20240105", ["- [ ] Personal task"])
-    _write_todos(journal_root, "work", "20240105", ["- [ ] Work task"])
+    _write_todos(journal_root, "personal", "20240105", [{"text": "Personal task"}])
+    _write_todos(journal_root, "work", "20240105", [{"text": "Work task"}])
 
     # Test filtering by facet
     result = upcoming(facet="personal", today="20240104")
@@ -310,8 +327,8 @@ def test_upcoming_aggregates_all_facets(monkeypatch, journal_root):
             f'{{"title": "{facet_name.title()}"}}', encoding="utf-8"
         )
 
-    _write_todos(journal_root, "personal", "20240105", ["- [ ] Personal task"])
-    _write_todos(journal_root, "work", "20240105", ["- [ ] Work task"])
+    _write_todos(journal_root, "personal", "20240105", [{"text": "Personal task"}])
+    _write_todos(journal_root, "work", "20240105", [{"text": "Work task"}])
 
     # Test aggregation (facet=None)
     result = upcoming(facet=None, today="20240104")
@@ -321,9 +338,8 @@ def test_upcoming_aggregates_all_facets(monkeypatch, journal_root):
     assert "Work task" in result
 
 
-def test_append_entry_validates_parsing(monkeypatch, journal_root):
-    from apps.todos.todo import TodoChecklist
-
+def test_checklist_append_entry(monkeypatch, journal_root):
+    """Test TodoChecklist.append_entry() creates valid JSONL."""
     monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
 
     # Create facet directory
@@ -333,23 +349,74 @@ def test_append_entry_validates_parsing(monkeypatch, journal_root):
     checklist = TodoChecklist.load("20240105", "work")
 
     # Test normal entry works
-    checklist.append_entry("Test task (10:30)")
-    assert len(checklist.entries) == 1
+    item = checklist.append_entry("Test task (10:30)")
+    assert len(checklist.items) == 1
+    assert item.text == "Test task"
+    assert item.time == "10:30"
 
-    # Verify it parses correctly
-    items = parse_items(checklist.entries)
-    assert len(items) == 1
-    assert items[0].text == "Test task"
-    assert items[0].time == "10:30"
+    # Verify file contents
+    content = checklist.path.read_text(encoding="utf-8")
+    data = json.loads(content.strip())
+    assert data["text"] == "Test task"
+    assert data["time"] == "10:30"
+
+
+def test_checklist_cancel_entry(monkeypatch, journal_root):
+    """Test TodoChecklist.cancel_entry() soft-deletes items."""
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+
+    _write_todos(
+        journal_root,
+        "personal",
+        "20240105",
+        [{"text": "Task to cancel"}],
+    )
+
+    checklist = TodoChecklist.load("20240105", "personal")
+    item = checklist.cancel_entry(1)
+
+    assert item.cancelled is True
+    assert checklist.items[0].cancelled is True
+
+    # Verify file was updated
+    content = checklist.path.read_text(encoding="utf-8")
+    data = json.loads(content.strip())
+    assert data["cancelled"] is True
+
+
+def test_checklist_display_includes_cancelled_with_strikethrough(
+    monkeypatch, journal_root
+):
+    """Test TodoChecklist.display() always includes cancelled items with strikethrough."""
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+
+    _write_todos(
+        journal_root,
+        "personal",
+        "20240105",
+        [
+            {"text": "Active task"},
+            {"text": "Cancelled task", "cancelled": True},
+            {"text": "Another active"},
+        ],
+    )
+
+    checklist = TodoChecklist.load("20240105", "personal")
+
+    # All items included, cancelled ones have strikethrough
+    display = checklist.display()
+    assert "1: [ ] Active task" in display
+    assert "2: ~~[cancelled] Cancelled task~~" in display
+    assert "3: [ ] Another active" in display
 
 
 def test_get_facets_with_todos(monkeypatch, journal_root):
     monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
 
     # Create todos in multiple facets
-    _write_todos(journal_root, "personal", "20240105", ["- [ ] Personal task"])
-    _write_todos(journal_root, "work", "20240105", ["- [ ] Work task"])
-    _write_todos(journal_root, "hobby", "20240106", ["- [ ] Hobby task"])
+    _write_todos(journal_root, "personal", "20240105", [{"text": "Personal task"}])
+    _write_todos(journal_root, "work", "20240105", [{"text": "Work task"}])
+    _write_todos(journal_root, "hobby", "20240106", [{"text": "Hobby task"}])
 
     # Test getting facets for a specific day
     facets_20240105 = get_facets_with_todos("20240105")

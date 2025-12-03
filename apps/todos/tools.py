@@ -17,7 +17,7 @@ from think.facets import log_tool_action
 
 # Declare tool pack - creates the "todo" pack with all todo tools
 TOOL_PACKS = {
-    "todo": ["todo_list", "todo_add", "todo_remove", "todo_done", "todo_upcoming"],
+    "todo": ["todo_list", "todo_add", "todo_cancel", "todo_done", "todo_upcoming"],
 }
 
 
@@ -28,7 +28,7 @@ TOOL_PACKS = {
 
 @register_tool(annotations=HINTS)
 def todo_list(day: str, facet: str) -> dict[str, Any]:
-    """Return the numbered markdown checklist for ``day``'s todos in a specific facet.
+    """Return the numbered todo checklist for ``day``'s todos in a specific facet.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
@@ -36,12 +36,12 @@ def todo_list(day: str, facet: str) -> dict[str, Any]:
 
     Returns:
         Dictionary containing the formatted ``markdown`` view with ``N:`` line
-        prefixes, or an error payload when the journal day is missing.
+        prefixes. Cancelled items are shown with strikethrough to maintain
+        sequential line numbering for ``todo_add`` operations.
     """
-
     try:
         checklist = todo.TodoChecklist.load(day, facet)
-        return {"day": day, "facet": facet, "markdown": checklist.numbered()}
+        return {"day": day, "facet": facet, "markdown": checklist.display()}
     except FileNotFoundError:
         return {"error": f"No todos found for facet '{facet}' on day '{day}'"}
     except Exception as exc:  # pragma: no cover - unexpected failure
@@ -58,13 +58,12 @@ def todo_add(
         day: The day this item is due on in ``YYYYMMDD`` format, must always be today or in the future.
         facet: Facet name (e.g., "personal", "work").
         line_number: Expected next line value; must be ``current_count + 1``.
-        text: Body of the todo item (stored after the ``- [ ]`` prefix).
+        text: Body of the todo item. Time can be included as ``(HH:MM)`` suffix.
 
     Returns:
         Dictionary with the updated ``markdown`` checklist including numbering,
         or an error payload if validation fails.
     """
-
     try:
         # Validate that the day is not in the past
         try:
@@ -83,15 +82,15 @@ def todo_add(
             }
 
         checklist = todo.TodoChecklist.load(day, facet)
-        checklist.add_entry(line_number, text)
+        item = checklist.add_entry(line_number, text)
         log_tool_action(
             facet=facet,
             action="todo_add",
-            params={"line_number": line_number, "text": text},
+            params={"line_number": line_number, "text": item.text},
             context=context,
             day=day,
         )
-        return {"day": day, "facet": facet, "markdown": checklist.numbered()}
+        return {"day": day, "facet": facet, "markdown": checklist.display()}
     except RuntimeError as exc:
         return {"error": str(exc)}
     except todo.TodoLineNumberError as exc:
@@ -109,99 +108,75 @@ def todo_add(
 
 
 @register_tool(annotations=HINTS)
-def todo_remove(
-    day: str, facet: str, line_number: int, guard: str, context: Context | None = None
+def todo_cancel(
+    day: str, facet: str, line_number: int, context: Context | None = None
 ) -> dict[str, Any]:
-    """Delete an existing todo entry after verifying its current text.
+    """Cancel a todo entry (soft delete). The entry remains in the file but is hidden from view.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
         facet: Facet name (e.g., "personal", "work").
-        line_number: 1-based index of the entry to remove.
-        guard: Full todo line (e.g., ``- [ ] Review logs``) expected on the numbered line.
+        line_number: 1-based index of the entry to cancel.
 
     Returns:
         Dictionary with the updated ``markdown`` checklist including numbering,
         or an error payload if validation fails.
     """
-
     try:
         checklist = todo.TodoChecklist.load(day, facet)
-        checklist.remove_entry(line_number, guard)
+        item = checklist.cancel_entry(line_number)
         log_tool_action(
             facet=facet,
-            action="todo_remove",
-            params={"line_number": line_number, "text": guard},
+            action="todo_cancel",
+            params={"line_number": line_number, "text": item.text},
             context=context,
             day=day,
         )
-        return {"day": day, "facet": facet, "markdown": checklist.numbered()}
+        return {"day": day, "facet": facet, "markdown": checklist.display()}
     except FileNotFoundError:
         return {
             "error": f"No todos found for facet '{facet}' on day '{day}'",
-            "suggestion": "verify the facet and day exist before removing todos",
-        }
-    except todo.TodoGuardMismatchError as exc:
-        return {
-            "error": str(exc),
-            "suggestion": f"expected '{exc.expected}'",
+            "suggestion": "verify the facet and day exist before cancelling todos",
         }
     except IndexError as exc:
         return {"error": str(exc), "suggestion": "refresh the todo list"}
-    except ValueError as exc:
-        return {
-            "error": f"Malformed todo entry: {exc}",
-            "suggestion": "recreate the todo manually if needed",
-        }
     except Exception as exc:  # pragma: no cover - unexpected failure
-        return {"error": f"Failed to remove todo: {exc}"}
+        return {"error": f"Failed to cancel todo: {exc}"}
 
 
 @register_tool(annotations=HINTS)
 def todo_done(
-    day: str, facet: str, line_number: int, guard: str, context: Context | None = None
+    day: str, facet: str, line_number: int, context: Context | None = None
 ) -> dict[str, Any]:
-    """Mark a todo entry as completed by switching its checkbox to ``[x]``.
+    """Mark a todo entry as completed.
 
     Args:
         day: Journal day in ``YYYYMMDD`` format.
         facet: Facet name (e.g., "personal", "work").
         line_number: 1-based index of the entry to mark as done.
-        guard: Full todo line (e.g., ``- [ ] Review logs``) expected on the numbered line.
 
     Returns:
         Dictionary with the updated ``markdown`` checklist including numbering,
         or an error payload if validation fails.
     """
-
     try:
         checklist = todo.TodoChecklist.load(day, facet)
-        checklist.mark_done(line_number, guard)
+        item = checklist.mark_done(line_number)
         log_tool_action(
             facet=facet,
             action="todo_done",
-            params={"line_number": line_number, "text": guard},
+            params={"line_number": line_number, "text": item.text},
             context=context,
             day=day,
         )
-        return {"day": day, "facet": facet, "markdown": checklist.numbered()}
+        return {"day": day, "facet": facet, "markdown": checklist.display()}
     except FileNotFoundError:
         return {
             "error": f"No todos found for facet '{facet}' on day '{day}'",
             "suggestion": "verify the facet and day exist before updating todos",
         }
-    except todo.TodoGuardMismatchError as exc:
-        return {
-            "error": str(exc),
-            "suggestion": f"expected '{exc.expected}'",
-        }
     except IndexError as exc:
         return {"error": str(exc), "suggestion": "refresh the todo list"}
-    except ValueError as exc:
-        return {
-            "error": f"Malformed todo entry: {exc}",
-            "suggestion": "recreate the todo manually if needed",
-        }
     except Exception as exc:  # pragma: no cover - unexpected failure
         return {"error": f"Failed to complete todo: {exc}"}
 
@@ -234,7 +209,6 @@ def todo_upcoming(limit: int = 20, facet: str | None = None) -> dict[str, Any]:
         - todo_upcoming(facet="personal")  # Return personal facet todos only
         - todo_upcoming(limit=50, facet="work")  # Return up to 50 work todos
     """
-
     try:
         markdown = todo.upcoming(limit=limit, facet=facet)
         return {"limit": limit, "facet": facet, "markdown": markdown}
@@ -250,22 +224,21 @@ def todo_upcoming(limit: int = 20, facet: str | None = None) -> dict[str, Any]:
 @mcp.resource("journal://todo/{facet}/{day}")
 def get_todo(facet: str, day: str) -> TextResource:
     """Return the facet-scoped todo checklist for a specific day."""
+    checklist = todo.TodoChecklist.load(day, facet)
 
-    todo_path = todo.todo_file_path(day, facet)
-
-    if not todo_path.is_file():
-        facet_path = todo_path.parents[1]  # facets/{facet}/todos
+    if not checklist.exists:
+        facet_path = checklist.path.parents[1]  # facets/{facet}/todos
         if not facet_path.is_dir():
             text = f"No todos folder for facet '{facet}'."
         else:
             text = f"(No todos recorded for {day} in facet '{facet}'.)"
     else:
-        text = todo_path.read_text(encoding="utf-8")
+        text = checklist.display()
 
     return TextResource(
         uri=f"journal://todo/{facet}/{day}",
         name=f"Todos: {facet}/{day}",
         description=f"Checklist entries for facet '{facet}' on {day}",
-        mime_type="text/markdown",
+        mime_type="text/plain",
         text=text,
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -20,20 +21,37 @@ FIXTURES_JOURNAL = Path(__file__).resolve().parents[3] / "fixtures" / "journal"
 
 def test_todo_list_returns_numbered_view(todo_env):
     """todo_list should number checklist entries starting at 1."""
-    day, facet, _ = todo_env(["- [ ] First item", "- [ ] Second item"])
+    day, facet, _ = todo_env([{"text": "First item"}, {"text": "Second item"}])
 
     result = call_tool(todo_tools.todo_list, day, facet)
 
     assert result == {
         "day": day,
         "facet": facet,
-        "markdown": "1: - [ ] First item\n2: - [ ] Second item",
+        "markdown": "1: [ ] First item\n2: [ ] Second item",
     }
+
+
+def test_todo_list_includes_cancelled(todo_env):
+    """todo_list should include cancelled items with strikethrough for line number continuity."""
+    day, facet, _ = todo_env(
+        [
+            {"text": "Active item"},
+            {"text": "Cancelled item", "cancelled": True},
+            {"text": "Another active"},
+        ]
+    )
+
+    result = call_tool(todo_tools.todo_list, day, facet)
+
+    assert "1: [ ] Active item" in result["markdown"]
+    assert "2: ~~[cancelled] Cancelled item~~" in result["markdown"]
+    assert "3: [ ] Another active" in result["markdown"]
 
 
 def test_todo_add_requires_next_line(todo_env):
     """todo_add should reject mismatched next line numbers."""
-    day, facet, _ = todo_env(["- [ ] First item"])
+    day, facet, _ = todo_env([{"text": "First item"}])
 
     result = call_tool(
         todo_tools.todo_add, day, facet, line_number=1, text="Second item"
@@ -44,7 +62,7 @@ def test_todo_add_requires_next_line(todo_env):
 
 def test_todo_add_appends_entry(todo_env):
     """todo_add should append using the provided text and update storage."""
-    day, facet, todo_path = todo_env(["- [ ] First item"])
+    day, facet, todo_path = todo_env([{"text": "First item"}])
 
     result = call_tool(
         todo_tools.todo_add, day, facet, line_number=2, text="Second item"
@@ -53,11 +71,14 @@ def test_todo_add_appends_entry(todo_env):
     assert result == {
         "day": day,
         "facet": facet,
-        "markdown": "1: - [ ] First item\n2: - [ ] Second item",
+        "markdown": "1: [ ] First item\n2: [ ] Second item",
     }
-    assert todo_path.read_text(encoding="utf-8") == (
-        "- [ ] First item\n- [ ] Second item\n"
-    )
+
+    # Verify file contents
+    lines = todo_path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 2
+    assert json.loads(lines[0])["text"] == "First item"
+    assert json.loads(lines[1])["text"] == "Second item"
 
 
 def test_todo_add_creates_missing_day(tmp_path, monkeypatch):
@@ -78,57 +99,52 @@ def test_todo_add_creates_missing_day(tmp_path, monkeypatch):
         text="Plan end-of-year celebration",
     )
 
-    todo_path = tmp_path / "facets" / facet / "todos" / f"{day}.md"
+    todo_path = tmp_path / "facets" / facet / "todos" / f"{day}.jsonl"
 
     assert result == {
         "day": day,
         "facet": facet,
-        "markdown": "1: - [ ] Plan end-of-year celebration",
+        "markdown": "1: [ ] Plan end-of-year celebration",
     }
-    assert todo_path.read_text(encoding="utf-8") == (
-        "- [ ] Plan end-of-year celebration\n"
-    )
+
+    content = todo_path.read_text(encoding="utf-8")
+    data = json.loads(content.strip())
+    assert data["text"] == "Plan end-of-year celebration"
 
 
-def test_todo_remove_validates_guard(todo_env):
-    """todo_remove should validate the guard string before deleting."""
-    day, facet, _ = todo_env(["- [ ] First item", "- [ ] Second item"])
+def test_todo_cancel_sets_cancelled_flag(todo_env):
+    """todo_cancel should mark the entry as cancelled."""
+    day, facet, todo_path = todo_env([{"text": "First item"}, {"text": "Second item"}])
 
-    result = call_tool(
-        todo_tools.todo_remove, day, facet, line_number=2, guard="- [ ] Other"
-    )
+    result = call_tool(todo_tools.todo_cancel, day, facet, line_number=2)
 
-    assert result["error"] == "guard text does not match current todo"
+    # Cancelled items shown with strikethrough
+    assert result == {
+        "day": day,
+        "facet": facet,
+        "markdown": "1: [ ] First item\n2: ~~[cancelled] Second item~~",
+    }
 
-
-def test_todo_remove_updates_file(todo_env):
-    """todo_remove should delete the requested entry and renumber output."""
-    day, facet, todo_path = todo_env(["- [ ] First item", "- [ ] Second item"])
-
-    result = call_tool(
-        todo_tools.todo_remove, day, facet, line_number=2, guard="- [ ] Second item"
-    )
-
-    assert result == {"day": day, "facet": facet, "markdown": "1: - [ ] First item"}
-    assert todo_path.read_text(encoding="utf-8") == "- [ ] First item\n"
+    # Verify file still has both items, second one cancelled
+    lines = todo_path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 2
+    assert json.loads(lines[1])["cancelled"] is True
 
 
 def test_todo_done_marks_complete(todo_env):
     """todo_done should mark the entry as completed in storage."""
-    day, facet, todo_path = todo_env(["- [ ] First item", "- [ ] Second item"])
+    day, facet, todo_path = todo_env([{"text": "First item"}, {"text": "Second item"}])
 
-    result = call_tool(
-        todo_tools.todo_done, day, facet, line_number=2, guard="- [ ] Second item"
-    )
+    result = call_tool(todo_tools.todo_done, day, facet, line_number=2)
 
     assert result == {
         "day": day,
         "facet": facet,
-        "markdown": "1: - [ ] First item\n2: - [x] Second item",
+        "markdown": "1: [ ] First item\n2: [x] Second item",
     }
-    assert todo_path.read_text(encoding="utf-8") == (
-        "- [ ] First item\n- [x] Second item\n"
-    )
+
+    lines = todo_path.read_text(encoding="utf-8").strip().split("\n")
+    assert json.loads(lines[1])["completed"] is True
 
 
 def test_todo_add_validates_empty_text(todo_env):
@@ -142,9 +158,27 @@ def test_todo_add_validates_empty_text(todo_env):
     assert "suggestion" in result
 
 
+def test_todo_add_extracts_time(todo_env):
+    """todo_add should extract time from text."""
+    day, facet, todo_path = todo_env([])
+
+    result = call_tool(
+        todo_tools.todo_add, day, facet, line_number=1, text="Meeting (14:30)"
+    )
+
+    assert "error" not in result
+    assert "14:30" in result["markdown"]
+
+    # Verify file stores time separately
+    content = todo_path.read_text(encoding="utf-8")
+    data = json.loads(content.strip())
+    assert data["text"] == "Meeting"
+    assert data["time"] == "14:30"
+
+
 @pytest.mark.integration
 def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
-    """Exercise add/done/remove flow against a copied fixture journal."""
+    """Exercise add/done/cancel flow against a copied fixture journal."""
     if not FIXTURES_JOURNAL.exists():
         pytest.skip("fixtures/journal not found")
 
@@ -155,8 +189,8 @@ def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
     facet = "personal"
     todos_dir = journal_copy / "facets" / facet / "todos"
     todos_dir.mkdir(parents=True, exist_ok=True)
-    todo_path = todos_dir / f"{day}.md"
-    todo_path.write_text("- [ ] Fixture task\n", encoding="utf-8")
+    todo_path = todos_dir / f"{day}.jsonl"
+    todo_path.write_text('{"text": "Fixture task"}\n', encoding="utf-8")
 
     monkeypatch.setenv("JOURNAL_PATH", str(journal_copy))
 
@@ -164,7 +198,7 @@ def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
     assert list_result == {
         "day": day,
         "facet": facet,
-        "markdown": "1: - [ ] Fixture task",
+        "markdown": "1: [ ] Fixture task",
     }
 
     add_result = call_tool(
@@ -173,34 +207,33 @@ def test_todo_tool_pack_round_trip(tmp_path, monkeypatch):
     if "error" in add_result:
         raise AssertionError(f"todo_add failed: {add_result}")
     assert add_result["markdown"].splitlines() == [
-        "1: - [ ] Fixture task",
-        "2: - [ ] Follow up task",
+        "1: [ ] Fixture task",
+        "2: [ ] Follow up task",
     ]
 
-    done_result = call_tool(
-        todo_tools.todo_done, day, facet, line_number=2, guard="- [ ] Follow up task"
-    )
+    done_result = call_tool(todo_tools.todo_done, day, facet, line_number=2)
     assert done_result["markdown"].splitlines() == [
-        "1: - [ ] Fixture task",
-        "2: - [x] Follow up task",
+        "1: [ ] Fixture task",
+        "2: [x] Follow up task",
     ]
 
-    removed_done = call_tool(
-        todo_tools.todo_remove, day, facet, line_number=2, guard="- [x] Follow up task"
-    )
-    assert removed_done == {
-        "day": day,
-        "facet": facet,
-        "markdown": "1: - [ ] Fixture task",
-    }
+    # Cancel the completed item
+    cancel_result = call_tool(todo_tools.todo_cancel, day, facet, line_number=2)
+    # Cancelled items shown with strikethrough
+    assert cancel_result["markdown"].splitlines() == [
+        "1: [ ] Fixture task",
+        "2: ~~[cancelled] Follow up task~~",
+    ]
 
-    empty_result = call_tool(
-        todo_tools.todo_remove, day, facet, line_number=1, guard="- [ ] Fixture task"
-    )
-    assert empty_result == {
-        "day": day,
-        "facet": facet,
-        "markdown": "0: (no todos)",
-    }
+    # Cancel remaining item
+    cancel_last = call_tool(todo_tools.todo_cancel, day, facet, line_number=1)
+    assert cancel_last["markdown"].splitlines() == [
+        "1: ~~[cancelled] Fixture task~~",
+        "2: ~~[cancelled] Follow up task~~",
+    ]
 
-    assert todo_path.read_text(encoding="utf-8") == ""
+    # File should still have both items (soft delete)
+    lines = todo_path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 2
+    assert json.loads(lines[0])["cancelled"] is True
+    assert json.loads(lines[1])["cancelled"] is True

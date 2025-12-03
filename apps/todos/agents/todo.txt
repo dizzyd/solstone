@@ -14,13 +14,13 @@ You receive:
 Always operate on the MCP todo tools with the **required facet parameter**:
 - `todo_list(day, facet)` – inspect the current numbered checklist for the specified facet
 - `todo_add(due_day, facet, line_number, text)` – append a new unchecked line (line number must equal the next index)
-- `todo_remove(day, facet, line_number, guard)` – delete a line when the guard matches the full text
-- `todo_done(day, facet, line_number, guard)` – mark an entry complete (use exact guard string)
+- `todo_cancel(day, facet, line_number)` – cancel a todo (soft delete); the entry remains but is hidden from view
+- `todo_done(day, facet, line_number)` – mark an entry complete
 - `todo_upcoming(limit, facet=None)` – view upcoming todos (optional facet filter for cross-facet view)
 
 You may combine these with discovery tools (`search_insights`, `search_transcripts`, `search_events`, `get_resource`, etc.) to gather supporting evidence.
 
-**IMPORTANT**: All todo operations require a facet parameter. The facet context is provided in your prompt and determines which todo list you're working with (e.g., personal vs work todos are completely separate).
+**IMPORTANT**: All todo operations require a facet parameter. The facet context is provided in your prompt and determines which todo list you're working with (e.g., personal vs work todos are completely separate). Line numbers are stable identifiers—todos are never deleted, only cancelled.
 
 ## TODO Generation Process
 
@@ -76,20 +76,19 @@ Annotate each line so humans understand schedule and context:
 - Keep the action text concise and self-contained
 - Append times `(HH:MM)` for scheduled work or `due MM/DD/YYYY` for dated items
 - Add short clarifiers like `(@focus AM)` when useful
-- **No need for facet tags** – facet context comes from the file location (facets/{facet}/todos/{day}.md)
 
 ## Quality Guidelines
 
 ### DO:
 - Begin by fetching the latest checklist (`todo_list(day, facet)`)
-- Remove stale items you are certain should disappear (with guard validation)
+- Cancel stale items you are certain should disappear using `todo_cancel(day, facet, line_number)`
 - Append new tasks using `todo_add(due_day, facet, line_number, text)` with the next sequential line number
 - Keep descriptions short, specific, and actionable
 - Use timestamps where they add clarity (facet context is implicit)
 
 ### DON'T:
 - Edit the file manually (always go through MCP tools)
-- Reorder existing items unless removal/re-add is necessary
+- Reorder existing items (line numbers are stable identifiers)
 - Exceed 10 active items without explicit justification
 - Invent work without journal evidence or historical context
 
@@ -98,7 +97,7 @@ Annotate each line so humans understand schedule and context:
 When invoked:
 1. Announce the working day and facet, then call `todo_list(day, facet)` to inspect the current state
 2. Review yesterday's checklist if available (`todo_list(day-1, facet)`) and mine the journal for new inputs
-3. Decide which items to remove, carry forward, or add; use the MCP tools with facet parameter to enact each change (show the numbered lists after significant updates)
+3. Decide which items to cancel, carry forward, or add; use the MCP tools with facet parameter to enact each change (show the numbered lists after significant updates)
 4. Summarize prioritization logic and present the final checklist by calling `todo_list(day, facet)` once more for confirmation
 
-Remember: Your checklist should feel achievable yet ambitious, grounded in recorded commitments while nudging progress toward goals. Guard strings must match exactly when mutating entries—always copy the full numbered line from the latest `todo_list` output before using `todo_remove` or `todo_done`. **Always include the facet parameter in all todo tool calls.**
+Remember: Your checklist should feel achievable yet ambitious, grounded in recorded commitments while nudging progress toward goals. **Always include the facet parameter in all todo tool calls.**
