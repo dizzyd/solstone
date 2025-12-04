@@ -362,11 +362,19 @@ async def run_agent(
                     # Tool output finished — mirror end, include original args if we have them
                     elif name == "tool_output" and isinstance(item, ToolCallOutputItem):
                         raw = item.raw_item
-                        call_id = (
-                            getattr(raw, "tool_call_id", None)
-                            or getattr(raw, "call_id", None)
-                            or getattr(raw, "id", None)
-                        )
+                        # raw_item is a TypedDict (dict), not an object - use dict access
+                        if isinstance(raw, dict):
+                            call_id = (
+                                raw.get("tool_call_id")
+                                or raw.get("call_id")
+                                or raw.get("id")
+                            )
+                        else:
+                            call_id = (
+                                getattr(raw, "tool_call_id", None)
+                                or getattr(raw, "call_id", None)
+                                or getattr(raw, "id", None)
+                            )
                         meta = pending_tools.pop(call_id, {}) if call_id else {}
                         cb.emit(
                             {

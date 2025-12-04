@@ -4,10 +4,10 @@ Note: These functions are registered as MCP tools by muse/mcp.py
 They can also be imported and called directly for testing or internal use.
 """
 
-from fastmcp import Context
+import base64
 
 
-async def get_resource(uri: str, ctx: Context) -> object:
+async def get_resource(uri: str) -> object:
     """Return the contents of a journal resource.
 
     Many MCP clients cannot read ``journal://`` resources directly. This tool
@@ -30,25 +30,16 @@ async def get_resource(uri: str, ctx: Context) -> object:
         Base64-encoded string for binary media, or a plain string for
         text resources.
     """
+    # Import here to avoid circular import at module load time
+    from muse.mcp import mcp
 
     try:
-        content_list = await ctx.read_resource(uri)
+        # Use the resource manager directly - bypasses Context initialization issues
+        result = await mcp._resource_manager.read_resource(uri)
 
-        # read_resource returns a list of content items
-        if not content_list:
-            return {"error": f"Resource not found: {uri}"}
-
-        content = content_list[0]
-
-        # Check if content is binary (blob) or text
-        # FastMCP returns BlobResourceContents for binary, TextResourceContents for text
-        if hasattr(content, "blob") and content.blob is not None:
-            # Binary content - already base64 encoded by FastMCP
-            return content.blob
-        elif hasattr(content, "text"):
-            return content.text
-        else:
-            # Fallback for unexpected content types
-            return str(content)
-    except Exception as exc:  # pragma: no cover - unexpected failure
+        # read_resource returns str for text, bytes for binary
+        if isinstance(result, bytes):
+            return base64.b64encode(result).decode("ascii")
+        return result
+    except Exception as exc:
         return {"error": f"Failed to fetch resource: {exc}"}
