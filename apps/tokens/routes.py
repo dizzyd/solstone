@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 from flask import Blueprint, jsonify, render_template, request
 
 from convey import state
-from convey.utils import DATE_RE, format_date_short
+from convey.utils import DATE_RE
 from think.models import calc_token_cost, get_model_provider
 
 tokens_bp = Blueprint(
@@ -307,9 +307,7 @@ def day_view(day: str):
     """Token usage dashboard for specific day."""
     if not DATE_RE.fullmatch(day):
         return "", 404
-    return render_template(
-        "app.html", app="tokens", day=day, day_formatted=format_date_short(day)
-    )
+    return render_template("app.html")
 
 
 @tokens_bp.route("/api/usage")

@@ -331,7 +331,7 @@ class AppRegistry:
                 def index():
                     from flask import render_template
 
-                    return render_template("app.html", app=app_name)
+                    return render_template("app.html")
 
                 def setup_index(state):
                     """Deferred setup function called when blueprint is registered."""

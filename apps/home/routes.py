@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, redirect, render_template, url_for
 
 from apps.todos.todo import get_todos
 from convey import state
-from convey.utils import DATE_RE, format_date_short
+from convey.utils import DATE_RE
 from think.entities import load_entities
 from think.facets import get_facet_news, get_facets
 from think.indexer import search_events
@@ -131,12 +131,7 @@ def home_day(day: str) -> str:
     if not DATE_RE.fullmatch(day):
         return "", 404
 
-    return render_template(
-        "app.html",
-        app="home",
-        day=day,
-        day_formatted=format_date_short(day),
-    )
+    return render_template("app.html")
 
 
 @home_bp.route("/api/summary/<day>")

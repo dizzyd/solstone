@@ -67,7 +67,7 @@ def inject_chat_data():
 @chat_bp.route("/")
 def index():
     """Chat app index - context processor provides recent_chats and unread_count."""
-    return render_template("app.html", app="chat")
+    return render_template("app.html")
 
 
 TITLE_SYSTEM_INSTRUCTION = (

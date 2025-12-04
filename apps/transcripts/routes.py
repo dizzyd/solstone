@@ -10,7 +10,7 @@ from typing import Any
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 from convey import state
-from convey.utils import DATE_RE, format_date, format_date_short
+from convey.utils import DATE_RE, format_date
 from think.utils import day_dirs, day_path
 
 transcripts_bp = Blueprint(
@@ -35,13 +35,7 @@ def transcripts_day(day: str) -> str:
 
     title = format_date(day)
 
-    return render_template(
-        "app.html",
-        app="transcripts",
-        title=title,
-        day=day,
-        day_formatted=format_date_short(day),
-    )
+    return render_template("app.html", title=title)
 
 
 @transcripts_bp.route("/api/ranges/<day>")

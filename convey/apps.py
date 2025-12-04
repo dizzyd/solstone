@@ -66,19 +66,43 @@ def _get_selected_facet() -> str | None:
 
 
 def register_app_context(app: Flask, registry: AppRegistry) -> None:
-    """Register app system context processors."""
+    """Register app system context processors and template filters."""
+    from .utils import DATE_RE, format_date_short
+
+    # Register Jinja2 filters
+    app.jinja_env.filters["format_date_short"] = format_date_short
 
     @app.context_processor
     def inject_app_context() -> dict:
         """Inject app registry and facets context for new app system."""
         from .config import apply_app_order, load_convey_config
 
+        # Parse URL path: /app/{app_name}/{day}/...
+        path_parts = request.path.split("/")
+
+        # Auto-extract app name from URL for /app/{app_name}/... routes
+        current_app_name = None
+        if (
+            len(path_parts) > 2
+            and path_parts[1] == "app"
+            and path_parts[2] in registry.apps
+        ):
+            current_app_name = path_parts[2]
+
+        # Auto-extract day from URL for apps with date_nav enabled
+        # Pattern: /app/{app_name}/{YYYYMMDD} or /app/{app_name}/{YYYYMMDD}/*
+        day = None
+        if (
+            current_app_name
+            and registry.apps[current_app_name].date_nav_enabled()
+            and len(path_parts) > 3
+            and DATE_RE.fullmatch(path_parts[3])
+        ):
+            day = path_parts[3]
+
         # Determine if current app wants muted facets shown
-        current_app_name = (
-            request.path.split("/")[2] if "/app/" in request.path else None
-        )
         include_muted = False
-        if current_app_name and current_app_name in registry.apps:
+        if current_app_name:
             include_muted = registry.apps[current_app_name].show_muted_facets()
 
         facets = _get_facets_data(include_muted=include_muted)
@@ -101,10 +125,12 @@ def register_app_context(app: Flask, registry: AppRegistry) -> None:
 
         return {
             "app_registry": registry,
+            "app": current_app_name,
             "apps": apps_dict,
             "facets": facets,
             "selected_facet": selected_facet,
             "starred_apps": starred_apps,
+            "day": day,
         }
 
     @app.context_processor

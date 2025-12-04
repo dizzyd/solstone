@@ -250,7 +250,6 @@ def import_detail(timestamp: str) -> str:
 
     return render_template(
         "app.html",
-        app="import",
         view="detail",
         timestamp=timestamp,
     )

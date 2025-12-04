@@ -84,7 +84,8 @@ See `apps/__init__.py` for discovery logic and route injection.
 The workspace template is included inside the app container (`app.html`).
 
 **Available Template Context:**
-- `app` - Current app name
+- `app` - Current app name (auto-injected from URL)
+- `day` - Current day as YYYYMMDD string (auto-injected from URL for apps with `date_nav: true`)
 - `facets` - List of active facet dicts: `[{name, title, color, emoji}, ...]`
 - `selected_facet` - Currently selected facet name (string or None)
 - `app_registry` - Registry with all apps (usually not needed directly)
@@ -167,7 +168,7 @@ This provides a unified `← Date →` control with:
 - Month picker dropdown (click date label)
 - Keyboard shortcuts: ←/→ arrows, `t` for today
 
-The component reads `day` and `app` from template context to construct navigation URLs.
+The `day` and `app` variables are auto-injected from the URL by the context processor.
 
 **Month Picker:**
 
@@ -523,7 +524,7 @@ See `apps/todos/routes.py:todos_day()` - Loads data per-facet when selected, or 
 Pass `facet_counts` dict to `render_template()` to show initial badge counts on facet pills:
 ```python
 facet_counts = {"work": 5, "personal": 3}
-return render_template("app.html", app="my_app", facet_counts=facet_counts)
+return render_template("app.html", facet_counts=facet_counts)
 ```
 For client-side updates (e.g., after completing a todo), use `AppServices.badges.facet.set(facetName, count)`.
 

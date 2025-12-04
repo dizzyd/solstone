@@ -23,7 +23,7 @@ from apps.todos.todo import (
 from apps.utils import log_app_action
 from convey import state
 from convey.config import get_selected_facet
-from convey.utils import DATE_RE, adjacent_days, format_date, format_date_short
+from convey.utils import DATE_RE, adjacent_days, format_date
 from think.facets import get_facets
 
 todos_bp = Blueprint("app:todos", __name__, url_prefix="/app/todos")
@@ -429,10 +429,7 @@ def todos_day(day: str):  # type: ignore[override]
 
     return render_template(
         "app.html",
-        app="todos",
         title=format_date(day),
-        day=day,
-        day_formatted=format_date_short(day),
         prev_day=prev_day,
         next_day=next_day,
         today_day=today_day,

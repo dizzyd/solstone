@@ -9,7 +9,7 @@ from typing import Any
 from flask import Blueprint, jsonify, redirect, render_template, url_for
 
 from convey import state
-from convey.utils import DATE_RE, adjacent_days, format_date, format_date_short
+from convey.utils import DATE_RE, adjacent_days, format_date
 from think.utils import day_dirs, day_path
 
 calendar_bp = Blueprint(
@@ -42,13 +42,10 @@ def calendar_day(day: str) -> str:
 
     return render_template(
         "app.html",
-        app="calendar",
         view="day",
         title=title,
         prev_day=prev_day,
         next_day=next_day,
-        day=day,
-        day_formatted=format_date_short(day),
     )
 
 
@@ -166,13 +163,10 @@ def _dev_calendar_screens_list(day: str) -> str:
 
     return render_template(
         "app.html",
-        app="calendar",
         view="_dev_screens_list",
         title=title,
-        day=day,
         prev_day=prev_day,
         next_day=next_day,
-        day_formatted=format_date_short(day),
     )
 
 
@@ -201,14 +195,11 @@ def _dev_calendar_screens_detail(day: str, timestamp: str) -> str:
 
     return render_template(
         "app.html",
-        app="calendar",
         view="_dev_screens_detail",
         title=title,
-        day=day,
         timestamp=timestamp,
         prev_day=prev_day,
         next_day=next_day,
-        day_formatted=format_date_short(day),
     )
 
 
