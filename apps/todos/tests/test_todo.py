@@ -427,3 +427,194 @@ def test_get_facets_with_todos(monkeypatch, journal_root):
 
     facets_20240107 = get_facets_with_todos("20240107")
     assert facets_20240107 == []
+
+
+# --- Timestamp tests ---
+
+
+def test_todo_item_timestamps_on_creation(monkeypatch, journal_root):
+    """Test that timestamps are set when creating a new todo."""
+    import time
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+
+    # Create facet directory
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    before = int(time.time() * 1000)
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("New task")
+    after = int(time.time() * 1000)
+
+    assert item.created_at is not None
+    assert item.updated_at is not None
+    assert before <= item.created_at <= after
+    assert before <= item.updated_at <= after
+    assert item.created_at == item.updated_at  # Same on creation
+
+
+def test_todo_item_updated_at_changes_on_mark_done(monkeypatch, journal_root):
+    """Test that updated_at changes when marking todo complete."""
+    import time
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("Task to complete")
+    original_created = item.created_at
+    original_updated = item.updated_at
+
+    time.sleep(0.01)  # Ensure time passes
+
+    updated_item = checklist.mark_done(item.index)
+
+    assert updated_item.created_at == original_created  # Unchanged
+    assert updated_item.updated_at > original_updated
+
+
+def test_todo_item_updated_at_changes_on_mark_undone(monkeypatch, journal_root):
+    """Test that updated_at changes when marking todo incomplete."""
+    import time
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("Task to uncomplete")
+    checklist.mark_done(item.index)
+
+    time.sleep(0.01)
+
+    reloaded = TodoChecklist.load("20240110", "personal")
+    original_updated = reloaded.items[0].updated_at
+    original_created = reloaded.items[0].created_at
+
+    time.sleep(0.01)
+
+    updated_item = reloaded.mark_undone(item.index)
+
+    assert updated_item.created_at == original_created
+    assert updated_item.updated_at > original_updated
+
+
+def test_todo_item_updated_at_changes_on_cancel(monkeypatch, journal_root):
+    """Test that updated_at changes when cancelling a todo."""
+    import time
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("Task to cancel")
+    original_created = item.created_at
+    original_updated = item.updated_at
+
+    time.sleep(0.01)
+
+    cancelled_item = checklist.cancel_entry(item.index)
+
+    assert cancelled_item.created_at == original_created
+    assert cancelled_item.updated_at > original_updated
+
+
+def test_todo_item_updated_at_changes_on_text_update(monkeypatch, journal_root):
+    """Test that updated_at changes when updating todo text."""
+    import time
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("Original text")
+    original_created = item.created_at
+    original_updated = item.updated_at
+
+    time.sleep(0.01)
+
+    updated_item = checklist.update_entry_text(item.index, "Updated text")
+
+    assert updated_item.created_at == original_created
+    assert updated_item.updated_at > original_updated
+
+
+def test_todo_item_timestamps_serialization(monkeypatch, journal_root):
+    """Test that timestamps are properly serialized to and from JSONL."""
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("Persistent task")
+
+    # Verify timestamps in to_jsonl output
+    jsonl = item.to_jsonl()
+    assert "created_at" in jsonl
+    assert "updated_at" in jsonl
+    assert jsonl["created_at"] == item.created_at
+    assert jsonl["updated_at"] == item.updated_at
+
+    # Verify timestamps survive round-trip
+    reloaded = TodoChecklist.load("20240110", "personal")
+    assert len(reloaded.items) == 1
+    assert reloaded.items[0].created_at == item.created_at
+    assert reloaded.items[0].updated_at == item.updated_at
+
+
+def test_todo_item_timestamps_in_as_dict(monkeypatch, journal_root):
+    """Test that timestamps are included in as_dict() output."""
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    item = checklist.append_entry("API task")
+
+    d = item.as_dict()
+    assert "created_at" in d
+    assert "updated_at" in d
+    assert d["created_at"] == item.created_at
+    assert d["updated_at"] == item.updated_at
+
+
+def test_todo_item_backward_compatibility_no_timestamps(monkeypatch, journal_root):
+    """Test loading files without timestamps (backward compatibility)."""
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+
+    # Write old-format todos without timestamps
+    _write_todos(
+        journal_root,
+        "personal",
+        "20240110",
+        [
+            {"text": "Old task"},
+            {"text": "Old completed", "completed": True},
+        ],
+    )
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    assert len(checklist.items) == 2
+
+    # Old items have None timestamps
+    assert checklist.items[0].created_at is None
+    assert checklist.items[0].updated_at is None
+    assert checklist.items[1].created_at is None
+    assert checklist.items[1].updated_at is None
+
+
+def test_append_entry_preserves_created_at(monkeypatch, journal_root):
+    """Test that append_entry can preserve a provided created_at timestamp."""
+    import time
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal_root))
+    (journal_root / "facets" / "personal" / "todos").mkdir(parents=True)
+
+    checklist = TodoChecklist.load("20240110", "personal")
+    original_created = 1700000000000  # Fixed timestamp in the past
+
+    before = int(time.time() * 1000)
+    item = checklist.append_entry("Moved task", created_at=original_created)
+    after = int(time.time() * 1000)
+
+    # created_at preserved from argument
+    assert item.created_at == original_created
+    # updated_at is current time
+    assert before <= item.updated_at <= after

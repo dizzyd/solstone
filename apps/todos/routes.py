@@ -320,9 +320,11 @@ def todos_day(day: str):  # type: ignore[override]
                         source_item = checklist.get_item(index)
                         old_text = source_item.text
 
-                        # Add to new facet
+                        # Add to new facet, preserving original created_at
                         new_checklist = TodoChecklist.load(day, new_facet)
-                        new_item = new_checklist.append_entry(text)
+                        new_item = new_checklist.append_entry(
+                            text, created_at=source_item.created_at
+                        )
 
                         # Preserve completed status
                         if source_item.completed:
@@ -501,7 +503,10 @@ def move_todo(day: str):  # type: ignore[override]
         text = source_item.text
         if source_item.time:
             text = f"{text} ({source_item.time})"
-        new_item = target_checklist.append_entry(text)
+        # Preserve original created_at timestamp when moving
+        new_item = target_checklist.append_entry(
+            text, created_at=source_item.created_at
+        )
     except TodoEmptyTextError as exc:
         current_app.logger.debug("Failed to append todo to %s: %s", target_day, exc)
         return jsonify({"error": "Unable to move todo to the selected day."}), 400

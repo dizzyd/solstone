@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,11 @@ __all__ = [
 
 # Regex for extracting time annotation from text
 TIME_RE = re.compile(r"\((\d{1,2}:[0-5]\d)\)\s*$")
+
+
+def _now_ms() -> int:
+    """Return current time as epoch milliseconds."""
+    return int(time.time() * 1000)
 
 
 class TodoError(Exception):
@@ -65,6 +71,8 @@ class TodoItem:
     time: str | None
     completed: bool
     cancelled: bool
+    created_at: int | None = None
+    updated_at: int | None = None
 
     def as_dict(self) -> dict[str, object]:
         """Return the item as a JSON-serializable dictionary."""
@@ -74,6 +82,8 @@ class TodoItem:
             "time": self.time,
             "completed": self.completed,
             "cancelled": self.cancelled,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
     def to_jsonl(self) -> dict[str, Any]:
@@ -85,6 +95,10 @@ class TodoItem:
             data["completed"] = True
         if self.cancelled:
             data["cancelled"] = True
+        if self.created_at is not None:
+            data["created_at"] = self.created_at
+        if self.updated_at is not None:
+            data["updated_at"] = self.updated_at
         return data
 
     @classmethod
@@ -96,6 +110,8 @@ class TodoItem:
             time=data.get("time"),
             completed=data.get("completed", False),
             cancelled=data.get("cancelled", False),
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
         )
 
     def display_line(self) -> str:
@@ -222,13 +238,17 @@ class TodoChecklist:
 
         return self.append_entry(text, time)
 
-    def append_entry(self, text: str, time: str | None = None) -> TodoItem:
+    def append_entry(
+        self, text: str, time: str | None = None, *, created_at: int | None = None
+    ) -> TodoItem:
         """Append a new unchecked todo entry without line validation.
 
         Args:
             text: Body of the todo item.
             time: Optional scheduled time in "HH:MM" format. If not provided,
                   will be extracted from text if present as (HH:MM) suffix.
+            created_at: Optional creation timestamp to preserve (e.g., when moving todos).
+                        If not provided, uses current time.
 
         Returns:
             The newly created TodoItem.
@@ -247,12 +267,15 @@ class TodoChecklist:
                 except ValueError:
                     pass
 
+        now = _now_ms()
         item = TodoItem(
             index=len(self.items) + 1,
             text=body,
             time=time,
             completed=False,
             cancelled=False,
+            created_at=created_at if created_at is not None else now,
+            updated_at=now,
         )
 
         self.items.append(item)
@@ -268,9 +291,10 @@ class TodoChecklist:
         Returns:
             The cancelled TodoItem.
         """
-        index, item = self._get_item(line_number)
+        _, item = self._get_item(line_number)
 
         item.cancelled = True
+        item.updated_at = _now_ms()
         self.save()
         return item
 
@@ -283,9 +307,10 @@ class TodoChecklist:
         Returns:
             The updated TodoItem.
         """
-        index, item = self._get_item(line_number)
+        _, item = self._get_item(line_number)
 
         item.completed = True
+        item.updated_at = _now_ms()
         self.save()
         return item
 
@@ -298,9 +323,10 @@ class TodoChecklist:
         Returns:
             The updated TodoItem.
         """
-        index, item = self._get_item(line_number)
+        _, item = self._get_item(line_number)
 
         item.completed = False
+        item.updated_at = _now_ms()
         self.save()
         return item
 
@@ -314,7 +340,7 @@ class TodoChecklist:
         Returns:
             The updated TodoItem.
         """
-        index, item = self._get_item(line_number)
+        _, item = self._get_item(line_number)
         body = self._validated_text(text)
 
         # Extract time from new text
@@ -331,6 +357,7 @@ class TodoChecklist:
 
         item.text = body
         item.time = time
+        item.updated_at = _now_ms()
         self.save()
         return item
 
