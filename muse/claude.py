@@ -7,19 +7,19 @@ via the SDK and is used by the ``muse-agents`` CLI.
 
 from __future__ import annotations
 
-import logging
 import os
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from claude_code_sdk import (
+from claude_agent_sdk import (
     AssistantMessage,
-    ClaudeCodeOptions,
+    ClaudeAgentOptions,
     CLINotFoundError,
     ProcessError,
     TextBlock,
+    ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
@@ -39,13 +39,6 @@ if _claude_bin.exists():
         os.environ["PATH"] = f"{_claude_bin}:{current_path}"
 
 _DEFAULT_MODEL = CLAUDE_SONNET_4
-
-
-def setup_logging(verbose: bool) -> logging.Logger:
-    """Return app logger configured for ``verbose``."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level)
-    return logging.getLogger(__name__)
 
 
 async def run_agent(
@@ -104,11 +97,8 @@ async def run_agent(
             }
         )
 
-        # Use the prompt directly without persona modifications
-        combined_prompt = prompt
-
         # Configure Claude Code options
-        options = ClaudeCodeOptions(
+        options = ClaudeAgentOptions(
             system_prompt=system_instruction,
             model=model,
             cwd=facet_path,  # Set working directory to the facet path
@@ -137,7 +127,7 @@ async def run_agent(
         response_text = []
 
         # Stream responses from Claude Code
-        async for message in query(prompt=combined_prompt, options=options):
+        async for message in query(prompt=prompt, options=options):
             if isinstance(message, AssistantMessage):
                 # Process each content block in the assistant's message
                 for block in message.content:
@@ -182,10 +172,9 @@ async def run_agent(
                                 }
                             )
 
-                    # Handle other block types if needed
-                    elif hasattr(block, "thinking"):
+                    elif isinstance(block, ThinkingBlock):
                         # Thinking/reasoning block
-                        thinking_content = getattr(block, "thinking", "")
+                        thinking_content = block.thinking
                         if thinking_content:
                             thinking_event: ThinkingEvent = {
                                 "event": "thinking",
@@ -282,19 +271,6 @@ async def run_agent(
         raise
 
 
-async def run_prompt(
-    config: Dict[str, Any],
-    on_event: Optional[Callable[[dict], None]] = None,
-) -> str:
-    """Convenience helper to run agent (alias for run_agent).
-
-    Uses the complete configuration from the unified config dict.
-    """
-    return await run_agent(config=config, on_event=on_event)
-
-
 __all__ = [
     "run_agent",
-    "run_prompt",
-    "setup_logging",
 ]

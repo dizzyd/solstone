@@ -7,7 +7,7 @@ name = "sunstone"
 version = "0.1.0"
 description = "Navigate Intelligently - A collection of utilities for multimodal navigation and analysis"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Jer+AI", email = "jeremie.miller@gmail.com"}
@@ -18,10 +18,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
     "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -69,6 +69,7 @@ full = [
     "scikit-image",
     "PyGObject",
     "watchdog",
+    "claude-agent-sdk>=0.1.0",
 ]
 
 macos = [
