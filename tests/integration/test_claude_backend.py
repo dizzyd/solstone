@@ -44,19 +44,17 @@ def skip_if_claude_cli_unavailable():
 
 
 def setup_test_journal(journal_path: str) -> Path:
-    """Create journal structure for testing. Returns test_facet_dir path."""
+    """Create journal structure for testing. Returns journal_dir path."""
     journal_dir = Path(journal_path)
     journal_dir.mkdir(parents=True, exist_ok=True)
 
     agents_dir = journal_dir / "agents"
     agents_dir.mkdir(exist_ok=True)
 
-    facets_dir = journal_dir / "facets"
-    facets_dir.mkdir(exist_ok=True)
-    test_facet_dir = facets_dir / "test-facet"
-    test_facet_dir.mkdir(exist_ok=True)
+    health_dir = journal_dir / "health"
+    health_dir.mkdir(exist_ok=True)
 
-    return test_facet_dir
+    return journal_dir
 
 
 def prepare_test_env(journal_path: str, max_tokens: int = 100) -> dict:
@@ -120,7 +118,6 @@ def test_claude_backend_real_sdk():
             "persona": "default",
             "model": CLAUDE_SONNET_4,
             "max_tokens": 100,
-            "facet": "test-facet",
         }
     )
 
@@ -147,6 +144,8 @@ def test_claude_backend_real_sdk():
     assert start_event["model"] == CLAUDE_SONNET_4
     assert start_event["persona"] == "default"
     assert start_event["backend"] == "claude"
+    # Claude backend now emits journal_path instead of facet
+    assert "journal_path" in start_event
     if "ts" in start_event:
         assert isinstance(start_event["ts"], int)
 
@@ -174,7 +173,7 @@ def test_claude_backend_real_sdk():
 @pytest.mark.integration
 @pytest.mark.requires_claude_sdk
 def test_claude_backend_with_tool_calls():
-    """Test Claude backend with tool calls."""
+    """Test Claude backend with tool calls (read-only file access)."""
     fixtures_env, journal_path = get_fixtures_env()
     if not fixtures_env:
         pytest.skip("fixtures/.env not found")
@@ -182,11 +181,11 @@ def test_claude_backend_with_tool_calls():
         pytest.skip("JOURNAL_PATH not found in fixtures/.env file")
 
     skip_if_claude_cli_unavailable()
-    test_facet_dir = setup_test_journal(journal_path)
+    journal_dir = setup_test_journal(journal_path)
     env = prepare_test_env(journal_path, max_tokens=200)
 
-    # Create a test file to read
-    test_file = test_facet_dir / "test_file.txt"
+    # Create a test file in the journal (not in a facet)
+    test_file = journal_dir / "test_file.txt"
     test_file.write_text("Hello from test file!")
 
     try:
@@ -197,7 +196,6 @@ def test_claude_backend_with_tool_calls():
                 "persona": "default",
                 "model": CLAUDE_SONNET_4,
                 "max_tokens": 200,
-                "facet": "test-facet",
             }
         )
 
@@ -249,7 +247,6 @@ def test_claude_backend_with_thinking():
             "persona": "default",
             "model": CLAUDE_SONNET_4,
             "max_tokens": 200,
-            "facet": "test-facet",
         }
     )
 

@@ -43,7 +43,7 @@ Requests are created via `cortex_request()` from `muse.cortex_client`, which bro
   "max_tokens": 8192,               // Optional: token limit (if supported)
   "disable_mcp": false,             // Optional: disable MCP tools for this request
   "continue_from": "1234567890122",  // Optional: continue from previous agent
-  "facet": "my-project",          // Required for Claude backend only
+  "facet": "my-project",          // Optional: project context
   "save": "analysis.md",             // Optional: save result to file in day directory
   "day": "20250109",                  // Optional: YYYYMMDD format, defaults to current day
   "handoff": {                       // Optional: chain to another agent on completion

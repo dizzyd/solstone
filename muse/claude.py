@@ -3,6 +3,9 @@
 
 This module exposes agent functionality for interacting with Claude Code
 via the SDK and is used by the ``muse-agents`` CLI.
+
+The Claude backend provides read-only access to the entire journal with
+diagnostic shell commands for system analysis and health checks.
 """
 
 from __future__ import annotations
@@ -41,6 +44,31 @@ if _claude_bin.exists():
 _DEFAULT_MODEL = CLAUDE_SONNET_4
 
 
+def _get_readonly_tools(journal_path: str) -> list[str]:
+    """Return allowed tools for read-only journal access with diagnostic commands."""
+    return [
+        # Read-only file access to journal
+        f"Read({journal_path}/**)",
+        f"Glob({journal_path}/**)",
+        f"LS({journal_path}/**)",
+        # Diagnostic shell commands (read-only)
+        "Bash(ls:*)",
+        "Bash(cat:*)",
+        "Bash(head:*)",
+        "Bash(tail:*)",
+        "Bash(grep:*)",
+        "Bash(jq:*)",
+        "Bash(wc:*)",
+        "Bash(date:*)",
+        "Bash(pgrep:*)",
+        "Bash(basename:*)",
+        "Bash(dirname:*)",
+        "Bash(test:*)",
+        "Bash(stat:*)",
+        "Bash(find:*)",
+    ]
+
+
 async def run_agent(
     config: Dict[str, Any],
     on_event: Optional[Callable[[dict], None]] = None,
@@ -48,10 +76,11 @@ async def run_agent(
     """Run a single prompt through the Claude Code SDK and return the response.
 
     Uses persona configuration from the unified config dict.
-    The config should include instruction text and all necessary parameters.
+    The Claude backend provides read-only access to the entire journal
+    with diagnostic shell commands for system analysis.
 
     Args:
-        config: Complete configuration dictionary including prompt, instruction, model, facet, etc.
+        config: Complete configuration dictionary including prompt, instruction, model, etc.
         on_event: Optional event callback
     """
     # Extract values from unified config
@@ -66,21 +95,15 @@ async def run_agent(
     callback = JSONEventCallback(on_event)
 
     try:
-        # Require facet in config
-        facet = config.get("facet")
-        if not facet:
-            raise ValueError("config must include 'facet' value")
-
         # Get journal path for file permissions
         load_dotenv()
         journal_path = os.getenv("JOURNAL_PATH")
         if not journal_path:
             raise RuntimeError("JOURNAL_PATH not set")
 
-        # Resolve facet path and ensure it exists
-        facet_path = os.path.join(journal_path, "facets", facet)
-        if not os.path.isdir(facet_path):
-            raise ValueError(f"Facet directory does not exist: {facet_path}")
+        # Ensure journal path exists
+        if not os.path.isdir(journal_path):
+            raise ValueError(f"Journal directory does not exist: {journal_path}")
 
         # Extract instruction from config
         system_instruction = config.get("instruction", "")
@@ -92,34 +115,19 @@ async def run_agent(
                 "persona": persona,
                 "model": model,
                 "backend": "claude",
-                "facet": facet,
-                "facet_path": facet_path,
+                "journal_path": journal_path,
             }
         )
 
-        # Configure Claude Code options
+        # Configure Claude Code options with read-only journal access
         options = ClaudeAgentOptions(
             system_prompt=system_instruction,
             model=model,
-            cwd=facet_path,  # Set working directory to the facet path
-            # Allow file operations and git commands in facet directory
-            allowed_tools=[
-                f"Read({facet_path}/**)",
-                f"Write({facet_path}/**)",
-                f"Edit({facet_path}/**)",
-                f"MultiEdit({facet_path}/**)",
-                f"LS({facet_path}/**)",
-                f"Glob({facet_path}/**)",
-                "Bash(git:*)",
-                "Bash(ls:*)",
-                "Bash(cat:*)",
-                "Bash(mkdir:*)",
-                "Bash(pwd)",
-                "Bash(echo:*)",
-            ],
+            cwd=journal_path,  # Set working directory to journal root
+            allowed_tools=_get_readonly_tools(journal_path),
             disallowed_tools=["mcp_*"],  # Disable MCP tools
-            permission_mode="acceptEdits",  # Auto-accept file edits
-            max_turns=max_turns,  # Allow multiple turns for complex tasks
+            permission_mode="bypassPermissions",  # Skip prompts, rely on allowed_tools
+            max_turns=max_turns,
         )
 
         # Track tool calls for pairing start/end events
