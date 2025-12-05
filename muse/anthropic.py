@@ -190,7 +190,6 @@ async def run_agent(
 
     model = config.get("model", _DEFAULT_MODEL)
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
-    thinking_budget_tokens = config.get("thinking_budget_tokens", None)
     disable_mcp = config.get("disable_mcp", False)
     persona = config.get("persona", "default")
 
@@ -261,21 +260,10 @@ async def run_agent(
                         "claude-sonnet-4-20250514",
                         "claude-sonnet-3-7-20241124",
                     ]:
-                        # Use config value if provided, otherwise calculate default
-                        if thinking_budget_tokens is not None:
-                            budget_tokens = thinking_budget_tokens
-                        elif max_tokens >= 2048:
-                            # Only enable thinking if we have enough tokens
-                            budget_tokens = min(10000, max_tokens - 1000)
-                        else:
-                            # Skip thinking for small token limits
-                            thinking_config = None
-                            budget_tokens = None
-
-                        if budget_tokens is not None:
+                        if max_tokens >= 2048:
                             thinking_config = {
                                 "type": "enabled",
-                                "budget_tokens": budget_tokens,
+                                "budget_tokens": min(10000, max_tokens - 1000),
                             }
 
                     # Only include tools parameter if we have tools
@@ -335,21 +323,10 @@ async def run_agent(
                 "claude-sonnet-4-20250514",
                 "claude-sonnet-3-7-20241124",
             ]:
-                # Use config value if provided, otherwise calculate default
-                if thinking_budget_tokens is not None:
-                    budget_tokens = thinking_budget_tokens
-                elif max_tokens >= 2048:
-                    # Only enable thinking if we have enough tokens
-                    budget_tokens = min(10000, max_tokens - 1000)
-                else:
-                    # Skip thinking for small token limits
-                    thinking_config = None
-                    budget_tokens = None
-
-                if budget_tokens is not None:
+                if max_tokens >= 2048:
                     thinking_config = {
                         "type": "enabled",
-                        "budget_tokens": budget_tokens,
+                        "budget_tokens": min(10000, max_tokens - 1000),
                     }
 
             # Create params without tools parameter when MCP is disabled

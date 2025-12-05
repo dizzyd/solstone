@@ -156,8 +156,7 @@ def test_anthropic_backend_with_thinking():
             "backend": "anthropic",
             "persona": "default",
             "model": CLAUDE_SONNET_4,
-            "max_tokens": 200,
-            "thinking_budget_tokens": 1024,  # Minimum required for thinking
+            "max_tokens": 2048,
             "disable_mcp": True,
         }
     )
