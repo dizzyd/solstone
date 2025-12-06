@@ -56,7 +56,7 @@ def _get_day_summary(day: str) -> dict[str, Any]:
             "todos": [],
             "events_by_topic": {},
             "entities": [],
-            "news_preview": None,
+            "news_content": None,
         }
 
         # Todos - return actual items
@@ -96,16 +96,14 @@ def _get_day_summary(day: str) -> dict[str, Any]:
         except Exception:
             pass
 
-        # News preview
+        # News content
         try:
             news = get_facet_news(facet_name, day=day)
             days = news.get("days", [])
             if days:
                 content = days[0].get("raw_content", "")
                 if content:
-                    facet_data["news_preview"] = content[:150] + (
-                        "..." if len(content) > 150 else ""
-                    )
+                    facet_data["news_content"] = content
         except Exception:
             pass
 

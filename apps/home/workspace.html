@@ -179,12 +179,51 @@
   font-size: 0.85rem;
 }
 
-/* News preview */
-.home-news-preview {
-  color: #4b5563;
-  line-height: 1.5;
+/* News content - markdown typography */
+.home-news-content {
+  color: #374151;
+  line-height: 1.6;
+}
+.home-news-content h1, .home-news-content h2, .home-news-content h3,
+.home-news-content h4, .home-news-content h5, .home-news-content h6 {
+  margin: 0.75em 0 0.4em 0;
+  color: #111827;
+}
+.home-news-content h1 { font-size: 1.5em; }
+.home-news-content h2 { font-size: 1.25em; }
+.home-news-content h3 { font-size: 1.1em; }
+.home-news-content p { margin: 0.5em 0; }
+.home-news-content ul, .home-news-content ol { margin: 0.5em 0; padding-left: 1.5em; }
+.home-news-content li { margin: 0.25em 0; }
+.home-news-content code {
+  background: #f3f4f6;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.home-news-content pre {
+  background: #f3f4f6;
+  padding: 0.75em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+.home-news-content pre code { background: none; padding: 0; }
+.home-news-content blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid #d1d5db;
+  color: #6b7280;
+}
+.home-news-content strong { color: #111827; }
+.home-news-content hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 1em 0;
 }
 </style>
+
+<script src="{{ vendor_lib('marked') }}"></script>
 
 <script>
 (function() {
@@ -304,29 +343,30 @@
   function renderNews(data, facet) {
     const card = document.getElementById('news-card');
     const container = document.getElementById('news-content');
-    let newsPreview = null;
+    let newsContent = null;
 
     if (facet) {
       const facetData = data.facets[facet];
-      newsPreview = facetData ? facetData.news_preview : null;
+      newsContent = facetData ? facetData.news_content : null;
     } else {
-      // Show first news preview found across facets
+      // Show first news found across facets
       for (const facetName of Object.keys(data.facets)) {
-        const preview = data.facets[facetName].news_preview;
-        if (preview) {
-          newsPreview = preview;
+        const content = data.facets[facetName].news_content;
+        if (content) {
+          newsContent = content;
           break;
         }
       }
     }
 
-    if (!newsPreview) {
+    if (!newsContent) {
       card.style.display = 'none';
       return;
     }
 
     card.style.display = 'block';
-    container.innerHTML = `<div class="home-news-preview">${escapeHtml(newsPreview)}</div>`;
+    const html = marked.parse(newsContent, { breaks: true, gfm: true });
+    container.innerHTML = `<div class="home-news-content">${html}</div>`;
   }
 
   function escapeHtml(text) {
