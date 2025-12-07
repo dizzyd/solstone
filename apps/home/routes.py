@@ -15,7 +15,7 @@ from convey import state
 from convey.utils import DATE_RE
 from think.entities import load_entities
 from think.facets import get_facet_news, get_facets
-from think.indexer import search_events
+from think.indexer.journal import get_events
 
 home_bp = Blueprint(
     "app:home",
@@ -74,12 +74,12 @@ def _get_day_summary(day: str) -> dict[str, Any]:
                 else:
                     result["totals"]["todos_pending"] += 1
 
-        # Events (search for this facet on this day)
+        # Events (load directly from source files)
         try:
-            _, events = search_events(query="", day=day, facet=facet_name, limit=100)
+            events = get_events(day, facet=facet_name)
             facet_events: dict[str, int] = defaultdict(int)
             for event in events:
-                topic = event.get("metadata", {}).get("topic", "other")
+                topic = event.get("topic", "other")
                 facet_events[topic] += 1
                 events_by_topic[topic] += 1
                 result["totals"]["events"] += 1

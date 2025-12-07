@@ -1,13 +1,13 @@
-"""Indexer package for insights, events, and transcripts.
+"""Indexer package for journal content.
 
-This module provides backward compatibility by re-exporting all the main
-functions from the sub-modules.
+This module provides the unified journal index and backward-compatible
+re-exports for the legacy separate indexes.
 """
 
 # Import from cli
 from .cli import main
 
-# Import from core
+# Legacy imports from core
 from .core import (
     DATE_RE,
     DB_NAMES,
@@ -18,13 +18,13 @@ from .core import (
     sanitize_fts_query,
 )
 
-# Import from events
+# Legacy imports from events
 from .events import (
     scan_events,
     search_events,
 )
 
-# Import from insights
+# Legacy imports from insights
 from .insights import (
     find_event_files,
     find_insight_files,
@@ -32,7 +32,16 @@ from .insights import (
     search_insights,
 )
 
-# Import from transcripts
+# Import from journal (new unified index)
+from .journal import (
+    get_events,
+    get_journal_index,
+    reset_journal_index,
+    scan_journal,
+    search_journal,
+)
+
+# Legacy imports from transcripts
 from .transcripts import (
     AUDIO_RE,
     SCREEN_RE,
@@ -43,7 +52,13 @@ from .transcripts import (
 
 # All public functions and constants
 __all__ = [
-    # Core
+    # Journal (new unified index)
+    "get_events",
+    "get_journal_index",
+    "reset_journal_index",
+    "scan_journal",
+    "search_journal",
+    # Legacy: Core
     "DATE_RE",
     "DB_NAMES",
     "INDEX_DIR",
@@ -51,15 +66,15 @@ __all__ = [
     "get_index",
     "reset_index",
     "sanitize_fts_query",
-    # Insights
+    # Legacy: Insights
     "find_event_files",
     "find_insight_files",
     "scan_insights",
     "search_insights",
-    # Events
+    # Legacy: Events
     "scan_events",
     "search_events",
-    # Transcripts
+    # Legacy: Transcripts
     "AUDIO_RE",
     "SCREEN_RE",
     "find_transcript_files",

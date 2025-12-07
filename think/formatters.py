@@ -35,6 +35,23 @@ from typing import Any, Callable
 
 from dotenv import load_dotenv
 
+from think.utils import day_dirs, segment_key
+
+# Patterns for journal index file discovery (subset of FORMATTERS)
+# Excludes agents/*.jsonl which are not indexed
+INDEX_PATTERNS: list[str] = [
+    # JSONL files
+    "facets/*/entities/*.jsonl",
+    "facets/*/entities.jsonl",
+    "facets/*/events/*.jsonl",
+    "facets/*/todos/*.jsonl",
+    "*/screen.jsonl",
+    "*/*_audio.jsonl",
+    "*/audio.jsonl",
+    # Markdown files
+    "**/*.md",
+]
+
 # Registry mapping glob patterns to (module_path, function_name)
 # Patterns are matched against journal-relative paths
 # Order matters: first match wins, so place specific patterns before general ones
@@ -119,6 +136,131 @@ def load_markdown(file_path: str | Path) -> str:
     """
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def find_formattable_files(journal: str) -> dict[str, str]:
+    """Find all indexable files matching INDEX_PATTERNS.
+
+    Scans the journal directory for files that have formatters and should
+    be included in the journal index. Excludes agents/*.jsonl.
+
+    Locations scanned:
+    - Daily insights: YYYYMMDD/insights/*.md
+    - Segment content: YYYYMMDD/HHMMSS*/*.md, *.jsonl
+    - Facet content: facets/*/events/*.jsonl, entities/, todos/, news/
+    - Import summaries: imports/*/summary.md
+    - App insights: apps/*/insights/*.md
+
+    Args:
+        journal: Path to journal root directory
+
+    Returns:
+        Mapping of journal-relative paths to absolute paths
+    """
+    files: dict[str, str] = {}
+    journal_path = Path(journal)
+
+    # Scan day directories for insights and segment content
+    for day, day_abs in day_dirs().items():
+        day_path = Path(day_abs)
+
+        # Daily insights: YYYYMMDD/insights/*.md
+        insights_dir = day_path / "insights"
+        if insights_dir.is_dir():
+            for md_file in insights_dir.glob("*.md"):
+                rel = f"{day}/insights/{md_file.name}"
+                files[rel] = str(md_file)
+
+        # Segment content: YYYYMMDD/HHMMSS*/*
+        for entry in day_path.iterdir():
+            if not entry.is_dir():
+                continue
+            seg_key = segment_key(entry.name)
+            if not seg_key:
+                continue
+
+            # Segment markdown: screen.md, audio.md, etc.
+            for md_file in entry.glob("*.md"):
+                rel = f"{day}/{entry.name}/{md_file.name}"
+                files[rel] = str(md_file)
+
+            # Segment JSONL: audio.jsonl, screen.jsonl, *_audio.jsonl
+            for jsonl_file in entry.glob("*.jsonl"):
+                name = jsonl_file.name
+                if (
+                    name == "audio.jsonl"
+                    or name == "screen.jsonl"
+                    or name.endswith("_audio.jsonl")
+                ):
+                    rel = f"{day}/{entry.name}/{name}"
+                    files[rel] = str(jsonl_file)
+
+    # Facet content: facets/*/...
+    facets_dir = journal_path / "facets"
+    if facets_dir.is_dir():
+        for facet_dir in facets_dir.iterdir():
+            if not facet_dir.is_dir():
+                continue
+            facet_name = facet_dir.name
+
+            # Events: facets/*/events/*.jsonl
+            events_dir = facet_dir / "events"
+            if events_dir.is_dir():
+                for jsonl_file in events_dir.glob("*.jsonl"):
+                    rel = f"facets/{facet_name}/events/{jsonl_file.name}"
+                    files[rel] = str(jsonl_file)
+
+            # Entities attached: facets/*/entities.jsonl
+            entities_file = facet_dir / "entities.jsonl"
+            if entities_file.is_file():
+                rel = f"facets/{facet_name}/entities.jsonl"
+                files[rel] = str(entities_file)
+
+            # Entities detected: facets/*/entities/*.jsonl
+            entities_dir = facet_dir / "entities"
+            if entities_dir.is_dir():
+                for jsonl_file in entities_dir.glob("*.jsonl"):
+                    rel = f"facets/{facet_name}/entities/{jsonl_file.name}"
+                    files[rel] = str(jsonl_file)
+
+            # Todos: facets/*/todos/*.jsonl
+            todos_dir = facet_dir / "todos"
+            if todos_dir.is_dir():
+                for jsonl_file in todos_dir.glob("*.jsonl"):
+                    rel = f"facets/{facet_name}/todos/{jsonl_file.name}"
+                    files[rel] = str(jsonl_file)
+
+            # News: facets/*/news/*.md
+            news_dir = facet_dir / "news"
+            if news_dir.is_dir():
+                for md_file in news_dir.glob("*.md"):
+                    rel = f"facets/{facet_name}/news/{md_file.name}"
+                    files[rel] = str(md_file)
+
+    # Import summaries: imports/*/summary.md
+    imports_dir = journal_path / "imports"
+    if imports_dir.is_dir():
+        for import_dir in imports_dir.iterdir():
+            if not import_dir.is_dir():
+                continue
+            summary_file = import_dir / "summary.md"
+            if summary_file.is_file():
+                rel = f"imports/{import_dir.name}/summary.md"
+                files[rel] = str(summary_file)
+
+    # App insights: apps/*/insights/*.md
+    apps_dir = journal_path / "apps"
+    if apps_dir.is_dir():
+        for app_dir in apps_dir.iterdir():
+            if not app_dir.is_dir():
+                continue
+            app_insights_dir = app_dir / "insights"
+            if app_insights_dir.is_dir():
+                for md_file in app_insights_dir.glob("*.md"):
+                    rel = f"apps/{app_dir.name}/insights/{md_file.name}"
+                    files[rel] = str(md_file)
+
+    return files
 
 
 def format_file(

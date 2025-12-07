@@ -52,22 +52,18 @@ def calendar_day_occurrences(day: str) -> Any:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    from think.indexer import search_events
+    from think.indexer.journal import get_events
     from think.utils import get_insights
 
     insights = get_insights()
 
-    # Use search_events to get all events for this day
-    _, results = search_events(query="", day=day, limit=1000)
+    # Get full event objects from source files
+    events = get_events(day)
 
-    # Transform search results into timeline format (same as facet_day)
+    # Transform events into timeline format
     occurrences = []
-    for result in results:
-        event = result.get("event", {})
-        metadata = result.get("metadata", {})
-        topic = metadata.get("topic", "other")
-
-        # Add topic color
+    for event in events:
+        topic = event.get("topic", "other")
         topic_color = insights.get(topic, {}).get("color", "#6c757d")
 
         occurrence = {
@@ -78,7 +74,7 @@ def calendar_day_occurrences(day: str) -> Any:
             "participants": event.get("participants", []),
             "topic": topic,
             "color": topic_color,
-            "facet": metadata.get("facet", ""),
+            "facet": event.get("facet", ""),
         }
 
         # Convert time strings to ISO timestamps

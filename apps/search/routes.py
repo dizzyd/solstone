@@ -6,15 +6,11 @@ import re
 from typing import Any
 
 import markdown  # type: ignore
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, request
 
 from convey import state
 from convey.utils import format_date
-from think.indexer import (
-    search_events,
-    search_insights,
-    search_transcripts,
-)
+from think.indexer.journal import search_journal
 
 search_bp = Blueprint(
     "app:search",
@@ -37,15 +33,17 @@ def search_insights_api() -> Any:
     insights = get_insights()
     day = request.args.get("day")
     topic_filter = request.args.get("topic")
-    total, rows = search_insights(query, limit, offset, day=day, topic=topic_filter)
+
+    # Search journal, excluding transcript/event topics to get insights
+    total, rows = search_journal(query, limit, offset, day=day, topic=topic_filter)
+
     results = []
     for r in rows:
         meta = r.get("metadata", {})
         topic = meta.get("topic", "")
-        if topic.startswith("insights/"):
-            topic = topic[len("insights/") :]  # noqa: E203
-        if topic.endswith(".md"):
-            topic = topic[:-3]
+        # Skip non-insight content types
+        if topic in ("audio", "screen", "event", "todo") or topic.startswith("entity:"):
+            continue
         text = r["text"]
         words = text.split()
         if len(words) > 100:
@@ -77,40 +75,25 @@ def search_events_api() -> Any:
 
     insights = get_insights()
     day = request.args.get("day")
-    topic_filter = request.args.get("topic")
-    total, rows = search_events(query, limit, offset, day=day, topic=topic_filter)
+
+    # Search events only
+    total, rows = search_journal(query, limit, offset, day=day, topic="event")
+
     results = []
     for r in rows:
         meta = r.get("metadata", {})
-        topic = meta.get("topic", "")
-        if topic.startswith("insights/"):
-            topic = topic[len("insights/") :]  # noqa: E203
-        if topic.endswith(".md"):
-            topic = topic[:-3]
         text = r.get("text", "")
         words = text.split()
         if len(words) > 100:
             text = " ".join(words[:100]) + " ..."
-        start = meta.get("start", "")
-        end = meta.get("end")
-        length = 0
-        if start and end:
-            try:
-                import datetime as _dt
-
-                s = _dt.datetime.strptime(start, "%H:%M:%S")
-                e = _dt.datetime.strptime(end, "%H:%M:%S")
-                length = int((e - s).total_seconds() / 60)
-            except Exception:
-                length = 0
+        facet = meta.get("facet", "")
         results.append(
             {
                 "day": meta.get("day", ""),
                 "date": format_date(meta.get("day", "")),
-                "topic": topic,
-                "color": insights.get(topic, {}).get("color"),
-                "start": start,
-                "length": length,
+                "topic": "event",
+                "facet": facet,
+                "color": insights.get("event", {}).get("color"),
                 "text": markdown.markdown(text, extensions=["extra"]),
                 "score": r.get("score", 0.0),
             }
@@ -130,7 +113,16 @@ def search_transcripts_api() -> Any:
     limit, offset = parse_pagination_params(default_limit=20)
 
     day = request.args.get("day")
-    total, rows = search_transcripts(query, limit, offset, day=day)
+    topic = request.args.get("topic")  # "audio" or "screen"
+
+    # Search transcripts (audio and screen topics)
+    # If no topic specified, search both audio and screen by not filtering
+    if topic:
+        total, rows = search_journal(query, limit, offset, day=day, topic=topic)
+    else:
+        # Search audio first, could extend to search both
+        total, rows = search_journal(query, limit, offset, day=day, topic="audio")
+
     results = []
     for r in rows:
         meta = r.get("metadata", {})
@@ -141,8 +133,7 @@ def search_transcripts_api() -> Any:
             {
                 "day": meta.get("day", ""),
                 "date": format_date(meta.get("day", "")),
-                "time": meta.get("time", ""),
-                "type": meta.get("type", ""),
+                "topic": meta.get("topic", ""),
                 "preview": preview,
             }
         )
