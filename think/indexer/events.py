@@ -7,54 +7,50 @@ import sqlite3
 from typing import Any, Dict, List
 
 from .core import _scan_files, get_index, sanitize_fts_query
-from .insights import find_insight_files
+from .insights import find_event_files
 
 
-def _index_events(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) -> None:
-    """Index events from a JSON file.
+def _index_events(
+    conn: sqlite3.Connection, rel: str, path: str, verbose: bool
+) -> None:
+    """Index events from a JSONL file.
 
-    Handles both occurrences (occurred=1) and anticipations (occurred=0).
-    For anticipations, the event's 'date' field is used as the index day.
-    For occurrences, the file's day directory is used.
+    Path format: facets/{facet}/events/YYYYMMDD.jsonl
+    Each line is a self-contained event with 'occurred' field.
     """
     logger = logging.getLogger(__name__)
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    # Check for anticipations first, then occurrences
-    if isinstance(data, dict) and "anticipations" in data:
-        events = data.get("anticipations", [])
-        occurred = 0
-    elif isinstance(data, dict):
-        events = data.get("occurrences", [])
-        occurred = 1
-    else:
-        events = data
-        occurred = 1
+    # Extract facet and day from path: facets/{facet}/events/YYYYMMDD.jsonl
+    parts = rel.split(os.sep)
+    path_facet = parts[1] if len(parts) >= 4 else ""
+    filename = os.path.basename(rel)
+    file_day = os.path.splitext(filename)[0]  # YYYYMMDD from filename
+
+    events = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
 
     if verbose:
-        event_type = "anticipations" if occurred == 0 else "occurrences"
-        logger.info("  indexed %s %s", len(events), event_type)
-
-    file_day = rel.split(os.sep, 1)[0]
-    topic = os.path.splitext(os.path.basename(rel))[0]
+        logger.info("  indexed %s events", len(events))
 
     for idx, event in enumerate(events):
-        # For anticipations, use the event's date field as the index day
-        # This allows querying "what's scheduled for date X"
-        if occurred == 0:
-            event_date = event.get("date", "")
-            # Convert YYYY-MM-DD to YYYYMMDD for consistency
-            index_day = event_date.replace("-", "") if event_date else file_day
-        else:
-            index_day = file_day
+        occurred = 1 if event.get("occurred", True) else 0
+        topic = event.get("topic", "")
+        facet = event.get("facet", path_facet)
 
         conn.execute(
             "INSERT INTO events_text(content, path, day, idx) VALUES (?, ?, ?, ?)",
             (
                 json.dumps(event, ensure_ascii=False),
                 rel,
-                index_day,
+                file_day,
                 idx,
             ),
         )
@@ -63,10 +59,10 @@ def _index_events(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) 
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 rel,
-                index_day,
+                file_day,
                 idx,
                 topic,
-                event.get("facet", ""),
+                facet,
                 event.get("start") or "",
                 event.get("end") or "",
                 occurred,
@@ -75,22 +71,20 @@ def _index_events(conn: sqlite3.Connection, rel: str, path: str, verbose: bool) 
 
 
 def scan_events(journal: str, verbose: bool = False) -> bool:
-    """Index event JSON files."""
+    """Index event JSONL files from facets/*/events/*.jsonl."""
     logger = logging.getLogger(__name__)
     conn, _ = get_index(index="events", journal=journal)
-    files = find_insight_files(journal, (".json",))
+
+    delete_sql = [
+        "DELETE FROM events_text WHERE path=?",
+        "DELETE FROM event_match WHERE path=?",
+    ]
+
+    files = find_event_files(journal)
     if files:
         logger.info("\nIndexing %s event files...", len(files))
-    changed = _scan_files(
-        conn,
-        files,
-        [
-            "DELETE FROM events_text WHERE path=?",
-            "DELETE FROM event_match WHERE path=?",
-        ],
-        _index_events,
-        verbose,
-    )
+    changed = _scan_files(conn, files, delete_sql, _index_events, verbose)
+
     if changed:
         conn.commit()
     conn.close()

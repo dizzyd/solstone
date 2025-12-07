@@ -47,6 +47,7 @@ def test_ponder_main(tmp_path, monkeypatch):
                 "work": True,
                 "participants": [],
                 "details": "",
+                "facet": "work",
             }
         ]
 
@@ -59,13 +60,14 @@ def test_ponder_main(tmp_path, monkeypatch):
     mod.main()
 
     md = day_dir / "insights" / "prompt.md"
-    js = day_dir / "insights" / "prompt.json"
     assert md.read_text() == "summary"
-    data = json.loads(js.read_text())
-    assert data["day"] == "20240101"
-    assert data["occurrences"]
     assert md.with_suffix(md.suffix + ".crumb").is_file()
-    assert js.with_suffix(js.suffix + ".crumb").is_file()
+    # Events now go to facets/{facet}/events/YYYYMMDD.jsonl
+    events_file = tmp_path / "facets" / "work" / "events" / "20240101.jsonl"
+    assert events_file.exists()
+    data = json.loads(events_file.read_text().strip())
+    assert data["occurred"] is True
+    assert data["topic"] == "prompt"
     # Facet summaries are now always included in extra_instructions
     assert captured["extra"] == "No facets found."
 
@@ -99,6 +101,7 @@ def test_ponder_extra_instructions(tmp_path, monkeypatch):
                 "work": True,
                 "participants": [],
                 "details": "",
+                "facet": "work",
             }
         ]
 
@@ -113,11 +116,13 @@ def test_ponder_extra_instructions(tmp_path, monkeypatch):
     mod.main()
 
     md = day_dir / "insights" / "flow.md"
-    js = day_dir / "insights" / "flow.json"
     assert md.read_text() == "summary"
-    data = json.loads(js.read_text())
-    assert data["day"] == "20240101"
-    assert data["occurrences"]
+    # Events now go to facets/{facet}/events/YYYYMMDD.jsonl
+    events_file = tmp_path / "facets" / "work" / "events" / "20240101.jsonl"
+    assert events_file.exists()
+    data = json.loads(events_file.read_text().strip())
+    assert data["occurred"] is True
+    assert data["topic"] == "flow"
     # Facet summaries are prepended to insight-specific occurrence instructions
     assert captured["extra"]
     assert captured["extra"].startswith("No facets found.")

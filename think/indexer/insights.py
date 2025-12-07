@@ -25,6 +25,30 @@ def split_chunks(text: str) -> List[str]:
     return [render_chunk(c) for c in chunk_markdown(text)]
 
 
+def find_event_files(journal: str) -> Dict[str, str]:
+    """Map relative event file path to full path.
+
+    Scans facet event directories: facets/*/events/*.jsonl
+    """
+    files: Dict[str, str] = {}
+
+    facets_dir = os.path.join(journal, "facets")
+    if not os.path.isdir(facets_dir):
+        return files
+
+    for facet_name in os.listdir(facets_dir):
+        events_dir = os.path.join(facets_dir, facet_name, "events")
+        if not os.path.isdir(events_dir):
+            continue
+        for name in os.listdir(events_dir):
+            if not name.endswith(".jsonl"):
+                continue
+            rel = os.path.join("facets", facet_name, "events", name)
+            files[rel] = os.path.join(events_dir, name)
+
+    return files
+
+
 def find_insight_files(
     journal: str, exts: Tuple[str, ...] | None = None
 ) -> Dict[str, str]:
@@ -38,7 +62,7 @@ def find_insight_files(
     - App insights: apps/*/insights/*.md
     """
     files: Dict[str, str] = {}
-    exts = exts or (".md", ".json")
+    exts = exts or (".md",)
     insight_topics = _get_insight_topics()
 
     # Scan daily and segment insights

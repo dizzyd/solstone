@@ -26,6 +26,7 @@ from .events import (
 
 # Import from insights
 from .insights import (
+    find_event_files,
     find_insight_files,
     scan_insights,
     search_insights,
@@ -52,6 +53,7 @@ __all__ = [
     "reset_index",
     "sanitize_fts_query",
     # Insights
+    "find_event_files",
     "find_insight_files",
     "scan_insights",
     "search_insights",

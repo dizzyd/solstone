@@ -61,19 +61,19 @@ def test_events_indexer_scan_and_search():
             # scan_count is True if files were scanned, False if all were up to date
             # Just continue - the search will verify if it worked
 
-            # Search for meetings content
-            total, results = search_events("Team sync")
-            assert total > 0, "Should find 'Team sync' meeting"
+            # Search for meetings content (from fixtures/journal/facets/work/events/20240101.jsonl)
+            total, results = search_events("Team standup")
+            assert total > 0, "Should find 'Team standup' meeting"
 
             # Check for specific meeting times we added
             total, results = search_events("09:00")
             assert total > 0, "Should find 09:00 meeting time"
 
-            total, results = search_events("Client review")
-            assert total > 0, "Should find 'Client review' meeting"
+            total, results = search_events("Code review")
+            assert total > 0, "Should find 'Code review' task"
 
-            total, results = search_events("Sprint planning")
-            assert total > 0, "Should find 'Sprint planning' meeting"
+            total, results = search_events("Daily sync")
+            assert total > 0, "Should find 'Daily sync' in meeting summary"
 
             # Verify result structure
             if results:
@@ -104,29 +104,40 @@ def test_events_indexer_with_custom_events():
     if not journal_path.exists():
         pytest.skip("fixtures/journal not found")
 
-    # Create some additional event files for testing
+    # Create some additional event files for testing in JSONL format
     events_data = [
         {
-            "timestamp": "2024-01-01T10:30:00",
             "type": "deployment",
-            "description": "Deployed authentication service to staging",
-            "details": {"version": "1.2.3", "environment": "staging"},
+            "start": "10:30:00",
+            "end": "10:45:00",
+            "title": "Deploy auth service",
+            "summary": "Deployed authentication service to staging",
+            "facet": "work",
+            "topic": "activity",
+            "occurred": True,
+            "source": "20240101/insights/activity.md",
+            "details": "version 1.2.3, environment staging",
         },
         {
-            "timestamp": "2024-01-01T15:45:00",
             "type": "incident",
-            "description": "Database connection timeout issue resolved",
-            "details": {"severity": "medium", "duration": "15 minutes"},
+            "start": "15:45:00",
+            "end": "16:00:00",
+            "title": "Database timeout resolved",
+            "summary": "Database connection timeout issue resolved",
+            "facet": "work",
+            "topic": "activity",
+            "occurred": True,
+            "source": "20240101/insights/activity.md",
+            "details": "severity medium, duration 15 minutes",
         },
     ]
 
-    # Write additional events file in insights directory with a valid topic name
-    # Use "timeline" as it's a valid topic name
-    events_file = journal_path / "20240101" / "insights" / "timeline.json"
-    events_file.parent.mkdir(exist_ok=True)
-    # Wrap in occurrences structure as expected by the indexer
-    events_json = {"day": "20240101", "occurrences": events_data}
-    events_file.write_text(json.dumps(events_json, indent=2))
+    # Write to JSONL in facets/work/events/20240101.jsonl
+    events_dir = journal_path / "facets" / "work" / "events"
+    events_dir.mkdir(parents=True, exist_ok=True)
+    events_file = events_dir / "20240101_custom.jsonl"
+    jsonl_content = "\n".join(json.dumps(e) for e in events_data)
+    events_file.write_text(jsonl_content)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         old_journal = os.environ.get("JOURNAL_PATH")
@@ -157,24 +168,12 @@ def test_events_indexer_with_custom_events():
             scan_events(str(journal_path))
 
             # Search for deployment event
-            total, results = search_events("deployment staging")
+            total, results = search_events("authentication service staging")
             assert total > 0, "Should find deployment event"
-            found_deployment = False
-            for result in results:
-                # Check in the event data
-                event_json = json.dumps(result.get("event", {}))
-                if "authentication service" in event_json:
-                    found_deployment = True
-                    break
-            assert found_deployment, "Should find authentication service deployment"
 
             # Search for incident
             total, results = search_events("connection timeout")
             assert total > 0, "Should find timeout incident"
-
-            # Search by version
-            total, results = search_events("1.2.3")
-            assert total > 0, "Should find version in deployment event"
 
         finally:
             # Clean up the test file

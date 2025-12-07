@@ -23,15 +23,92 @@ from think.utils import (
 COMMON_SYSTEM_INSTRUCTION = "You are an expert productivity analyst tasked with analyzing a full workday transcript containing both audio conversations and screen activity data, segmented into 5-minute chunks. You will be given the transcripts and then following that you will have a detailed user request for how to process them.  Please follow those instructions carefully. Take time to consider all of the nuance of the interactions from the day, deeply think through how best to prioritize the most important aspects and understandings, formulate the best approach for each step of the analysis."
 
 
+def _write_events_jsonl(
+    events: list[dict],
+    topic: str,
+    occurred: bool,
+    source_insight: str,
+    capture_day: str,
+) -> list[Path]:
+    """Write events to facet-based JSONL files.
+
+    Groups events by facet and writes each to the appropriate file:
+    facets/{facet}/events/{event_day}.jsonl
+
+    Args:
+        events: List of event dictionaries from extraction.
+        topic: Source insight topic (e.g., "meetings", "schedule").
+        occurred: True for occurrences, False for anticipations.
+        source_insight: Relative path to source insight file.
+        capture_day: Day the insight was captured (YYYYMMDD).
+
+    Returns:
+        List of paths to written JSONL files.
+    """
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+
+    # Group events by (facet, event_day)
+    grouped: dict[tuple[str, str], list[dict]] = {}
+
+    for event in events:
+        facet = event.get("facet", "")
+        if not facet:
+            continue  # Skip events without facet
+
+        # Determine the event day
+        if occurred:
+            # Occurrences use capture day
+            event_day = capture_day
+        else:
+            # Anticipations use their scheduled date
+            event_date = event.get("date", "")
+            # Convert YYYY-MM-DD to YYYYMMDD
+            event_day = event_date.replace("-", "") if event_date else capture_day
+
+        if not event_day:
+            continue
+
+        key = (facet, event_day)
+        if key not in grouped:
+            grouped[key] = []
+
+        # Enrich event with metadata
+        enriched = dict(event)
+        enriched["topic"] = topic
+        enriched["occurred"] = occurred
+        enriched["source"] = source_insight
+
+        grouped[key].append(enriched)
+
+    # Write each group to its JSONL file
+    written_paths: list[Path] = []
+
+    for (facet, event_day), facet_events in grouped.items():
+        events_dir = Path(journal) / "facets" / facet / "events"
+        events_dir.mkdir(parents=True, exist_ok=True)
+
+        jsonl_path = events_dir / f"{event_day}.jsonl"
+        with open(jsonl_path, "a", encoding="utf-8") as f:
+            for event in facet_events:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+        written_paths.append(jsonl_path)
+
+    return written_paths
+
+
 def _insight_keys() -> list[str]:
     """Return available insight keys."""
     return sorted(get_insights().keys())
 
 
-def _output_paths(
+def _output_path(
     day_dir: os.PathLike[str], key: str, segment: str | None = None
-) -> tuple[Path, Path]:
-    """Return markdown and JSON output paths for insight ``key`` in ``day_dir``.
+) -> Path:
+    """Return markdown output path for insight ``key`` in ``day_dir``.
 
     Args:
         day_dir: Day directory path (YYYYMMDD)
@@ -39,7 +116,7 @@ def _output_paths(
         segment: Optional segment key (HHMMSS_LEN)
 
     Returns:
-        (md_path, json_path) tuple
+        Path to markdown file:
         - Daily: YYYYMMDD/insights/{topic}.md (where topic = get_insight_topic(key))
         - Segment: YYYYMMDD/{segment}/{topic}.md
     """
@@ -48,12 +125,10 @@ def _output_paths(
 
     if segment:
         # Segment insights go directly in segment directory
-        segment_dir = day / segment
-        return segment_dir / f"{topic}.md", segment_dir / f"{topic}.json"
+        return day / segment / f"{topic}.md"
     else:
         # Daily insights go in insights/ subdirectory
-        insights_dir = day / "insights"
-        return insights_dir / f"{topic}.md", insights_dir / f"{topic}.json"
+        return day / "insights" / f"{topic}.md"
 
 
 def scan_day(day: str) -> dict[str, list[str]]:
@@ -62,7 +137,7 @@ def scan_day(day: str) -> dict[str, list[str]]:
     processed: list[str] = []
     pending: list[str] = []
     for key in _insight_keys():
-        md_path, _ = _output_paths(day_dir, key)
+        md_path = _output_path(day_dir, key)
         if md_path.exists():
             processed.append(os.path.join("insights", md_path.name))
         else:
@@ -321,7 +396,7 @@ def main() -> None:
             count_tokens(markdown, prompt, api_key, model)
             return
 
-        md_path, json_path = _output_paths(day_dir, insight_key, segment=args.segment)
+        md_path = _output_path(day_dir, insight_key, segment=args.segment)
         # Use cache key scoped to day or segment
         if args.segment:
             cache_display_name = f"{day}_{args.segment}"
@@ -377,17 +452,12 @@ def main() -> None:
             print(f"Crumb saved to: {crumb_path}")
 
         if skip_occ and not do_anticipations:
-            print('"occurrences" set to false; skipping JSON generation')
+            print('"occurrences" set to false; skipping event extraction')
             success = True
             return
 
         # Determine which prompt to use: anticipations or occurrences
-        if do_anticipations:
-            prompt_name = "anticipate"
-            array_key = "anticipations"
-        else:
-            prompt_name = "summarize"
-            array_key = "occurrences"
+        prompt_name = "anticipate" if do_anticipations else "summarize"
 
         # Load the appropriate extraction prompt
         try:
@@ -399,17 +469,6 @@ def main() -> None:
             return
 
         extraction_prompt = extraction_prompt_content.text
-
-        json_output_path = json_path
-        json_exists = json_output_path.exists() and json_output_path.stat().st_size > 0
-
-        if json_exists and not args.force:
-            print(
-                f"JSON file already exists: {json_output_path}. Use --force to overwrite."
-            )
-            return
-        elif json_exists and args.force:
-            print("JSON file exists but --force specified. Regenerating.")
 
         try:
             # Load facet summaries and combine with topic-specific instructions
@@ -434,32 +493,38 @@ def main() -> None:
             print(f"Error: {e}")
             return
 
-        # Build output JSON with appropriate array key
-        if args.segment:
-            full_obj = {
-                "day": day,
-                "segment": args.segment,
-                array_key: events,
-            }
+        # Write to new JSONL format (facets/{facet}/events/{day}.jsonl)
+        occurred = not do_anticipations
+        insight_topic = get_insight_topic(insight_key)
+
+        # Compute the relative source insight path
+        # md_path is absolute, day_dir is the YYYYMMDD directory path
+        # source_insight should be like "20240101/insights/meetings.md"
+        journal = os.getenv("JOURNAL_PATH", "")
+        if journal and str(md_path).startswith(journal):
+            source_insight = os.path.relpath(str(md_path), journal)
         else:
-            full_obj = {"day": day, array_key: events}
-
-        json_result = json.dumps(full_obj, indent=2)
-
-        os.makedirs(json_output_path.parent, exist_ok=True)
-        with open(json_output_path, "w") as f:
-            f.write(json_result)
-
-        print(f"Results saved to: {json_output_path}")
-
-        json_crumb_builder = (
-            CrumbBuilder()
-            .add_file(str(extraction_prompt_content.path))
-            .add_file(md_path)
-            .add_model(model)
+            # Fallback: construct from day and topic
+            source_insight = os.path.join(
+                day,
+                "insights" if not args.segment else args.segment,
+                f"{insight_topic}.md",
+            )
+        written_paths = _write_events_jsonl(
+            events=events,
+            topic=insight_topic,
+            occurred=occurred,
+            source_insight=source_insight,
+            capture_day=day,
         )
-        json_crumb_path = json_crumb_builder.commit(str(json_output_path))
-        print(f"Crumb saved to: {json_crumb_path}")
+
+        if written_paths:
+            print(f"Events written to {len(written_paths)} JSONL file(s):")
+            for p in written_paths:
+                print(f"  {p}")
+        else:
+            print("No events with valid facets to write")
+
         success = True
 
     finally:

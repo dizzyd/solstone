@@ -23,23 +23,26 @@ def test_scan_day(tmp_path, monkeypatch):
     (day / "entities.md").write_text("")
     (day / "insights").mkdir()
     (day / "insights" / "flow.md").write_text("")
-    data = {
-        "day": "20240101",
-        "occurrences": [
-            {
-                "type": "meeting",
-                "start": "00:00:00",
-                "end": "00:05:00",
-                "title": "t",
-                "summary": "s",
-                "work": True,
-                "participants": [],
-                "details": "",
-                "facet": "work",
-            }
-        ],
+
+    # Create event in new JSONL format: facets/{facet}/events/YYYYMMDD.jsonl
+    events_dir = journal / "facets" / "work" / "events"
+    events_dir.mkdir(parents=True)
+    event = {
+        "type": "meeting",
+        "start": "00:00:00",
+        "end": "00:05:00",
+        "title": "t",
+        "summary": "s",
+        "work": True,
+        "participants": [],
+        "details": "",
+        "facet": "work",
+        "topic": "meetings",
+        "occurred": True,
+        "source": "20240101/insights/meetings.md",
     }
-    (day / "insights" / "meetings.json").write_text(json.dumps(data))
+    (events_dir / "20240101.jsonl").write_text(json.dumps(event))
+
     monkeypatch.setenv("JOURNAL_PATH", str(journal))
     js = stats_mod.JournalStats()
     day_data = js.scan_day("20240101", str(day))

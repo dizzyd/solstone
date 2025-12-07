@@ -74,80 +74,82 @@ def test_parse_entity_line():
 
 
 def test_occurrence_index(tmp_path):
+    """Test indexing occurrences from JSONL format."""
     mod = importlib.import_module("think.indexer")
     journal = tmp_path
     os.environ["JOURNAL_PATH"] = str(journal)
-    day = journal / "20240101"
-    day.mkdir()
-    data = {
-        "day": "20240101",
-        "occurrences": [
-            {
-                "type": "meeting",
-                "source": "insights/meetings.md",
-                "start": "09:00:00",
-                "end": "09:30:00",
-                "title": "Standup",
-                "summary": "Daily sync",
-                "details": "progress",
-            }
-        ],
+
+    # Create facet events directory
+    events_dir = journal / "facets" / "work" / "events"
+    events_dir.mkdir(parents=True)
+
+    event = {
+        "type": "meeting",
+        "start": "09:00:00",
+        "end": "09:30:00",
+        "title": "Standup",
+        "summary": "Daily sync",
+        "details": "progress",
+        "facet": "work",
+        "topic": "meetings",
+        "occurred": True,
+        "source": "20240101/insights/meetings.md",
     }
-    insights_dir = day / "insights"
-    insights_dir.mkdir()
-    (insights_dir / "meetings.json").write_text(json.dumps(data))
+    (events_dir / "20240101.jsonl").write_text(json.dumps(event))
+
     mod.scan_events(str(journal), verbose=True)
     total, results = mod.search_events("Standup")
     assert total == 1
     assert results and results[0]["metadata"]["day"] == "20240101"
     assert results[0]["event"]["title"] == "Standup"
-    # Occurrences should have occurred=True
     assert results[0]["metadata"]["occurred"] is True
 
 
 def test_anticipation_index(tmp_path):
-    """Test that anticipations are indexed with occurred=False and by event date."""
+    """Test that anticipations are indexed with occurred=False."""
     mod = importlib.import_module("think.indexer")
     journal = tmp_path
     os.environ["JOURNAL_PATH"] = str(journal)
 
-    # Create day directory where schedule.json is captured
-    day = journal / "20240101"
-    day.mkdir()
-    insights_dir = day / "insights"
-    insights_dir.mkdir()
+    # Create facet events directory
+    events_dir = journal / "facets" / "work" / "events"
+    events_dir.mkdir(parents=True)
 
-    # Create anticipations data - events scheduled for future dates
-    data = {
-        "day": "20240101",
-        "anticipations": [
-            {
-                "type": "meeting",
-                "date": "2024-01-05",
-                "start": "09:00:00",
-                "end": "10:00:00",
-                "title": "Project kickoff",
-                "summary": "Initial project meeting",
-                "work": True,
-                "participants": ["Alice", "Bob"],
-                "facet": "work",
-                "details": "Virtual meeting",
-            },
-            {
-                "type": "deadline",
-                "date": "2024-01-10",
-                "start": None,
-                "end": None,
-                "title": "Q1 Planning Due",
-                "summary": "Submit planning document",
-                "work": True,
-                "participants": [],
-                "facet": "work",
-                "details": "Full day deadline",
-            },
-        ],
+    # Anticipations go in file named for their event date
+    events = [
+        {
+            "type": "meeting",
+            "date": "2024-01-05",
+            "start": "09:00:00",
+            "end": "10:00:00",
+            "title": "Project kickoff",
+            "summary": "Initial project meeting",
+            "work": True,
+            "participants": ["Alice", "Bob"],
+            "facet": "work",
+            "topic": "schedule",
+            "occurred": False,
+            "source": "20240101/insights/schedule.md",
+        },
+    ]
+    (events_dir / "20240105.jsonl").write_text(json.dumps(events[0]))
+
+    # Another anticipation for a different date
+    event2 = {
+        "type": "deadline",
+        "date": "2024-01-10",
+        "start": None,
+        "end": None,
+        "title": "Q1 Planning Due",
+        "summary": "Submit planning document",
+        "work": True,
+        "participants": [],
+        "facet": "work",
+        "topic": "schedule",
+        "occurred": False,
+        "source": "20240101/insights/schedule.md",
     }
-    (insights_dir / "schedule.json").write_text(json.dumps(data))
+    (events_dir / "20240110.jsonl").write_text(json.dumps(event2))
 
     mod.scan_events(str(journal), verbose=True)
 
@@ -155,12 +157,10 @@ def test_anticipation_index(tmp_path):
     total, results = mod.search_events("kickoff")
     assert total == 1
     assert results[0]["event"]["title"] == "Project kickoff"
-    # Anticipations should have occurred=False
     assert results[0]["metadata"]["occurred"] is False
-    # Anticipations are indexed by their event date, not capture date
     assert results[0]["metadata"]["day"] == "20240105"
 
-    # Search by event date (the date the event is scheduled for)
+    # Search by event date
     total, results = mod.search_events("", day="20240110")
     assert total == 1
     assert results[0]["event"]["title"] == "Q1 Planning Due"
@@ -168,10 +168,10 @@ def test_anticipation_index(tmp_path):
 
     # Filter by occurred status
     total, results = mod.search_events("", occurred=False)
-    assert total == 2  # Both anticipations
+    assert total == 2
 
     total, results = mod.search_events("", occurred=True)
-    assert total == 0  # No occurrences in this test
+    assert total == 0
 
 
 def test_mixed_occurrences_and_anticipations(tmp_path):
@@ -180,43 +180,38 @@ def test_mixed_occurrences_and_anticipations(tmp_path):
     journal = tmp_path
     os.environ["JOURNAL_PATH"] = str(journal)
 
-    day = journal / "20240101"
-    day.mkdir()
-    insights_dir = day / "insights"
-    insights_dir.mkdir()
+    # Create facet events directory
+    events_dir = journal / "facets" / "work" / "events"
+    events_dir.mkdir(parents=True)
 
-    # Create occurrences (what happened today)
-    occurrences_data = {
-        "day": "20240101",
-        "occurrences": [
-            {
-                "type": "meeting",
-                "start": "09:00:00",
-                "end": "09:30:00",
-                "title": "Morning standup",
-                "summary": "Team sync",
-                "facet": "work",
-            }
-        ],
+    # Occurrence for today
+    occurrence = {
+        "type": "meeting",
+        "start": "09:00:00",
+        "end": "09:30:00",
+        "title": "Morning standup",
+        "summary": "Team sync",
+        "facet": "work",
+        "topic": "meetings",
+        "occurred": True,
+        "source": "20240101/insights/meetings.md",
     }
-    (insights_dir / "meetings.json").write_text(json.dumps(occurrences_data))
+    (events_dir / "20240101.jsonl").write_text(json.dumps(occurrence))
 
-    # Create anticipations (what's scheduled for future)
-    anticipations_data = {
-        "day": "20240101",
-        "anticipations": [
-            {
-                "type": "meeting",
-                "date": "2024-01-05",
-                "start": "14:00:00",
-                "end": "15:00:00",
-                "title": "Client demo",
-                "summary": "Product demonstration",
-                "facet": "work",
-            }
-        ],
+    # Anticipation for future date
+    anticipation = {
+        "type": "meeting",
+        "date": "2024-01-05",
+        "start": "14:00:00",
+        "end": "15:00:00",
+        "title": "Client demo",
+        "summary": "Product demonstration",
+        "facet": "work",
+        "topic": "schedule",
+        "occurred": False,
+        "source": "20240101/insights/schedule.md",
     }
-    (insights_dir / "schedule.json").write_text(json.dumps(anticipations_data))
+    (events_dir / "20240105.jsonl").write_text(json.dumps(anticipation))
 
     mod.scan_events(str(journal), verbose=True)
 
@@ -234,7 +229,7 @@ def test_mixed_occurrences_and_anticipations(tmp_path):
     total, results = mod.search_events("", occurred=False)
     assert total == 1
     assert results[0]["event"]["title"] == "Client demo"
-    assert results[0]["metadata"]["day"] == "20240105"  # Indexed by event date
+    assert results[0]["metadata"]["day"] == "20240105"
 
 
 def test_ponder_index(tmp_path):
@@ -567,3 +562,93 @@ def test_scan_transcripts_single_segment(tmp_path):
     total, results = mod.search_transcripts("segment", limit=10, day="20240110")
     assert total == 1
     assert results[0]["metadata"]["time"] == "110000_300"
+
+
+def test_multiple_events_same_file(tmp_path):
+    """Test indexing multiple events from a single JSONL file."""
+    mod = importlib.import_module("think.indexer")
+    journal = tmp_path
+    os.environ["JOURNAL_PATH"] = str(journal)
+
+    events_dir = journal / "facets" / "work" / "events"
+    events_dir.mkdir(parents=True)
+
+    events = [
+        {
+            "type": "meeting",
+            "start": "09:00:00",
+            "end": "09:30:00",
+            "title": "First meeting",
+            "summary": "Daily sync",
+            "facet": "work",
+            "topic": "meetings",
+            "occurred": True,
+            "source": "20240101/insights/meetings.md",
+        },
+        {
+            "type": "task",
+            "start": "10:00:00",
+            "end": "11:00:00",
+            "title": "Code review",
+            "summary": "PR review session",
+            "facet": "work",
+            "topic": "activity",
+            "occurred": True,
+            "source": "20240101/insights/activity.md",
+        },
+    ]
+    jsonl_content = "\n".join(json.dumps(e) for e in events)
+    (events_dir / "20240101.jsonl").write_text(jsonl_content)
+
+    mod.scan_events(str(journal), verbose=True)
+
+    total, results = mod.search_events("", day="20240101")
+    assert total == 2
+
+    # Verify both events found by title
+    total, results = mod.search_events("First meeting")
+    assert total == 1
+    assert results[0]["metadata"]["topic"] == "meetings"
+
+    total, results = mod.search_events("Code review")
+    assert total == 1
+    assert results[0]["metadata"]["topic"] == "activity"
+
+
+def test_multiple_facets(tmp_path):
+    """Test indexing events from multiple facets."""
+    mod = importlib.import_module("think.indexer")
+    journal = tmp_path
+    os.environ["JOURNAL_PATH"] = str(journal)
+
+    # Create events in two facets
+    for facet in ["work", "personal"]:
+        events_dir = journal / "facets" / facet / "events"
+        events_dir.mkdir(parents=True)
+        event = {
+            "type": "task",
+            "start": "10:00:00",
+            "end": "11:00:00",
+            "title": f"{facet.capitalize()} task",
+            "summary": f"Task in {facet}",
+            "facet": facet,
+            "topic": "activity",
+            "occurred": True,
+            "source": "20240101/insights/activity.md",
+        }
+        (events_dir / "20240101.jsonl").write_text(json.dumps(event))
+
+    mod.scan_events(str(journal), verbose=True)
+
+    # Both facets indexed
+    total, _ = mod.search_events("")
+    assert total == 2
+
+    # Filter by facet
+    total, results = mod.search_events("", facet="work")
+    assert total == 1
+    assert results[0]["event"]["title"] == "Work task"
+
+    total, results = mod.search_events("", facet="personal")
+    assert total == 1
+    assert results[0]["event"]["title"] == "Personal task"

@@ -253,76 +253,70 @@ class JournalStats:
         stats["insights_processed"] = len(insight_info["processed"])
         stats["insights_pending"] = len(insight_info["repairable"])
 
-        # --- Insight occurrences and heatmap ---
-        insights_dir = day_dir / "insights"
+        # --- Events and heatmap from facets/*/events/YYYYMMDD.jsonl ---
         weekday = datetime.strptime(day, "%Y%m%d").weekday()
+        journal_root = day_dir.parent
+        facets_dir = journal_root / "facets"
 
-        if insights_dir.is_dir():
-            for fname in os.listdir(insights_dir):
-                base, ext = os.path.splitext(fname)
-                if ext != ".json":
+        if facets_dir.is_dir():
+            for facet_name in os.listdir(facets_dir):
+                events_dir = facets_dir / facet_name / "events"
+                if not events_dir.is_dir():
                     continue
-                insight_file = insights_dir / fname
+                events_file = events_dir / f"{day}.jsonl"
+                if not events_file.exists():
+                    continue
+
                 try:
-                    with open(insight_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Invalid JSON in {insight_file}: {e}")
-                    continue
+                    with open(events_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                event = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+
+                            topic = event.get("topic", "unknown")
+                            if topic not in topic_data:
+                                topic_data[topic] = {"count": 0, "minutes": 0.0}
+                            topic_data[topic]["count"] += 1
+
+                            start = event.get("start")
+                            end = event.get("end")
+                            try:
+                                sh, sm, ss = map(int, start.split(":"))
+                                eh, em, es = map(int, end.split(":"))
+                            except (ValueError, AttributeError, TypeError):
+                                continue
+
+                            start_sec = sh * 3600 + sm * 60 + ss
+                            end_sec = eh * 3600 + em * 60 + es
+                            duration = max(0, end_sec - start_sec)
+                            topic_data[topic]["minutes"] += duration / 60
+
+                            # Track facet stats
+                            facet = event.get("facet", facet_name)
+                            if facet not in facet_data:
+                                facet_data[facet] = {"count": 0, "minutes": 0.0}
+                            facet_data[facet]["count"] += 1
+                            facet_data[facet]["minutes"] += duration / 60
+
+                            # Build heatmap hours for this day
+                            cur = start_sec
+                            while cur < end_sec:
+                                hour = cur // 3600
+                                if hour >= 24:
+                                    break
+                                next_tick = min((hour + 1) * 3600, end_sec)
+                                minutes = (next_tick - cur) / 60
+                                heatmap_hours[str(hour)] = (
+                                    heatmap_hours.get(str(hour), 0.0) + minutes
+                                )
+                                cur = next_tick
                 except (OSError, IOError) as e:
-                    logger.warning(f"Error reading {insight_file}: {e}")
-                    continue
-
-                items = data.get("occurrences", []) if isinstance(data, dict) else data
-                if not isinstance(items, list):
-                    logger.debug(f"No occurrences list in {insight_file}")
-                    continue
-
-                # Initialize topic data
-                if base not in topic_data:
-                    topic_data[base] = {"count": 0, "minutes": 0.0}
-
-                for occ in items:
-                    topic_data[base]["count"] += 1
-                    start = occ.get("start")
-                    end = occ.get("end")
-                    try:
-                        sh, sm, ss = map(int, start.split(":"))
-                        eh, em, es = map(int, end.split(":"))
-                    except (ValueError, AttributeError, TypeError):
-                        logger.debug(
-                            f"Invalid timestamp in {insight_file}: {start} - {end}"
-                        )
-                        continue
-
-                    start_sec = sh * 3600 + sm * 60 + ss
-                    end_sec = eh * 3600 + em * 60 + es
-                    if end_sec < start_sec:
-                        duration = 0
-                    else:
-                        duration = end_sec - start_sec
-                    topic_data[base]["minutes"] += duration / 60
-
-                    # Track facet occurrence if present
-                    facet = occ.get("facet")
-                    if facet:
-                        if facet not in facet_data:
-                            facet_data[facet] = {"count": 0, "minutes": 0.0}
-                        facet_data[facet]["count"] += 1
-                        facet_data[facet]["minutes"] += duration / 60
-
-                    # Build heatmap hours for this day
-                    cur = start_sec
-                    while cur < end_sec:
-                        hour = cur // 3600
-                        if hour >= 24:
-                            break
-                        next_tick = min((hour + 1) * 3600, end_sec)
-                        minutes = (next_tick - cur) / 60
-                        heatmap_hours[str(hour)] = (
-                            heatmap_hours.get(str(hour), 0.0) + minutes
-                        )
-                        cur = next_tick
+                    logger.warning(f"Error reading {events_file}: {e}")
 
         # --- Build return dict ---
         stats["audio_duration"] = audio_duration

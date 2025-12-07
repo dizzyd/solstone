@@ -168,6 +168,7 @@ def topic_detail() -> Any:
 
 @search_bp.route("/api/occurrence_detail")
 def occurrence_detail() -> Any:
+    """Return event details from a JSONL file by line index."""
     path = request.args.get("path")
     idx = int(request.args.get("index", 0))
     if not path:
@@ -177,10 +178,10 @@ def occurrence_detail() -> Any:
     if os.path.isfile(full):
         try:
             with open(full, "r", encoding="utf-8") as f:
-                jd = json.load(f)
-            occs = jd.get("occurrences", jd if isinstance(jd, list) else [])
-            if 0 <= idx < len(occs):
-                data = occs[idx]
+                for line_num, line in enumerate(f):
+                    if line_num == idx:
+                        data = json.loads(line.strip())
+                        break
         except Exception:
             pass
     return jsonify(data)
