@@ -1055,3 +1055,217 @@ class TestFormatTodos:
         entries_none = [{"text": "Test"}]
         chunks, _ = format_todos(entries_none)
         assert chunks[0]["timestamp"] == 0
+
+
+class TestFormatEvents:
+    """Tests for the events formatter."""
+
+    def test_get_formatter_events(self):
+        """Test pattern matching for events/*.jsonl."""
+        from think.formatters import get_formatter
+
+        formatter = get_formatter("facets/work/events/20240101.jsonl")
+        assert formatter is not None
+        assert formatter.__name__ == "format_events"
+
+    def test_format_events_basic(self):
+        """Test basic events formatting with fixture file."""
+        from think.formatters import format_file
+
+        path = Path(os.environ["JOURNAL_PATH"]) / "facets/work/events/20240101.jsonl"
+        chunks, meta = format_file(path)
+
+        assert len(chunks) == 2  # 2 events in fixture
+        assert "header" in meta
+        assert "Events: work" in meta["header"]
+        assert "2024-01-01" in meta["header"]
+        assert "2 events" in meta["header"]
+        assert "2 occurred" in meta["header"]
+
+    def test_format_events_direct(self):
+        """Test format_events function directly."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {
+                "type": "meeting",
+                "title": "Team standup",
+                "start": "09:00:00",
+                "end": "09:30:00",
+                "summary": "Daily sync",
+                "participants": ["Alice", "Bob"],
+                "occurred": True,
+            },
+            {
+                "type": "task",
+                "title": "Code review",
+                "start": "10:00:00",
+                "summary": "Review PR",
+                "occurred": True,
+            },
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert len(chunks) == 2
+        assert "Meeting: Team standup" in chunks[0]["markdown"]
+        assert "**Time Occurred:** 09:00 - 09:30" in chunks[0]["markdown"]
+        assert "**Participants:** Alice, Bob" in chunks[0]["markdown"]
+        assert "Daily sync" in chunks[0]["markdown"]
+        assert "Task: Code review" in chunks[1]["markdown"]
+
+    def test_format_events_anticipation_labels(self):
+        """Test that anticipations use 'Planned', 'Scheduled', 'Expected' labels."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {
+                "type": "meeting",
+                "title": "Project kickoff",
+                "start": "14:00:00",
+                "occurred": False,
+                "source": "20240101/insights/schedule.md",
+                "participants": ["Alice", "Bob"],
+            }
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert len(chunks) == 1
+        assert "### Planned Meeting: Project kickoff" in chunks[0]["markdown"]
+        assert "**Time Scheduled:** 14:00" in chunks[0]["markdown"]
+        assert "**Expected Participants:** Alice, Bob" in chunks[0]["markdown"]
+        assert "**Created on:** 2024-01-01" in chunks[0]["markdown"]
+        assert "1 event (1 anticipated)" in meta["header"]
+
+    def test_format_events_occurrence_no_created_on(self):
+        """Test that occurrences do NOT show 'Created on' or 'Planned' prefix."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {
+                "type": "meeting",
+                "title": "Team standup",
+                "start": "09:00:00",
+                "occurred": True,
+                "source": "20240101/insights/meetings.md",
+                "participants": ["Alice"],
+            }
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert len(chunks) == 1
+        assert "### Meeting: Team standup" in chunks[0]["markdown"]
+        assert "Planned" not in chunks[0]["markdown"]
+        assert "Created on" not in chunks[0]["markdown"]
+        assert "**Participants:** Alice" in chunks[0]["markdown"]
+        assert "Expected" not in chunks[0]["markdown"]
+
+    def test_format_events_header_facet_from_path(self):
+        """Test that facet name and day are extracted from file path."""
+        from think.indexer.events import format_events
+
+        entries = [{"type": "task", "title": "Test", "occurred": True}]
+        context = {"file_path": "/journal/facets/personal/events/20251215.jsonl"}
+
+        chunks, meta = format_events(entries, context)
+
+        assert "Events: personal" in meta["header"]
+        assert "2025-12-15" in meta["header"]
+
+    def test_format_events_timestamp_calculation(self):
+        """Test that timestamp is calculated from day + start time."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {"type": "meeting", "title": "Morning", "start": "09:00:00", "occurred": True},
+            {"type": "meeting", "title": "Afternoon", "start": "14:30:00", "occurred": True},
+        ]
+        context = {"file_path": "/journal/facets/work/events/20240101.jsonl"}
+
+        chunks, meta = format_events(entries, context)
+
+        # Afternoon should have higher timestamp than morning
+        assert chunks[1]["timestamp"] > chunks[0]["timestamp"]
+
+    def test_format_events_skipped_entries_error(self):
+        """Test that entries without 'title' field are skipped and reported."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {"type": "meeting", "title": "Valid", "occurred": True},
+            {"type": "task", "summary": "No title"},  # Missing title
+            {"invalid": True},  # Missing title
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert len(chunks) == 1
+        assert "error" in meta
+        assert "Skipped 2 entries" in meta["error"]
+        assert "title" in meta["error"]
+
+    def test_format_events_mixed_occurred_anticipated(self):
+        """Test header counts for mixed occurred/anticipated events."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {"type": "meeting", "title": "Past event", "occurred": True},
+            {"type": "meeting", "title": "Future event 1", "occurred": False},
+            {"type": "meeting", "title": "Future event 2", "occurred": False},
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert "3 events (1 occurred, 2 anticipated)" in meta["header"]
+
+    def test_format_events_singular_grammar(self):
+        """Test that singular 'event' is used for count of 1."""
+        from think.indexer.events import format_events
+
+        entries = [{"type": "meeting", "title": "Solo event", "occurred": True}]
+
+        chunks, meta = format_events(entries)
+
+        assert "1 event (1 occurred)" in meta["header"]
+        assert "events" not in meta["header"]
+
+    def test_format_events_time_display_24h(self):
+        """Test that times are displayed in 24-hour format without seconds."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {
+                "type": "meeting",
+                "title": "Late meeting",
+                "start": "14:30:00",
+                "end": "16:00:00",
+                "occurred": True,
+            }
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert "**Time Occurred:** 14:30 - 16:00" in chunks[0]["markdown"]
+        # Should NOT include seconds
+        assert "14:30:00" not in chunks[0]["markdown"]
+
+    def test_format_events_with_details(self):
+        """Test that details field is included in output."""
+        from think.indexer.events import format_events
+
+        entries = [
+            {
+                "type": "meeting",
+                "title": "Planning",
+                "summary": "Sprint planning",
+                "details": "Discussed Q1 roadmap and priorities",
+                "occurred": True,
+            }
+        ]
+
+        chunks, meta = format_events(entries)
+
+        assert "Sprint planning" in chunks[0]["markdown"]
+        assert "Discussed Q1 roadmap" in chunks[0]["markdown"]
