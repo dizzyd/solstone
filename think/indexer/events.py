@@ -280,29 +280,12 @@ def format_events(
         except ValueError:
             pass
 
-    # Count occurrences vs anticipations for header
-    occurred_count = sum(1 for e in entries if e.get("occurred", True))
-    anticipated_count = len(entries) - occurred_count
-
     # Build header
     if day_str:
         formatted_day = f"{day_str[:4]}-{day_str[4:6]}-{day_str[6:8]}"
-        header_title = f"# Events: {facet_name} ({formatted_day})"
+        meta["header"] = f"# Events for '{facet_name}' facet on {formatted_day}"
     else:
-        header_title = f"# Events: {facet_name}"
-
-    event_count = len(entries)
-    event_word = "event" if event_count == 1 else "events"
-    status_parts = []
-    if occurred_count:
-        status_parts.append(f"{occurred_count} occurred")
-    if anticipated_count:
-        status_parts.append(f"{anticipated_count} anticipated")
-
-    if status_parts:
-        meta["header"] = f"{header_title}\n\n{event_count} {event_word} ({', '.join(status_parts)})"
-    else:
-        meta["header"] = f"{header_title}\n\n{event_count} {event_word}"
+        meta["header"] = f"# Events for '{facet_name}' facet"
 
     # Format each event as a chunk
     for event in entries:

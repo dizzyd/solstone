@@ -1077,10 +1077,7 @@ class TestFormatEvents:
 
         assert len(chunks) == 2  # 2 events in fixture
         assert "header" in meta
-        assert "Events: work" in meta["header"]
-        assert "2024-01-01" in meta["header"]
-        assert "2 events" in meta["header"]
-        assert "2 occurred" in meta["header"]
+        assert meta["header"] == "# Events for 'work' facet on 2024-01-01"
 
     def test_format_events_direct(self):
         """Test format_events function directly."""
@@ -1136,7 +1133,6 @@ class TestFormatEvents:
         assert "**Time Scheduled:** 14:00" in chunks[0]["markdown"]
         assert "**Expected Participants:** Alice, Bob" in chunks[0]["markdown"]
         assert "**Created on:** 2024-01-01" in chunks[0]["markdown"]
-        assert "1 event (1 anticipated)" in meta["header"]
 
     def test_format_events_occurrence_no_created_on(self):
         """Test that occurrences do NOT show 'Created on' or 'Planned' prefix."""
@@ -1171,8 +1167,7 @@ class TestFormatEvents:
 
         chunks, meta = format_events(entries, context)
 
-        assert "Events: personal" in meta["header"]
-        assert "2025-12-15" in meta["header"]
+        assert meta["header"] == "# Events for 'personal' facet on 2025-12-15"
 
     def test_format_events_timestamp_calculation(self):
         """Test that timestamp is calculated from day + start time."""
@@ -1218,18 +1213,8 @@ class TestFormatEvents:
 
         chunks, meta = format_events(entries)
 
-        assert "3 events (1 occurred, 2 anticipated)" in meta["header"]
-
-    def test_format_events_singular_grammar(self):
-        """Test that singular 'event' is used for count of 1."""
-        from think.indexer.events import format_events
-
-        entries = [{"type": "meeting", "title": "Solo event", "occurred": True}]
-
-        chunks, meta = format_events(entries)
-
-        assert "1 event (1 occurred)" in meta["header"]
-        assert "events" not in meta["header"]
+        # Header doesn't include counts anymore
+        assert "header" in meta
 
     def test_format_events_time_display_24h(self):
         """Test that times are displayed in 24-hour format without seconds."""
