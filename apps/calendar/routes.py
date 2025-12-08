@@ -75,6 +75,8 @@ def calendar_day_events(day: str) -> Any:
             "topic": topic,
             "color": topic_color,
             "facet": event.get("facet", ""),
+            "occurred": event.get("occurred", True),
+            "source": event.get("source", ""),
         }
 
         # Convert time strings to ISO timestamps

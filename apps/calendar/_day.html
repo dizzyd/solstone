@@ -80,6 +80,59 @@
   padding: 2em;
   text-align: center;
 }
+
+/* Planned/anticipated events - dotted outline, faded */
+.occ-planned {
+  opacity: 0.6;
+  background: transparent !important;
+  border: 2px dotted;
+}
+
+/* All-day section for untimed events */
+.all-day-section {
+  margin-bottom: 1.5em;
+  padding: 0.75em;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.all-day-section h4 {
+  margin: 0 0 0.5em 0;
+  font-size: 0.85em;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.all-day-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.all-day-card {
+  padding: 0.5em 0.75em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  cursor: pointer;
+  border-left: 3px solid;
+  background: white;
+}
+
+.all-day-card.planned {
+  border-style: dotted;
+  opacity: 0.7;
+}
+
+.all-day-card .card-title {
+  font-weight: 500;
+}
+
+.all-day-card .card-badge {
+  font-size: 0.75em;
+  color: #666;
+  margin-left: 0.5em;
+}
 </style>
 
 <div class="workspace-content-wide">
@@ -118,14 +171,40 @@
   function renderEvents(list) {
     const div = document.getElementById('eventsView');
     if (!list.length) {
-      div.innerHTML = '<div class="events-empty">No events for this day.</div>';
+      div.innerHTML = '<div class="events-empty">No events or scheduled items for this day.</div>';
       return;
     }
 
-    // Determine time range
+    // Split into timed and untimed events
+    const timedEvents = list.filter(o => o.startTime);
+    const untimedEvents = list.filter(o => !o.startTime);
+
+    let html = '';
+
+    // Render all-day/untimed section if any
+    if (untimedEvents.length) {
+      html += '<div class="all-day-section"><h4>All Day / Scheduled</h4><div class="all-day-cards">';
+      untimedEvents.forEach((o, i) => {
+        const idx = list.indexOf(o);
+        const isPlanned = o.occurred === false;
+        const cardClass = isPlanned ? 'all-day-card planned' : 'all-day-card';
+        const badge = isPlanned ? '<span class="card-badge">Planned</span>' : '';
+        const title = escapeHtml(o.title || o.summary || o.topic || 'Event');
+        html += `<div class="${cardClass}" data-index="${idx}" style="border-color:${o.color || '#6c757d'}">`;
+        html += `<span class="card-title">${title}</span>${badge}</div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // If no timed events, we're done
+    if (!timedEvents.length) {
+      div.innerHTML = html;
+      return;
+    }
+
+    // Determine time range for timed events
     let start = Infinity, end = -Infinity;
-    list.forEach(o => {
-      if (!o.startTime) return;
+    timedEvents.forEach(o => {
       const s = new Date(o.startTime);
       const e = o.endTime ? new Date(o.endTime) : new Date(s.getTime() + 3600000);
       const startMinutes = s.getHours() * 60 + s.getMinutes();
@@ -138,7 +217,7 @@
     let endHour = Math.min(Math.ceil(end / 60) + 1, 24);
     const pxPerHour = 66.7;
 
-    let html = `<div class='day-view' style='height:${(endHour - startHour) * pxPerHour}px'>`;
+    html += `<div class='day-view' style='height:${(endHour - startHour) * pxPerHour}px'>`;
 
     // Hour lines
     for (let h = startHour; h <= endHour; h++) {
@@ -150,8 +229,8 @@
     const processedEvents = [];
     const topics = [];
 
-    list.forEach((o, idx) => {
-      if (!o.startTime) return;
+    timedEvents.forEach(o => {
+      const idx = list.indexOf(o);
       const startTime = new Date(o.startTime);
       const endTime = o.endTime ? new Date(o.endTime) : new Date(startTime.getTime() + 5 * 60000);
       let s = startTime.getHours() * 60 + startTime.getMinutes();
@@ -169,7 +248,8 @@
         topic: topic,
         title: escapeHtml(o.title || o.summary || topic),
         color: o.color || '#6c757d',
-        index: idx
+        index: idx,
+        isPlanned: o.occurred === false
       });
     });
 
@@ -221,7 +301,10 @@
       const height = Math.max((event.endMinutes - event.startMinutes) / ((endHour - startHour) * 60) * 100, 0.4);
       const left = event.column * columnWidth;
       const width = columnWidth * 0.95;
-      html += `<a class='occ' data-index='${event.index}' style='top:${top}%;height:${height}%;left:${left}%;width:${width}%;background:${event.color}' title='${event.title}'></a>`;
+      const plannedClass = event.isPlanned ? ' occ-planned' : '';
+      const bgStyle = event.isPlanned ? `border-color:${event.color}` : `background:${event.color}`;
+      const titlePrefix = event.isPlanned ? '▸ ' : '';
+      html += `<a class='occ${plannedClass}' data-index='${event.index}' style='top:${top}%;height:${height}%;left:${left}%;width:${width}%;${bgStyle}' title='${titlePrefix}${event.title}'></a>`;
     });
 
     html += '</div>';
@@ -249,11 +332,22 @@
     return `${mins}m`;
   }
 
+  function parseCreatedDate(source) {
+    // Extract YYYYMMDD from source path like "20240101/insights/schedule.md"
+    const match = source && source.match(/^(\d{8})\//);
+    if (match) {
+      const d = match[1];
+      return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+    }
+    return null;
+  }
+
   function openModal(idx) {
     const occ = events[idx];
     if (!occ) return;
     const body = document.getElementById('modalBody');
 
+    const isPlanned = occ.occurred === false;
     const topic = occ.topic ? occ.topic.charAt(0).toUpperCase() + occ.topic.slice(1) : '';
     const titleText = `${topic ? topic + ': ' : ''}${occ.title || ''}`.trim();
     const subtitle = occ.subject || occ.summary || '';
@@ -264,13 +358,21 @@
     if (occ.startTime) {
       const when = fmtTime(occ.startTime);
       const len = fmtLength(occ.startTime, occ.endTime);
-      html += `<div class="occ-field"><strong>Started</strong> ${when} - ${len}</div>`;
+      const timeLabel = isPlanned ? 'Scheduled' : 'Started';
+      html += `<div class="occ-field"><strong>${timeLabel}</strong> ${when} - ${len}</div>`;
     }
     if (occ.facet) {
       html += `<div class="occ-field"><strong>Facet</strong> ${escapeHtml(occ.facet)}</div>`;
     }
-    if (Array.isArray(occ.participants) && occ.participants.length > 1) {
-      html += `<div class="occ-field"><strong>Participants</strong> ${escapeHtml(occ.participants.join(', '))}</div>`;
+    if (Array.isArray(occ.participants) && occ.participants.length > 0) {
+      const participantsLabel = isPlanned ? 'Expected' : 'Participants';
+      html += `<div class="occ-field"><strong>${participantsLabel}</strong> ${escapeHtml(occ.participants.join(', '))}</div>`;
+    }
+    if (isPlanned) {
+      const createdOn = parseCreatedDate(occ.source);
+      if (createdOn) {
+        html += `<div class="occ-field"><strong>Created</strong> ${createdOn}</div>`;
+      }
     }
     if (occ.details) {
       const det = typeof occ.details === 'string' ? occ.details : JSON.stringify(occ.details, null, 2);
@@ -292,7 +394,7 @@
         allEvents = d || [];
         applyFacetFilter();
         document.getElementById('eventsView').onclick = e => {
-          const el = e.target.closest('.occ');
+          const el = e.target.closest('.occ') || e.target.closest('.all-day-card');
           if (el) {
             e.preventDefault();
             openModal(parseInt(el.dataset.index));
