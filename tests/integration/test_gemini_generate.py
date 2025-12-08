@@ -73,7 +73,7 @@ def test_gemini_generate_with_system_instruction():
         model=GEMINI_FLASH,
         system_instruction="You are a helpful assistant. Keep responses under 50 words.",
         temperature=0.3,
-        max_output_tokens=200,  # Increased from 100 to avoid hitting limit
+        max_output_tokens=500,  # Increased to avoid hitting limit
     )
 
     assert response is not None

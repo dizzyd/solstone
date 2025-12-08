@@ -112,11 +112,13 @@ async def test_mcp_server_stdio_e2e(integration_journal_path):
         encoding="utf-8",
     )
 
-    # Create todos directory with a test todo
+    # Create todos directory with a test todo (JSONL format)
     todos_dir = facets_dir / "todos"
     todos_dir.mkdir(exist_ok=True)
-    todo_file = todos_dir / f"{day}.md"
-    todo_file.write_text("- [ ] Integration test todo\n", encoding="utf-8")
+    todo_file = todos_dir / f"{day}.jsonl"
+    todo_file.write_text(
+        json.dumps({"text": "Integration test todo"}) + "\n", encoding="utf-8"
+    )
 
     # Configure server parameters - use muse-mcp-tools entry point
     server_params = StdioServerParameters(
@@ -324,9 +326,12 @@ async def test_mcp_get_resource_tool(integration_journal_path):
 
     todos_dir = facets_dir / "todos"
     todos_dir.mkdir(exist_ok=True)
-    todo_file = todos_dir / f"{day}.md"
+    todo_file = todos_dir / f"{day}.jsonl"
+    # JSONL format: one JSON object per line
     todo_file.write_text(
-        "- [ ] Test resource fetch\n- [x] Already done\n", encoding="utf-8"
+        json.dumps({"text": "Test resource fetch"}) + "\n"
+        + json.dumps({"text": "Already done", "completed": True}) + "\n",
+        encoding="utf-8",
     )
 
     server_params = StdioServerParameters(
