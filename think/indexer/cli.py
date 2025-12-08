@@ -8,19 +8,61 @@ from think.utils import journal_log, setup_cli
 from .journal import (
     reset_journal_index,
     scan_journal,
+    search_counts,
     search_journal,
 )
 
 
-def _display_search_results(results: list[dict[str, Any]]) -> None:
+def _format_count_column(items: list[tuple[str, int]], total: int, top_n: int) -> list[str]:
+    """Format a column of count items with overflow indicator."""
+    lines = [f"{name} ({count})" for name, count in items[:top_n]]
+    if total > top_n:
+        lines.append(f"... +{total - top_n} more")
+    return lines
+
+
+def _display_counts(counts: dict[str, Any], top_n: int = 5) -> None:
+    """Display aggregated counts in a compact table format."""
+    total = counts["total"]
+    facets = counts["facets"]  # Counter
+    topics = counts["topics"]  # Counter
+    days = counts["days"]  # Counter
+
+    print(f"Total: {total:,} chunks\n")
+
+    # Build columns
+    facet_col = _format_count_column(facets.most_common(top_n), len(facets), top_n)
+    topic_col = _format_count_column(topics.most_common(top_n), len(topics), top_n)
+    day_col = _format_count_column(sorted(days.items(), reverse=True)[:top_n], len(days), top_n)
+
+    # Header and rows
+    print(f"{'Facet':<20} {'Topic':<20} {'Day':<20}")
+    print("-" * 60)
+
+    from itertools import zip_longest
+    for f, t, d in zip_longest(facet_col, topic_col, day_col, fillvalue=""):
+        print(f"{f:<20} {t:<20} {d:<20}")
+
+    print()
+
+
+def _display_search_results(
+    results: list[dict[str, Any]], total: int, offset: int
+) -> None:
     """Display search results in a consistent format."""
-    for idx, r in enumerate(results, 1):
+    if total == 0 or not results:
+        print("No results found")
+        return
+
+    # Show pagination context
+    start = offset + 1
+    end = offset + len(results)
+    print(f"Showing {start}-{end} of {total} results\n")
+
+    for idx, r in enumerate(results, start):
         meta = r.get("metadata", {})
-        snippet = (
-            r["text"][:100] + "..."
-            if len(r.get("text", "")) > 100
-            else r.get("text", "")
-        )
+        text = r.get("text", "").replace("\n", " ")
+        snippet = text[:100] + "..." if len(text) > 100 else text
         label = meta.get("topic") or meta.get("time") or ""
         facet = meta.get("facet")
         facet_str = f" ({facet})" if facet else ""
@@ -61,6 +103,24 @@ def main() -> None:
         const="",
         help="Run query (interactive mode if no query provided)",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum number of results to return (default: 10)",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Number of results to skip for pagination (default: 0)",
+    )
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=5,
+        help="Number of items to show per count column (default: 5)",
+    )
 
     args = setup_cli(parser)
 
@@ -90,9 +150,13 @@ def main() -> None:
             query_kwargs["topic"] = args.topic
 
         if args.query:
-            # Single query mode
-            _total, results = search_journal(args.query, 10, **query_kwargs)
-            _display_search_results(results)
+            # Single query mode - show counts then results
+            counts = search_counts(args.query, **query_kwargs)
+            _display_counts(counts, args.top)
+            total, results = search_journal(
+                args.query, args.limit, args.offset, **query_kwargs
+            )
+            _display_search_results(results, total, args.offset)
         else:
             # Interactive mode
             while True:
@@ -102,5 +166,9 @@ def main() -> None:
                     break
                 if not query:
                     break
-                _total, results = search_journal(query, 10, **query_kwargs)
-                _display_search_results(results)
+                counts = search_counts(query, **query_kwargs)
+                _display_counts(counts, args.top)
+                total, results = search_journal(
+                    query, args.limit, args.offset, **query_kwargs
+                )
+                _display_search_results(results, total, args.offset)

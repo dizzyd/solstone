@@ -11,7 +11,6 @@ All content is converted to markdown chunks via the formatters framework,
 then indexed with metadata fields for filtering (day, facet, topic).
 """
 
-import json
 import logging
 import os
 import re
@@ -299,6 +298,38 @@ def sanitize_fts_query(query: str) -> str:
     return result
 
 
+def _build_where_clause(
+    query: str,
+    day: str | None = None,
+    facet: str | None = None,
+    topic: str | None = None,
+) -> tuple[str, list[Any]]:
+    """Build WHERE clause and params for FTS5 search.
+
+    Returns:
+        Tuple of (where_clause, params)
+    """
+    params: list[Any] = []
+
+    if query:
+        sanitized = sanitize_fts_query(query)
+        where_clause = f"chunks MATCH '{sanitized}'"
+    else:
+        where_clause = "1=1"
+
+    if day:
+        where_clause += " AND day=?"
+        params.append(day)
+    if facet:
+        where_clause += " AND facet=?"
+        params.append(facet)
+    if topic:
+        where_clause += " AND topic=?"
+        params.append(topic)
+
+    return where_clause, params
+
+
 def search_journal(
     query: str,
     limit: int = 10,
@@ -327,25 +358,7 @@ def search_journal(
             - score: BM25 relevance score
     """
     conn, _ = get_journal_index()
-
-    # Build WHERE clause
-    params: list[Any] = []
-
-    if query:
-        sanitized = sanitize_fts_query(query)
-        where_clause = f"chunks MATCH '{sanitized}'"
-    else:
-        where_clause = "1=1"
-
-    if day:
-        where_clause += " AND day=?"
-        params.append(day)
-    if facet:
-        where_clause += " AND facet=?"
-        params.append(facet)
-    if topic:
-        where_clause += " AND topic=?"
-        params.append(topic)
+    where_clause, params = _build_where_clause(query, day, facet, topic)
 
     # Get total count
     total = conn.execute(
@@ -381,6 +394,49 @@ def search_journal(
 
     conn.close()
     return total, results
+
+
+def search_counts(
+    query: str,
+    *,
+    day: str | None = None,
+    facet: str | None = None,
+    topic: str | None = None,
+) -> dict[str, Any]:
+    """Get aggregated counts for a search query.
+
+    Uses single query + Python aggregation for efficiency.
+
+    Args:
+        query: FTS5 search query (empty string for all)
+        day: Filter by day (YYYYMMDD)
+        facet: Filter by facet name
+        topic: Filter by topic
+
+    Returns:
+        Dict with:
+            - total: Total matching chunks
+            - facets: Counter of facet_name -> count
+            - topics: Counter of topic_name -> count
+            - days: Counter of day -> count
+    """
+    from collections import Counter
+
+    conn, _ = get_journal_index()
+    where_clause, params = _build_where_clause(query, day, facet, topic)
+
+    rows = conn.execute(
+        f"SELECT facet, topic, day FROM chunks WHERE {where_clause}", params
+    ).fetchall()
+
+    conn.close()
+
+    return {
+        "total": len(rows),
+        "facets": Counter(r[0] for r in rows if r[0]),
+        "topics": Counter(r[1] for r in rows if r[1]),
+        "days": Counter(r[2] for r in rows if r[2]),
+    }
 
 
 def get_events(

@@ -13,6 +13,7 @@ from .journal import (
     reset_journal_index,
     sanitize_fts_query,
     scan_journal,
+    search_counts,
     search_journal,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     "reset_journal_index",
     "sanitize_fts_query",
     "scan_journal",
+    "search_counts",
     "search_journal",
     # CLI
     "main",
