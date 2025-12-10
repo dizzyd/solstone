@@ -80,44 +80,6 @@
   min-width: 0;
 }
 
-/* Search input */
-.search-input-area {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.search-input-area input[type="text"] {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  font-family: inherit;
-  font-size: 1rem;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.search-input-area input[type="text"]:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
-}
-
-.search-input-area button {
-  padding: 0.75rem 1.25rem;
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.95rem;
-}
-
-.search-input-area button:hover {
-  background: #1d4ed8;
-}
-
 /* Results summary */
 .search-summary {
   font-size: 0.85rem;
@@ -337,11 +299,6 @@
 
     <!-- Main content -->
     <main class="search-main">
-      <form id="searchForm" class="search-input-area">
-        <input id="query" type="text" placeholder="Search your journal..." autocomplete="off" />
-        <button type="submit">Search</button>
-      </form>
-
       <div class="search-summary" id="search-summary" style="display: none;"></div>
 
       <div id="results-container">
@@ -371,7 +328,6 @@
   let dayOffset = 0;
 
   // DOM elements
-  const queryInput = document.getElementById('query');
   const resultsContainer = document.getElementById('results-container');
   const searchSummary = document.getElementById('search-summary');
   const searchEmpty = document.getElementById('search-empty');
@@ -380,9 +336,18 @@
   const topicList = document.getElementById('topic-list');
 
   // Initialize
-  queryInput.focus();
   loadFromHash();
   window.addEventListener('hashchange', loadFromHash);
+
+  // Listen for search submissions from app bar
+  window.addEventListener('search.submit', (e) => {
+    const query = e.detail.query;
+    if (!query) return;
+    currentQuery = query;
+    dayOffset = 0;
+    updateHash();
+    doSearch(true);
+  });
 
   function loadFromHash() {
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
@@ -394,10 +359,16 @@
       currentQuery = q;
       currentFacet = f;
       currentTopic = t;
-      queryInput.value = q;
+
+      // Notify app bar of query change
+      window.dispatchEvent(new CustomEvent('search.queryUpdate', {
+        detail: { query: q }
+      }));
 
       if (q) {
         doSearch(true);
+      } else {
+        showEmpty();
       }
     }
   }
@@ -409,16 +380,6 @@
     if (currentTopic) params.set('topic', currentTopic);
     window.location.hash = params.toString();
   }
-
-  // Search form submission
-  document.getElementById('searchForm').onsubmit = function(e) {
-    e.preventDefault();
-    currentQuery = queryInput.value.trim();
-    if (!currentQuery) return;
-    dayOffset = 0;
-    updateHash();
-    doSearch(true);
-  };
 
   // Load more days
   loadMoreDaysBtn.onclick = function() {
