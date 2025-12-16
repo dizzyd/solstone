@@ -50,7 +50,11 @@ def get_entities(facet_name: str) -> Any:
 
 @entities_bp.route("/api/<facet_name>", methods=["POST"])
 def add_entity(facet_name: str) -> Any:
-    """Add/attach an entity to a facet."""
+    """Add/attach an entity to a facet.
+
+    If a previously detached entity with the same type+name exists,
+    re-activates it instead of creating a duplicate.
+    """
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -65,13 +69,34 @@ def add_entity(facet_name: str) -> Any:
         return jsonify({"error": "Type and name are required"}), 400
 
     try:
-        # Load existing attached entities
-        entities = load_entities(facet_name)
+        # Load ALL attached entities including detached ones
+        entities = load_entities(facet_name, include_detached=True)
 
-        # Check for duplicates
+        # Check for existing entity (active or detached)
         for entity in entities:
             if entity.get("type") == etype and entity.get("name") == name:
-                return jsonify({"error": "Entity already exists in facet"}), 409
+                if entity.get("detached"):
+                    # Re-activate detached entity
+                    entity.pop("detached", None)
+                    entity["updated_at"] = int(time.time() * 1000)
+                    # Update description if provided
+                    if desc:
+                        entity["description"] = desc
+                    save_entities(facet_name, entities)
+
+                    log_app_action(
+                        app="entities",
+                        facet=facet_name,
+                        action="entity_reattach",
+                        params={
+                            "type": etype,
+                            "name": name,
+                            "description": entity.get("description", ""),
+                        },
+                    )
+                    return jsonify({"success": True, "reattached": True})
+                else:
+                    return jsonify({"error": "Entity already exists in facet"}), 409
 
         # Add new entity with timestamps
         now = int(time.time() * 1000)
@@ -103,7 +128,11 @@ def add_entity(facet_name: str) -> Any:
 
 @entities_bp.route("/api/<facet_name>", methods=["DELETE"])
 def remove_entity(facet_name: str) -> Any:
-    """Remove/detach an entity from a facet."""
+    """Detach an entity from a facet (soft delete).
+
+    Sets detached=True instead of removing the entity, preserving
+    all metadata for potential re-attachment later.
+    """
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -115,28 +144,26 @@ def remove_entity(facet_name: str) -> Any:
         return jsonify({"error": "Type and name are required"}), 400
 
     try:
-        # Load existing attached entities
-        entities = load_entities(facet_name)
+        # Load ALL attached entities including detached ones
+        entities = load_entities(facet_name, include_detached=True)
 
-        # Find the entity to capture its data before removal
-        removed_entity = None
+        # Find the entity to detach
+        target_entity = None
         for e in entities:
             if e.get("type") == etype and e.get("name") == name:
-                removed_entity = e
+                if not e.get("detached"):
+                    target_entity = e
                 break
 
-        if not removed_entity:
+        if not target_entity:
             return jsonify({"error": "Entity not found in facet"}), 404
 
-        # Filter out the entity to remove
-        filtered = [
-            e
-            for e in entities
-            if not (e.get("type") == etype and e.get("name") == name)
-        ]
+        # Soft delete: set detached flag and update timestamp
+        target_entity["detached"] = True
+        target_entity["updated_at"] = int(time.time() * 1000)
 
-        # Save filtered list
-        save_entities(facet_name, filtered)
+        # Save updated list (entity remains in file with detached=True)
+        save_entities(facet_name, entities)
 
         log_app_action(
             app="entities",
@@ -145,8 +172,8 @@ def remove_entity(facet_name: str) -> Any:
             params={
                 "type": etype,
                 "name": name,
-                "description": removed_entity.get("description", ""),
-                "aka": removed_entity.get("aka", []),
+                "description": target_entity.get("description", ""),
+                "aka": target_entity.get("aka", []),
             },
         )
 
@@ -180,13 +207,15 @@ def update_entity(facet_name: str) -> Any:
         else:
             aka_list = []
 
-        # Load attached entities
-        entities = load_entities(facet_name)
+        # Load ALL attached entities including detached to avoid data loss on save
+        entities = load_entities(facet_name, include_detached=True)
 
-        # Find target entity
+        # Find target entity (only search active entities)
         target = None
         target_index = -1
         for i, entity in enumerate(entities):
+            if entity.get("detached"):
+                continue  # Skip detached entities
             if entity.get("type") == entity_type and entity.get("name") == old_name:
                 target = entity
                 target_index = i
@@ -198,9 +227,11 @@ def update_entity(facet_name: str) -> Any:
         # Capture old values before modification
         old_aka = target.get("aka", [])
 
-        # Check if new name conflicts with existing entities (excluding current)
+        # Check if new name conflicts with existing active entities (excluding current)
         if new_name != old_name:
             for i, entity in enumerate(entities):
+                if entity.get("detached"):
+                    continue  # Skip detached entities in conflict check
                 if (
                     i != target_index
                     and entity.get("type") == entity_type
@@ -256,13 +287,15 @@ def update_description(facet_name: str) -> Any:
         return jsonify({"error": "Type and name are required"}), 400
 
     try:
-        # Load existing attached entities
-        entities = load_entities(facet_name)
+        # Load ALL attached entities including detached to avoid data loss on save
+        entities = load_entities(facet_name, include_detached=True)
 
-        # Find and update the entity, capturing old description
+        # Find and update the entity (active only), capturing old description
         updated = False
         old_description = ""
         for entity in entities:
+            if entity.get("detached"):
+                continue  # Skip detached entities
             if entity.get("type") == entity_type and entity.get("name") == entity_name:
                 old_description = entity.get("description", "")
                 entity["description"] = new_description

@@ -491,3 +491,210 @@ def test_timestamp_preservation(fixture_journal, tmp_path):
     acme = next(e for e in loaded if e.get("name") == "Acme")
     assert acme["attached_at"] == 1700000002000
     assert acme["updated_at"] == 1700000002000
+
+
+# Tests for detached entity functionality
+
+
+def test_load_entities_excludes_detached_by_default(fixture_journal, tmp_path):
+    """Test that load_entities excludes detached entities by default."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Save entities with one detached
+    test_entities = [
+        {"type": "Person", "name": "Alice", "description": "Active person"},
+        {
+            "type": "Person",
+            "name": "Bob",
+            "description": "Detached person",
+            "detached": True,
+        },
+        {"type": "Company", "name": "Acme", "description": "Active company"},
+    ]
+    save_entities("test_facet", test_entities)
+
+    # Load without include_detached (default)
+    loaded = load_entities("test_facet")
+    assert len(loaded) == 2
+    names = [e["name"] for e in loaded]
+    assert "Alice" in names
+    assert "Acme" in names
+    assert "Bob" not in names
+
+
+def test_load_entities_includes_detached_when_requested(fixture_journal, tmp_path):
+    """Test that load_entities includes detached entities when include_detached=True."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Save entities with one detached
+    test_entities = [
+        {"type": "Person", "name": "Alice", "description": "Active person"},
+        {
+            "type": "Person",
+            "name": "Bob",
+            "description": "Detached person",
+            "detached": True,
+        },
+    ]
+    save_entities("test_facet", test_entities)
+
+    # Load with include_detached=True
+    loaded = load_entities("test_facet", include_detached=True)
+    assert len(loaded) == 2
+    names = [e["name"] for e in loaded]
+    assert "Alice" in names
+    assert "Bob" in names
+
+    # Verify detached flag is preserved
+    bob = next(e for e in loaded if e["name"] == "Bob")
+    assert bob.get("detached") is True
+
+
+def test_load_all_attached_entities_excludes_detached(fixture_journal, tmp_path):
+    """Test that load_all_attached_entities excludes detached entities."""
+    facet1_path = tmp_path / "facets" / "facet1"
+    facet2_path = tmp_path / "facets" / "facet2"
+    facet1_path.mkdir(parents=True)
+    facet2_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Save entities - one active, one detached per facet
+    save_entities(
+        "facet1",
+        [
+            {"type": "Person", "name": "Alice", "description": "Active in facet1"},
+            {
+                "type": "Person",
+                "name": "Bob",
+                "description": "Detached in facet1",
+                "detached": True,
+            },
+        ],
+    )
+    save_entities(
+        "facet2",
+        [
+            {"type": "Person", "name": "Charlie", "description": "Active in facet2"},
+        ],
+    )
+
+    all_entities = load_all_attached_entities()
+
+    # Should only have active entities
+    names = [e["name"] for e in all_entities]
+    assert "Alice" in names
+    assert "Charlie" in names
+    assert "Bob" not in names
+
+
+def test_load_detected_entities_recent_shows_detached_entity_names(
+    fixture_journal, tmp_path
+):
+    """Test that detached entities appear in detected list again (not excluded)."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity with detached=True
+    attached = [
+        {"type": "Person", "name": "Alice", "description": "Active person"},
+        {
+            "type": "Person",
+            "name": "Bob",
+            "description": "Detached person",
+            "detached": True,
+        },
+    ]
+    save_entities("test_facet", attached)
+
+    # Create detected entities including the detached name
+    detected_entities = [
+        {
+            "type": "Person",
+            "name": "Alice",
+            "description": "Should be excluded (active)",
+        },
+        {
+            "type": "Person",
+            "name": "Bob",
+            "description": "Should be INCLUDED (detached)",
+        },
+        {
+            "type": "Person",
+            "name": "Charlie",
+            "description": "Should be included (new)",
+        },
+    ]
+    save_entities("test_facet", detected_entities, "20250101")
+
+    # Load detected - Alice excluded (active), Bob included (detached), Charlie included (new)
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    names = [e["name"] for e in detected]
+
+    assert "Alice" not in names  # Excluded - still active
+    assert "Bob" in names  # Included - detached, so shows up in detected
+    assert "Charlie" in names  # Included - new entity
+
+
+def test_detached_entity_preserves_all_fields(fixture_journal, tmp_path):
+    """Test that detached entities preserve all fields including custom ones."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Save entity with custom fields and detached flag
+    test_entities = [
+        {
+            "type": "Person",
+            "name": "Alice",
+            "description": "Test person",
+            "attached_at": 1700000000000,
+            "updated_at": 1700000001000,
+            "aka": ["Ali", "AJ"],
+            "tags": ["friend", "colleague"],
+            "custom_field": "custom_value",
+            "detached": True,
+        },
+    ]
+    save_entities("test_facet", test_entities)
+
+    # Load with include_detached to verify all fields preserved
+    loaded = load_entities("test_facet", include_detached=True)
+    assert len(loaded) == 1
+
+    alice = loaded[0]
+    assert alice["name"] == "Alice"
+    assert alice["description"] == "Test person"
+    assert alice["attached_at"] == 1700000000000
+    assert alice["updated_at"] == 1700000001000
+    assert alice["aka"] == ["Ali", "AJ"]
+    assert alice["tags"] == ["friend", "colleague"]
+    assert alice["custom_field"] == "custom_value"
+    assert alice["detached"] is True
+
+
+def test_detached_flag_for_detected_entities_not_filtered(fixture_journal, tmp_path):
+    """Test that include_detached only affects attached entities, not detected."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create detected entity for a specific day
+    detected_entities = [
+        {"type": "Person", "name": "Alice", "description": "Detected person"},
+    ]
+    save_entities("test_facet", detected_entities, "20250101")
+
+    # Load detected entities - should always return all (no detached filtering for detected)
+    loaded = load_entities("test_facet", "20250101")
+    assert len(loaded) == 1
+
+    # include_detached should have no effect on detected entities
+    loaded_with_flag = load_entities("test_facet", "20250101", include_detached=True)
+    assert len(loaded_with_flag) == 1

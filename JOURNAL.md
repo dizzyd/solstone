@@ -203,8 +203,11 @@ Entity types are flexible and user-defined. Common examples: `Person`, `Company`
 
 Each entity is a JSON object with required fields (`type`, `name`, `description`) and optional custom fields for extensibility (e.g., `status`, `priority`, `tags`, `contact`, etc.). Custom fields are preserved throughout the system.
 
-**Standard optional field:**
+**Standard optional fields:**
 - `aka` (array of strings) – Alternative names, nicknames, or acronyms for the entity. Used in audio transcription to improve entity recognition.
+- `detached` (boolean) – When `true`, marks the entity as soft-deleted. Detached entities remain in the file but are hidden from UI and excluded from agent context. This preserves entity history and allows re-attachment without data loss.
+- `attached_at` (integer) – Unix timestamp in milliseconds when entity was first attached.
+- `updated_at` (integer) – Unix timestamp in milliseconds of last modification.
 
 #### Detected Entities
 
@@ -226,7 +229,9 @@ Format matches attached entities (JSONL):
 1. **Detection**: Daily agents scan journal content and record entities in `entities/YYYYMMDD.jsonl`
 2. **Aggregation**: Review agent tracks detection frequency across recent days
 3. **Promotion**: Entities with 3+ detections are auto-promoted to attached, or users manually promote via UI
-4. **Persistence**: Attached entities in `entities.jsonl` remain until manually removed
+4. **Persistence**: Attached entities in `entities.jsonl` remain active until detached
+5. **Detachment**: When removed via UI, entities are soft-deleted (`detached: true`) preserving all metadata
+6. **Re-attachment**: Detached entities can be re-activated, restoring them with preserved history (original `attached_at`, updated `updated_at`)
 
 #### Cross-Facet Behavior
 

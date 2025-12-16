@@ -101,12 +101,17 @@ def entity_file_path(facet: str, day: Optional[str] = None) -> Path:
         return facet_path / "entities" / f"{day}.jsonl"
 
 
-def load_entities(facet: str, day: Optional[str] = None) -> list[dict[str, Any]]:
+def load_entities(
+    facet: str, day: Optional[str] = None, *, include_detached: bool = False
+) -> list[dict[str, Any]]:
     """Load entities from facet entity file.
 
     Args:
         facet: Facet name
         day: Optional day in YYYYMMDD format for detected entities
+        include_detached: If True, includes entities with detached=True.
+                         Default False excludes detached entities.
+                         Only applies to attached entities (day=None).
 
     Returns:
         List of entity dictionaries with type, name, and description keys
@@ -116,7 +121,13 @@ def load_entities(facet: str, day: Optional[str] = None) -> list[dict[str, Any]]
         [{"type": "Person", "name": "John Smith", "description": "Friend from college"}]
     """
     path = entity_file_path(facet, day)
-    return parse_entity_file(str(path))
+    entities = parse_entity_file(str(path))
+
+    # Filter out detached entities for attached entity files (day=None)
+    if day is None and not include_detached:
+        entities = [e for e in entities if not e.get("detached")]
+
+    return entities
 
 
 def save_entities(
@@ -189,9 +200,18 @@ def update_entity(
         ValueError: If entity not found or guard mismatch
         RuntimeError: If JOURNAL_PATH is not set
     """
-    entities = load_entities(facet, day)
+    # Load ALL entities including detached to avoid data loss on save
+    # For attached entities (day=None), we need include_detached=True
+    entities = (
+        load_entities(facet, day, include_detached=True)
+        if day is None
+        else load_entities(facet, day)
+    )
 
     for entity in entities:
+        # Skip detached entities when searching
+        if entity.get("detached"):
+            continue
         if entity.get("type") == type and entity.get("name") == name:
             current_desc = entity.get("description", "")
             if current_desc != old_description:
@@ -248,6 +268,9 @@ def load_all_attached_entities() -> list[dict[str, Any]]:
 
         # Use parse_entity_file for consistency
         for entity in parse_entity_file(str(entities_file)):
+            # Skip detached entities
+            if entity.get("detached"):
+                continue
             name = entity.get("name", "")
             # Keep first occurrence only
             if name and name not in seen_names:
@@ -397,8 +420,9 @@ def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, 
     if not journal:
         raise RuntimeError("JOURNAL_PATH not set")
 
-    # Load attached entities and build exclusion set
-    attached = load_entities(facet)
+    # Load attached entities (excluding detached) and build exclusion set
+    # Detached entities should appear in detected list again
+    attached = load_entities(facet, include_detached=False)
     excluded_names: set[str] = set()
     for entity in attached:
         name = entity.get("name", "")
@@ -561,8 +585,15 @@ def format_entities(
             lines.append("*(No description available)*")
         lines.append("")
 
-        # Additional fields (skip core fields and timestamp fields)
-        skip_fields = {"type", "name", "description", "updated_at", "attached_at"}
+        # Additional fields (skip core fields, timestamp fields, and detached flag)
+        skip_fields = {
+            "type",
+            "name",
+            "description",
+            "updated_at",
+            "attached_at",
+            "detached",
+        }
 
         # Handle tags specially
         tags = entity.get("tags")

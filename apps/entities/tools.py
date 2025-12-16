@@ -91,7 +91,7 @@ def entity_detect(
     """Record a detected entity for a specific day in a facet.
 
     This tool adds an entity to the daily detected entities file at
-    facets/{facet}/entities/{day}.md. Detected entities are ephemeral
+    facets/{facet}/entities/{day}.jsonl. Detected entities are ephemeral
     observations from a specific day that can later be promoted to attached
     entities if they appear frequently.
 
@@ -171,6 +171,9 @@ def entity_attach(
     facets/{facet}/entities.jsonl. Attached entities are long-term tracked
     entities that appear in facet summaries and agent context.
 
+    If a previously detached entity with the same type+name exists,
+    re-activates it instead of creating a duplicate.
+
     Sets attached_at and updated_at timestamps on the new entity.
 
     Args:
@@ -184,6 +187,7 @@ def entity_attach(
         - facet: The facet name
         - message: Success message
         - entity: The attached entity details (type, name, description)
+        - reattached: True if a detached entity was re-activated
 
     Examples:
         - entity_attach("personal", "Person", "Alice", "Close friend from college")
@@ -197,16 +201,41 @@ def entity_attach(
                 "suggestion": "must be alphanumeric with spaces only, at least 3 characters long",
             }
 
-        # Load existing attached entities
-        existing = load_entities(facet, day=None)
+        # Load ALL attached entities including detached ones
+        existing = load_entities(facet, day=None, include_detached=True)
 
-        # Check for duplicate
+        # Check for existing entity (active or detached)
         for entity in existing:
             if entity.get("type") == type and entity.get("name") == name:
-                return {
-                    "error": f"Entity '{name}' of type '{type}' already attached",
-                    "suggestion": "entity already exists in attached list for this facet",
-                }
+                if entity.get("detached"):
+                    # Re-activate detached entity
+                    entity.pop("detached", None)
+                    entity["updated_at"] = int(time.time() * 1000)
+                    entity["description"] = description
+                    save_entities(facet, existing, day=None)
+
+                    log_tool_action(
+                        facet=facet,
+                        action="entity_reattach",
+                        params={"type": type, "name": name, "description": description},
+                        context=context,
+                    )
+
+                    return {
+                        "facet": facet,
+                        "message": f"Entity '{name}' re-attached successfully",
+                        "entity": {
+                            "type": type,
+                            "name": name,
+                            "description": description,
+                        },
+                        "reattached": True,
+                    }
+                else:
+                    return {
+                        "error": f"Entity '{name}' of type '{type}' already attached",
+                        "suggestion": "entity already exists in attached list for this facet",
+                    }
 
         # Add new entity with timestamps
         now = int(time.time() * 1000)
