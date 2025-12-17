@@ -1642,6 +1642,7 @@ window.AppServices = {
 /**
  * Privacy Blur
  * Blurs page content when window loses focus for privacy.
+ * Unblurs on drag-enter to support file drop interactions.
  * Disabled on mobile devices where overlapping windows don't exist.
  */
 (function() {
@@ -1661,6 +1662,15 @@ window.AppServices = {
 
   window.addEventListener('blur', onBlur);
   window.addEventListener('focus', onFocus);
+
+  // Handle drag-and-drop: unblur when dragging into window
+  document.addEventListener('dragenter', onFocus);
+  document.addEventListener('dragleave', (e) => {
+    // relatedTarget is null when leaving the document entirely
+    if (!e.relatedTarget && !document.hasFocus()) {
+      onBlur();
+    }
+  });
 
   // Handle initial state (page may load while window is not focused)
   if (!document.hasFocus()) {
