@@ -1,0 +1,18 @@
+{
+  "identity": {
+    "name": "Test User",
+    "preferred": "Tester",
+    "pronouns": {
+      "subject": "they",
+      "object": "them",
+      "possessive": "their",
+      "reflexive": "themselves"
+    },
+    "aliases": ["Tester", "test"],
+    "email_addresses": ["test@example.com"],
+    "timezone": "America/Denver"
+  },
+  "convey": {
+    "password": "test123"
+  }
+}

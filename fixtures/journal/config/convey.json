@@ -1,0 +1,10 @@
+{
+  "facets": {
+    "selected": "work",
+    "order": ["work", "personal", "full-featured"]
+  },
+  "apps": {
+    "order": ["home", "calendar", "chat", "todos", "entities", "search"],
+    "starred": ["home", "chat", "todos"]
+  }
+}

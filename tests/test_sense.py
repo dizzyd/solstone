@@ -128,7 +128,7 @@ def test_file_sensor_match_pattern():
         assert sensor._match_pattern(webm_file) is not None
         assert sensor._match_pattern(webm_file)[0] == "describe"
 
-        flac_file = day_dir / "123456_raw.flac"
+        flac_file = day_dir / "123456_300_raw.flac"
         assert sensor._match_pattern(flac_file) is not None
         assert sensor._match_pattern(flac_file)[0] == "transcribe"
 
@@ -137,7 +137,7 @@ def test_file_sensor_match_pattern():
         assert sensor._match_pattern(txt_file) is None
 
         # Should not match - in segment
-        segment_dir = day_dir / "123456"
+        segment_dir = day_dir / "123456_300"
         segment_dir.mkdir()
         segment_file = segment_dir / "audio.jsonl"
         assert sensor._match_pattern(segment_file) is None

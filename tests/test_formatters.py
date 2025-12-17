@@ -18,7 +18,7 @@ class TestRegistry:
         """Test pattern matching for screen.jsonl."""
         from think.formatters import get_formatter
 
-        formatter = get_formatter("20240102/234567/screen.jsonl")
+        formatter = get_formatter("20240102/234567_300/screen.jsonl")
         assert formatter is not None
         assert formatter.__name__ == "format_screen"
 
@@ -26,7 +26,7 @@ class TestRegistry:
         """Test pattern matching for audio.jsonl."""
         from think.formatters import get_formatter
 
-        formatter = get_formatter("20240101/123456/audio.jsonl")
+        formatter = get_formatter("20240101/123456_300/audio.jsonl")
         assert formatter is not None
         assert formatter.__name__ == "format_audio"
 
@@ -35,12 +35,12 @@ class TestRegistry:
         from think.formatters import get_formatter
 
         # Split audio
-        formatter = get_formatter("20240101/123456/123456_audio.jsonl")
+        formatter = get_formatter("20240101/123456_300/123456_300_audio.jsonl")
         assert formatter is not None
         assert formatter.__name__ == "format_audio"
 
         # Imported audio (matched by *_audio.jsonl pattern)
-        formatter = get_formatter("20240101/123456/imported_audio.jsonl")
+        formatter = get_formatter("20240101/123456_300/imported_audio.jsonl")
         assert formatter is not None
         assert formatter.__name__ == "format_audio"
 
@@ -59,7 +59,7 @@ class TestLoadJsonl:
         """Test loading a basic JSONL file."""
         from think.formatters import load_jsonl
 
-        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456/audio.jsonl"
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456_300/audio.jsonl"
         entries = load_jsonl(path)
 
         assert len(entries) == 6  # 1 metadata + 5 transcript entries
@@ -111,7 +111,7 @@ class TestFormatFile:
         """Test format_file with screen.jsonl."""
         from think.formatters import format_file
 
-        path = Path(os.environ["JOURNAL_PATH"]) / "20240102/234567/screen.jsonl"
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240102/234567_300/screen.jsonl"
         chunks, meta = format_file(path)
 
         assert len(chunks) > 0
@@ -125,7 +125,7 @@ class TestFormatFile:
         """Test format_file with audio.jsonl."""
         from think.formatters import format_file
 
-        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456/audio.jsonl"
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456_300/audio.jsonl"
         chunks, meta = format_file(path)
 
         assert len(chunks) > 0
@@ -442,7 +442,7 @@ class TestLoadTranscriptBackwardCompat:
         """Test that load_transcript still returns (metadata, entries, text) tuple."""
         from observe.hear import load_transcript
 
-        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456/audio.jsonl"
+        path = Path(os.environ["JOURNAL_PATH"]) / "20240101/123456_300/audio.jsonl"
         metadata, entries, formatted_text = load_transcript(path)
 
         assert isinstance(metadata, dict)
@@ -1281,7 +1281,7 @@ class TestFormatInsight:
         """Test pattern matching for segment screen.md files."""
         from think.formatters import get_formatter
 
-        formatter = get_formatter("20240101/123456/screen.md")
+        formatter = get_formatter("20240101/123456_300/screen.md")
         assert formatter is not None
         assert formatter.__name__ == "format_insight"
 

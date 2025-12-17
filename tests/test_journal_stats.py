@@ -9,7 +9,7 @@ def test_scan_day(tmp_path, monkeypatch):
     day.mkdir()
 
     # Create an audio jsonl file in segment directory
-    ts_dir = day / "123456"
+    ts_dir = day / "123456_300"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(
         '{"raw": "raw.flac"}\n'
@@ -18,7 +18,7 @@ def test_scan_day(tmp_path, monkeypatch):
     )
 
     # Create an unprocessed file (remains in day root)
-    (day / "123456_raw.flac").write_bytes(b"RIFF")
+    (day / "123456_300_raw.flac").write_bytes(b"RIFF")
 
     (day / "entities.md").write_text("")
     (day / "insights").mkdir()
@@ -178,7 +178,7 @@ def test_caching(tmp_path, monkeypatch):
     day.mkdir()
 
     # Create an audio jsonl file in segment directory
-    ts_dir = day / "123456"
+    ts_dir = day / "123456_300"
     ts_dir.mkdir()
     (ts_dir / "audio.jsonl").write_text(
         '{"raw": "raw.flac"}\n'
