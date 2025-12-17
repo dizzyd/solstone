@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from pathlib import Path
@@ -9,9 +10,16 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
+logger = logging.getLogger(__name__)
+
 from apps.utils import log_app_action
 from convey import state
-from think.entities import load_detected_entities_recent, load_entities, save_entities
+from think.entities import (
+    load_detected_entities_recent,
+    load_entities,
+    rename_entity_folder,
+    save_entities,
+)
 
 entities_bp = Blueprint(
     "app:entities",
@@ -252,6 +260,16 @@ def update_entity(facet_name: str) -> Any:
 
         # Save updated entities
         save_entities(facet_name, entities)
+
+        # Rename entity enrichment folder if name changed
+        if new_name != old_name:
+            try:
+                rename_entity_folder(facet_name, old_name, new_name)
+            except OSError as e:
+                # Log but don't fail - folder rename is best-effort
+                logger.warning(
+                    f"Failed to rename entity folder for '{old_name}' -> '{new_name}': {e}"
+                )
 
         log_app_action(
             app="entities",

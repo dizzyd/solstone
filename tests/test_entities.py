@@ -5,10 +5,14 @@ import os
 import pytest
 
 from think.entities import (
+    ensure_entity_folder,
     entity_file_path,
+    entity_folder_path,
     load_all_attached_entities,
     load_detected_entities_recent,
     load_entities,
+    normalize_entity_name,
+    rename_entity_folder,
     save_entities,
 )
 
@@ -698,3 +702,145 @@ def test_detached_flag_for_detected_entities_not_filtered(fixture_journal, tmp_p
     # include_detached should have no effect on detected entities
     loaded_with_flag = load_entities("test_facet", "20250101", include_detached=True)
     assert len(loaded_with_flag) == 1
+
+
+# Tests for entity folder utilities
+
+
+def test_normalize_entity_name_basic():
+    """Test basic name normalization."""
+    assert normalize_entity_name("Alice Johnson") == "alice_johnson"
+    assert normalize_entity_name("Acme Corp") == "acme_corp"
+    assert normalize_entity_name("PostgreSQL") == "postgresql"
+
+
+def test_normalize_entity_name_special_chars():
+    """Test normalization of names with special characters."""
+    assert normalize_entity_name("O'Brien") == "o_brien"
+    assert normalize_entity_name("AT&T") == "at_t"
+    assert normalize_entity_name("C++") == "c"
+
+
+def test_normalize_entity_name_unicode():
+    """Test normalization of unicode names."""
+    assert normalize_entity_name("José García") == "jose_garcia"
+    assert normalize_entity_name("Müller") == "muller"
+    # Chinese characters are transliterated to pinyin by python-slugify
+    assert normalize_entity_name("北京") == "bei_jing"
+
+
+def test_normalize_entity_name_whitespace():
+    """Test normalization handles various whitespace."""
+    assert normalize_entity_name("  Spaced  Out  ") == "spaced_out"
+    assert normalize_entity_name("Tab\tSeparated") == "tab_separated"
+    assert normalize_entity_name("New\nLine") == "new_line"
+
+
+def test_normalize_entity_name_empty():
+    """Test normalization of empty/blank names."""
+    assert normalize_entity_name("") == ""
+    assert normalize_entity_name("   ") == ""
+    assert normalize_entity_name(None) == ""  # type: ignore
+
+
+def test_normalize_entity_name_long():
+    """Test normalization of very long names."""
+    long_name = "A" * 300
+    normalized = normalize_entity_name(long_name)
+    # Should be truncated with hash suffix
+    assert len(normalized) <= 200
+    assert "_" in normalized[-9:]  # Hash suffix pattern
+
+
+def test_entity_folder_path(fixture_journal, tmp_path):
+    """Test entity folder path generation."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    path = entity_folder_path("personal", "Alice Johnson")
+    expected = tmp_path / "facets" / "personal" / "entities" / "alice_johnson"
+    assert path == expected
+
+
+def test_entity_folder_path_empty_name(fixture_journal, tmp_path):
+    """Test entity folder path with empty name raises ValueError."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    with pytest.raises(ValueError, match="normalizes to empty string"):
+        entity_folder_path("personal", "")
+
+
+def test_ensure_entity_folder(fixture_journal, tmp_path):
+    """Test entity folder creation."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    folder = ensure_entity_folder("personal", "Bob Smith")
+    assert folder.exists()
+    assert folder.is_dir()
+    assert folder == tmp_path / "facets" / "personal" / "entities" / "bob_smith"
+
+
+def test_ensure_entity_folder_idempotent(fixture_journal, tmp_path):
+    """Test that ensure_entity_folder is idempotent."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    folder1 = ensure_entity_folder("personal", "Charlie Brown")
+    folder2 = ensure_entity_folder("personal", "Charlie Brown")
+    assert folder1 == folder2
+    assert folder1.exists()
+
+
+def test_rename_entity_folder(fixture_journal, tmp_path):
+    """Test renaming entity folder."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create original folder
+    old_folder = ensure_entity_folder("work", "Alice Johnson")
+    assert old_folder.exists()
+
+    # Create a file inside to verify contents are moved
+    (old_folder / "notes.md").write_text("Test notes")
+
+    # Rename
+    result = rename_entity_folder("work", "Alice Johnson", "Alice Smith")
+    assert result is True
+
+    # Old folder should not exist
+    assert not old_folder.exists()
+
+    # New folder should exist with contents
+    new_folder = tmp_path / "facets" / "work" / "entities" / "alice_smith"
+    assert new_folder.exists()
+    assert (new_folder / "notes.md").read_text() == "Test notes"
+
+
+def test_rename_entity_folder_not_exists(fixture_journal, tmp_path):
+    """Test renaming non-existent folder returns False."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    result = rename_entity_folder("work", "NonExistent", "NewName")
+    assert result is False
+
+
+def test_rename_entity_folder_same_normalized(fixture_journal, tmp_path):
+    """Test renaming when normalized names are the same."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create folder
+    ensure_entity_folder("work", "Alice Johnson")
+
+    # Rename with different casing (normalizes to same)
+    result = rename_entity_folder("work", "Alice Johnson", "alice johnson")
+    assert result is False  # No rename needed
+
+
+def test_rename_entity_folder_target_exists(fixture_journal, tmp_path):
+    """Test renaming when target folder already exists raises OSError."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create both folders
+    ensure_entity_folder("work", "Alice")
+    ensure_entity_folder("work", "Bob")
+
+    # Try to rename Alice to Bob
+    with pytest.raises(OSError, match="already exists"):
+        rename_entity_folder("work", "Alice", "Bob")

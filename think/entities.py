@@ -1,14 +1,17 @@
 """Facet-scoped entity utilities for detected and attached entities."""
 
+import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
+from slugify import slugify
 
 
 def is_valid_entity_type(etype: str) -> bool:
@@ -19,6 +22,130 @@ def is_valid_entity_type(etype: str) -> bool:
     return bool(
         re.match(r"^[A-Za-z0-9 ]+$", etype) and re.search(r"[A-Za-z0-9]", etype)
     )
+
+
+# Maximum length for normalized entity folder names before truncation
+MAX_ENTITY_FOLDER_NAME_LENGTH = 200
+
+
+def normalize_entity_name(name: str) -> str:
+    """Normalize entity name to filesystem-safe folder name.
+
+    Uses python-slugify to convert names to lowercase with underscores.
+    Long names are truncated with a hash suffix to ensure uniqueness.
+
+    Args:
+        name: Entity name (e.g., "Alice Johnson", "Acme Corp")
+
+    Returns:
+        Normalized folder name (e.g., "alice_johnson", "acme_corp")
+
+    Examples:
+        >>> normalize_entity_name("Alice Johnson")
+        'alice_johnson'
+        >>> normalize_entity_name("O'Brien")
+        'o_brien'
+        >>> normalize_entity_name("AT&T")
+        'at_t'
+        >>> normalize_entity_name("José García")
+        'jose_garcia'
+    """
+    if not name or not name.strip():
+        return ""
+
+    # Use slugify with underscore separator
+    normalized = slugify(name, separator="_")
+
+    # Handle very long names - truncate and add hash suffix
+    if len(normalized) > MAX_ENTITY_FOLDER_NAME_LENGTH:
+        # Create hash of full name for uniqueness
+        name_hash = hashlib.md5(name.encode()).hexdigest()[:8]
+        # Truncate and append hash
+        normalized = normalized[: MAX_ENTITY_FOLDER_NAME_LENGTH - 9] + "_" + name_hash
+
+    return normalized
+
+
+def entity_folder_path(facet: str, name: str) -> Path:
+    """Return path to entity's enrichment folder.
+
+    Args:
+        facet: Facet name (e.g., "personal", "work")
+        name: Entity name (will be normalized)
+
+    Returns:
+        Path to facets/{facet}/entities/{normalized_name}/
+
+    Raises:
+        RuntimeError: If JOURNAL_PATH is not set
+        ValueError: If name normalizes to empty string
+    """
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+
+    normalized = normalize_entity_name(name)
+    if not normalized:
+        raise ValueError(f"Entity name '{name}' normalizes to empty string")
+
+    return Path(journal) / "facets" / facet / "entities" / normalized
+
+
+def ensure_entity_folder(facet: str, name: str) -> Path:
+    """Create entity enrichment folder if needed, return path.
+
+    Args:
+        facet: Facet name (e.g., "personal", "work")
+        name: Entity name (will be normalized)
+
+    Returns:
+        Path to the created/existing folder
+
+    Raises:
+        RuntimeError: If JOURNAL_PATH is not set
+        ValueError: If name normalizes to empty string
+    """
+    folder = entity_folder_path(facet, name)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def rename_entity_folder(facet: str, old_name: str, new_name: str) -> bool:
+    """Rename entity enrichment folder if it exists.
+
+    Called when an entity is renamed to keep folder in sync.
+
+    Args:
+        facet: Facet name
+        old_name: Previous entity name
+        new_name: New entity name
+
+    Returns:
+        True if folder was renamed, False if old folder didn't exist
+        or names normalize to the same value
+
+    Raises:
+        RuntimeError: If JOURNAL_PATH is not set
+        ValueError: If either name normalizes to empty string
+        OSError: If rename fails (e.g., target exists)
+    """
+    # Get paths using entity_folder_path (handles validation and JOURNAL_PATH)
+    old_folder = entity_folder_path(facet, old_name)
+    new_folder = entity_folder_path(facet, new_name)
+
+    # No rename needed if normalized names are the same
+    if old_folder == new_folder:
+        return False
+
+    if not old_folder.exists():
+        return False
+
+    if new_folder.exists():
+        raise OSError(f"Target folder already exists: {new_folder}")
+
+    shutil.move(str(old_folder), str(new_folder))
+    return True
 
 
 def parse_entity_file(
