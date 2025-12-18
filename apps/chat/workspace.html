@@ -1254,17 +1254,6 @@ function handleToolStart(event) {
 
   // Handle search tools with special event cards
   if(args && args.query) {
-    // Determine which index is being searched
-    let idx = 'insights';
-    let indexName = 'Insights';
-    if(tool.includes('event')) {
-      idx = 'events';
-      indexName = 'Events';
-    } else if(tool.includes('transcript')) {
-      idx = 'transcripts';
-      indexName = 'Transcripts';
-    }
-
     // Extract date from query if present (format: YYYYMMDD or YYYY-MM-DD)
     let dateStr = '';
     const dateMatch = args.query.match(/\b(\d{8}|\d{4}-\d{2}-\d{2})\b/);
@@ -1275,12 +1264,8 @@ function handleToolStart(event) {
       dateStr = ` on ${month}/${day}`;
     }
 
-    // Build search URL
-    const q = args.query + (idx === 'insights' ? '' : ' index:' + idx);
-    const url = searchBase + '#q=' + encodeURIComponent(q);
-
-    // Create descriptive text
-    const searchText = `Searching ${indexName} for "${args.query}"${dateStr}`;
+    const url = searchBase + '#q=' + encodeURIComponent(args.query);
+    const searchText = `Searching for "${args.query}"${dateStr}`;
     addEventCard(searchText, url, event);
     return;
   }
@@ -1314,8 +1299,8 @@ function createResourceCard(uri) {
     return `${hours}:${minutes}`;
   }
 
-  // Parse journal://summary/20250815/meetings format
-  let match = uri.match(/journal:\/\/summary\/(\d{8})\/(.+)/);
+  // Parse journal://insight/20250815/meetings format
+  let match = uri.match(/journal:\/\/insight\/(\d{8})\/(.+)/);
   if(match) {
     const date = match[1];
     const topic = match[2];
@@ -1323,7 +1308,7 @@ function createResourceCard(uri) {
     const topicDisplay = topic.charAt(0).toUpperCase() + topic.slice(1);
 
     return {
-      text: `Reading ${topicDisplay} Summary from ${dateStr}`,
+      text: `Reading ${topicDisplay} Insight from ${dateStr}`,
       url: `/calendar/${date}#${topic}`
     };
   }
