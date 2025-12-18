@@ -8,7 +8,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from .models import GEMINI_PRO, gemini_generate
+from .models import GEMINI_FLASH, gemini_generate
 from .utils import load_prompt, setup_cli
 
 
@@ -58,7 +58,7 @@ def _load_prompt() -> str:
 
 
 def generate_plan(
-    request: str, *, api_key: Optional[str] = None, model: str = GEMINI_PRO
+    request: str, *, api_key: Optional[str] = None, model: str = GEMINI_FLASH
 ) -> str:
     """Return a detailed agent plan for ``request`` using Gemini."""
     if api_key is None:
@@ -85,7 +85,7 @@ def parse_args() -> argparse.ArgumentParser:
         help="Path to .txt file with the request or '-' for stdin",
     )
     parser.add_argument("-q", "--query", help="Request text directly")
-    parser.add_argument("--model", default=GEMINI_PRO, help="Gemini model to use")
+    parser.add_argument("--model", default=GEMINI_FLASH, help="Gemini model to use")
     return parser
 
 

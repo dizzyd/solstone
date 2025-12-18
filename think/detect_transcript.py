@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 
-from .models import GEMINI_FLASH, GEMINI_PRO, gemini_generate
+from .models import GEMINI_FLASH, gemini_generate
 from .utils import load_prompt
 
 
@@ -101,7 +101,7 @@ def detect_transcript_segment(text: str, api_key: Optional[str] = None) -> List[
 
     response_text = gemini_generate(
         contents=numbered,
-        model=GEMINI_PRO,
+        model=GEMINI_FLASH,
         temperature=0.3,
         max_output_tokens=4096,
         thinking_budget=8192,

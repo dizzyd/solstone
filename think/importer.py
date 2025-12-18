@@ -24,7 +24,7 @@ from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
 from think.facets import get_facets
 from think.importer_utils import save_import_file, write_import_metadata
-from think.models import GEMINI_PRO, gemini_generate
+from think.models import GEMINI_FLASH, gemini_generate
 from think.utils import PromptNotFoundError, day_path, load_prompt, setup_cli
 
 try:
@@ -583,7 +583,7 @@ def create_transcript_summary(
         # Generate summary using Gemini
         response_text = gemini_generate(
             contents=user_message,
-            model=GEMINI_PRO,
+            model=GEMINI_FLASH,
             temperature=0.3,
             max_output_tokens=8192 * 4,
             system_instruction=importer_prompt,

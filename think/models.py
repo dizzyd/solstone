@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-GEMINI_PRO = "gemini-2.5-pro"
-GEMINI_FLASH = "gemini-2.5-flash"
+GEMINI_FLASH = "gemini-3-flash-preview"
+GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_LITE = "gemini-2.5-flash-lite"
 
-GPT_5 = "gpt-5.1"
+GPT_5 = "gpt-5.2"
 GPT_5_MINI = "gpt-5-mini"
 GPT_5_NANO = "gpt-5-nano"
 
