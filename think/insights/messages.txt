@@ -1,13 +1,13 @@
 # Workday Messaging and Email Analysis
 
-**Input:** A markdown file containing a chronologically ordered transcript of a workday for $name. The transcript is segmented into 5-minute chunks, each combining audio and screen activity for that interval.
+**Input:** A markdown file containing a chronologically ordered transcript of a workday for $name. The transcript is organized by recording segments, each combining audio and screen activity for that time period.
 
-**Objective:** Identify every instance where messaging or email applications are used, determine who $name is communicating with, summarize any visible message content, and record the 5-minute time block when it occurs.
+**Objective:** Identify every instance where messaging or email applications are used, determine who $name is communicating with, summarize any visible message content, and record the time block when it occurs.
 
 **Instructions:**
 
 1. **Scan Each Time Block**
-   - Read the transcript sequentially, one 5-minute segment at a time.
+   - Read the transcript sequentially, one recording segment at a time.
    - Pay close attention to screen descriptions that show messaging or email windows (Gmail, Slack, Messages, Sococo, etc.).
    - Note all visual cues mentioning sending, reading, or replying to messages.
 
@@ -26,12 +26,12 @@
    - If only partial content is visible, summarise the portion that can be seen and note that it is incomplete.
 
 5. **Record the Time Block**
-   - Use the timestamp at the start of each 5-minute segment as the `timeBlock` for any messaging activity found within that chunk.
-   - If the interaction spans multiple blocks, list each block where it remains visible or active.
+   - Use the timestamp at the start of each recording segment as the `timeBlock` for any messaging activity found within that segment.
+   - If the interaction spans multiple segments, list each segment where it remains visible or active.
 
 6. **Output Format**
    - Produce a nicely formatted Markdown document with the following information for each messaging interaction in its own section with a short title:
-     * Time Block – the 5-minute window (e.g., `09:00-09:05`).
+     * Time Block – the time window of the recording segment.
      * App – the messaging or email application used.
      * Contacts – people or channels involved.
      * Context – work or personal classification.

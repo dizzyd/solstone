@@ -83,8 +83,8 @@ def get_transcripts_full(day: str, time: str, length: str) -> TextResource:
     """Return full audio and raw screen transcripts for a specific time range.
 
     This resource provides both audio transcripts and raw screen diffs for a given
-    time range. The data is organized into 5-minute intervals and formatted
-    as markdown. Each 5 minute segment could potentially be very large if there was a lot of activity.
+    time range. The data is organized by recording segments and formatted as
+    markdown. Includes any segment that overlaps with the requested time range.
 
     Args:
         day: Day in YYYYMMDD format

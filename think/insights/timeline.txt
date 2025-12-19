@@ -2,7 +2,7 @@
 
 ## Objective
 
-Create a detailed, chronological timeline of the entire workday, documenting everything that happened with rich, descriptive detail. The transcript combines audio conversations and screen activity in 5-minute segments.
+Create a detailed, chronological timeline of the entire workday, documenting everything that happened with rich, descriptive detail. The transcript combines audio conversations and screen activity organized by recording segments.
 
 ## Documentation Approach
 

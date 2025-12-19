@@ -52,7 +52,7 @@ You have access to search tools and resource types for journal exploration:
   - `day`: YYYYMMDD format
   - `time`: HHMMSS format (start time)
   - `length`: Duration in minutes
-**Returns**: Markdown-formatted raw transcripts organized in 5-minute intervals
+**Returns**: Markdown-formatted raw transcripts organized by recording segments
 **Use when**: You need to examine detailed activity during a specific time segment, particularly useful for reconstructing exact sequences of events
 
 ### Resource vs Tool Selection

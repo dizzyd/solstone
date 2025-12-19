@@ -1,14 +1,14 @@
 # Workday Meeting Extraction and Analysis
 
-**Input:** A markdown file containing a chronologically ordered transcript of a workday for $name. The transcript is segmented into 5-minute chunks, each combining information from audio recordings and screen activity for that interval.
+**Input:** A markdown file containing a chronologically ordered transcript of a workday for $name. The transcript is organized by recording segments, each combining information from audio recordings and screen activity for that time period.
 
 **Objective:** Identify and summarize all of the meetings that $name participated in based on the provided workday transcripts, generate a nicely formatted Markdown document with the details for each.
 
 **Instructions:**
 
-1.  **Parse the Input:** Read the entire markdown file, paying close attention to the chronological 5-minute timestamps.
+1.  **Parse the Input:** Read the entire markdown file, paying close attention to the chronological timestamps.
 
-2.  **Identify Meetings:** Iterate through the time chunks to identify the start and end of meetings.
+2.  **Identify Meetings:** Iterate through the recording segments to identify the start and end of meetings.
     * **Meeting Start Cues:** A meeting may be starting if the audio transcript includes:
         * Greetings and introductory phrases (e.g., "Hi everyone," "Let's get started," "Thanks for joining," "How are you?").
         * The names of other individuals joining the conversation.

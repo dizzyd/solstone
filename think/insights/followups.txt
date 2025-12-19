@@ -2,7 +2,7 @@
 
 ## Objective
 
-Review the full day's transcript to find instances where an important future action is implied, requested, or promised, covering both professional and personal contexts. The transcript merges audio conversations and screen activity summaries in 5-minute increments.
+Review the full day's transcript to find instances where an important future action is implied, requested, or promised, covering both professional and personal contexts. The transcript merges audio conversations and screen activity summaries organized by recording segments.
 
 ## Approach
 
@@ -25,7 +25,7 @@ Review the full day's transcript to find instances where an important future act
 
 Produce a concise Markdown list capturing each follow-up with the following fields in individual blocks with a short title:
 
-- **Time Block** – starting timestamp of the 5-minute segment.
+- **Time Block** – starting timestamp of the recording segment.
 - **Context** – short description of the discussion or screen activity.
 - **Action Needed** – what follow-up is expected.
 - **Work/Personal** – classify the nature of the task.

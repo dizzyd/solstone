@@ -30,9 +30,19 @@ def _load_entries(
     from think.utils import segment_parse
 
     for item in day_path_obj.iterdir():
-        start_time, _ = segment_parse(item.name)
+        start_time, end_time = segment_parse(item.name)
         if not (item.is_dir() and start_time):
             continue
+
+        # Compute segment key and end time for grouping
+        segment_key = item.name
+        day_date = datetime.strptime(date_str, "%Y%m%d").date()
+        segment_start = datetime.combine(day_date, start_time)
+        if end_time:
+            segment_end = datetime.combine(day_date, end_time)
+        else:
+            # Default to start + 5 minutes if no duration
+            segment_end = segment_start + timedelta(minutes=5)
 
         # Process audio transcripts
         if audio:
@@ -53,16 +63,14 @@ def _load_entries(
                     continue
 
                 # Use formatted text for human-readable display
-                day_date = datetime.strptime(date_str, "%Y%m%d").date()
-                timestamp = datetime.combine(day_date, start_time)
                 entries.append(
                     {
-                        "timestamp": timestamp,
+                        "timestamp": segment_start,
+                        "segment_key": segment_key,
+                        "segment_start": segment_start,
+                        "segment_end": segment_end,
                         "prefix": "audio",
                         "content": formatted_text,
-                        "monitor": None,
-                        "source": None,
-                        "id": None,
                         "name": f"{item.name}/{audio_file.name}",
                     }
                 )
@@ -73,16 +81,14 @@ def _load_entries(
             if screen_md.exists():
                 try:
                     content = screen_md.read_text()
-                    day_date = datetime.strptime(date_str, "%Y%m%d").date()
-                    timestamp = datetime.combine(day_date, start_time)
                     entries.append(
                         {
-                            "timestamp": timestamp,
+                            "timestamp": segment_start,
+                            "segment_key": segment_key,
+                            "segment_start": segment_start,
+                            "segment_end": segment_end,
                             "prefix": "screen",
                             "content": content,
-                            "monitor": None,
-                            "source": None,
-                            "id": None,
                             "name": f"{item.name}/screen.md",
                         }
                     )
@@ -99,16 +105,14 @@ def _load_entries(
                     # Use formatter to get proper markdown instead of raw JSON
                     content = format_screen_text(screen_jsonl)
                     if content:
-                        day_date = datetime.strptime(date_str, "%Y%m%d").date()
-                        base_timestamp = datetime.combine(day_date, start_time)
                         entries.append(
                             {
-                                "timestamp": base_timestamp,
+                                "timestamp": segment_start,
+                                "segment_key": segment_key,
+                                "segment_start": segment_start,
+                                "segment_end": segment_end,
                                 "prefix": "screen_frames",
                                 "content": content,
-                                "monitor": None,
-                                "source": None,
-                                "id": None,
                                 "name": f"{item.name}/screen.jsonl",
                             }
                         )
@@ -124,27 +128,40 @@ def _load_entries(
 
 def _group_entries(
     entries: List[Dict[str, str]],
-) -> Dict[datetime, List[Dict[str, str]]]:
-    grouped: Dict[datetime, List[Dict[str, str]]] = defaultdict(list)
+) -> Dict[str, List[Dict[str, str]]]:
+    """Group entries by segment key.
+
+    Returns dict mapping segment_key to list of entries for that segment.
+    """
+    grouped: Dict[str, List[Dict[str, str]]] = defaultdict(list)
     for e in entries:
-        ts = e["timestamp"]
-        interval = ts.replace(
-            minute=ts.minute - (ts.minute % 5), second=0, microsecond=0
-        )
-        grouped[interval].append(e)
+        grouped[e["segment_key"]].append(e)
     return grouped
 
 
-def _groups_to_markdown(groups: Dict[datetime, List[Dict[str, str]]]) -> str:
+def _groups_to_markdown(groups: Dict[str, List[Dict[str, str]]]) -> str:
+    """Render grouped entries as markdown with segment-based headers."""
     lines: List[str] = []
-    for interval_start in sorted(groups.keys()):
-        interval_end = interval_start + timedelta(minutes=5)
+
+    # Sort by segment start time (entries within each group have same segment_start)
+    def sort_key(segment_key: str) -> datetime:
+        entries = groups[segment_key]
+        return entries[0]["segment_start"] if entries else datetime.min
+
+    for segment_key in sorted(groups.keys(), key=sort_key):
+        segment_entries = groups[segment_key]
+        if not segment_entries:
+            continue
+
+        # Use segment times from first entry (all entries in group share same segment)
+        segment_start = segment_entries[0]["segment_start"]
+        segment_end = segment_entries[0]["segment_end"]
         lines.append(
-            f"## {interval_start.strftime('%Y-%m-%d %H:%M')} - {interval_end.strftime('%H:%M')}"
+            f"## {segment_start.strftime('%Y-%m-%d %H:%M:%S')} - {segment_end.strftime('%H:%M:%S')}"
         )
         lines.append("")
 
-        for entry in groups[interval_start]:
+        for entry in segment_entries:
             if entry["prefix"] == "audio":
                 lines.append("### Audio Transcript")
                 lines.append(entry["content"].strip())
@@ -155,17 +172,6 @@ def _groups_to_markdown(groups: Dict[datetime, List[Dict[str, str]]]) -> str:
                 lines.append("")
             elif entry["prefix"] == "screen_frames":
                 lines.append("### Screen Activity")
-                lines.append(entry["content"].strip())
-                lines.append("")
-            else:
-                src = entry.get("source") or entry["prefix"]
-                ident = entry.get("id") or entry.get("monitor")
-                title = (
-                    f"{src.capitalize()} {ident}"
-                    if ident is not None
-                    else src.capitalize()
-                )
-                lines.append(f"### {title} {entry['timestamp'].strftime('%H:%M:%S')}")
                 lines.append(entry["content"].strip())
                 lines.append("")
 
@@ -377,13 +383,22 @@ def _load_entries_from_segment(
     # Extract day and time from segment directory path
     day_dir = segment_path.parent
     date_str = _date_str(str(day_dir))
-    segment_name = segment_path.name
+    segment_key = segment_path.name
 
     from think.utils import segment_parse
 
-    start_time, _ = segment_parse(segment_name)
+    start_time, end_time = segment_parse(segment_key)
     if not start_time:
         return entries
+
+    # Compute segment times
+    day_date = datetime.strptime(date_str, "%Y%m%d").date()
+    segment_start = datetime.combine(day_date, start_time)
+    if end_time:
+        segment_end = datetime.combine(day_date, end_time)
+    else:
+        # Default to start + 5 minutes if no duration
+        segment_end = segment_start + timedelta(minutes=5)
 
     # Process audio transcripts
     if audio:
@@ -401,17 +416,15 @@ def _load_entries_from_segment(
                 )
                 continue
 
-            day_date = datetime.strptime(date_str, "%Y%m%d").date()
-            timestamp = datetime.combine(day_date, start_time)
             entries.append(
                 {
-                    "timestamp": timestamp,
+                    "timestamp": segment_start,
+                    "segment_key": segment_key,
+                    "segment_start": segment_start,
+                    "segment_end": segment_end,
                     "prefix": "audio",
                     "content": formatted_text,
-                    "monitor": None,
-                    "source": None,
-                    "id": None,
-                    "name": f"{segment_name}/{audio_file.name}",
+                    "name": f"{segment_key}/{audio_file.name}",
                 }
             )
 
@@ -421,17 +434,15 @@ def _load_entries_from_segment(
         if screen_md.exists():
             try:
                 content = screen_md.read_text()
-                day_date = datetime.strptime(date_str, "%Y%m%d").date()
-                timestamp = datetime.combine(day_date, start_time)
                 entries.append(
                     {
-                        "timestamp": timestamp,
+                        "timestamp": segment_start,
+                        "segment_key": segment_key,
+                        "segment_start": segment_start,
+                        "segment_end": segment_end,
                         "prefix": "screen",
                         "content": content,
-                        "monitor": None,
-                        "source": None,
-                        "id": None,
-                        "name": f"{segment_name}/screen.md",
+                        "name": f"{segment_key}/screen.md",
                     }
                 )
             except Exception as e:
@@ -444,17 +455,15 @@ def _load_entries_from_segment(
                 # Use formatter to get proper markdown instead of raw JSON
                 content = format_screen_text(screen_jsonl)
                 if content:
-                    day_date = datetime.strptime(date_str, "%Y%m%d").date()
-                    timestamp = datetime.combine(day_date, start_time)
                     entries.append(
                         {
-                            "timestamp": timestamp,
+                            "timestamp": segment_start,
+                            "segment_key": segment_key,
+                            "segment_start": segment_start,
+                            "segment_end": segment_end,
                             "prefix": "screen_frames",
                             "content": content,
-                            "monitor": None,
-                            "source": None,
-                            "id": None,
-                            "name": f"{segment_name}/screen.jsonl",
+                            "name": f"{segment_key}/screen.jsonl",
                         }
                     )
             except Exception as e:
@@ -467,6 +476,16 @@ def _load_entries_from_segment(
     return entries
 
 
+def _segments_overlap(
+    seg_start: datetime, seg_end: datetime, range_start: datetime, range_end: datetime
+) -> bool:
+    """Check if a segment overlaps with a time range.
+
+    Returns True if any part of the segment falls within the range.
+    """
+    return seg_start < range_end and seg_end > range_start
+
+
 def cluster_range(
     day: str,
     start: str,
@@ -474,7 +493,11 @@ def cluster_range(
     audio: bool = True,
     screen: Optional[str] = "summary",
 ) -> str:
-    """Return markdown for ``day`` limited to ``start``-``end`` (HHMMSS)."""
+    """Return markdown for ``day`` limited to ``start``-``end`` (HHMMSS).
+
+    Includes any segment that overlaps with the requested time range,
+    even if only partially.
+    """
 
     if screen is not None and screen not in {"summary", "raw"}:
         raise ValueError("screen must be 'summary', 'raw', or None")
@@ -485,14 +508,19 @@ def cluster_range(
     end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
 
     entries = _load_entries(day_dir, audio, screen)
-    entries = [e for e in entries if start_dt <= e["timestamp"] < end_dt]
+    # Include segments that overlap with the requested range
+    entries = [
+        e
+        for e in entries
+        if _segments_overlap(e["segment_start"], e["segment_end"], start_dt, end_dt)
+    ]
     groups = _group_entries(entries)
     return _groups_to_markdown(groups)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate a Markdown report for a day's JSON files grouped by 5-minute intervals."
+        description="Generate a Markdown report for a day's JSON files grouped by recording segments."
     )
     parser.add_argument(
         "day",

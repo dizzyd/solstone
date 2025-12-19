@@ -2,7 +2,7 @@
 
 ## Objective
 
-Analyze the full workday transcript to identify embryonic ideas, innovation sparks, and potential business opportunities that emerge throughout the day. The transcript combines audio conversations and screen activity in 5-minute segments.
+Analyze the full workday transcript to identify embryonic ideas, innovation sparks, and potential business opportunities that emerge throughout the day. The transcript combines audio conversations and screen activity organized by recording segments.
 
 ## Discovery Framework
 

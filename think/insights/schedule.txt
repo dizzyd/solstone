@@ -1,6 +1,6 @@
 # Future Schedule Extraction
 
-**Input:** A markdown file containing chronologically ordered transcripts of a workday. The transcript combines audio recordings and screen activity in 5-minute segments.
+**Input:** A markdown file containing chronologically ordered transcripts of a workday. The transcript combines audio recordings and screen activity organized by recording segments.
 
 **Objective:** Identify and extract all future scheduled events and calendar entries visible or mentioned throughout the day. Focus exclusively on events scheduled for dates beyond today - not current day or historical events.
 

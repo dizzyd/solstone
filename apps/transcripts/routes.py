@@ -89,23 +89,9 @@ def transcript_content(day: str) -> Any:
         markdown_text = cluster_range(day, start, end, audio=True, screen="summary")
     elif audio_enabled:
         # Audio only - exclude screen content
-        from think.cluster import (
-            _date_str,
-            _group_entries,
-            _groups_to_markdown,
-            _load_entries,
-            day_path,
-        )
+        from think.cluster import cluster_range
 
-        day_dir = str(day_path(day))
-        date_str = _date_str(day_dir)
-        start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
-        end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
-
-        entries = _load_entries(day_dir, audio=True, screen_mode=None)
-        entries = [e for e in entries if start_dt <= e["timestamp"] < end_dt]
-        groups = _group_entries(entries)
-        markdown_text = _groups_to_markdown(groups)
+        markdown_text = cluster_range(day, start, end, audio=True, screen=None)
     else:
         # Screen only
         from think.cluster import cluster_range
@@ -139,7 +125,7 @@ def raw_files(day: str) -> Any:
 
     file_type = request.args.get("type", None)
 
-    from think.cluster import _date_str, _load_entries
+    from think.cluster import _date_str, _load_entries, _segments_overlap
 
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
@@ -158,7 +144,7 @@ def raw_files(day: str) -> Any:
 
     files = []
     for e in entries:
-        if start_dt <= e["timestamp"] < end_dt:
+        if _segments_overlap(e["segment_start"], e["segment_end"], start_dt, end_dt):
             minutes = e["timestamp"].hour * 60 + e["timestamp"].minute
             file_type_str = "audio" if e["prefix"] == "audio" else "screen"
             files.append(
@@ -187,7 +173,7 @@ def media_files(day: str) -> Any:
 
     file_type = request.args.get("type", None)
 
-    from think.cluster import _date_str, _load_entries
+    from think.cluster import _date_str, _load_entries, _segments_overlap
 
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
@@ -206,7 +192,7 @@ def media_files(day: str) -> Any:
 
     media = []
     for e in entries:
-        if start_dt <= e["timestamp"] < end_dt:
+        if _segments_overlap(e["segment_start"], e["segment_end"], start_dt, end_dt):
             try:
                 rel_path, mime_type, metadata = get_raw_file(day, e["name"])
                 file_url = f"/app/transcripts/api/serve_file/{day}/{rel_path.replace('/', '__')}"
@@ -275,7 +261,7 @@ def download_audio(day: str) -> Any:
 
     from flask import send_file
 
-    from think.cluster import _date_str, _load_entries
+    from think.cluster import _date_str, _load_entries, _segments_overlap
     from think.utils import get_raw_file
 
     day_dir = str(day_path(day))
@@ -290,7 +276,9 @@ def download_audio(day: str) -> Any:
 
     audio_files = []
     for e in entries:
-        if e.get("prefix") == "audio" and start_dt <= e["timestamp"] < end_dt:
+        if e.get("prefix") == "audio" and _segments_overlap(
+            e["segment_start"], e["segment_end"], start_dt, end_dt
+        ):
             try:
                 rel_path, mime_type, metadata = get_raw_file(day, e["name"])
                 flac_path = os.path.join(day_dir, rel_path)
