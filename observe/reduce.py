@@ -222,6 +222,34 @@ def assemble_markdown(
     return "\n".join(parts)
 
 
+def format_screen_text(jsonl_path: Path) -> str:
+    """Format screen.jsonl to markdown text.
+
+    Convenience wrapper that loads and formats a screen.jsonl file,
+    returning concatenated markdown. Parallel to observe.hear's
+    _format_transcript_entries().
+
+    Parameters
+    ----------
+    jsonl_path : Path
+        Path to screen.jsonl file
+
+    Returns
+    -------
+    str
+        Formatted markdown document
+    """
+    from observe.utils import load_analysis_frames
+
+    frames = load_analysis_frames(jsonl_path)
+    if not frames:
+        return ""
+
+    return assemble_markdown(
+        frames, video_path=jsonl_path, include_entity_context=False
+    )
+
+
 def call_gemini_with_retry(
     markdown: str, prompt: str, max_retries: int = 3
 ) -> str | None:

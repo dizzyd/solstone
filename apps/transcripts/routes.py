@@ -102,12 +102,8 @@ def transcript_content(day: str) -> Any:
         start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
         end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
 
-        entries = _load_entries(day_dir, True, "raw")
-        entries = [
-            e
-            for e in entries
-            if e.get("prefix") == "audio" and start_dt <= e["timestamp"] < end_dt
-        ]
+        entries = _load_entries(day_dir, audio=True, screen_mode=None)
+        entries = [e for e in entries if start_dt <= e["timestamp"] < end_dt]
         groups = _group_entries(entries)
         markdown_text = _groups_to_markdown(groups)
     else:

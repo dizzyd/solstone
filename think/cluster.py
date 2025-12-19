@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import re
 import sys
@@ -8,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from observe.utils import load_analysis_frames
+from observe.reduce import format_screen_text
 
 from .utils import day_path, setup_cli
 
@@ -97,25 +96,20 @@ def _load_entries(
             screen_jsonl = item / "screen.jsonl"
             if screen_jsonl.exists():
                 try:
-                    # Use shared loading logic from observe module
-                    frames = load_analysis_frames(screen_jsonl)
-
-                    # Sort frames by timestamp
-                    frames.sort(key=lambda f: f.get("timestamp", 0))
-
-                    # Create one entry with all frames as JSON content
-                    if frames:
+                    # Use formatter to get proper markdown instead of raw JSON
+                    content = format_screen_text(screen_jsonl)
+                    if content:
                         day_date = datetime.strptime(date_str, "%Y%m%d").date()
                         base_timestamp = datetime.combine(day_date, start_time)
                         entries.append(
                             {
                                 "timestamp": base_timestamp,
-                                "prefix": "screen_jsonl",
-                                "content": json.dumps(frames, indent=2),
+                                "prefix": "screen_frames",
+                                "content": content,
                                 "monitor": None,
                                 "source": None,
                                 "id": None,
-                                "name": f"{time_part}/screen.jsonl",
+                                "name": f"{item.name}/screen.jsonl",
                             }
                         )
                 except Exception as e:  # pragma: no cover - warning only
@@ -157,15 +151,11 @@ def _groups_to_markdown(groups: Dict[datetime, List[Dict[str, str]]]) -> str:
                 lines.append("")
             elif entry["prefix"] == "screen":
                 lines.append("### Screen Activity Summary")
-                lines.append('"""')
                 lines.append(entry["content"].strip())
-                lines.append('"""')
                 lines.append("")
-            elif entry["prefix"] == "screen_jsonl":
-                lines.append("### Screen Activity (JSONL)")
-                lines.append("```json")
+            elif entry["prefix"] == "screen_frames":
+                lines.append("### Screen Activity")
                 lines.append(entry["content"].strip())
-                lines.append("```")
                 lines.append("")
             else:
                 src = entry.get("source") or entry["prefix"]
@@ -176,9 +166,7 @@ def _groups_to_markdown(groups: Dict[datetime, List[Dict[str, str]]]) -> str:
                     else src.capitalize()
                 )
                 lines.append(f"### {title} {entry['timestamp'].strftime('%H:%M:%S')}")
-                lines.append("```json")
                 lines.append(entry["content"].strip())
-                lines.append("```")
                 lines.append("")
 
     return "\n".join(lines)
@@ -310,8 +298,6 @@ def cluster_segments(day: str) -> List[Dict[str, any]]:
             end_str = end_time.strftime("%H:%M")
         else:
             # Default to start + 5 minutes if no duration
-            from datetime import timedelta
-
             end_dt = datetime.combine(datetime.min, start_time) + timedelta(minutes=5)
             end_str = end_dt.strftime("%H:%M")
 
@@ -455,17 +441,16 @@ def _load_entries_from_segment(
         screen_jsonl = segment_path / "screen.jsonl"
         if screen_jsonl.exists():
             try:
-                frames = load_analysis_frames(screen_jsonl)
-                frames.sort(key=lambda f: f.get("timestamp", 0))
-
-                if frames:
+                # Use formatter to get proper markdown instead of raw JSON
+                content = format_screen_text(screen_jsonl)
+                if content:
                     day_date = datetime.strptime(date_str, "%Y%m%d").date()
                     timestamp = datetime.combine(day_date, start_time)
                     entries.append(
                         {
                             "timestamp": timestamp,
-                            "prefix": "screen_jsonl",
-                            "content": json.dumps(frames, indent=2),
+                            "prefix": "screen_frames",
+                            "content": content,
                             "monitor": None,
                             "source": None,
                             "id": None,
@@ -503,43 +488,6 @@ def cluster_range(
     entries = [e for e in entries if start_dt <= e["timestamp"] < end_dt]
     groups = _group_entries(entries)
     return _groups_to_markdown(groups)
-
-
-def cluster_files(
-    day: str, start: str, end: str, type: Optional[str] = None
-) -> List[str]:
-    """Return raw audio and screen transcript contents for ``day`` in ``start``-``end`` (HHMMSS).
-
-    Args:
-        day: Day in YYYYMMDD format
-        start: Start time in HHMMSS format
-        end: End time in HHMMSS format
-        type: Filter by content type - 'audio', 'screen', or None for both
-
-    Returns:
-        List of strings containing the raw JSON/markdown content for each matching file,
-        ordered chronologically.
-    """
-    if type is not None and type not in {"audio", "screen"}:
-        raise ValueError("type must be 'audio', 'screen', or None")
-
-    day_dir = str(day_path(day))
-    date_str = _date_str(day_dir)
-    start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
-    end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
-
-    # Determine loading parameters based on type filter
-    if type == "audio":
-        entries = _load_entries(day_dir, audio=True, screen_mode=None)
-    elif type == "screen":
-        entries = _load_entries(day_dir, audio=False, screen_mode="raw")
-    else:  # type is None - load both
-        entries = _load_entries(day_dir, audio=True, screen_mode="raw")
-
-    # Filter to the requested window and return the raw contents.
-    return [
-        e["content"].strip() for e in entries if start_dt <= e["timestamp"] < end_dt
-    ]
 
 
 def main():

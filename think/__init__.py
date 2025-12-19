@@ -3,7 +3,7 @@ from .detect_transcript import detect_transcript_json, detect_transcript_segment
 from .planner import generate_plan
 from .sunstone import main as sunstone_main
 
-# Cluster imports removed to avoid heavy dependencies (observe.utils, skimage, etc.)
+# Cluster functions not re-exported here to avoid circular imports
 # Import directly from think.cluster where needed
 
 __all__ = [
