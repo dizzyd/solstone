@@ -935,7 +935,7 @@ async def handle_daily_tasks(last_day: datetime.date) -> datetime.date:
 
 
 def _handle_segment_observed(message: dict) -> None:
-    """Handle segment completion events from observe tract."""
+    """Handle segment completion events (from live observation or imports)."""
     if message.get("tract") != "observe" or message.get("event") != "observed":
         return
 
@@ -944,8 +944,8 @@ def _handle_segment_observed(message: dict) -> None:
         logging.warning("observed event missing segment field")
         return
 
-    # Extract day from current date (segment observed on same day)
-    day = datetime.now().strftime("%Y%m%d")
+    # Use day from event payload, fallback to today (for live observation)
+    day = message.get("day") or datetime.now().strftime("%Y%m%d")
 
     logging.info(f"Segment observed: {day}/{segment}, spawning processing...")
 

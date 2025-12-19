@@ -25,7 +25,13 @@ from think.detect_transcript import detect_transcript_json, detect_transcript_se
 from think.facets import get_facets
 from think.importer_utils import save_import_file, write_import_metadata
 from think.models import GEMINI_FLASH, gemini_generate
-from think.utils import PromptNotFoundError, day_path, load_prompt, setup_cli
+from think.utils import (
+    PromptNotFoundError,
+    day_path,
+    load_prompt,
+    segment_key,
+    setup_cli,
+)
 
 try:
     from pypdf import PdfReader
@@ -827,8 +833,9 @@ def main() -> None:
         print("Starting import...")
 
     base_dt = dt.datetime.strptime(args.timestamp, "%Y%m%d_%H%M%S")
+    day = base_dt.strftime("%Y%m%d")
     logger.info(f"Using provided timestamp: {args.timestamp}")
-    day_dir = str(day_path(base_dt.strftime("%Y%m%d")))
+    day_dir = str(day_path(day))
 
     # Initialize importer tract state
     _import_id = args.timestamp
@@ -854,7 +861,7 @@ def main() -> None:
         import_id=_import_id,
         input_file=os.path.basename(args.media),
         file_type=ext.lstrip("."),
-        day=base_dt.strftime("%Y%m%d"),
+        day=day,
         facet=args.facet,
         setting=args.setting,
         options={
@@ -1013,6 +1020,25 @@ def main() -> None:
             except Exception as e:
                 logger.warning(f"Failed to update import metadata: {e}")
 
+        # Extract segment names from created transcript files for event emission
+        # Path format: YYYYMMDD/HHMMSS_300/imported_audio.jsonl
+        created_segments = []
+        for file_path in audio_transcript_files:
+            seg = segment_key(file_path)
+            if seg and seg not in created_segments:
+                created_segments.append(seg)
+
+        # Emit observe.observed events for each segment to trigger segment processing
+        # This allows segment insights (think-dream --segment) to run in parallel with summary
+        for seg in created_segments:
+            _callosum.emit(
+                "observe",
+                "observed",
+                segment=seg,
+                day=day,
+            )
+            logger.info(f"Emitted observe.observed for segment: {day}/{seg}")
+
         # Create Gemini Pro summary if requested and audio transcripts were created
         if args.summarize and audio_transcript_files:
             # Set stage for summarization
@@ -1042,6 +1068,7 @@ def main() -> None:
             output_files=output_files_relative,
             metadata_file=metadata_file_relative,
             stages_run=_stages_run,
+            segments=created_segments,
         )
 
     except Exception as e:
