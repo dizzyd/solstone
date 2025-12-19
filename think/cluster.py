@@ -19,108 +19,130 @@ def _date_str(day_dir: str) -> str:
     return base
 
 
-def _load_entries(
-    day_dir: str, audio: bool, screen_mode: Optional[str]
+def _process_segment(
+    segment_path: Path,
+    date_str: str,
+    audio: bool,
+    screen_mode: Optional[str],
 ) -> List[Dict[str, str]]:
-    date_str = _date_str(day_dir)
-    entries: List[Dict[str, str]] = []
-    day_path_obj = Path(day_dir)
+    """Process a single segment directory and return entries.
 
-    # Check timestamp subdirectories for transcript files
+    Args:
+        segment_path: Path to segment directory
+        date_str: Date in YYYYMMDD format
+        audio: Whether to load audio transcripts
+        screen_mode: "summary" for screen.md, "raw" for screen.jsonl, None to skip
+
+    Returns:
+        List of entry dicts with timestamp, segment_key, prefix, content, name, etc.
+    """
     from think.utils import segment_parse
 
-    for item in day_path_obj.iterdir():
-        start_time, end_time = segment_parse(item.name)
-        if not (item.is_dir() and start_time):
-            continue
+    entries: List[Dict[str, str]] = []
 
-        # Compute segment key and end time for grouping
-        segment_key = item.name
-        day_date = datetime.strptime(date_str, "%Y%m%d").date()
-        segment_start = datetime.combine(day_date, start_time)
-        if end_time:
-            segment_end = datetime.combine(day_date, end_time)
-        else:
-            # Default to start + 5 minutes if no duration
-            segment_end = segment_start + timedelta(minutes=5)
+    start_time, end_time = segment_parse(segment_path.name)
+    if not start_time:
+        return entries
 
-        # Process audio transcripts
-        if audio:
-            # Check for audio.jsonl or split audio files
-            audio_files = [f for f in item.glob("*audio.jsonl") if f.is_file()]
-            for audio_file in audio_files:
-                # Load JSONL format using shared utility
-                from observe.hear import load_transcript
+    # Compute segment times
+    segment_key = segment_path.name
+    day_date = datetime.strptime(date_str, "%Y%m%d").date()
+    segment_start = datetime.combine(day_date, start_time)
+    if end_time:
+        segment_end = datetime.combine(day_date, end_time)
+    else:
+        # Default to start + 5 minutes if no duration
+        segment_end = segment_start + timedelta(minutes=5)
 
-                metadata, transcript_entries, formatted_text = load_transcript(
-                    str(audio_file)
+    # Process audio transcripts
+    if audio:
+        audio_files = [f for f in segment_path.glob("*audio.jsonl") if f.is_file()]
+        for audio_file in audio_files:
+            from observe.hear import load_transcript
+
+            metadata, transcript_entries, formatted_text = load_transcript(
+                str(audio_file)
+            )
+            if transcript_entries is None:
+                print(
+                    f"Warning: Could not load transcript {audio_file.name}: {metadata.get('error')}",
+                    file=sys.stderr,
                 )
-                if transcript_entries is None:
-                    print(
-                        f"Warning: Could not load transcript {audio_file.name}: {metadata.get('error')}",
-                        file=sys.stderr,
-                    )
-                    continue
+                continue
 
-                # Use formatted text for human-readable display
+            entries.append(
+                {
+                    "timestamp": segment_start,
+                    "segment_key": segment_key,
+                    "segment_start": segment_start,
+                    "segment_end": segment_end,
+                    "prefix": "audio",
+                    "content": formatted_text,
+                    "name": f"{segment_path.name}/{audio_file.name}",
+                }
+            )
+
+    # Process screen summaries or transcripts
+    if screen_mode == "summary":
+        screen_md = segment_path / "screen.md"
+        if screen_md.exists():
+            try:
+                content = screen_md.read_text()
                 entries.append(
                     {
                         "timestamp": segment_start,
                         "segment_key": segment_key,
                         "segment_start": segment_start,
                         "segment_end": segment_end,
-                        "prefix": "audio",
-                        "content": formatted_text,
-                        "name": f"{item.name}/{audio_file.name}",
+                        "prefix": "screen",
+                        "content": content,
+                        "name": f"{segment_path.name}/screen.md",
                     }
                 )
+            except Exception as e:
+                print(f"Warning: Could not read file screen.md: {e}", file=sys.stderr)
 
-        # Process screen summaries or transcripts
-        if screen_mode == "summary":
-            screen_md = item / "screen.md"
-            if screen_md.exists():
-                try:
-                    content = screen_md.read_text()
+    elif screen_mode == "raw":
+        screen_jsonl = segment_path / "screen.jsonl"
+        if screen_jsonl.exists():
+            try:
+                content = format_screen_text(screen_jsonl)
+                if content:
                     entries.append(
                         {
                             "timestamp": segment_start,
                             "segment_key": segment_key,
                             "segment_start": segment_start,
                             "segment_end": segment_end,
-                            "prefix": "screen",
+                            "prefix": "screen_frames",
                             "content": content,
-                            "name": f"{item.name}/screen.md",
+                            "name": f"{segment_path.name}/screen.jsonl",
                         }
                     )
-                except Exception as e:
-                    print(
-                        f"Warning: Could not read file screen.md: {e}", file=sys.stderr
-                    )
+            except Exception as e:  # pragma: no cover - warning only
+                print(
+                    f"Warning: Could not read JSONL file screen.jsonl: {e}",
+                    file=sys.stderr,
+                )
 
-        elif screen_mode == "raw":
-            # Check for screen.jsonl
-            screen_jsonl = item / "screen.jsonl"
-            if screen_jsonl.exists():
-                try:
-                    # Use formatter to get proper markdown instead of raw JSON
-                    content = format_screen_text(screen_jsonl)
-                    if content:
-                        entries.append(
-                            {
-                                "timestamp": segment_start,
-                                "segment_key": segment_key,
-                                "segment_start": segment_start,
-                                "segment_end": segment_end,
-                                "prefix": "screen_frames",
-                                "content": content,
-                                "name": f"{item.name}/screen.jsonl",
-                            }
-                        )
-                except Exception as e:  # pragma: no cover - warning only
-                    print(
-                        f"Warning: Could not read JSONL file screen.jsonl: {e}",
-                        file=sys.stderr,
-                    )
+    return entries
+
+
+def _load_entries(
+    day_dir: str, audio: bool, screen_mode: Optional[str]
+) -> List[Dict[str, str]]:
+    """Load all transcript entries from a day directory."""
+    from think.utils import segment_parse
+
+    date_str = _date_str(day_dir)
+    entries: List[Dict[str, str]] = []
+    day_path_obj = Path(day_dir)
+
+    for item in day_path_obj.iterdir():
+        start_time, _ = segment_parse(item.name)
+        if not (item.is_dir() and start_time):
+            continue
+        entries.extend(_process_segment(item, date_str, audio, screen_mode))
 
     entries.sort(key=lambda e: e["timestamp"])
     return entries
@@ -378,100 +400,8 @@ def _load_entries_from_segment(
         List of entry dicts with timestamp, prefix, content, etc.
     """
     segment_path = Path(segment_dir)
-    entries: List[Dict[str, str]] = []
-
-    # Extract day and time from segment directory path
-    day_dir = segment_path.parent
-    date_str = _date_str(str(day_dir))
-    segment_key = segment_path.name
-
-    from think.utils import segment_parse
-
-    start_time, end_time = segment_parse(segment_key)
-    if not start_time:
-        return entries
-
-    # Compute segment times
-    day_date = datetime.strptime(date_str, "%Y%m%d").date()
-    segment_start = datetime.combine(day_date, start_time)
-    if end_time:
-        segment_end = datetime.combine(day_date, end_time)
-    else:
-        # Default to start + 5 minutes if no duration
-        segment_end = segment_start + timedelta(minutes=5)
-
-    # Process audio transcripts
-    if audio:
-        audio_files = [f for f in segment_path.glob("*audio.jsonl") if f.is_file()]
-        for audio_file in audio_files:
-            from observe.hear import load_transcript
-
-            metadata, transcript_entries, formatted_text = load_transcript(
-                str(audio_file)
-            )
-            if transcript_entries is None:
-                print(
-                    f"Warning: Could not load transcript {audio_file.name}: {metadata.get('error')}",
-                    file=sys.stderr,
-                )
-                continue
-
-            entries.append(
-                {
-                    "timestamp": segment_start,
-                    "segment_key": segment_key,
-                    "segment_start": segment_start,
-                    "segment_end": segment_end,
-                    "prefix": "audio",
-                    "content": formatted_text,
-                    "name": f"{segment_key}/{audio_file.name}",
-                }
-            )
-
-    # Process screen summaries or transcripts
-    if screen_mode == "summary":
-        screen_md = segment_path / "screen.md"
-        if screen_md.exists():
-            try:
-                content = screen_md.read_text()
-                entries.append(
-                    {
-                        "timestamp": segment_start,
-                        "segment_key": segment_key,
-                        "segment_start": segment_start,
-                        "segment_end": segment_end,
-                        "prefix": "screen",
-                        "content": content,
-                        "name": f"{segment_key}/screen.md",
-                    }
-                )
-            except Exception as e:
-                print(f"Warning: Could not read file screen.md: {e}", file=sys.stderr)
-
-    elif screen_mode == "raw":
-        screen_jsonl = segment_path / "screen.jsonl"
-        if screen_jsonl.exists():
-            try:
-                # Use formatter to get proper markdown instead of raw JSON
-                content = format_screen_text(screen_jsonl)
-                if content:
-                    entries.append(
-                        {
-                            "timestamp": segment_start,
-                            "segment_key": segment_key,
-                            "segment_start": segment_start,
-                            "segment_end": segment_end,
-                            "prefix": "screen_frames",
-                            "content": content,
-                            "name": f"{segment_key}/screen.jsonl",
-                        }
-                    )
-            except Exception as e:
-                print(
-                    f"Warning: Could not read JSONL file screen.jsonl: {e}",
-                    file=sys.stderr,
-                )
-
+    date_str = _date_str(str(segment_path.parent))
+    entries = _process_segment(segment_path, date_str, audio, screen_mode)
     entries.sort(key=lambda e: e["timestamp"])
     return entries
 
@@ -516,6 +446,54 @@ def cluster_range(
     ]
     groups = _group_entries(entries)
     return _groups_to_markdown(groups)
+
+
+def get_entries_for_range(
+    day: str,
+    start: str,
+    end: str,
+    audio: bool = True,
+    screen: Optional[str] = "raw",
+) -> List[Dict[str, str]]:
+    """Return filtered transcript entries for a time range.
+
+    Public API for routes/tools that need raw entry data (not markdown).
+    Returns entries with metadata for further processing (e.g., media file lookup).
+
+    Args:
+        day: Day in YYYYMMDD format
+        start: Start time in HHMMSS format
+        end: End time in HHMMSS format
+        audio: Whether to include audio transcripts
+        screen: "summary" for screen.md, "raw" for screen.jsonl, None to skip
+
+    Returns:
+        List of entry dicts with keys:
+        - timestamp: datetime of segment start
+        - segment_key: segment directory name
+        - segment_start: datetime of segment start
+        - segment_end: datetime of segment end
+        - prefix: "audio", "screen", or "screen_frames"
+        - content: formatted transcript text
+        - name: relative path like "HHMMSS_LEN/audio.jsonl"
+    """
+    if screen is not None and screen not in {"summary", "raw"}:
+        raise ValueError("screen must be 'summary', 'raw', or None")
+
+    day_dir = str(day_path(day))
+    if not os.path.isdir(day_dir):
+        return []
+
+    date_str = _date_str(day_dir)
+    start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
+    end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
+
+    entries = _load_entries(day_dir, audio, screen)
+    return [
+        e
+        for e in entries
+        if _segments_overlap(e["segment_start"], e["segment_end"], start_dt, end_dt)
+    ]
 
 
 def main():

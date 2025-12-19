@@ -110,60 +110,13 @@ def transcript_content(day: str) -> Any:
     return jsonify({"html": html_output})
 
 
-@transcripts_bp.route("/api/raw_files/<day>")
-def raw_files(day: str) -> Any:
-    """Return raw file timestamps for the selected range."""
-    if not re.fullmatch(DATE_RE.pattern, day):
-        return "", 404
-
-    from think.utils import segment_key
-
-    start = request.args.get("start", "")
-    end = request.args.get("end", "")
-    if not segment_key(start) or not segment_key(end):
-        return "", 400
-
-    file_type = request.args.get("type", None)
-
-    from think.cluster import _date_str, _load_entries, _segments_overlap
-
-    day_dir = str(day_path(day))
-    if not os.path.isdir(day_dir):
-        return jsonify({"files": []})
-
-    date_str = _date_str(day_dir)
-    start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
-    end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
-
-    if file_type == "audio":
-        entries = _load_entries(day_dir, audio=True, screen_mode=None)
-    elif file_type == "screen":
-        entries = _load_entries(day_dir, audio=False, screen_mode="raw")
-    else:
-        entries = _load_entries(day_dir, audio=True, screen_mode="raw")
-
-    files = []
-    for e in entries:
-        if _segments_overlap(e["segment_start"], e["segment_end"], start_dt, end_dt):
-            minutes = e["timestamp"].hour * 60 + e["timestamp"].minute
-            file_type_str = "audio" if e["prefix"] == "audio" else "screen"
-            files.append(
-                {
-                    "minute": minutes,
-                    "type": file_type_str,
-                    "time": e["timestamp"].strftime("%H:%M:%S"),
-                }
-            )
-
-    return jsonify({"files": files})
-
-
 @transcripts_bp.route("/api/media_files/<day>")
 def media_files(day: str) -> Any:
     """Return actual media files for embedding in the selected range."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
+    from think.cluster import get_entries_for_range
     from think.utils import get_raw_file, segment_key
 
     start = request.args.get("start", "")
@@ -173,45 +126,36 @@ def media_files(day: str) -> Any:
 
     file_type = request.args.get("type", None)
 
-    from think.cluster import _date_str, _load_entries, _segments_overlap
-
-    day_dir = str(day_path(day))
-    if not os.path.isdir(day_dir):
-        return jsonify({"media": []})
-
-    date_str = _date_str(day_dir)
-    start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
-    end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
-
     if file_type == "audio":
-        entries = _load_entries(day_dir, audio=True, screen_mode=None)
+        entries = get_entries_for_range(day, start, end, audio=True, screen=None)
     elif file_type == "screen":
-        entries = _load_entries(day_dir, audio=False, screen_mode="raw")
+        entries = get_entries_for_range(day, start, end, audio=False, screen="raw")
     else:
-        entries = _load_entries(day_dir, audio=True, screen_mode="raw")
+        entries = get_entries_for_range(day, start, end, audio=True, screen="raw")
 
     media = []
     for e in entries:
-        if _segments_overlap(e["segment_start"], e["segment_end"], start_dt, end_dt):
-            try:
-                rel_path, mime_type, metadata = get_raw_file(day, e["name"])
-                file_url = f"/app/transcripts/api/serve_file/{day}/{rel_path.replace('/', '__')}"
-                file_type_str = "audio" if e["prefix"] == "audio" else "screen"
-                human_time = e["timestamp"].strftime("%I:%M:%S %p").lstrip("0")
+        try:
+            rel_path, mime_type, metadata = get_raw_file(day, e["name"])
+            file_url = (
+                f"/app/transcripts/api/serve_file/{day}/{rel_path.replace('/', '__')}"
+            )
+            file_type_str = "audio" if e["prefix"] == "audio" else "screen"
+            human_time = e["timestamp"].strftime("%I:%M:%S %p").lstrip("0")
 
-                media.append(
-                    {
-                        "url": file_url,
-                        "type": file_type_str,
-                        "mime_type": mime_type,
-                        "time": e["timestamp"].strftime("%H:%M:%S"),
-                        "human_time": human_time,
-                        "timestamp": e["timestamp"].isoformat(),
-                        "metadata": metadata,
-                    }
-                )
-            except Exception:
-                continue
+            media.append(
+                {
+                    "url": file_url,
+                    "type": file_type_str,
+                    "mime_type": mime_type,
+                    "time": e["timestamp"].strftime("%H:%M:%S"),
+                    "human_time": human_time,
+                    "timestamp": e["timestamp"].isoformat(),
+                    "metadata": metadata,
+                }
+            )
+        except Exception:
+            continue
 
     media.sort(key=lambda x: x["timestamp"])
     return jsonify({"media": media})
@@ -261,24 +205,18 @@ def download_audio(day: str) -> Any:
 
     from flask import send_file
 
-    from think.cluster import _date_str, _load_entries, _segments_overlap
+    from think.cluster import get_entries_for_range
     from think.utils import get_raw_file
 
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
         return jsonify({"error": "Day directory not found"}), 404
 
-    date_str = _date_str(day_dir)
-    start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
-    end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
-
-    entries = _load_entries(day_dir, audio=True, screen_mode=None)
+    entries = get_entries_for_range(day, start, end, audio=True, screen=None)
 
     audio_files = []
     for e in entries:
-        if e.get("prefix") == "audio" and _segments_overlap(
-            e["segment_start"], e["segment_end"], start_dt, end_dt
-        ):
+        if e.get("prefix") == "audio":
             try:
                 rel_path, mime_type, metadata = get_raw_file(day, e["name"])
                 flac_path = os.path.join(day_dir, rel_path)
@@ -290,9 +228,10 @@ def download_audio(day: str) -> Any:
     if not audio_files:
         return jsonify({"error": "No audio files found in the selected range"}), 404
 
-    start_hhmm = start_dt.strftime("%H%M")
-    end_hhmm = end_dt.strftime("%H%M")
-    filename = f"sunstone_{day}_{start_hhmm}-{end_hhmm}.mp3"
+    # Format times for filename and metadata
+    start_dt = datetime.strptime(start, "%H%M%S")
+    end_dt = datetime.strptime(end, "%H%M%S")
+    filename = f"sunstone_{day}_{start[:4]}-{end[:4]}.mp3"
 
     date_obj = datetime.strptime(day, "%Y%m%d")
     date_formatted = date_obj.strftime("%B %d, %Y")
