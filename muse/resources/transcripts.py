@@ -14,7 +14,7 @@ def _get_transcript_resource(
     """Shared handler for all transcript resource modes.
 
     Args:
-        mode: Transcript mode - "full", "audio", or "screen"
+        mode: Transcript mode - "full", "audio", "screen", or "summary"
         day: Day in YYYYMMDD format
         time: Start time in HHMMSS format
         length: Length in minutes for the time range
@@ -43,19 +43,44 @@ def _get_transcript_resource(
         # Configure cluster_range based on mode
         if mode == "full":
             markdown_content = cluster_range(
-                day=day, start=time, end=end_time, audio=True, screen="raw"
+                day=day,
+                start=time,
+                end=end_time,
+                audio=True,
+                screen=True,
+                insights=False,
             )
-            description = f"Full transcripts (audio + raw screen) from {day} starting at {time} for {length} minutes"
+            description = f"Raw audio and screencast transcripts from {day} at {time} for {length} minutes"
         elif mode == "audio":
             markdown_content = cluster_range(
-                day=day, start=time, end=end_time, audio=True, screen=None
+                day=day,
+                start=time,
+                end=end_time,
+                audio=True,
+                screen=False,
+                insights=False,
             )
-            description = f"Audio transcripts only from {day} starting at {time} for {length} minutes"
+            description = f"Raw audio transcripts from {day} at {time} for {length} minutes"
         elif mode == "screen":
             markdown_content = cluster_range(
-                day=day, start=time, end=end_time, audio=False, screen="summary"
+                day=day,
+                start=time,
+                end=end_time,
+                audio=False,
+                screen=True,
+                insights=False,
             )
-            description = f"Screen summaries only from {day} starting at {time} for {length} minutes"
+            description = f"Raw screencast transcripts from {day} at {time} for {length} minutes"
+        elif mode == "summary":
+            markdown_content = cluster_range(
+                day=day,
+                start=time,
+                end=end_time,
+                audio=False,
+                screen=False,
+                insights=True,
+            )
+            description = f"AI-generated summaries from {day} at {time} for {length} minutes"
         else:
             raise ValueError(f"Invalid transcript mode: {mode}")
 
@@ -80,11 +105,10 @@ def _get_transcript_resource(
 
 @mcp.resource("journal://transcripts/full/{day}/{time}/{length}")
 def get_transcripts_full(day: str, time: str, length: str) -> TextResource:
-    """Return full audio and raw screen transcripts for a specific time range.
+    """Return formatted raw audio and screencast transcripts.
 
-    This resource provides both audio transcripts and raw screen diffs for a given
-    time range. The data is organized by recording segments and formatted as
-    markdown. Includes any segment that overlaps with the requested time range.
+    Provides both spoken word transcripts and frame-level screen activity
+    transcriptions. Use this when you need the complete raw capture data.
 
     Args:
         day: Day in YYYYMMDD format
@@ -96,10 +120,10 @@ def get_transcripts_full(day: str, time: str, length: str) -> TextResource:
 
 @mcp.resource("journal://transcripts/audio/{day}/{time}/{length}")
 def get_transcripts_audio(day: str, time: str, length: str) -> TextResource:
-    """Return audio transcripts only for a specific time range.
+    """Return formatted raw audio transcripts only.
 
-    This resource provides audio transcripts without screen data for a given
-    time range. Useful when you only need verbal/audio content.
+    Provides spoken word transcripts from microphone and system audio capture.
+    Use this when you only need what was said, without screen activity.
 
     Args:
         day: Day in YYYYMMDD format
@@ -111,10 +135,10 @@ def get_transcripts_audio(day: str, time: str, length: str) -> TextResource:
 
 @mcp.resource("journal://transcripts/screen/{day}/{time}/{length}")
 def get_transcripts_screen(day: str, time: str, length: str) -> TextResource:
-    """Return screen summaries only for a specific time range.
+    """Return formatted raw screencast transcripts only.
 
-    This resource provides processed screen summaries without audio data for a given
-    time range. Useful when you only need visual activity summaries.
+    Provides frame-level screen activity transcriptions showing what appeared
+    on screen. Use this when you only need visual activity, without audio.
 
     Args:
         day: Day in YYYYMMDD format
@@ -122,3 +146,18 @@ def get_transcripts_screen(day: str, time: str, length: str) -> TextResource:
         length: Length in minutes for the time range
     """
     return _get_transcript_resource("screen", day, time, length)
+
+
+@mcp.resource("journal://transcripts/summary/{day}/{time}/{length}")
+def get_transcripts_summary(day: str, time: str, length: str) -> TextResource:
+    """Return AI-generated summaries and insights.
+
+    Provides processed summaries of screen activity and other observations.
+    Use this for high-level understanding rather than raw transcript data.
+
+    Args:
+        day: Day in YYYYMMDD format
+        time: Start time in HHMMSS format
+        length: Length in minutes for the time range
+    """
+    return _get_transcript_resource("summary", day, time, length)

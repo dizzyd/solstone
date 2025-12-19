@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, url_fo
 
 from convey import state
 from convey.utils import DATE_RE, format_date
+from think.cluster import cluster_range, cluster_scan, cluster_segments
 from think.utils import day_dirs, day_path
 
 transcripts_bp = Blueprint(
@@ -44,8 +45,6 @@ def transcript_ranges(day: str) -> Any:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    from think.cluster import cluster_scan
-
     audio_ranges, screen_ranges = cluster_scan(day)
     return jsonify({"audio": audio_ranges, "screen": screen_ranges})
 
@@ -58,8 +57,6 @@ def transcript_segments(day: str) -> Any:
     """
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-
-    from think.cluster import cluster_segments
 
     segments = cluster_segments(day)
     return jsonify({"segments": segments})
@@ -84,19 +81,18 @@ def transcript_content(day: str) -> Any:
     if not audio_enabled and not screen_enabled:
         markdown_text = "*Please select at least one source (Audio or Screen)*"
     elif audio_enabled and screen_enabled:
-        from think.cluster import cluster_range
-
-        markdown_text = cluster_range(day, start, end, audio=True, screen="summary")
+        markdown_text = cluster_range(
+            day, start, end, audio=True, screen=True, insights=False
+        )
     elif audio_enabled:
-        # Audio only - exclude screen content
-        from think.cluster import cluster_range
-
-        markdown_text = cluster_range(day, start, end, audio=True, screen=None)
+        markdown_text = cluster_range(
+            day, start, end, audio=True, screen=False, insights=False
+        )
     else:
-        # Screen only
-        from think.cluster import cluster_range
-
-        markdown_text = cluster_range(day, start, end, audio=False, screen="summary")
+        # Screen only - raw screencast transcripts
+        markdown_text = cluster_range(
+            day, start, end, audio=False, screen=True, insights=False
+        )
 
     try:
         import markdown
@@ -127,11 +123,11 @@ def media_files(day: str) -> Any:
     file_type = request.args.get("type", None)
 
     if file_type == "audio":
-        entries = get_entries_for_range(day, start, end, audio=True, screen=None)
+        entries = get_entries_for_range(day, start, end, audio=True, screen=False)
     elif file_type == "screen":
-        entries = get_entries_for_range(day, start, end, audio=False, screen="raw")
+        entries = get_entries_for_range(day, start, end, audio=False, screen=True)
     else:
-        entries = get_entries_for_range(day, start, end, audio=True, screen="raw")
+        entries = get_entries_for_range(day, start, end, audio=True, screen=True)
 
     media = []
     for e in entries:
@@ -212,7 +208,7 @@ def download_audio(day: str) -> Any:
     if not os.path.isdir(day_dir):
         return jsonify({"error": "Day directory not found"}), 404
 
-    entries = get_entries_for_range(day, start, end, audio=True, screen=None)
+    entries = get_entries_for_range(day, start, end, audio=True, screen=False)
 
     audio_files = []
     for e in entries:

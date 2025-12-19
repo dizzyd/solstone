@@ -26,9 +26,12 @@ def test_cluster_full(tmp_path, monkeypatch):
     copy_day(tmp_path)
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     md, count = mod.cluster("20240101")
-    assert count == 2
+    # Count: audio.jsonl (1) + audio.md (1) + screen.md (1) = 3 entries
+    assert count == 3
     assert "Audio Transcript" in md
-    assert "Screen Activity Summary" in md
+    # Now uses insight format: "### {stem} summary"
+    assert "### screen summary" in md
+    assert "### audio summary" in md
 
 
 def test_cluster_cli(tmp_path, monkeypatch, capsys):
@@ -38,7 +41,8 @@ def test_cluster_cli(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["cluster", "20240101"])
     mod.main()
     out = capsys.readouterr().out
-    assert "Screen Activity Summary" in out
+    # Now uses insight format: "### {stem} summary"
+    assert "### screen summary" in out
 
 
 def test_cluster_cli_range(tmp_path, monkeypatch, capsys):
@@ -51,4 +55,6 @@ def test_cluster_cli_range(tmp_path, monkeypatch, capsys):
     )
     mod.main()
     out = capsys.readouterr().out
-    assert "Screen Activity Summary" in out
+    # CLI --start/--length uses raw screen data (screen=True)
+    assert "### Screen Activity" in out
+    assert "IDE with auth.py open" in out

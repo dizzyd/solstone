@@ -4,6 +4,7 @@ from think.utils import day_path
 
 
 def test_cluster(tmp_path, monkeypatch):
+    """Test cluster() uses audio and insight summaries (*.md files)."""
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     day_dir = day_path("20240101")
 
@@ -16,10 +17,12 @@ def test_cluster(tmp_path, monkeypatch):
     result, count = mod.cluster("20240101")
     assert count == 2
     assert "Audio Transcript" in result
-    assert "Screen Activity Summary" in result
+    # Now uses insight rendering: "### {stem} summary"
+    assert "screen summary" in result
 
 
 def test_cluster_range(tmp_path, monkeypatch):
+    """Test cluster_range with audio and insights parameters."""
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
     day_dir = day_path("20240101")
 
@@ -31,12 +34,12 @@ def test_cluster_range(tmp_path, monkeypatch):
         '{"start": "00:00:01", "source": "mic", "text": "hi from audio"}\n'
     )
     (day_dir / "120000" / "screen.md").write_text("screen summary content")
-    # Test with summary mode to ensure screen content is included
-    md = mod.cluster_range("20240101", "120000", "120100", audio=True, screen="summary")
+    # Test with insights=True to include *.md files
+    md = mod.cluster_range("20240101", "120000", "120100", audio=True, insights=True)
     # Check that the function works and includes expected sections
     assert "Audio Transcript" in md
-    assert "Screen Activity Summary" in md
-    # The audio might be empty if there are formatting issues, but screen should work
+    # Now uses insight rendering: "### {stem} summary"
+    assert "screen summary" in md
     assert "screen summary content" in md
 
 
@@ -56,13 +59,13 @@ def test_cluster_scan(tmp_path, monkeypatch):
     (day_dir / "110000" / "audio.jsonl").write_text("{}\n")
     # Screen transcripts at 10:01, 10:05, 10:20 and 12:00
     (day_dir / "100101").mkdir()
-    (day_dir / "100101" / "screen.md").write_text("screen")
+    (day_dir / "100101" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
     (day_dir / "100500").mkdir()
-    (day_dir / "100500" / "screen.md").write_text("screen")
+    (day_dir / "100500" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
     (day_dir / "102000").mkdir()
-    (day_dir / "102000" / "screen.md").write_text("screen")
+    (day_dir / "102000" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
     (day_dir / "120000").mkdir()
-    (day_dir / "120000" / "screen.md").write_text("screen")
+    (day_dir / "120000" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
     audio_ranges, screen_ranges = mod.cluster_scan("20240101")
     assert audio_ranges == [("09:00", "09:30"), ("11:00", "11:15")]
     assert screen_ranges == [("10:00", "10:30"), ("12:00", "12:15")]
@@ -82,11 +85,11 @@ def test_cluster_segments(tmp_path, monkeypatch):
     # Create segment with both audio and screen
     (day_dir / "100000_600").mkdir()
     (day_dir / "100000_600" / "audio.jsonl").write_text("{}\n")
-    (day_dir / "100000_600" / "screen.md").write_text("screen")
+    (day_dir / "100000_600" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
 
     # Create segment with only screen
     (day_dir / "110000_300").mkdir()
-    (day_dir / "110000_300" / "screen.md").write_text("screen")
+    (day_dir / "110000_300" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
 
     segments = mod.cluster_segments("20240101")
 
@@ -110,3 +113,102 @@ def test_cluster_segments(tmp_path, monkeypatch):
     assert segments[2]["start"] == "11:00"
     assert segments[2]["end"] == "11:05"
     assert segments[2]["types"] == ["screen"]
+
+
+def test_cluster_period_uses_raw_screen(tmp_path, monkeypatch):
+    """Test cluster_period uses raw screen.jsonl, not insight *.md files."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create segment with both audio and raw screen data
+    segment = day_dir / "100000_300"
+    segment.mkdir()
+    (segment / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"start": "00:00:01", "text": "hello"}\n'
+    )
+    # Raw screen.jsonl with frame analysis (what cluster_period should use)
+    (segment / "screen.jsonl").write_text(
+        '{"raw": "screen.webm"}\n'
+        '{"timestamp": 10, "analysis": {"visible": "code_editor", '
+        '"visual_description": "VS Code with Python file"}}\n'
+    )
+    # Also create screen.md (insight) to verify it's NOT used by cluster_period
+    (segment / "screen.md").write_text("This insight should NOT appear")
+
+    result, count = mod.cluster_period("20240101", "100000_300")
+
+    # Should have both audio and screen entries
+    assert count == 2
+    assert "Audio Transcript" in result
+    # Should use raw screen format header
+    assert "Screen Activity" in result
+    # Raw screen content should be present
+    assert "VS Code with Python file" in result
+    # Insight content should NOT be present (insights=False for cluster_period)
+    assert "This insight should NOT appear" not in result
+
+
+def test_cluster_range_with_insights(tmp_path, monkeypatch):
+    """Test cluster_range with insights=True loads all *.md files."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create segment with multiple insight files
+    segment = day_dir / "100000_300"
+    segment.mkdir()
+    (segment / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"start": "00:00:01", "text": "hello"}\n'
+    )
+    (segment / "screen.md").write_text("Screen activity summary")
+    (segment / "activity.md").write_text("Activity insight content")
+    # Also create screen.jsonl to verify it's NOT used when insights=True, screen=False
+    (segment / "screen.jsonl").write_text(
+        '{"raw": "screen.webm"}\n'
+        '{"timestamp": 10, "analysis": {"visible": "code_editor"}}\n'
+    )
+
+    # Test insights=True returns *.md summaries, not raw screen data
+    result = mod.cluster_range(
+        "20240101", "100000", "100500", audio=True, screen=False, insights=True
+    )
+
+    assert "Audio Transcript" in result
+    # Should include both .md files as insights
+    assert "### screen summary" in result
+    assert "Screen activity summary" in result
+    assert "### activity summary" in result
+    assert "Activity insight content" in result
+    # Should NOT include raw screen data
+    assert "code_editor" not in result
+
+
+def test_cluster_range_with_screen(tmp_path, monkeypatch):
+    """Test cluster_range with screen=True loads raw screen.jsonl data."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create segment with raw screen data and insight file
+    segment = day_dir / "100000_300"
+    segment.mkdir()
+    (segment / "screen.jsonl").write_text(
+        '{"raw": "screen.webm"}\n'
+        '{"timestamp": 10, "analysis": {"visible": "code_editor"}}\n'
+    )
+    (segment / "screen.md").write_text("Screen summary insight")
+
+    # Test screen=True returns raw screen data, not insights
+    result = mod.cluster_range(
+        "20240101", "100000", "100500", audio=False, screen=True, insights=False
+    )
+
+    assert "Screen Activity" in result
+    assert "code_editor" in result
+    # Should NOT include insight content
+    assert "Screen summary insight" not in result
+    assert "### screen summary" not in result

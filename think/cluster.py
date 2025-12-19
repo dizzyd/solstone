@@ -5,7 +5,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from observe.reduce import format_screen_text
 
@@ -23,22 +23,24 @@ def _process_segment(
     segment_path: Path,
     date_str: str,
     audio: bool,
-    screen_mode: Optional[str],
-) -> List[Dict[str, str]]:
+    screen: bool,
+    insights: bool,
+) -> List[Dict[str, Any]]:
     """Process a single segment directory and return entries.
 
     Args:
         segment_path: Path to segment directory
         date_str: Date in YYYYMMDD format
         audio: Whether to load audio transcripts
-        screen_mode: "summary" for screen.md, "raw" for screen.jsonl, None to skip
+        screen: Whether to load raw screen data from screen.jsonl
+        insights: Whether to load insight summaries from *.md files
 
     Returns:
         List of entry dicts with timestamp, segment_key, prefix, content, name, etc.
     """
     from think.utils import segment_parse
 
-    entries: List[Dict[str, str]] = []
+    entries: List[Dict[str, Any]] = []
 
     start_time, end_time = segment_parse(segment_path.name)
     if not start_time:
@@ -82,27 +84,8 @@ def _process_segment(
                 }
             )
 
-    # Process screen summaries or transcripts
-    if screen_mode == "summary":
-        screen_md = segment_path / "screen.md"
-        if screen_md.exists():
-            try:
-                content = screen_md.read_text()
-                entries.append(
-                    {
-                        "timestamp": segment_start,
-                        "segment_key": segment_key,
-                        "segment_start": segment_start,
-                        "segment_end": segment_end,
-                        "prefix": "screen",
-                        "content": content,
-                        "name": f"{segment_path.name}/screen.md",
-                    }
-                )
-            except Exception as e:
-                print(f"Warning: Could not read file screen.md: {e}", file=sys.stderr)
-
-    elif screen_mode == "raw":
+    # Process raw screen data from screen.jsonl
+    if screen:
         screen_jsonl = segment_path / "screen.jsonl"
         if screen_jsonl.exists():
             try:
@@ -114,7 +97,7 @@ def _process_segment(
                             "segment_key": segment_key,
                             "segment_start": segment_start,
                             "segment_end": segment_end,
-                            "prefix": "screen_frames",
+                            "prefix": "screen",
                             "content": content,
                             "name": f"{segment_path.name}/screen.jsonl",
                         }
@@ -125,43 +108,69 @@ def _process_segment(
                     file=sys.stderr,
                 )
 
+    # Process insight summaries from all *.md files
+    if insights:
+        for md_file in sorted(segment_path.glob("*.md")):
+            if not md_file.is_file():
+                continue
+            try:
+                content = md_file.read_text()
+                if content.strip():
+                    entries.append(
+                        {
+                            "timestamp": segment_start,
+                            "segment_key": segment_key,
+                            "segment_start": segment_start,
+                            "segment_end": segment_end,
+                            "prefix": "insight",
+                            "insight_name": md_file.stem,
+                            "content": content,
+                            "name": f"{segment_path.name}/{md_file.name}",
+                        }
+                    )
+            except Exception as e:  # pragma: no cover - warning only
+                print(
+                    f"Warning: Could not read file {md_file.name}: {e}",
+                    file=sys.stderr,
+                )
+
     return entries
 
 
 def _load_entries(
-    day_dir: str, audio: bool, screen_mode: Optional[str]
-) -> List[Dict[str, str]]:
+    day_dir: str, audio: bool, screen: bool, insights: bool
+) -> List[Dict[str, Any]]:
     """Load all transcript entries from a day directory."""
     from think.utils import segment_parse
 
     date_str = _date_str(day_dir)
-    entries: List[Dict[str, str]] = []
+    entries: List[Dict[str, Any]] = []
     day_path_obj = Path(day_dir)
 
     for item in day_path_obj.iterdir():
         start_time, _ = segment_parse(item.name)
         if not (item.is_dir() and start_time):
             continue
-        entries.extend(_process_segment(item, date_str, audio, screen_mode))
+        entries.extend(_process_segment(item, date_str, audio, screen, insights))
 
     entries.sort(key=lambda e: e["timestamp"])
     return entries
 
 
 def _group_entries(
-    entries: List[Dict[str, str]],
-) -> Dict[str, List[Dict[str, str]]]:
+    entries: List[Dict[str, Any]],
+) -> Dict[str, List[Dict[str, Any]]]:
     """Group entries by segment key.
 
     Returns dict mapping segment_key to list of entries for that segment.
     """
-    grouped: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for e in entries:
         grouped[e["segment_key"]].append(e)
     return grouped
 
 
-def _groups_to_markdown(groups: Dict[str, List[Dict[str, str]]]) -> str:
+def _groups_to_markdown(groups: Dict[str, List[Dict[str, Any]]]) -> str:
     """Render grouped entries as markdown with segment-based headers."""
     lines: List[str] = []
 
@@ -189,11 +198,12 @@ def _groups_to_markdown(groups: Dict[str, List[Dict[str, str]]]) -> str:
                 lines.append(entry["content"].strip())
                 lines.append("")
             elif entry["prefix"] == "screen":
-                lines.append("### Screen Activity Summary")
+                lines.append("### Screen Activity")
                 lines.append(entry["content"].strip())
                 lines.append("")
-            elif entry["prefix"] == "screen_frames":
-                lines.append("### Screen Activity")
+            elif entry["prefix"] == "insight":
+                insight_name = entry.get("insight_name", "insight")
+                lines.append(f"### {insight_name} summary")
                 lines.append(entry["content"].strip())
                 lines.append("")
 
@@ -270,8 +280,8 @@ def cluster_scan(day: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]
             if (item / "audio.jsonl").exists() or any(item.glob("*_audio.jsonl")):
                 audio_slots.add(slot)
 
-            # Check for screen summaries or transcripts
-            if (item / "screen.md").exists() or (item / "screen.jsonl").exists():
+            # Check for screen content
+            if (item / "screen.jsonl").exists():
                 screen_slots.add(slot)
 
     audio_ranges = _slots_to_ranges(sorted(audio_slots))
@@ -315,7 +325,7 @@ def cluster_segments(day: str) -> List[Dict[str, any]]:
             types.append("audio")
 
         # Check for screen content
-        if (item / "screen.md").exists() or (item / "screen.jsonl").exists():
+        if (item / "screen.jsonl").exists():
             types.append("screen")
 
         if not types:
@@ -344,14 +354,17 @@ def cluster_segments(day: str) -> List[Dict[str, any]]:
 
 
 def cluster(day: str) -> Tuple[str, int]:
-    """Return Markdown summary for one day's JSON files and the number processed."""
+    """Return Markdown summary for one day's JSON files and the number processed.
+
+    Uses insight summaries (*.md files) rather than raw screen data for daily view.
+    """
 
     day_dir = str(day_path(day))
     # day_path now ensures dir exists, but check anyway for safety
     if not os.path.isdir(day_dir):
         return f"Day folder not found: {day_dir}", 0
 
-    entries = _load_entries(day_dir, True, "summary")
+    entries = _load_entries(day_dir, audio=True, screen=False, insights=True)
     if not entries:
         return f"No audio or screen files found for date {day} in {day_dir}.", 0
 
@@ -362,6 +375,8 @@ def cluster(day: str) -> Tuple[str, int]:
 
 def cluster_period(day: str, segment: str) -> Tuple[str, int]:
     """Return Markdown summary for one segment's JSON files and the number processed.
+
+    Uses raw screen data for segment insights (more granular than summaries).
 
     Args:
         day: Day in YYYYMMDD format
@@ -376,8 +391,9 @@ def cluster_period(day: str, segment: str) -> Tuple[str, int]:
     if not segment_dir.is_dir():
         return f"Segment folder not found: {segment_dir}", 0
 
-    # Load entries from this specific segment directory
-    entries = _load_entries_from_segment(str(segment_dir), True, "summary")
+    entries = _load_entries_from_segment(
+        str(segment_dir), audio=True, screen=True, insights=False
+    )
     if not entries:
         return f"No audio or screen files found for segment {segment}", 0
 
@@ -387,21 +403,22 @@ def cluster_period(day: str, segment: str) -> Tuple[str, int]:
 
 
 def _load_entries_from_segment(
-    segment_dir: str, audio: bool, screen_mode: Optional[str]
-) -> List[Dict[str, str]]:
+    segment_dir: str, audio: bool, screen: bool, insights: bool
+) -> List[Dict[str, Any]]:
     """Load entries from a single segment directory.
 
     Args:
         segment_dir: Path to segment directory (e.g., /path/to/20251109/163045_300)
         audio: Whether to load audio transcripts
-        screen_mode: "summary" for screen.md, "raw" for screen.jsonl, None to skip
+        screen: Whether to load raw screen data from screen.jsonl
+        insights: Whether to load insight summaries from *.md files
 
     Returns:
         List of entry dicts with timestamp, prefix, content, etc.
     """
     segment_path = Path(segment_dir)
     date_str = _date_str(str(segment_path.parent))
-    entries = _process_segment(segment_path, date_str, audio, screen_mode)
+    entries = _process_segment(segment_path, date_str, audio, screen, insights)
     entries.sort(key=lambda e: e["timestamp"])
     return entries
 
@@ -421,23 +438,29 @@ def cluster_range(
     start: str,
     end: str,
     audio: bool = True,
-    screen: Optional[str] = "summary",
+    screen: bool = False,
+    insights: bool = True,
 ) -> str:
     """Return markdown for ``day`` limited to ``start``-``end`` (HHMMSS).
 
     Includes any segment that overlaps with the requested time range,
     even if only partially.
-    """
 
-    if screen is not None and screen not in {"summary", "raw"}:
-        raise ValueError("screen must be 'summary', 'raw', or None")
+    Args:
+        day: Day in YYYYMMDD format
+        start: Start time in HHMMSS format
+        end: End time in HHMMSS format
+        audio: Whether to include audio transcripts
+        screen: Whether to include raw screen data from screen.jsonl
+        insights: Whether to include insight summaries from *.md files
+    """
 
     day_dir = str(day_path(day))
     date_str = _date_str(day_dir)
     start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
     end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
 
-    entries = _load_entries(day_dir, audio, screen)
+    entries = _load_entries(day_dir, audio, screen, insights)
     # Include segments that overlap with the requested range
     entries = [
         e
@@ -453,8 +476,9 @@ def get_entries_for_range(
     start: str,
     end: str,
     audio: bool = True,
-    screen: Optional[str] = "raw",
-) -> List[Dict[str, str]]:
+    screen: bool = True,
+    insights: bool = False,
+) -> List[Dict[str, Any]]:
     """Return filtered transcript entries for a time range.
 
     Public API for routes/tools that need raw entry data (not markdown).
@@ -465,7 +489,8 @@ def get_entries_for_range(
         start: Start time in HHMMSS format
         end: End time in HHMMSS format
         audio: Whether to include audio transcripts
-        screen: "summary" for screen.md, "raw" for screen.jsonl, None to skip
+        screen: Whether to include raw screen data from screen.jsonl
+        insights: Whether to include insight summaries from *.md files
 
     Returns:
         List of entry dicts with keys:
@@ -473,12 +498,11 @@ def get_entries_for_range(
         - segment_key: segment directory name
         - segment_start: datetime of segment start
         - segment_end: datetime of segment end
-        - prefix: "audio", "screen", or "screen_frames"
+        - prefix: "audio", "screen", or "insight"
+        - insight_name: (insights only) stem of the .md filename
         - content: formatted transcript text
         - name: relative path like "HHMMSS_LEN/audio.jsonl"
     """
-    if screen is not None and screen not in {"summary", "raw"}:
-        raise ValueError("screen must be 'summary', 'raw', or None")
 
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
@@ -488,7 +512,7 @@ def get_entries_for_range(
     start_dt = datetime.strptime(date_str + start, "%Y%m%d%H%M%S")
     end_dt = datetime.strptime(date_str + end, "%Y%m%d%H%M%S")
 
-    entries = _load_entries(day_dir, audio, screen)
+    entries = _load_entries(day_dir, audio, screen, insights)
     return [
         e
         for e in entries
@@ -525,7 +549,8 @@ def main():
             args.start,
             end_dt.strftime("%H%M%S"),
             audio=True,
-            screen="summary",
+            screen=True,
+            insights=False,
         )
         print(markdown)
     elif args.start or args.length is not None:
