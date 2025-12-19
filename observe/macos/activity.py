@@ -106,15 +106,16 @@ def get_monitor_geometries() -> list[dict]:
     """
     # TODO: Implement using PyObjC NSScreen
     # from Cocoa import NSScreen
+    # from observe.utils import assign_monitor_positions
     #
     # Get all screens: NSScreen.screens()
     # For each screen:
     #   - Get frame: screen.frame()
     #   - Get device description for ID: screen.deviceDescription()
     #   - Extract NSDeviceResolution, NSScreenNumber, etc.
+    #   - Build dict with "id" and "box" keys
     #
-    # Compute union bounding box and midlines
-    # Assign position labels (center/left/right/top/bottom) based on intersection
+    # Use assign_monitor_positions() to add position labels
     # Return list matching GNOME format
     logger.warning("get_monitor_geometries not yet implemented")
     return []

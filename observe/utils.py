@@ -72,6 +72,101 @@ def extract_descriptive_suffix(filename: str) -> str:
             return "raw"
 
 
+def assign_monitor_positions(monitors: list[dict]) -> list[dict]:
+    """
+    Assign position labels to monitors based on their center points.
+
+    Uses center-point comparison against the union bounding box midlines to
+    determine relative positions. This ensures unique positions for common
+    multi-monitor configurations (side-by-side, stacked, grid).
+
+    Parameters
+    ----------
+    monitors : list[dict]
+        List of monitor dicts, each with keys:
+        - id: Monitor identifier (e.g., "DP-3", "HDMI-1")
+        - box: [x1, y1, x2, y2] coordinates
+
+    Returns
+    -------
+    list[dict]
+        Same monitors with "position" key added to each:
+        - "center": Monitor center at union midpoint
+        - "left"/"right": Horizontal position
+        - "top"/"bottom": Vertical position
+        - "left-top", "right-bottom", etc.: Corner positions
+
+    Examples
+    --------
+    >>> monitors = [
+    ...     {"id": "DP-1", "box": [0, 0, 1920, 1080]},
+    ...     {"id": "DP-2", "box": [1920, 0, 3840, 1080]},
+    ... ]
+    >>> result = assign_monitor_positions(monitors)
+    >>> result[0]["position"]
+    'left'
+    >>> result[1]["position"]
+    'right'
+    """
+    if not monitors:
+        return []
+
+    if len(monitors) == 1:
+        # Single monitor is always "center"
+        monitors[0]["position"] = "center"
+        return monitors
+
+    # Compute union bounding box
+    min_x = min(m["box"][0] for m in monitors)
+    min_y = min(m["box"][1] for m in monitors)
+    max_x = max(m["box"][2] for m in monitors)
+    max_y = max(m["box"][3] for m in monitors)
+
+    # Compute midlines of union box
+    union_mid_x = (min_x + max_x) / 2
+    union_mid_y = (min_y + max_y) / 2
+
+    # Tolerance for "center" classification (monitor center within 1px of midline)
+    epsilon = 1
+
+    for m in monitors:
+        x1, y1, x2, y2 = m["box"]
+
+        # Compute monitor center point
+        center_x = (x1 + x2) / 2
+        center_y = (y1 + y2) / 2
+
+        # Horizontal position based on center point
+        if abs(center_x - union_mid_x) <= epsilon:
+            h_pos = "center"
+        elif center_x < union_mid_x:
+            h_pos = "left"
+        else:
+            h_pos = "right"
+
+        # Vertical position based on center point
+        if abs(center_y - union_mid_y) <= epsilon:
+            v_pos = "center"
+        elif center_y < union_mid_y:
+            v_pos = "top"
+        else:
+            v_pos = "bottom"
+
+        # Combine positions
+        if h_pos == "center" and v_pos == "center":
+            position = "center"
+        elif h_pos == "center":
+            position = v_pos
+        elif v_pos == "center":
+            position = h_pos
+        else:
+            position = f"{h_pos}-{v_pos}"
+
+        m["position"] = position
+
+    return monitors
+
+
 def parse_monitor_metadata(
     title: str, video_width: int, video_height: int
 ) -> Dict[str, dict]:
