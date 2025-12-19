@@ -335,6 +335,9 @@ def format_insight(
     This is the formatter interface for markdown files. Each chunk contains
     its full context (headers, intro paragraphs) rendered back to markdown.
 
+    Note: Unlike JSONL formatters, this does not return indexer metadata.
+    Topic for markdown files is derived from path by extract_path_metadata().
+
     Args:
         text: Markdown text to chunk
         context: Optional context dict (unused, for formatter interface compatibility)
@@ -342,7 +345,8 @@ def format_insight(
     Returns:
         Tuple of (chunks, meta) where:
             - chunks: List of {"markdown": str} dicts (timestamp omitted)
-            - meta: Empty dict (no header needed - context is in each chunk)
+            - meta: Empty dict (no header or indexer - context is in each chunk,
+              topic is path-derived)
     """
     raw_chunks = chunk_markdown(text)
     chunks = [{"markdown": render_chunk(c)} for c in raw_chunks]

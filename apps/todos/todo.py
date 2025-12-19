@@ -647,4 +647,7 @@ def format_todos(
         meta["error"] = error_msg
         logging.info(error_msg)
 
+    # Indexer metadata - topic is always "todo" for todo items
+    meta["indexer"] = {"topic": "todo"}
+
     return chunks, meta

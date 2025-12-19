@@ -1106,6 +1106,9 @@ def format_agent(
     if skipped_count > 0:
         meta["error"] = f"Skipped {skipped_count} entries missing 'event' field"
 
+    # Indexer metadata - agents aren't indexed but include for consistency
+    meta["indexer"] = {"topic": "agent"}
+
     return chunks, meta
 
 

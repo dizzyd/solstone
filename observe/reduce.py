@@ -175,6 +175,9 @@ def format_screen(
 
         chunks.append({"timestamp": int(frame_offset), "markdown": "\n".join(lines)})
 
+    # Indexer metadata - topic is always "screen" for screen analysis
+    meta["indexer"] = {"topic": "screen"}
+
     return chunks, meta
 
 

@@ -15,11 +15,16 @@ Output contract: All formatters return tuple[list[dict], dict] where:
     - dict: Metadata about the formatting with optional keys:
         - header: str - Optional header markdown (metadata summary, context, etc.)
         - error: str - Optional error/warning message (e.g., skipped entries)
+        - indexer: dict - Indexing metadata with keys:
+            - topic: str - Content type (e.g., "audio", "screen", "event")
+            JSONL formatters must provide topic. Markdown topic is path-derived.
+            Day and facet are extracted from path by extract_path_metadata().
 
 JSONL formatters receive list[dict] entries and are responsible for:
     - Extracting metadata from entries (typically first line)
     - Building header from metadata if applicable
     - Formatting content entries into chunks
+    - Providing indexer.topic in the meta dict
 
 Markdown formatters receive str text and perform semantic chunking.
 """
@@ -28,6 +33,7 @@ import argparse
 import fnmatch
 import json
 import os
+import re
 import sys
 from importlib import import_module
 from pathlib import Path
@@ -37,20 +43,65 @@ from dotenv import load_dotenv
 
 from think.utils import day_dirs, segment_key
 
-# Patterns for journal index file discovery (subset of FORMATTERS)
-# Excludes agents/*.jsonl which are not indexed
-INDEX_PATTERNS: list[str] = [
-    # JSONL files
-    "facets/*/entities/*.jsonl",
-    "facets/*/entities.jsonl",
-    "facets/*/events/*.jsonl",
-    "facets/*/todos/*.jsonl",
-    "*/screen.jsonl",
-    "*/*_audio.jsonl",
-    "*/audio.jsonl",
-    # Markdown files
-    "**/*.md",
-]
+# Date pattern for path parsing
+_DATE_RE = re.compile(r"^\d{8}$")
+
+
+def extract_path_metadata(rel_path: str) -> dict[str, str]:
+    """Extract indexing metadata from a journal-relative path.
+
+    Extracts day and facet from path structure. For markdown files, also
+    derives topic from path. For JSONL files, topic should be provided
+    by the formatter via meta["indexer"]["topic"].
+
+    Args:
+        rel_path: Journal-relative path (e.g., "20240101/insights/flow.md")
+
+    Returns:
+        Dict with keys: day, facet, topic
+        - day: YYYYMMDD string or empty
+        - facet: Facet name or empty
+        - topic: Derived topic for .md files, empty for .jsonl
+    """
+    parts = rel_path.replace("\\", "/").split("/")
+    filename = parts[-1]
+    basename = os.path.splitext(filename)[0]
+    is_markdown = filename.endswith(".md")
+
+    day = ""
+    facet = ""
+    topic = ""
+
+    # Extract day from YYYYMMDD directory prefix
+    if parts[0] and _DATE_RE.match(parts[0]):
+        day = parts[0]
+
+    # Extract facet from facets/{facet}/... paths
+    if parts[0] == "facets" and len(parts) >= 3:
+        facet = parts[1]
+        # Day from YYYYMMDD filename (events/entities/todos/news)
+        if len(parts) >= 4 and _DATE_RE.match(basename):
+            day = basename
+
+    # Extract day from imports/YYYYMMDD_HHMMSS/...
+    if parts[0] == "imports" and len(parts) >= 2:
+        import_id = parts[1]
+        day = import_id.split("_")[0] if "_" in import_id else import_id[:8]
+
+    # Derive topic for markdown files only
+    if is_markdown:
+        if parts[0] == "facets" and len(parts) >= 4 and parts[2] == "news":
+            topic = "news"
+        elif parts[0] == "imports":
+            topic = "import"
+        elif parts[0] == "apps" and len(parts) >= 4:
+            topic = f"{parts[1]}:{basename}"
+        else:
+            # Daily insights, segment markdown: use basename
+            topic = basename
+
+    return {"day": day, "facet": facet, "topic": topic}
+
 
 # Registry mapping glob patterns to (module_path, function_name)
 # Patterns are matched against journal-relative paths
@@ -139,7 +190,7 @@ def load_markdown(file_path: str | Path) -> str:
 
 
 def find_formattable_files(journal: str) -> dict[str, str]:
-    """Find all indexable files matching INDEX_PATTERNS.
+    """Find all indexable files in the journal.
 
     Scans the journal directory for files that have formatters and should
     be included in the journal index. Excludes agents/*.jsonl.

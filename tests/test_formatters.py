@@ -1401,3 +1401,154 @@ class TestFormatInsight:
 
         assert isinstance(text, str)
         assert len(text) > 0
+
+
+class TestExtractPathMetadata:
+    """Tests for extract_path_metadata helper."""
+
+    def test_daily_insight(self):
+        """Test day extraction from daily insight path."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("20240101/insights/flow.md")
+        assert meta["day"] == "20240101"
+        assert meta["facet"] == ""
+        assert meta["topic"] == "flow"
+
+    def test_segment_markdown(self):
+        """Test day and topic extraction from segment markdown."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("20240101/100000/screen.md")
+        assert meta["day"] == "20240101"
+        assert meta["facet"] == ""
+        assert meta["topic"] == "screen"
+
+    def test_segment_jsonl_no_topic(self):
+        """Test that JSONL files get empty topic (formatter provides it)."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("20240101/100000/audio.jsonl")
+        assert meta["day"] == "20240101"
+        assert meta["facet"] == ""
+        assert meta["topic"] == ""  # Formatter provides topic for JSONL
+
+    def test_facet_event(self):
+        """Test facet and day extraction from event path."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("facets/work/events/20240101.jsonl")
+        assert meta["day"] == "20240101"
+        assert meta["facet"] == "work"
+        assert meta["topic"] == ""  # Formatter provides topic
+
+    def test_facet_entities_attached(self):
+        """Test facet extraction from attached entities path."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("facets/personal/entities.jsonl")
+        assert meta["day"] == ""
+        assert meta["facet"] == "personal"
+        assert meta["topic"] == ""  # Formatter provides topic
+
+    def test_facet_entities_detected(self):
+        """Test facet and day extraction from detected entities path."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("facets/work/entities/20250101.jsonl")
+        assert meta["day"] == "20250101"
+        assert meta["facet"] == "work"
+        assert meta["topic"] == ""  # Formatter provides topic
+
+    def test_facet_news(self):
+        """Test facet news markdown gets topic from path."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("facets/work/news/20240101.md")
+        assert meta["day"] == "20240101"
+        assert meta["facet"] == "work"
+        assert meta["topic"] == "news"
+
+    def test_import_summary(self):
+        """Test import summary path extraction."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("imports/20240101_093000/summary.md")
+        assert meta["day"] == "20240101"
+        assert meta["facet"] == ""
+        assert meta["topic"] == "import"
+
+    def test_app_insight(self):
+        """Test app insight path extraction."""
+        from think.formatters import extract_path_metadata
+
+        meta = extract_path_metadata("apps/myapp/insights/custom.md")
+        assert meta["day"] == ""
+        assert meta["facet"] == ""
+        assert meta["topic"] == "myapp:custom"
+
+
+class TestFormatterIndexerMetadata:
+    """Tests verifying formatters return indexer metadata."""
+
+    def test_format_audio_returns_indexer(self):
+        """Test format_audio returns indexer with topic."""
+        from observe.hear import format_audio
+
+        entries = [{"start": "00:00:01", "text": "Hello"}]
+        chunks, meta = format_audio(entries)
+
+        assert "indexer" in meta
+        assert meta["indexer"]["topic"] == "audio"
+
+    def test_format_screen_returns_indexer(self):
+        """Test format_screen returns indexer with topic."""
+        from observe.reduce import format_screen
+
+        entries = [{"timestamp": 0, "analysis": {"visible": "code"}}]
+        chunks, meta = format_screen(entries)
+
+        assert "indexer" in meta
+        assert meta["indexer"]["topic"] == "screen"
+
+    def test_format_events_returns_indexer(self):
+        """Test format_events returns indexer with topic."""
+        from think.events import format_events
+
+        entries = [{"type": "meeting", "title": "Test", "occurred": True}]
+        chunks, meta = format_events(entries)
+
+        assert "indexer" in meta
+        assert meta["indexer"]["topic"] == "event"
+
+    def test_format_entities_attached_returns_indexer(self):
+        """Test format_entities returns indexer with attached topic."""
+        from think.entities import format_entities
+
+        entries = [{"type": "Person", "name": "Alice", "description": "Test"}]
+        # No file_path context means not detected
+        chunks, meta = format_entities(entries)
+
+        assert "indexer" in meta
+        assert meta["indexer"]["topic"] == "entity:attached"
+
+    def test_format_entities_detected_returns_indexer(self):
+        """Test format_entities returns indexer with detected topic."""
+        from think.entities import format_entities
+
+        entries = [{"type": "Person", "name": "Alice", "description": "Test"}]
+        context = {"file_path": "/journal/facets/work/entities/20240101.jsonl"}
+        chunks, meta = format_entities(entries, context)
+
+        assert "indexer" in meta
+        assert meta["indexer"]["topic"] == "entity:detected"
+
+    def test_format_todos_returns_indexer(self):
+        """Test format_todos returns indexer with topic."""
+        from apps.todos.todo import format_todos
+
+        entries = [{"text": "Test task", "completed": False}]
+        chunks, meta = format_todos(entries)
+
+        assert "indexer" in meta
+        assert meta["indexer"]["topic"] == "todo"

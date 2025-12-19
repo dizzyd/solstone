@@ -611,6 +611,9 @@ def format_audio(
 
         chunks.append({"timestamp": entry_timestamp, "markdown": markdown})
 
+    # Indexer metadata - topic is always "audio" for audio transcripts
+    meta["indexer"] = {"topic": "audio"}
+
     return chunks, meta
 
 

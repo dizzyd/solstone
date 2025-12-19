@@ -157,6 +157,9 @@ def format_events(
         meta["error"] = error_msg
         logging.info(error_msg)
 
+    # Indexer metadata - topic is always "event" for events
+    meta["indexer"] = {"topic": "event"}
+
     return chunks, meta
 
 

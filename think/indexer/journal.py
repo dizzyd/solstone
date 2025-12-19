@@ -19,8 +19,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from think.formatters import find_formattable_files, format_file, load_jsonl
-from think.utils import segment_key
+from think.formatters import (
+    extract_path_metadata,
+    find_formattable_files,
+    format_file,
+    load_jsonl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,7 @@ logger = logging.getLogger(__name__)
 INDEX_DIR = "indexer"
 DB_NAME = "journal.sqlite"
 
-# Date pattern for path parsing
+# Date pattern for historical day check
 DATE_RE = re.compile(r"^\d{8}$")
 
 # Schema for the unified journal index
@@ -87,85 +91,6 @@ def reset_journal_index(journal: str) -> None:
         pass
 
 
-def parse_path_metadata(rel_path: str) -> dict[str, str]:
-    """Extract day, facet, and topic from a journal-relative path.
-
-    Args:
-        rel_path: Journal-relative path (e.g., "20240101/insights/flow.md")
-
-    Returns:
-        Dict with keys: day, facet, topic
-    """
-    parts = rel_path.replace("\\", "/").split("/")
-    filename = parts[-1]
-    basename = os.path.splitext(filename)[0]
-
-    # YYYYMMDD/... patterns (day directories)
-    if parts[0] and DATE_RE.match(parts[0]):
-        day = parts[0]
-
-        # Daily insights: YYYYMMDD/insights/*.md
-        if len(parts) >= 3 and parts[1] == "insights":
-            return {"day": day, "facet": "", "topic": basename}
-
-        # Segment content: YYYYMMDD/HHMMSS*/*
-        if len(parts) >= 3 and segment_key(parts[1]):
-            # Markdown: screen.md, audio.md -> topic is basename
-            if filename.endswith(".md"):
-                return {"day": day, "facet": "", "topic": basename}
-
-            # JSONL transcripts: topic encoded with source later
-            # audio.jsonl -> "audio", screen.jsonl -> "screen"
-            # *_audio.jsonl -> "audio" (mic_audio.jsonl, sys_audio.jsonl)
-            if filename == "audio.jsonl" or filename.endswith("_audio.jsonl"):
-                return {"day": day, "facet": "", "topic": "audio"}
-            if filename == "screen.jsonl":
-                return {"day": day, "facet": "", "topic": "screen"}
-
-    # facets/*/* patterns
-    if parts[0] == "facets" and len(parts) >= 3:
-        facet = parts[1]
-
-        # Events: facets/*/events/YYYYMMDD.jsonl
-        if parts[2] == "events" and len(parts) >= 4:
-            event_day = basename  # filename is YYYYMMDD.jsonl
-            return {"day": event_day, "facet": facet, "topic": "event"}
-
-        # Entities attached: facets/*/entities.jsonl
-        if parts[2] == "entities.jsonl":
-            return {"day": "", "facet": facet, "topic": "entity:attached"}
-
-        # Entities detected: facets/*/entities/YYYYMMDD.jsonl
-        if parts[2] == "entities" and len(parts) >= 4:
-            entity_day = basename
-            return {"day": entity_day, "facet": facet, "topic": "entity:detected"}
-
-        # Todos: facets/*/todos/YYYYMMDD.jsonl
-        if parts[2] == "todos" and len(parts) >= 4:
-            todo_day = basename
-            return {"day": todo_day, "facet": facet, "topic": "todo"}
-
-        # News: facets/*/news/YYYYMMDD.md
-        if parts[2] == "news" and len(parts) >= 4:
-            news_day = basename
-            return {"day": news_day, "facet": facet, "topic": "news"}
-
-    # imports/*/summary.md
-    if parts[0] == "imports" and len(parts) >= 3 and parts[2] == "summary.md":
-        import_id = parts[1]
-        # Extract day from import_id (format: YYYYMMDD_HHMMSS or YYYYMMDD)
-        import_day = import_id.split("_")[0] if "_" in import_id else import_id[:8]
-        return {"day": import_day, "facet": "", "topic": "import"}
-
-    # apps/*/insights/*.md
-    if parts[0] == "apps" and len(parts) >= 4 and parts[2] == "insights":
-        app_name = parts[1]
-        return {"day": "", "facet": "", "topic": f"{app_name}:{basename}"}
-
-    # Fallback
-    return {"day": "", "facet": "", "topic": basename}
-
-
 def _index_file(
     conn: sqlite3.Connection,
     rel: str,
@@ -176,6 +101,11 @@ def _index_file(
 
     Uses format_file() to convert content to markdown chunks,
     then inserts each chunk with metadata.
+
+    Metadata is sourced from two places:
+    - Path-derived: day and facet from extract_path_metadata()
+    - Formatter-provided: topic from meta["indexer"]["topic"]
+    For markdown files, topic is also path-derived.
     """
     try:
         chunks, meta = format_file(path)
@@ -183,11 +113,16 @@ def _index_file(
         logger.warning("Skipping %s: %s", rel, e)
         return
 
-    metadata = parse_path_metadata(rel)
-    day = metadata["day"]
-    # Normalize facet and topic to lowercase for case-insensitive filtering
-    facet = metadata["facet"].lower()
-    base_topic = metadata["topic"].lower()
+    # Get path-derived metadata (day, facet, topic for .md files)
+    path_meta = extract_path_metadata(rel)
+
+    # Get formatter-provided metadata (topic for JSONL files)
+    formatter_indexer = meta.get("indexer", {})
+
+    # Merge: formatter values override path values, normalize to lowercase
+    day = formatter_indexer.get("day") or path_meta["day"]
+    facet = (formatter_indexer.get("facet") or path_meta["facet"]).lower()
+    topic = (formatter_indexer.get("topic") or path_meta["topic"]).lower()
 
     if verbose:
         logger.info(
@@ -195,18 +130,13 @@ def _index_file(
             len(chunks),
             day,
             facet,
-            base_topic,
+            topic,
         )
 
     for idx, chunk in enumerate(chunks):
         content = chunk.get("markdown", "")
         if not content:
             continue
-
-        # For transcripts, encode source in topic if available
-        # Chunks from format_audio have source info we could extract
-        # For now, use base topic (audio/screen)
-        topic = base_topic
 
         conn.execute(
             "INSERT INTO chunks(content, path, day, facet, topic, idx) VALUES (?, ?, ?, ?, ?, ?)",

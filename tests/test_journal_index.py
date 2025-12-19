@@ -269,55 +269,6 @@ def test_get_events_filter_by_facet(journal_fixture):
     assert len(events) == 0
 
 
-def test_parse_path_metadata():
-    """Test path metadata extraction."""
-    from think.indexer.journal import parse_path_metadata
-
-    # Daily insight
-    meta = parse_path_metadata("20240101/insights/flow.md")
-    assert meta["day"] == "20240101"
-    assert meta["facet"] == ""
-    assert meta["topic"] == "flow"
-
-    # Segment markdown
-    meta = parse_path_metadata("20240101/100000/screen.md")
-    assert meta["day"] == "20240101"
-    assert meta["topic"] == "screen"
-
-    # Segment audio
-    meta = parse_path_metadata("20240101/100000/audio.jsonl")
-    assert meta["day"] == "20240101"
-    assert meta["topic"] == "audio"
-
-    # Facet event
-    meta = parse_path_metadata("facets/work/events/20240101.jsonl")
-    assert meta["day"] == "20240101"
-    assert meta["facet"] == "work"
-    assert meta["topic"] == "event"
-
-    # Facet entities detected
-    meta = parse_path_metadata("facets/work/entities/20240101.jsonl")
-    assert meta["day"] == "20240101"
-    assert meta["facet"] == "work"
-    assert meta["topic"] == "entity:detected"
-
-    # Facet news
-    meta = parse_path_metadata("facets/work/news/20240101.md")
-    assert meta["day"] == "20240101"
-    assert meta["facet"] == "work"
-    assert meta["topic"] == "news"
-
-    # Import summary
-    meta = parse_path_metadata("imports/20240101_093000/summary.md")
-    assert meta["day"] == "20240101"
-    assert meta["topic"] == "import"
-
-    # App insight
-    meta = parse_path_metadata("apps/myapp/insights/custom.md")
-    assert meta["day"] == ""
-    assert meta["topic"] == "myapp:custom"
-
-
 def test_reset_journal_index(journal_fixture):
     """Test resetting the journal index."""
     from think.indexer.journal import reset_journal_index, scan_journal
