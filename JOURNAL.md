@@ -11,7 +11,7 @@ Sunstone transforms raw recordings into actionable understanding through a three
 │  LAYER 3: INSIGHTS                  │  Narrative summaries
 │  (Markdown files)                   │  "What it means"
 │  - insights/*.md (daily insights)   │
-│  - screen.md, activity.md (segment) │
+│  - *.md (segment insights)          │
 └─────────────────────────────────────┘
          ↑ synthesized from
 ┌─────────────────────────────────────┐
@@ -38,7 +38,7 @@ Sunstone transforms raw recordings into actionable understanding through a three
 |------|------------|----------|
 | **Capture** | Raw audio/video recording | `*.flac`, `*.webm` |
 | **Extract** | Structured data from captures | `*.jsonl` |
-| **Insight** | AI-generated narrative summary | `insights/*.md`, `screen.md` |
+| **Insight** | AI-generated narrative summary | `insights/*.md`, `HHMMSS_LEN/*.md` |
 
 **Organization**
 
@@ -642,10 +642,7 @@ Insights are AI-generated markdown files that provide human-readable narratives 
 
 #### Segment insights
 
-After captures are processed, segment-level insights are generated within each segment folder:
-
-- `HHMMSS_LEN/screen.md` – narrative summary of the segment's screen activity, synthesized from frame analysis
-- `HHMMSS_LEN/activity.md` – contextual activity summary combining audio and screen content
+After captures are processed, segment-level insights are generated within each segment folder as `HHMMSS_LEN/*.md` files. Available segment insight types are defined by templates in `think/insights/` with `"frequency": "segment"` in their metadata JSON.
 
 #### Daily insights
 

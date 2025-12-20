@@ -196,38 +196,28 @@ def send_markdown(
     model: str,
     cache_display_name: str | None = None,
 ) -> str:
-    client = genai.Client(api_key=api_key) if cache_display_name else None
-
+    # Try to use cache if display name provided
+    client = None
+    cache_name = None
     if cache_display_name:
+        client = genai.Client(api_key=api_key)
         cache_name = _get_or_create_cache(client, model, cache_display_name, markdown)
 
-        if cache_name:
-            # Cache created successfully, use it
-            contents: list[str] = [prompt]
-            return gemini_generate(
-                contents=contents,
-                model=model,
-                temperature=0.3,
-                max_output_tokens=8192 * 6,
-                thinking_budget=8192 * 3,
-                cached_content=cache_name,
-                client=client,
-            )
-        else:
-            # Content too small for caching, proceed without cache
-            contents = [markdown, prompt]
-            return gemini_generate(
-                contents=contents,
-                model=model,
-                temperature=0.3,
-                max_output_tokens=8192 * 6,
-                thinking_budget=8192 * 3,
-                system_instruction=COMMON_SYSTEM_INSTRUCTION,
-            )
-    else:
-        contents = [markdown, prompt]
+    if cache_name:
+        # Cache available: content already in cache, just send prompt
         return gemini_generate(
-            contents=contents,
+            contents=[prompt],
+            model=model,
+            temperature=0.3,
+            max_output_tokens=8192 * 6,
+            thinking_budget=8192 * 3,
+            cached_content=cache_name,
+            client=client,
+        )
+    else:
+        # No cache: send markdown + prompt with system instruction
+        return gemini_generate(
+            contents=[markdown, prompt],
             model=model,
             temperature=0.3,
             max_output_tokens=8192 * 6,
@@ -445,9 +435,15 @@ def main() -> None:
                 .add_file(str(insight_prompt.path))
                 .add_glob(os.path.join(day_dir, "*/audio.jsonl"))
                 .add_glob(os.path.join(day_dir, "*/*_audio.jsonl"))  # Split audio
-                .add_glob(os.path.join(day_dir, "*/screen.md"))
-                .add_model(model)
             )
+            if args.segment:
+                # Segment insights use raw screen data
+                crumb_builder.add_glob(os.path.join(day_dir, "*/screen.jsonl"))
+                crumb_builder.add_glob(os.path.join(day_dir, "*/*_screen.jsonl"))
+            else:
+                # Daily insights use segment insight summaries
+                crumb_builder.add_glob(os.path.join(day_dir, "*/*.md"))
+            crumb_builder.add_model(model)
             crumb_path = crumb_builder.commit(str(md_path))
             print(f"Crumb saved to: {crumb_path}")
 

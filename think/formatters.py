@@ -230,7 +230,7 @@ def find_formattable_files(journal: str) -> dict[str, str]:
             if not seg_key:
                 continue
 
-            # Segment markdown: screen.md, audio.md, etc.
+            # Segment insight markdown files (*.md)
             for md_file in entry.glob("*.md"):
                 rel = f"{day}/{entry.name}/{md_file.name}"
                 files[rel] = str(md_file)
