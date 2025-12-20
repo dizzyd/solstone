@@ -60,7 +60,9 @@ def _get_transcript_resource(
                 screen=False,
                 insights=False,
             )
-            description = f"Raw audio transcripts from {day} at {time} for {length} minutes"
+            description = (
+                f"Raw audio transcripts from {day} at {time} for {length} minutes"
+            )
         elif mode == "screen":
             markdown_content = cluster_range(
                 day=day,
@@ -70,7 +72,9 @@ def _get_transcript_resource(
                 screen=True,
                 insights=False,
             )
-            description = f"Raw screencast transcripts from {day} at {time} for {length} minutes"
+            description = (
+                f"Raw screencast transcripts from {day} at {time} for {length} minutes"
+            )
         elif mode == "summary":
             markdown_content = cluster_range(
                 day=day,
@@ -80,7 +84,9 @@ def _get_transcript_resource(
                 screen=False,
                 insights=True,
             )
-            description = f"AI-generated summaries from {day} at {time} for {length} minutes"
+            description = (
+                f"AI-generated summaries from {day} at {time} for {length} minutes"
+            )
         else:
             raise ValueError(f"Invalid transcript mode: {mode}")
 
