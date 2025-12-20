@@ -11,17 +11,14 @@ def test_format_screen_extracts_segment_from_directory():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {"visible": "code", "visual_description": "Editing Python"},
         },
         {
             "timestamp": 30,
-            "monitor": "0",
             "analysis": {"visible": "terminal", "visual_description": "Running tests"},
         },
         {
             "timestamp": 120,
-            "monitor": "0",
             "analysis": {"visible": "browser", "visual_description": "Reading docs"},
         },
     ]
@@ -51,12 +48,10 @@ def test_format_screen_handles_segment_with_duration_suffix():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {"visible": "code", "visual_description": "Code"},
         },
         {
             "timestamp": 60,
-            "monitor": "0",
             "analysis": {"visible": "terminal", "visual_description": "Terminal"},
         },
     ]
@@ -82,12 +77,10 @@ def test_format_screen_handles_no_file_path():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {"visible": "code", "visual_description": "Code"},
         },
         {
             "timestamp": 3600,
-            "monitor": "0",
             "analysis": {"visible": "browser", "visual_description": "Browser"},
         },
     ]
@@ -102,36 +95,52 @@ def test_format_screen_handles_no_file_path():
     assert "Browser" in markdown
 
 
-def test_format_screen_handles_multiple_monitors():
-    """Test that monitor information is included when multiple monitors are present."""
+def test_format_screen_header_includes_monitor_info():
+    """Test that monitor info is included in header for per-monitor files."""
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
-            "monitor_position": "left",
             "analysis": {"visible": "code", "visual_description": "Editing code"},
         },
         {
-            "timestamp": 0,
-            "monitor": "1",
-            "monitor_position": "right",
+            "timestamp": 30,
             "analysis": {"visible": "browser", "visual_description": "Documentation"},
         },
     ]
 
+    # Per-monitor file with position/connector in filename
     context = {
-        "file_path": Path("20240101/120000/screen.jsonl"),
+        "file_path": Path("20240101/120000_300/center_DP-3_screen.jsonl"),
         "include_entity_context": False,
     }
 
     chunks, meta = format_screen(frames, context)
-    markdown = "\n".join([meta.get("header", "")] + [c["markdown"] for c in chunks])
 
-    # Should include monitor info when multiple monitors present
-    assert "Monitor 0 - left" in markdown
-    assert "Monitor 1 - right" in markdown
-    assert "Editing code" in markdown
-    assert "Documentation" in markdown
+    # Should include monitor info in header
+    assert "(center - DP-3)" in meta.get("header", "")
+    assert "Editing code" in chunks[0]["markdown"]
+    assert "Documentation" in chunks[1]["markdown"]
+
+
+def test_format_screen_plain_screen_no_monitor_info():
+    """Test that plain screen.jsonl has no monitor info in header."""
+    frames = [
+        {
+            "timestamp": 0,
+            "analysis": {"visible": "code", "visual_description": "Editing code"},
+        },
+    ]
+
+    context = {
+        "file_path": Path("20240101/120000_300/screen.jsonl"),
+        "include_entity_context": False,
+    }
+
+    chunks, meta = format_screen(frames, context)
+
+    # Plain screen.jsonl should not have monitor info
+    assert "(center" not in meta.get("header", "")
+    assert "# Frame Analyses" in meta.get("header", "")
 
 
 def test_format_screen_includes_entity_context():
@@ -139,7 +148,6 @@ def test_format_screen_includes_entity_context():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {"visible": "code", "visual_description": "Code"},
         },
     ]
@@ -163,7 +171,6 @@ def test_format_screen_includes_extracted_text():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {
                 "visible": "terminal",
                 "visual_description": "Terminal window",
@@ -191,12 +198,10 @@ def test_format_screen_returns_chunks_with_timestamps():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {"visible": "code", "visual_description": "Frame 1"},
         },
         {
             "timestamp": 30,
-            "monitor": "0",
             "analysis": {"visible": "terminal", "visual_description": "Frame 2"},
         },
     ]
@@ -215,7 +220,6 @@ def test_format_screen_returns_indexer_metadata():
     frames = [
         {
             "timestamp": 0,
-            "monitor": "0",
             "analysis": {"visible": "code", "visual_description": "Test"},
         },
     ]

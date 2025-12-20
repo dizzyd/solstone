@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from observe.utils import load_analysis_frames
+from observe.utils import load_analysis_frames, parse_screen_filename
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,15 @@ def format_screen(
 
     chunks: list[dict[str, Any]] = []
 
+    # Extract position/connector from filename for header
+    # e.g., "center_DP-3_screen.jsonl" -> position="center", connector="DP-3"
+    position, connector = "unknown", "unknown"
+    if file_path:
+        file_path = Path(file_path)
+        position, connector = parse_screen_filename(file_path.stem)
+
     # Build header with entity context if requested
+    header_lines = []
     if include_entity_context and entity_names:
         header_lines = [
             "# Entity Context",
@@ -75,11 +83,15 @@ def format_screen(
             "",
             "---",
             "",
-            "# Frame Analyses",
         ]
-        meta["header"] = "\n".join(header_lines)
+
+    # Add frame analyses header with monitor info if available
+    if position != "unknown" and connector != "unknown":
+        header_lines.append(f"# Frame Analyses ({position} - {connector})")
     else:
-        meta["header"] = "# Frame Analyses"
+        header_lines.append("# Frame Analyses")
+
+    meta["header"] = "\n".join(header_lines)
 
     # Extract base timestamp from segment directory (HHMMSS_LEN)
     # Expected structure: YYYYMMDD/HHMMSS_LEN/screen.jsonl
@@ -98,10 +110,6 @@ def format_screen(
         except (ValueError, AttributeError):
             pass
 
-    # Check if multiple monitors present
-    monitors_present = set(frame.get("monitor", "0") for frame in frame_entries)
-    multiple_monitors = len(monitors_present) > 1
-
     # Sort all frames chronologically
     sorted_frames = sorted(frame_entries, key=lambda f: f.get("timestamp", 0))
 
@@ -117,17 +125,8 @@ def format_screen(
         abs_minute = (total_seconds // 60) % 60
         abs_second = total_seconds % 60
 
-        # Build frame header with timestamp and optional monitor info
+        # Build frame header with timestamp
         frame_header = f"### {abs_hour:02d}:{abs_minute:02d}:{abs_second:02d}"
-
-        if multiple_monitors:
-            monitor_id = frame.get("monitor", "0")
-            monitor_position = frame.get("monitor_position")
-
-            if monitor_position:
-                frame_header += f" (Monitor {monitor_id} - {monitor_position})"
-            else:
-                frame_header += f" (Monitor {monitor_id})"
 
         lines.append(frame_header)
         lines.append("")

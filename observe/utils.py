@@ -66,6 +66,50 @@ def extract_descriptive_suffix(filename: str) -> str:
         return "raw"
 
 
+def parse_screen_filename(filename: str) -> tuple[str, str]:
+    """
+    Parse position and connector from a per-monitor screen filename.
+
+    Handles both pre-move filenames (with segment prefix) and post-move filenames
+    (in segment directory without prefix).
+
+    Parameters
+    ----------
+    filename : str
+        Filename stem (without extension), e.g.:
+        - "143022_300_center_DP-3_screen" (pre-move, in day root)
+        - "center_DP-3_screen" (post-move, in segment directory)
+
+    Returns
+    -------
+    tuple[str, str]
+        (position, connector) tuple, e.g., ("center", "DP-3")
+        Returns ("unknown", "unknown") if pattern doesn't match
+
+    Examples
+    --------
+    >>> parse_screen_filename("143022_300_center_DP-3_screen")
+    ("center", "DP-3")
+    >>> parse_screen_filename("center_DP-3_screen")
+    ("center", "DP-3")
+    >>> parse_screen_filename("143022_300_screen")
+    ("unknown", "unknown")
+    >>> parse_screen_filename("screen")
+    ("unknown", "unknown")
+    """
+    # Pattern 1: HHMMSS_LEN_position_connector_screen (pre-move)
+    match = re.match(r"^\d{6}_\d+_([a-z-]+)_([A-Za-z0-9-]+)_screen$", filename)
+    if match:
+        return match.group(1), match.group(2)
+
+    # Pattern 2: position_connector_screen (post-move, in segment directory)
+    match = re.match(r"^([a-z-]+)_([A-Za-z0-9-]+)_screen$", filename)
+    if match:
+        return match.group(1), match.group(2)
+
+    return "unknown", "unknown"
+
+
 def assign_monitor_positions(monitors: list[dict]) -> list[dict]:
     """
     Assign position labels to monitors based on their center points.
@@ -289,7 +333,6 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
         return []
 
     # Sort frames by frame_id for sequential video decoding
-    # Note: Duplicate frame_ids are normal when multiple monitors qualify the same frame
     frames.sort(key=lambda f: f.get("frame_id", 0))
 
     # Return header first, then sorted frames

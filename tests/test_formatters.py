@@ -220,25 +220,22 @@ class TestFormatScreen:
         assert "header" in meta
         assert "Entity Context" not in meta["header"]
 
-    def test_format_screen_multiple_monitors(self):
-        """Test screen formatting with multiple monitors."""
+    def test_format_screen_per_monitor_file(self):
+        """Test screen formatting includes monitor info from filename."""
+        from pathlib import Path
+
         from observe.screen import format_screen
 
         entries = [
-            {"timestamp": 0, "monitor": "0", "analysis": {}},
-            {
-                "timestamp": 5,
-                "monitor": "1",
-                "monitor_position": "left",
-                "analysis": {},
-            },
+            {"timestamp": 0, "analysis": {}},
+            {"timestamp": 5, "analysis": {}},
         ]
 
-        chunks, meta = format_screen(entries)
+        context = {"file_path": Path("20240101/120000_300/left_DP-1_screen.jsonl")}
+        chunks, meta = format_screen(entries, context)
 
-        # Should include monitor info in headers
-        assert "(Monitor 0)" in chunks[0]["markdown"]
-        assert "(Monitor 1 - left)" in chunks[1]["markdown"]
+        # Monitor info should be in the header, not per-frame
+        assert "(left - DP-1)" in meta["header"]
 
     def test_format_screen_meeting_analysis(self):
         """Test screen formatting with meeting analysis."""

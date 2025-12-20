@@ -2,7 +2,11 @@
 
 import pytest
 
-from observe.utils import assign_monitor_positions, parse_monitor_metadata
+from observe.utils import (
+    assign_monitor_positions,
+    parse_monitor_metadata,
+    parse_screen_filename,
+)
 
 
 class TestParseMonitorMetadata:
@@ -241,3 +245,55 @@ class TestAssignMonitorPositions:
 
         assert result[0]["extra"] == "data"
         assert result[0]["position"] == "center"
+
+
+class TestParseScreenFilename:
+    """Test screen filename parsing for per-monitor files."""
+
+    def test_standard_format(self):
+        """Parse standard per-monitor filename."""
+        position, connector = parse_screen_filename("143022_300_center_DP-3_screen")
+        assert position == "center"
+        assert connector == "DP-3"
+
+    def test_left_position(self):
+        """Parse left position filename."""
+        position, connector = parse_screen_filename("120000_600_left_HDMI-1_screen")
+        assert position == "left"
+        assert connector == "HDMI-1"
+
+    def test_compound_position(self):
+        """Parse compound position like left-top."""
+        position, connector = parse_screen_filename("090000_300_left-top_DP-1_screen")
+        assert position == "left-top"
+        assert connector == "DP-1"
+
+    def test_simple_screen_filename(self):
+        """Simple screen filename without position returns unknown."""
+        position, connector = parse_screen_filename("143022_300_screen")
+        assert position == "unknown"
+        assert connector == "unknown"
+
+    def test_audio_filename(self):
+        """Audio filename returns unknown."""
+        position, connector = parse_screen_filename("143022_300_audio")
+        assert position == "unknown"
+        assert connector == "unknown"
+
+    def test_post_move_format(self):
+        """Parse post-move filename (in segment directory, no HHMMSS_LEN prefix)."""
+        position, connector = parse_screen_filename("center_DP-3_screen")
+        assert position == "center"
+        assert connector == "DP-3"
+
+    def test_post_move_left_top(self):
+        """Parse post-move filename with compound position."""
+        position, connector = parse_screen_filename("left-top_HDMI-2_screen")
+        assert position == "left-top"
+        assert connector == "HDMI-2"
+
+    def test_plain_screen(self):
+        """Plain 'screen' filename returns unknown."""
+        position, connector = parse_screen_filename("screen")
+        assert position == "unknown"
+        assert connector == "unknown"
