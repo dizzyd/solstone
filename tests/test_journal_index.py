@@ -85,7 +85,7 @@ def journal_fixture(tmp_path):
     )
 
     # Create segment with audio transcript
-    segment = day / "100000"
+    segment = day / "100000_300"
     segment.mkdir()
     (segment / "audio.jsonl").write_text(
         json.dumps({"topics": ["test"], "setting": "personal"})
@@ -340,8 +340,8 @@ def test_find_formattable_files(journal_fixture):
     assert "20240101/insights/flow.md" in paths
 
     # Segment content
-    assert "20240101/100000/screen.md" in paths
-    assert "20240101/100000/audio.jsonl" in paths
+    assert "20240101/100000_300/screen.md" in paths
+    assert "20240101/100000_300/audio.jsonl" in paths
 
     # Facet content
     assert "facets/work/events/20240101.jsonl" in paths

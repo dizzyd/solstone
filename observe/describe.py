@@ -883,7 +883,7 @@ async def async_main():
         segment = segment_key(video_path.stem)
         if segment is None:
             parser.error(
-                f"Invalid video filename: {video_path.stem} (must start with HHMMSS)"
+                f"Invalid video filename: {video_path.stem} (must be HHMMSS_LEN format)"
             )
         segment_dir = video_path.parent / segment
         segment_dir.mkdir(exist_ok=True)
@@ -913,9 +913,8 @@ async def async_main():
             # Emit completion event
             if output_path and output_path.exists():
                 journal_path = Path(os.getenv("JOURNAL_PATH", ""))
-                # Moved path is in segment: YYYYMMDD/HHMMSS/screen.webm
-                time_part = video_path.stem.split("_")[0]
-                moved_path = video_path.parent / time_part / "screen.webm"
+                # Moved path is in segment: YYYYMMDD/HHMMSS_LEN/screen.webm
+                moved_path = video_path.parent / segment / "screen.webm"
 
                 try:
                     rel_input = moved_path.relative_to(journal_path)

@@ -81,7 +81,7 @@ def format_screen(
     else:
         meta["header"] = "# Frame Analyses"
 
-    # Extract base timestamp from segment directory (HHMMSS)
+    # Extract base timestamp from segment directory (HHMMSS_LEN)
     # Expected structure: YYYYMMDD/HHMMSS_LEN/screen.jsonl
     base_hour = base_minute = base_second = 0
     if file_path:

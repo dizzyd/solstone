@@ -52,7 +52,7 @@ def recent_audio_activity(window: int = 120) -> bool:
     from think.utils import segment_key
 
     cutoff = time.time() - window
-    # Check segments (HHMMSS/)
+    # Check segments (HHMMSS_LEN/)
     for item in os.listdir(day_dir):
         item_path = day_dir / item
         if item_path.is_dir() and segment_key(item):

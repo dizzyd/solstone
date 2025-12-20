@@ -513,11 +513,11 @@ def format_audio(
         file_path = Path(file_path)
         parts = file_path.parts
 
-        # Try to find YYYYMMDD and HHMMSS in path
+        # Try to find YYYYMMDD and HHMMSS_LEN in path
         for i, part in enumerate(reversed(parts)):
             if re.match(r"^\d{8}$", part):
                 day_str = part
-                # Check if previous part (parent dir) is HHMMSS segment
+                # Check if previous part (parent dir) is HHMMSS_LEN segment
                 if i > 0:
                     from think.utils import segment_parse
 

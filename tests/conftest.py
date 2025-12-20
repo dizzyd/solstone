@@ -139,10 +139,10 @@ def add_module_stubs(request, monkeypatch):
             repairable_files = []
 
             if day_path.is_dir():
-                # Find raw (processed) files in segments (HHMMSS/)
-                for item in day_path.iterdir():
-                    from think.utils import segment_key
+                from think.utils import segment_key
 
+                # Find raw (processed) files in segments (HHMMSS_LEN/)
+                for item in day_path.iterdir():
                     if item.is_dir() and segment_key(item.name):
                         # Found segment
                         for p in item.glob("*.flac"):
@@ -156,8 +156,6 @@ def add_module_stubs(request, monkeypatch):
 
                 # Find processed output files in segments
                 for item in day_path.iterdir():
-                    from think.utils import segment_key
-
                     if item.is_dir() and segment_key(item.name):
                         for p in item.glob("*audio.jsonl"):
                             processed_files.append(f"{item.name}/{p.name}")
@@ -167,18 +165,18 @@ def add_module_stubs(request, monkeypatch):
                 # Find repairable files (source media in root without matching segment)
                 for audio_ext in ["*.flac", "*.m4a"]:
                     for p in day_path.glob(audio_ext):
-                        if "_" in p.stem:
-                            segment_name = p.stem.split("_")[0]
-                            segment_dir = day_path / segment_name
+                        seg = segment_key(p.stem)
+                        if seg:
+                            segment_dir = day_path / seg
                             if not segment_dir.exists():
                                 repairable_files.append(p.name)
 
                 for video_ext in ["*.webm", "*.mp4"]:
                     for p in day_path.glob(video_ext):
-                        if "_" in p.stem:
-                            time_part = p.stem.split("_")[0]
-                            ts_dir = day_path / time_part
-                            if not ts_dir.exists():
+                        seg = segment_key(p.stem)
+                        if seg:
+                            segment_dir = day_path / seg
+                            if not segment_dir.exists():
                                 repairable_files.append(p.name)
 
             return {

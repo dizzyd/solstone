@@ -20,13 +20,13 @@ def extract_descriptive_suffix(filename: str) -> str:
     """
     Extract descriptive suffix from media filename.
 
-    Returns the portion after the segment (HHMMSS or HHMMSS_LEN), preserving
+    Returns the portion after the segment (HHMMSS_LEN), preserving
     the descriptive information for the final filename in the segment directory.
 
     Parameters
     ----------
     filename : str
-        Filename stem (without extension), e.g., "143022_300_audio", "143022_screen"
+        Filename stem (without extension), e.g., "143022_300_audio"
 
     Returns
     -------
@@ -41,35 +41,29 @@ def extract_descriptive_suffix(filename: str) -> str:
     "screen"
     >>> extract_descriptive_suffix("143022_300_mic_sys")
     "mic_sys"
-    >>> extract_descriptive_suffix("143022_audio")
-    "audio"
-    >>> extract_descriptive_suffix("143022")
+    >>> extract_descriptive_suffix("143022_300")
     "raw"
     """
     parts = filename.split("_")
 
-    # Filename format: HHMMSS[_LEN][_descriptive_text...]
+    # Filename format: HHMMSS_LEN[_descriptive_text...]
     # First part must be 6-digit timestamp
     if not parts or not parts[0].isdigit() or len(parts[0]) != 6:
         raise ValueError(
             f"Invalid filename format: {filename} (must start with HHMMSS)"
         )
 
-    # Check if second part is numeric duration suffix
-    if len(parts) >= 2 and parts[1].isdigit():
-        # Has duration suffix: HHMMSS_LEN_suffix...
-        # Join remaining parts as descriptive suffix
-        if len(parts) > 2:
-            return "_".join(parts[2:])
-        else:
-            return "raw"
+    # Second part must be numeric duration suffix
+    if len(parts) < 2 or not parts[1].isdigit():
+        raise ValueError(
+            f"Invalid filename format: {filename} (must have HHMMSS_LEN format)"
+        )
+
+    # HHMMSS_LEN_suffix... - join remaining parts as descriptive suffix
+    if len(parts) > 2:
+        return "_".join(parts[2:])
     else:
-        # No duration suffix: HHMMSS_suffix...
-        # Join remaining parts as descriptive suffix
-        if len(parts) > 1:
-            return "_".join(parts[1:])
-        else:
-            return "raw"
+        return "raw"
 
 
 def assign_monitor_positions(monitors: list[dict]) -> list[dict]:

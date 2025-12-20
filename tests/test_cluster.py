@@ -10,10 +10,10 @@ def test_cluster(tmp_path, monkeypatch):
 
     mod = importlib.import_module("think.cluster")
     # Write JSONL format: metadata first, then entry in segment directory
-    (day_dir / "120000").mkdir()
-    (day_dir / "120000" / "audio.jsonl").write_text('{}\n{"text": "hi"}\n')
-    (day_dir / "120500").mkdir()
-    (day_dir / "120500" / "screen.md").write_text("screen summary")
+    (day_dir / "120000_300").mkdir()
+    (day_dir / "120000_300" / "audio.jsonl").write_text('{}\n{"text": "hi"}\n')
+    (day_dir / "120500_300").mkdir()
+    (day_dir / "120500_300" / "screen.md").write_text("screen summary")
     result, count = mod.cluster("20240101")
     assert count == 2
     assert "Audio Transcript" in result
@@ -28,12 +28,12 @@ def test_cluster_range(tmp_path, monkeypatch):
 
     mod = importlib.import_module("think.cluster")
     # Write JSONL format: metadata first, then entry with proper start time and source in segment directory
-    (day_dir / "120000").mkdir()
-    (day_dir / "120000" / "audio.jsonl").write_text(
+    (day_dir / "120000_300").mkdir()
+    (day_dir / "120000_300" / "audio.jsonl").write_text(
         '{"raw": "raw.flac", "model": "whisper-1"}\n'
         '{"start": "00:00:01", "source": "mic", "text": "hi from audio"}\n'
     )
-    (day_dir / "120000" / "screen.md").write_text("screen summary content")
+    (day_dir / "120000_300" / "screen.md").write_text("screen summary content")
     # Test with insights=True to include *.md files
     md = mod.cluster_range("20240101", "120000", "120100", audio=True, insights=True)
     # Check that the function works and includes expected sections
@@ -49,24 +49,26 @@ def test_cluster_scan(tmp_path, monkeypatch):
 
     mod = importlib.import_module("think.cluster")
     # Audio transcripts at 09:01, 09:05, 09:20 and 11:00 (JSONL format with empty metadata)
-    (day_dir / "090101").mkdir()
-    (day_dir / "090101" / "audio.jsonl").write_text("{}\n")
-    (day_dir / "090500").mkdir()
-    (day_dir / "090500" / "audio.jsonl").write_text("{}\n")
-    (day_dir / "092000").mkdir()
-    (day_dir / "092000" / "audio.jsonl").write_text("{}\n")
-    (day_dir / "110000").mkdir()
-    (day_dir / "110000" / "audio.jsonl").write_text("{}\n")
+    (day_dir / "090101_300").mkdir()
+    (day_dir / "090101_300" / "audio.jsonl").write_text("{}\n")
+    (day_dir / "090500_300").mkdir()
+    (day_dir / "090500_300" / "audio.jsonl").write_text("{}\n")
+    (day_dir / "092000_300").mkdir()
+    (day_dir / "092000_300" / "audio.jsonl").write_text("{}\n")
+    (day_dir / "110000_300").mkdir()
+    (day_dir / "110000_300" / "audio.jsonl").write_text("{}\n")
     # Screen transcripts at 10:01, 10:05, 10:20 and 12:00
-    (day_dir / "100101").mkdir()
-    (day_dir / "100101" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
-    (day_dir / "100500").mkdir()
-    (day_dir / "100500" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
-    (day_dir / "102000").mkdir()
-    (day_dir / "102000" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
-    (day_dir / "120000").mkdir()
-    (day_dir / "120000" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
+    (day_dir / "100101_300").mkdir()
+    (day_dir / "100101_300" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
+    (day_dir / "100500_300").mkdir()
+    (day_dir / "100500_300" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
+    (day_dir / "102000_300").mkdir()
+    (day_dir / "102000_300" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
+    (day_dir / "120000_300").mkdir()
+    (day_dir / "120000_300" / "screen.jsonl").write_text('{"raw": "screen.webm"}\n')
     audio_ranges, screen_ranges = mod.cluster_scan("20240101")
+    # Expected ranges: 15-minute slot grouping (segments 09:01-09:05-09:20 group together)
+    # Slots: 09:00, 09:00, 09:15 -> ranges: 09:00-09:30; 11:00 -> 11:00-11:15
     assert audio_ranges == [("09:00", "09:30"), ("11:00", "11:15")]
     assert screen_ranges == [("10:00", "10:30"), ("12:00", "12:15")]
 
@@ -253,12 +255,14 @@ def test_cluster_scan_with_split_screen(tmp_path, monkeypatch):
     mod = importlib.import_module("think.cluster")
 
     # Create segment with only *_screen.jsonl (no screen.jsonl)
-    (day_dir / "100000").mkdir()
-    (day_dir / "100000" / "monitor_1_screen.jsonl").write_text('{"raw": "m1.webm"}\n')
+    (day_dir / "100000_300").mkdir()
+    (day_dir / "100000_300" / "monitor_1_screen.jsonl").write_text(
+        '{"raw": "m1.webm"}\n'
+    )
 
     audio_ranges, screen_ranges = mod.cluster_scan("20240101")
 
-    # Should detect the segment as having screen content
+    # Should detect the segment as having screen content (15-minute slot grouping)
     assert screen_ranges == [("10:00", "10:15")]
 
 

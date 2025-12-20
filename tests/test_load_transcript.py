@@ -262,10 +262,10 @@ def test_load_transcript_all_fields():
 def test_load_transcript_formatted_text_basic():
     """Test formatted text output with metadata and entries."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create test transcript file in YYYYMMDD/HHMMSS segment
+        # Create test transcript file in YYYYMMDD/HHMMSS_LEN segment
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        segment_dir = day_dir / "100500"
+        segment_dir = day_dir / "100500_300"
         segment_dir.mkdir()
         file_path = segment_dir / "audio.jsonl"
 
@@ -303,7 +303,7 @@ def test_load_transcript_formatted_text_minimal():
     with tempfile.TemporaryDirectory() as tmpdir:
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        segment_dir = day_dir / "100500"
+        segment_dir = day_dir / "100500_300"
         segment_dir.mkdir()
         file_path = segment_dir / "audio.jsonl"
 
@@ -330,7 +330,7 @@ def test_load_transcript_formatted_text_imported():
     with tempfile.TemporaryDirectory() as tmpdir:
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        segment_dir = day_dir / "100500"
+        segment_dir = day_dir / "100500_300"
         segment_dir.mkdir()
         file_path = segment_dir / "imported_audio.jsonl"
 
@@ -365,7 +365,7 @@ def test_load_transcript_formatted_text_no_speaker():
     with tempfile.TemporaryDirectory() as tmpdir:
         day_dir = Path(tmpdir) / "20250615"
         day_dir.mkdir()
-        segment_dir = day_dir / "100500"
+        segment_dir = day_dir / "100500_300"
         segment_dir.mkdir()
         file_path = segment_dir / "audio.jsonl"
 

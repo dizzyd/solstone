@@ -26,9 +26,9 @@ def test_format_screen_extracts_segment_from_directory():
         },
     ]
 
-    # Simulate path structure: YYYYMMDD/HHMMSS/screen.jsonl
+    # Simulate path structure: YYYYMMDD/HHMMSS_LEN/screen.jsonl
     context = {
-        "file_path": Path("20240101/143022/screen.jsonl"),
+        "file_path": Path("20240101/143022_300/screen.jsonl"),
         "include_entity_context": False,
     }
 

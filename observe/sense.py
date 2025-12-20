@@ -97,7 +97,7 @@ class FileSensor:
 
         # Ignore files in subdirectories (segments, trash/)
         # Expected structure: journal_dir/YYYYMMDD/file.ext (2 parts from journal_dir)
-        # Reject: journal_dir/YYYYMMDD/HHMMSS/file.ext (3+ parts from journal_dir)
+        # Reject: journal_dir/YYYYMMDD/HHMMSS_LEN/file.ext (3+ parts from journal_dir)
         try:
             rel_path = file_path.relative_to(self.journal_dir)
             if len(rel_path.parts) != 2:
@@ -557,10 +557,10 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
 
     Returns:
         Dictionary with:
-        - "processed": List of JSONL output files in segments (HHMMSS/audio.jsonl, HHMMSS/screen.jsonl)
+        - "processed": List of JSONL output files in segments (HHMMSS_LEN/audio.jsonl, etc)
         - "unprocessed": List of unprocessed source media files in day root
     """
-    # Find processed output files in segments (HHMMSS/)
+    # Find processed output files in segments (HHMMSS_LEN/)
     from think.utils import segment_key
 
     processed = []

@@ -43,18 +43,14 @@ def _process_segment(
     entries: List[Dict[str, Any]] = []
 
     start_time, end_time = segment_parse(segment_path.name)
-    if not start_time:
+    if not start_time or not end_time:
         return entries
 
     # Compute segment times
     segment_key = segment_path.name
     day_date = datetime.strptime(date_str, "%Y%m%d").date()
     segment_start = datetime.combine(day_date, start_time)
-    if end_time:
-        segment_end = datetime.combine(day_date, end_time)
-    else:
-        # Default to start + 5 minutes if no duration
-        segment_end = segment_start + timedelta(minutes=5)
+    segment_end = datetime.combine(day_date, end_time)
 
     # Process audio transcripts
     if audio:
@@ -316,7 +312,7 @@ def cluster_segments(day: str) -> List[Dict[str, any]]:
 
     for item in day_path_obj.iterdir():
         start_time, end_time = segment_parse(item.name)
-        if not (item.is_dir() and start_time):
+        if not (item.is_dir() and start_time and end_time):
             continue
 
         types = []
@@ -332,12 +328,7 @@ def cluster_segments(day: str) -> List[Dict[str, any]]:
             continue
 
         start_str = start_time.strftime("%H:%M")
-        if end_time:
-            end_str = end_time.strftime("%H:%M")
-        else:
-            # Default to start + 5 minutes if no duration
-            end_dt = datetime.combine(datetime.min, start_time) + timedelta(minutes=5)
-            end_str = end_dt.strftime("%H:%M")
+        end_str = end_time.strftime("%H:%M")
 
         segments.append(
             {

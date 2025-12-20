@@ -223,7 +223,7 @@ def find_formattable_files(journal: str) -> dict[str, str]:
                 rel = f"{day}/insights/{md_file.name}"
                 files[rel] = str(md_file)
 
-        # Segment content: YYYYMMDD/HHMMSS*/*
+        # Segment content: YYYYMMDD/HHMMSS_LEN/*
         for entry in day_path.iterdir():
             if not entry.is_dir():
                 continue

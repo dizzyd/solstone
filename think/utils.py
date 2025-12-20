@@ -205,7 +205,7 @@ def day_dirs() -> dict[str, str]:
 
 
 def segment_key(name_or_path: str) -> str | None:
-    """Extract full segment key (HHMMSS or HHMMSS_LEN) from any path/filename.
+    """Extract segment key (HHMMSS_LEN) from any path/filename.
 
     Parameters
     ----------
@@ -215,12 +215,10 @@ def segment_key(name_or_path: str) -> str | None:
     Returns
     -------
     str or None
-        Full segment key (HHMMSS or HHMMSS_LEN) if valid, None otherwise.
+        Segment key in HHMMSS_LEN format if valid, None otherwise.
 
     Examples
     --------
-    >>> segment_key("143022")
-    "143022"
     >>> segment_key("143022_300")
     "143022_300"
     >>> segment_key("143022_300_summary.txt")
@@ -230,37 +228,36 @@ def segment_key(name_or_path: str) -> str | None:
     >>> segment_key("invalid")
     None
     """
-    pattern = r"\b(\d{6})(?:_(\d+))?(?:_|\b)"
+    # Match HHMMSS_LEN format: 6 digits, underscore, 1+ digits
+    pattern = r"\b(\d{6})_(\d+)(?:_|\b)"
     match = re.search(pattern, name_or_path)
     if match:
         time_part = match.group(1)
         len_part = match.group(2)
-        return f"{time_part}_{len_part}" if len_part else time_part
+        return f"{time_part}_{len_part}"
     return None
 
 
 def segment_parse(
     name_or_path: str,
-) -> tuple[datetime.time | None, datetime.time | None]:
+) -> tuple[datetime.time, datetime.time] | tuple[None, None]:
     """Parse segment to extract start and end times as datetime objects.
 
     Parameters
     ----------
     name_or_path : str
-        Segment name (e.g., "143022" or "143022_300") or full path containing segment.
+        Segment name (e.g., "143022_300") or full path containing segment.
 
     Returns
     -------
-    tuple of (datetime.time or None, datetime.time or None)
+    tuple of (datetime.time, datetime.time) or (None, None)
         Tuple of (start_time, end_time) where:
         - start_time: datetime.time for HHMMSS
-        - end_time: datetime.time computed from start + LEN seconds, or None if no LEN
-        Returns (None, None) if not a valid segment format.
+        - end_time: datetime.time computed from start + LEN seconds
+        Returns (None, None) if not a valid HHMMSS_LEN segment format.
 
     Examples
     --------
-    >>> segment_parse("143022")
-    (datetime.time(14, 30, 22), None)
     >>> segment_parse("143022_300")  # 14:30:22 + 300 seconds = 14:35:22
     (datetime.time(14, 30, 22), datetime.time(14, 35, 22))
     >>> segment_parse("/journal/20250109/143022_300/audio.jsonl")
@@ -273,7 +270,7 @@ def segment_parse(
     # Extract just the segment name if it's a path
     if "/" in name_or_path or "\\" in name_or_path:
         path_parts = Path(name_or_path).parts
-        # Look for YYYYMMDD/HHMMSS* pattern
+        # Look for YYYYMMDD/HHMMSS_LEN pattern
         for i, part in enumerate(path_parts):
             if part.isdigit() and len(part) == 8 and i + 1 < len(path_parts):
                 name = path_parts[i + 1]
@@ -283,24 +280,21 @@ def segment_parse(
     else:
         name = name_or_path
 
-    # Validate and extract HHMMSS from segment name
-    # Simple format: HHMMSS (6 digits)
-    if name.isdigit() and len(name) == 6:
-        time_str = name
-    # Extended format: HHMMSS_LEN
-    elif "_" in name:
-        parts = name.split("_", 1)  # Split on first underscore only
-        if (
-            len(parts) == 2
-            and parts[0].isdigit()
-            and len(parts[0]) == 6
-            and parts[1].isdigit()
-        ):
-            time_str = parts[0]
-        else:
-            return (None, None)
-    else:
+    # Validate and extract HHMMSS_LEN from segment name
+    if "_" not in name:
         return (None, None)
+
+    parts = name.split("_", 1)  # Split on first underscore only
+    if (
+        len(parts) != 2
+        or not parts[0].isdigit()
+        or len(parts[0]) != 6
+        or not parts[1].isdigit()
+    ):
+        return (None, None)
+
+    time_str = parts[0]
+    length_str = parts[1]
 
     # Parse HHMMSS to datetime.time
     try:
@@ -316,20 +310,16 @@ def segment_parse(
     except (ValueError, IndexError):
         return (None, None)
 
-    # Parse LEN if present in original name
-    if "_" in name:
-        length_str = name.split("_", 1)[1]
-        try:
-            length_seconds = int(length_str)
-            # Compute end time by adding duration
-            start_dt = datetime.combine(datetime.today(), start_time)
-            end_dt = start_dt + timedelta(seconds=length_seconds)
-            end_time = end_dt.time()
-            return (start_time, end_time)
-        except ValueError:
-            return (None, None)
-
-    return (start_time, None)
+    # Parse LEN and compute end time
+    try:
+        length_seconds = int(length_str)
+        # Compute end time by adding duration
+        start_dt = datetime.combine(datetime.today(), start_time)
+        end_dt = start_dt + timedelta(seconds=length_seconds)
+        end_time = end_dt.time()
+        return (start_time, end_time)
+    except ValueError:
+        return (None, None)
 
 
 def get_config() -> dict[str, Any]:

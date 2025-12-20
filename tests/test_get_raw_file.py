@@ -9,9 +9,9 @@ def test_get_raw_file(tmp_path, monkeypatch):
     day_dir = day_path("20240101")
 
     # Create segments
-    segment_123000 = day_dir / "123000"
+    segment_123000 = day_dir / "123000_300"
     segment_123000.mkdir()
-    segment_090000 = day_dir / "090000"
+    segment_090000 = day_dir / "090000_300"
     segment_090000.mkdir()
 
     (segment_123000 / "monitor_1_diff.png").write_bytes(b"data")
@@ -25,12 +25,12 @@ def test_get_raw_file(tmp_path, monkeypatch):
         '{"raw": "raw.flac"}\n{"text": "hello"}\n'
     )
 
-    path, mime, meta = utils.get_raw_file("20240101", "123000/monitor_1_diff.json")
+    path, mime, meta = utils.get_raw_file("20240101", "123000_300/monitor_1_diff.json")
     assert path == "monitor_1_diff.png"
     assert mime == "image/png"
     assert meta["visual_description"] == "screen"
 
-    path, mime, meta = utils.get_raw_file("20240101", "090000/audio.jsonl")
+    path, mime, meta = utils.get_raw_file("20240101", "090000_300/audio.jsonl")
     assert path == "raw.flac"
     assert mime == "audio/flac"
     # JSONL format returns a list: [entry1_dict, ...]

@@ -196,7 +196,7 @@ def _dev_screen_files(day: str) -> Any:
     from think.utils import segment_key
 
     files = []
-    # Look for segments (HHMMSS/)
+    # Look for segments (HHMMSS_LEN/)
     for item in sorted(os.listdir(day_dir)):
         item_path = os.path.join(day_dir, item)
         if os.path.isdir(item_path) and segment_key(item):
