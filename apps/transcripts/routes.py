@@ -2,18 +2,45 @@
 
 from __future__ import annotations
 
+import io
 import os
 import re
+import subprocess
+import tempfile
 from datetime import date, datetime
 from glob import glob
+from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 
 from convey import state
 from convey.utils import DATE_RE, format_date
-from think.cluster import cluster_range, cluster_scan, cluster_segments
-from think.utils import day_dirs, day_path
+from observe.see import decode_frames, image_to_jpeg_bytes
+from observe.utils import load_analysis_frames
+from think.cluster import (
+    cluster_range,
+    cluster_scan,
+    cluster_segments,
+    get_entries_for_range,
+)
+from think.utils import (
+    day_dirs,
+    day_path,
+    get_raw_file,
+)
+from think.utils import segment_key as validate_segment_key
+
+# Regex for HHMMSS time format validation
+TIME_RE = re.compile(r"\d{6}")
 
 # Single-segment screenshot cache (flushed when different segment requested)
 _screen_cache: dict = {
@@ -78,26 +105,17 @@ def transcript_content(day: str) -> Any:
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not re.fullmatch(r"\d{6}", start) or not re.fullmatch(r"\d{6}", end):
+    if not TIME_RE.fullmatch(start) or not TIME_RE.fullmatch(end):
         return "", 400
 
-    audio_enabled = request.args.get("audio", "true").lower() == "true"
-    screen_enabled = request.args.get("screen", "true").lower() == "true"
+    audio = request.args.get("audio", "true").lower() == "true"
+    screen = request.args.get("screen", "true").lower() == "true"
 
-    if not audio_enabled and not screen_enabled:
+    if not audio and not screen:
         markdown_text = "*Please select at least one source (Audio or Screen)*"
-    elif audio_enabled and screen_enabled:
-        markdown_text = cluster_range(
-            day, start, end, audio=True, screen=True, insights=False
-        )
-    elif audio_enabled:
-        markdown_text = cluster_range(
-            day, start, end, audio=True, screen=False, insights=False
-        )
     else:
-        # Screen only - raw screencast transcripts
         markdown_text = cluster_range(
-            day, start, end, audio=False, screen=True, insights=False
+            day, start, end, audio=audio, screen=screen, insights=False
         )
 
     try:
@@ -118,22 +136,15 @@ def media_files(day: str) -> Any:
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    from think.cluster import get_entries_for_range
-    from think.utils import get_raw_file
-
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not re.fullmatch(r"\d{6}", start) or not re.fullmatch(r"\d{6}", end):
+    if not TIME_RE.fullmatch(start) or not TIME_RE.fullmatch(end):
         return "", 400
 
     file_type = request.args.get("type", None)
-
-    if file_type == "audio":
-        entries = get_entries_for_range(day, start, end, audio=True, screen=False)
-    elif file_type == "screen":
-        entries = get_entries_for_range(day, start, end, audio=False, screen=True)
-    else:
-        entries = get_entries_for_range(day, start, end, audio=True, screen=True)
+    audio = file_type != "screen"
+    screen = file_type != "audio"
+    entries = get_entries_for_range(day, start, end, audio=audio, screen=screen)
 
     media = []
     for e in entries:
@@ -180,12 +191,38 @@ def serve_file(day: str, encoded_path: str) -> Any:
         if not os.path.isfile(full_path):
             return "", 404
 
-        from flask import send_file
-
         return send_file(full_path)
 
     except Exception:
         return "", 404
+
+
+def _build_ffmpeg_cmd(
+    input_args: list[str],
+    output_path: str,
+    title: str,
+    year: int,
+    time_range: str,
+) -> list[str]:
+    """Build ffmpeg command with common encoding and metadata options."""
+    return [
+        "ffmpeg",
+        *input_args,
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
+        "-metadata",
+        f"title={title}",
+        "-metadata",
+        "album=Sunstone Journal",
+        "-metadata",
+        f"date={year}",
+        "-metadata",
+        f"comment=Time range: {time_range}",
+        "-y",
+        output_path,
+    ]
 
 
 @transcripts_bp.route("/api/download_audio/<day>")
@@ -196,17 +233,8 @@ def download_audio(day: str) -> Any:
 
     start = request.args.get("start", "")
     end = request.args.get("end", "")
-    if not re.fullmatch(r"\d{6}", start) or not re.fullmatch(r"\d{6}", end):
+    if not TIME_RE.fullmatch(start) or not TIME_RE.fullmatch(end):
         return "", 400
-
-    import subprocess
-    import tempfile
-    from pathlib import Path
-
-    from flask import send_file
-
-    from think.cluster import get_entries_for_range
-    from think.utils import get_raw_file
 
     day_dir = str(day_path(day))
     if not os.path.isdir(day_dir):
@@ -218,11 +246,11 @@ def download_audio(day: str) -> Any:
     for e in entries:
         if e.get("prefix") == "audio":
             try:
-                rel_path, mime_type, metadata = get_raw_file(day, e["name"])
+                rel_path, _, _ = get_raw_file(day, e["name"])
                 flac_path = os.path.join(day_dir, rel_path)
                 if os.path.isfile(flac_path):
                     audio_files.append(flac_path)
-            except (ValueError, Exception):
+            except Exception:
                 continue
 
     if not audio_files:
@@ -236,6 +264,7 @@ def download_audio(day: str) -> Any:
     date_obj = datetime.strptime(day, "%Y%m%d")
     date_formatted = date_obj.strftime("%B %d, %Y")
     time_range = f"{start_dt.strftime('%I:%M %p')} - {end_dt.strftime('%I:%M %p')}"
+    title = f"Sunstone Recording - {date_formatted} {time_range}"
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -243,57 +272,19 @@ def download_audio(day: str) -> Any:
             output_mp3 = temp_path / filename
 
             if len(audio_files) == 1:
-                cmd = [
-                    "ffmpeg",
-                    "-i",
-                    audio_files[0],
-                    "-c:a",
-                    "libmp3lame",
-                    "-b:a",
-                    "192k",
-                    "-metadata",
-                    f"title=Sunstone Recording - {date_formatted} {time_range}",
-                    "-metadata",
-                    "album=Sunstone Journal",
-                    "-metadata",
-                    f"date={date_obj.year}",
-                    "-metadata",
-                    f"comment=Time range: {time_range}",
-                    "-y",
-                    str(output_mp3),
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
+                input_args = ["-i", audio_files[0]]
             else:
                 concat_file = temp_path / "concat.txt"
                 with open(concat_file, "w") as f:
                     for flac_file in audio_files:
                         escaped_path = str(flac_file).replace("'", "'\\''")
                         f.write(f"file '{escaped_path}'\n")
+                input_args = ["-f", "concat", "-safe", "0", "-i", str(concat_file)]
 
-                cmd = [
-                    "ffmpeg",
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    str(concat_file),
-                    "-c:a",
-                    "libmp3lame",
-                    "-b:a",
-                    "192k",
-                    "-metadata",
-                    f"title=Sunstone Recording - {date_formatted} {time_range}",
-                    "-metadata",
-                    "album=Sunstone Journal",
-                    "-metadata",
-                    f"date={date_obj.year}",
-                    "-metadata",
-                    f"comment=Time range: {time_range}",
-                    "-y",
-                    str(output_mp3),
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
+            cmd = _build_ffmpeg_cmd(
+                input_args, str(output_mp3), title, date_obj.year, time_range
+            )
+            subprocess.run(cmd, check=True, capture_output=True)
 
             return send_file(
                 str(output_mp3),
@@ -319,20 +310,16 @@ def api_stats(month: str):
         JSON dict mapping day (YYYYMMDD) to transcript range count.
         Transcripts app is not facet-aware, so returns simple {day: count} mapping.
     """
-    if not re.fullmatch(r"\d{6}", month):
+    if not TIME_RE.fullmatch(month):
         return jsonify({"error": "Invalid month format, expected YYYYMM"}), 400
-
-    from think.cluster import cluster_scan
 
     stats: dict[str, int] = {}
 
     for day_name in day_dirs().keys():
-        # Filter to only days in requested month
         if not day_name.startswith(month):
             continue
 
         audio_ranges, screen_ranges = cluster_scan(day_name)
-        # Count total ranges (audio + screen, but unique time slots)
         total_ranges = len(audio_ranges) + len(screen_ranges)
         if total_ranges > 0:
             stats[day_name] = total_ranges
@@ -349,8 +336,6 @@ def screen_frames(day: str, segment_key: str) -> Any:
     """
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
-
-    from think.utils import segment_key as validate_segment_key
 
     if not validate_segment_key(segment_key):
         return "", 404
@@ -374,9 +359,6 @@ def screen_frames(day: str, segment_key: str) -> Any:
     screen_files = glob(os.path.join(segment_dir, "*screen.jsonl"))
     if not screen_files:
         return jsonify({"frames": []})
-
-    from observe.see import decode_frames, image_to_jpeg_bytes
-    from observe.utils import load_analysis_frames
 
     all_metadata = []
 
@@ -453,12 +435,9 @@ def screen_frame(day: str, segment_key: str, filename: str, frame_id: int) -> An
     if not re.fullmatch(DATE_RE.pattern, day):
         return "", 404
 
-    from think.utils import segment_key as validate_segment_key
-
     if not validate_segment_key(segment_key):
         return "", 404
 
-    # Validate filename pattern
     if not filename.endswith("screen.jsonl"):
         return "", 404
 
@@ -467,14 +446,9 @@ def screen_frame(day: str, segment_key: str, filename: str, frame_id: int) -> An
     if _screen_cache["segment"] != cache_key:
         return jsonify({"error": "Segment not cached. Load frames list first."}), 404
 
-    # Look up frame in cache
     frame_key = (filename, frame_id)
     if frame_key not in _screen_cache["frames"]:
         return jsonify({"error": "Frame not found in cache."}), 404
-
-    import io
-
-    from flask import send_file
 
     jpeg_bytes = _screen_cache["frames"][frame_key]
     buffer = io.BytesIO(jpeg_bytes)
