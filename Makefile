@@ -1,7 +1,7 @@
 # Sunstone Makefile
 # Python-based AI-driven desktop journaling toolkit
 
-.PHONY: install deps test test-apps test-app lint format check clean dev full all
+.PHONY: install deps test test-apps test-app lint format check clean dev full all convey-restart screenshot
 
 # Default target - install package in editable mode
 all: install
@@ -196,59 +196,28 @@ pre-commit:
 pre-push: format lint-flake8 test
 	@echo "Ready to push!"
 
+# Restart Convey web service via supervisor
+convey-restart:
+	unset JOURNAL_PATH && convey-restart -v
+
 # Capture screenshot of a Convey view
 screenshot:
 	@if [ -z "$(VIEW)" ]; then \
 		echo "ERROR: VIEW parameter is required"; \
 		echo ""; \
-		echo "Usage: make screenshot VIEW=<route> RESTART=<0|1> [OUTPUT=path] [SCRIPT=\"js...\"]"; \
+		echo "Usage: make screenshot VIEW=<route> [OUTPUT=path] [SCRIPT=\"js...\"]"; \
 		echo ""; \
 		echo "Parameters:"; \
 		echo "  VIEW     - Route to screenshot (e.g., /, /facets, /search)"; \
-		echo "  RESTART  - Required boolean (1/true/yes or 0/false/no)"; \
 		echo "  OUTPUT   - Optional output path (default: logs/screenshot.png)"; \
 		echo "  SCRIPT   - Optional JavaScript to execute before screenshot"; \
 		echo ""; \
-		echo "RESTART Guidelines:"; \
-		echo "  Use RESTART=1 when:"; \
-		echo "    - Convey code has changed (convey/*.py, convey/templates/*, convey/static/*)"; \
-		echo "    - App code has changed (apps/*/)"; \
-		echo "    - Static content has changed (CSS, JS, templates)"; \
-		echo "  Use RESTART=0 when:"; \
-		echo "    - Taking multiple screenshots without code/content changes"; \
-		echo "    - Service is already running with latest code"; \
-		echo ""; \
 		echo "Examples:"; \
-		echo "  make screenshot VIEW=/ RESTART=1"; \
-		echo "  make screenshot VIEW=/facets RESTART=0 OUTPUT=screenshots/facets.png"; \
-		echo "  make screenshot VIEW=/ RESTART=0 SCRIPT=\"document.querySelector('nav').style.display='none'\""; \
+		echo "  make screenshot VIEW=/"; \
+		echo "  make screenshot VIEW=/facets OUTPUT=screenshots/facets.png"; \
+		echo "  make screenshot VIEW=/ SCRIPT=\"document.querySelector('nav').style.display='none'\""; \
+		echo ""; \
+		echo "Note: Run 'make convey-restart' first if you've changed code in convey/ or apps/"; \
 		exit 1; \
-	fi; \
-	if [ -z "$(RESTART)" ]; then \
-		echo "ERROR: RESTART parameter is required"; \
-		echo ""; \
-		echo "Usage: make screenshot VIEW=<route> RESTART=<0|1> [OUTPUT=path] [SCRIPT=\"js...\"]"; \
-		echo ""; \
-		echo "RESTART must be specified as a boolean:"; \
-		echo "  RESTART=1 (or true/yes)  - Restart convey service before screenshot"; \
-		echo "  RESTART=0 (or false/no)  - Skip restart (use when no code changes)"; \
-		echo ""; \
-		echo "RESTART=1 is required when convey/app code or static content has changed."; \
-		echo "RESTART=0 can be used between subsequent screenshots without code updates."; \
-		exit 1; \
-	fi; \
-	RESTART_FLAG=""; \
-	case "$(RESTART)" in \
-		1|true|yes|TRUE|YES|True|Yes) \
-			RESTART_FLAG="--restart"; \
-			;; \
-		0|false|no|FALSE|NO|False|No) \
-			RESTART_FLAG=""; \
-			;; \
-		*) \
-			echo "ERROR: Invalid RESTART value: $(RESTART)"; \
-			echo "RESTART must be: 1/true/yes (to restart) or 0/false/no (to skip)"; \
-			exit 1; \
-			;; \
-	esac; \
-	unset JOURNAL_PATH && convey-screenshot -v $$RESTART_FLAG $(VIEW) $(if $(OUTPUT),-o $(OUTPUT)) $(if $(SCRIPT),--script "$(SCRIPT)")
+	fi
+	unset JOURNAL_PATH && convey-screenshot -v $(VIEW) $(if $(OUTPUT),-o $(OUTPUT)) $(if $(SCRIPT),--script "$(SCRIPT)")

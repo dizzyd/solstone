@@ -159,8 +159,11 @@ make test-integration-only TEST=name
 make coverage               # Generates htmlcov/index.html
 
 # UI testing
+make convey-restart           # Restart Convey service (after code changes)
 make screenshot VIEW=<route>  # Capture Convey view screenshot
 ```
+
+**Important:** Always run `make convey-restart` after editing anything in `convey/` or `apps/` to clear caches and reload code.
 
 ### Development Workflow
 ```bash
@@ -228,6 +231,7 @@ make lint          # Check code quality
 
 # Testing & Debugging
 make test-integration         # Run integration tests
+make convey-restart           # Restart Convey service (after code changes)
 make screenshot VIEW=<route>  # Capture Convey view screenshot
 make coverage                 # Generate coverage report
 
