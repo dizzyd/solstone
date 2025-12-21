@@ -144,12 +144,12 @@ def _match_streams_to_monitors(streams: list[dict], monitors: list[dict]) -> lis
         stream_pos = _variant_or_value(props.get("position", (0, 0)))
         stream_size = _variant_or_value(props.get("size", (0, 0)))
 
-        if isinstance(stream_pos, tuple) and len(stream_pos) >= 2:
+        if isinstance(stream_pos, (tuple, list)) and len(stream_pos) >= 2:
             sx, sy = int(stream_pos[0]), int(stream_pos[1])
         else:
             sx, sy = 0, 0
 
-        if isinstance(stream_size, tuple) and len(stream_size) >= 2:
+        if isinstance(stream_size, (tuple, list)) and len(stream_size) >= 2:
             sw, sh = int(stream_size[0]), int(stream_size[1])
         else:
             sw, sh = 0, 0

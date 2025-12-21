@@ -3,13 +3,7 @@
 import json
 import logging
 import re
-from math import ceil
 from pathlib import Path
-from typing import Dict
-
-import av
-import numpy as np
-from skimage.metrics import structural_similarity as ssim
 
 from think.utils import segment_key
 
@@ -112,11 +106,11 @@ def parse_screen_filename(filename: str) -> tuple[str, str]:
 
 def assign_monitor_positions(monitors: list[dict]) -> list[dict]:
     """
-    Assign position labels to monitors based on their center points.
+    Assign position labels to monitors based on relative positions.
 
-    Uses center-point comparison against the union bounding box midlines to
-    determine relative positions. This ensures unique positions for common
-    multi-monitor configurations (side-by-side, stacked, grid).
+    Uses pairwise comparison to determine positions. Vertical labels (top/bottom)
+    are only assigned when monitors actually overlap horizontally, avoiding
+    phantom relationships from offset monitors.
 
     Parameters
     ----------
@@ -129,9 +123,9 @@ def assign_monitor_positions(monitors: list[dict]) -> list[dict]:
     -------
     list[dict]
         Same monitors with "position" key added to each:
-        - "center": Monitor center at union midpoint
+        - "center": No monitors on both sides
         - "left"/"right": Horizontal position
-        - "top"/"bottom": Vertical position
+        - "top"/"bottom": Vertical position (only with horizontal overlap)
         - "left-top", "right-bottom", etc.: Corner positions
 
     Examples
@@ -150,140 +144,75 @@ def assign_monitor_positions(monitors: list[dict]) -> list[dict]:
         return []
 
     if len(monitors) == 1:
-        # Single monitor is always "center"
         monitors[0]["position"] = "center"
         return monitors
 
-    # Compute union bounding box
-    min_x = min(m["box"][0] for m in monitors)
-    min_y = min(m["box"][1] for m in monitors)
-    max_x = max(m["box"][2] for m in monitors)
-    max_y = max(m["box"][3] for m in monitors)
-
-    # Compute midlines of union box
-    union_mid_x = (min_x + max_x) / 2
-    union_mid_y = (min_y + max_y) / 2
-
-    # Tolerance for "center" classification (monitor center within 1px of midline)
+    # Tolerance for center classification
     epsilon = 1
 
     for m in monitors:
         x1, y1, x2, y2 = m["box"]
-
-        # Compute monitor center point
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
 
-        # Horizontal position based on center point
-        if abs(center_x - union_mid_x) <= epsilon:
+        has_left = False
+        has_right = False
+        has_above = False
+        has_below = False
+
+        for other in monitors:
+            if other is m:
+                continue
+
+            ox1, oy1, ox2, oy2 = other["box"]
+            other_center_x = (ox1 + ox2) / 2
+            other_center_y = (oy1 + oy2) / 2
+
+            # Horizontal relationship (always check)
+            if other_center_x < center_x - epsilon:
+                has_left = True
+            elif other_center_x > center_x + epsilon:
+                has_right = True
+
+            # Vertical relationship only if horizontal overlap exists
+            # Overlap means ranges intersect (not just touch)
+            h_overlap = (x1 < ox2) and (x2 > ox1)
+            if h_overlap:
+                if other_center_y < center_y - epsilon:
+                    has_above = True
+                elif other_center_y > center_y + epsilon:
+                    has_below = True
+
+        # Determine horizontal label
+        if has_left and has_right:
             h_pos = "center"
-        elif center_x < union_mid_x:
+        elif has_left:
+            h_pos = "right"
+        elif has_right:
             h_pos = "left"
         else:
-            h_pos = "right"
+            h_pos = "center"
 
-        # Vertical position based on center point
-        if abs(center_y - union_mid_y) <= epsilon:
-            v_pos = "center"
-        elif center_y < union_mid_y:
+        # Determine vertical label (only if monitors above/below with overlap)
+        if has_above and has_below:
+            v_pos = "middle"
+        elif has_above:
+            v_pos = "bottom"
+        elif has_below:
             v_pos = "top"
         else:
-            v_pos = "bottom"
+            v_pos = None
 
         # Combine positions
-        if h_pos == "center" and v_pos == "center":
-            position = "center"
+        if v_pos is None:
+            position = h_pos
         elif h_pos == "center":
             position = v_pos
-        elif v_pos == "center":
-            position = h_pos
         else:
             position = f"{h_pos}-{v_pos}"
 
         m["position"] = position
 
-    return monitors
-
-
-def parse_monitor_metadata(
-    title: str, video_width: int, video_height: int
-) -> Dict[str, dict]:
-    """
-    Parse monitor metadata from video title string.
-
-    Parameters
-    ----------
-    title : str
-        Video title metadata (e.g., "DP-3:center,1920,0,5360,1440 HDMI-4:right,5360,219,7280,1299")
-    video_width : int
-        Video frame width in pixels
-    video_height : int
-        Video frame height in pixels
-
-    Returns
-    -------
-    Dict[str, dict]
-        Mapping of monitor_id to monitor info with keys:
-        - name: Monitor identifier
-        - position: Position label (e.g., "center", "right", "unknown")
-        - x1, y1: Top-left coordinates
-        - x2, y2: Bottom-right coordinates
-
-        If title is empty or unparseable, returns single monitor covering full frame.
-
-    Examples
-    --------
-    >>> parse_monitor_metadata("DP-3:center,0,0,1920,1080", 1920, 1080)
-    {'DP-3': {'name': 'DP-3', 'position': 'center', 'x1': 0, 'y1': 0, 'x2': 1920, 'y2': 1080}}
-
-    >>> parse_monitor_metadata("", 1920, 1080)
-    {'0': {'name': '0', 'position': 'unknown', 'x1': 0, 'y1': 0, 'x2': 1920, 'y2': 1080}}
-    """
-    if not title:
-        # No metadata - return single monitor covering full frame
-        return {
-            "0": {
-                "name": "0",
-                "position": "unknown",
-                "x1": 0,
-                "y1": 0,
-                "x2": video_width,
-                "y2": video_height,
-            }
-        }
-
-    monitors = {}
-    # Parse space-separated monitor entries
-    for entry in title.split():
-        # Format: "DP-3:center,1920,0,5360,1440"
-        # Monitor name can be any character except ':' or whitespace
-        match = re.match(r"([^:\s]+):([^,]+),(\d+),(\d+),(\d+),(\d+)", entry.strip())
-        if match:
-            monitor_name, position, x1, y1, x2, y2 = match.groups()
-            monitors[monitor_name] = {
-                "name": monitor_name,
-                "position": position,
-                "x1": int(x1),
-                "y1": int(y1),
-                "x2": int(x2),
-                "y2": int(y2),
-            }
-
-    if not monitors:
-        logger.warning(f"Could not parse monitor metadata from title: {title}")
-        # Return single monitor covering full frame
-        return {
-            "0": {
-                "name": "0",
-                "position": "unknown",
-                "x1": 0,
-                "y1": 0,
-                "x2": video_width,
-                "y2": video_height,
-            }
-        }
-
-    logger.info(f"Parsed {len(monitors)} monitors from metadata")
     return monitors
 
 
@@ -339,97 +268,6 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
     if header:
         return [header] + frames
     return frames
-
-
-def get_frames(container: av.container.Container) -> list[tuple[float, int]]:
-    """
-    Get frames sorted by compressed packet size from a video container.
-
-    Larger packets typically indicate more complex/detailed frames with more
-    visual change. This method is fast since it reads packets without decoding.
-    Samples frames at 1.0 second intervals.
-
-    Args:
-        container: PyAV container opened for reading
-
-    Returns:
-        List of (timestamp, packet_size) tuples sorted by packet size descending
-    """
-    # Scan video packets and collect frame data
-    frame_data = []  # List of (timestamp, packet_size)
-    sample_interval = 1.0
-    last_sampled = -sample_interval
-
-    for packet in container.demux(video=0):
-        if packet.pts is None:
-            continue
-
-        timestamp = float(packet.pts * packet.time_base)
-
-        # Sample at 1 second intervals
-        if timestamp - last_sampled >= sample_interval:
-            frame_data.append((timestamp, packet.size))
-            last_sampled = timestamp
-
-    # Sort by packet size descending
-    frame_data.sort(key=lambda x: x[1], reverse=True)
-
-    return frame_data
-
-
-def compare_frames(
-    frame1: av.VideoFrame,
-    frame2: av.VideoFrame,
-    block_size: int = 64,
-    ssim_threshold: float = 0.90,
-    margin: int = 5,
-) -> list[dict]:
-    """
-    Compare two PyAV video frames and return bounding boxes of changed regions.
-
-    Uses block-based SSIM on Y-plane (luma) for efficient detection of perceptual
-    changes without full RGB decoding. Optimized to work directly with PyAV frames
-    for ~3-5x faster performance.
-
-    Args:
-        frame1: First video frame
-        frame2: Second video frame
-        block_size: Size of comparison blocks in pixels (default 64)
-        ssim_threshold: SSIM threshold below which blocks are marked as changed (default 0.90)
-        margin: Pixel margin to add around bounding boxes (default 5)
-
-    Returns:
-        List of dicts with 'box_2d' key containing [y_min, x_min, y_max, x_max] coordinates
-    """
-    # Extract Y-plane (luma) directly - equivalent to LAB L-channel
-    y_plane1 = frame1.to_ndarray(format="gray")
-    y_plane2 = frame2.to_ndarray(format="gray")
-
-    height, width = y_plane1.shape
-    grid_rows = ceil(height / block_size)
-    grid_cols = ceil(width / block_size)
-    changed = [[False] * grid_cols for _ in range(grid_rows)]
-
-    # Compute SSIM for each block
-    for i in range(grid_rows):
-        for j in range(grid_cols):
-            y0 = i * block_size
-            x0 = j * block_size
-            y1 = min(y0 + block_size, height)
-            x1 = min(x0 + block_size, width)
-            block1 = y_plane1[y0:y1, x0:x1]
-            block2 = y_plane2[y0:y1, x0:x1]
-            score, _ = ssim(block1, block2, full=True)
-            if score < ssim_threshold:
-                changed[i][j] = True
-
-    # Group contiguous changed blocks using DFS
-    groups = _group_changed_blocks(changed, grid_rows, grid_cols)
-
-    # Convert groups to bounding boxes
-    boxes = _blocks_to_boxes(groups, block_size, width, height, margin)
-
-    return boxes
 
 
 def _group_changed_blocks(changed, grid_rows, grid_cols):

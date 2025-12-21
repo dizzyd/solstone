@@ -31,7 +31,6 @@ import logging
 import os
 import sys
 import time
-from pathlib import Path
 
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
