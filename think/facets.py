@@ -387,6 +387,63 @@ def is_facet_muted(facet: str) -> bool:
     return bool(facets[facet].get("muted", False))
 
 
+def get_active_facets(day: str) -> set[str]:
+    """Return facets that had activity on a given day.
+
+    Activity is determined by the presence of occurrence events (not anticipations)
+    in the facet's events file for that day.
+
+    Args:
+        day: Day in YYYYMMDD format
+
+    Returns:
+        Set of facet names that had at least one occurrence event on that day
+
+    Raises:
+        RuntimeError: If JOURNAL_PATH is not set
+    """
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+    if not journal:
+        raise RuntimeError("JOURNAL_PATH not set")
+
+    facets_dir = Path(journal) / "facets"
+    active: set[str] = set()
+
+    if not facets_dir.exists():
+        return active
+
+    for facet_path in facets_dir.iterdir():
+        if not facet_path.is_dir():
+            continue
+
+        facet_name = facet_path.name
+        events_file = facet_path / "events" / f"{day}.jsonl"
+
+        if not events_file.exists():
+            continue
+
+        # Check for at least one occurrence (occurred=true)
+        try:
+            with open(events_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        # Only count occurrences, not anticipations
+                        if event.get("occurred", True):
+                            active.add(facet_name)
+                            break  # Found one, no need to check more
+                    except json.JSONDecodeError:
+                        continue
+        except (OSError, IOError):
+            continue
+
+    return active
+
+
 def set_facet_muted(facet: str, muted: bool) -> None:
     """Mute or unmute a facet by updating facet.json.
 

@@ -16,7 +16,7 @@ from desktop_notifier import DesktopNotifier, Urgency
 
 from muse.cortex_client import cortex_request
 from think.callosum import CallosumConnection, CallosumServer
-from think.facets import get_facets
+from think.facets import get_active_facets, get_facets
 from think.runner import ManagedProcess as RunnerManagedProcess
 from think.utils import get_agents, setup_cli
 
@@ -416,16 +416,19 @@ async def check_scheduled_agents() -> None:
         # Get agents directory for tracking active files
         agents_dir = _get_journal_path() / "agents"
 
+        # Pre-compute shared data for multi-facet agents (same for all agents in group)
+        # yesterday is the same for all agents in the group (YYYY-MM-DD format)
+        yesterday = agents_list[0][2] if agents_list else ""
+        yesterday_yyyymmdd = yesterday.replace("-", "")
+        facets = get_facets()
+        enabled_facets = {k: v for k, v in facets.items() if not v.get("muted", False)}
+        active_facets = get_active_facets(yesterday_yyyymmdd)
+
         active_files = []
         for persona_id, config, yesterday in agents_list:
             try:
                 # Check if this is a multi-facet agent
                 if config.get("multi_facet"):
-                    facets = get_facets()
-                    # Filter out muted facets for automated runs
-                    enabled_facets = {
-                        k: v for k, v in facets.items() if not v.get("muted", False)
-                    }
                     muted_count = len(facets) - len(enabled_facets)
                     if muted_count > 0:
                         muted_names = [
@@ -435,7 +438,18 @@ async def check_scheduled_agents() -> None:
                             f"Skipping {muted_count} muted facet(s) for {persona_id}: "
                             f"{', '.join(muted_names)}"
                         )
+
+                    always_run = config.get("always", False)
+
                     for facet_name in enabled_facets.keys():
+                        # Skip inactive facets unless agent has always=true
+                        if not always_run and facet_name not in active_facets:
+                            logging.info(
+                                f"Skipping {persona_id} for {facet_name}: "
+                                f"no activity on {yesterday}"
+                            )
+                            continue
+
                         logging.info(f"Spawning {persona_id} for facet: {facet_name}")
                         agent_id = cortex_request(
                             prompt=f"You are processing facet '{facet_name}' for yesterday ({yesterday}), use get_facet('{facet_name}') to load the correct context before starting.",

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from think.facets import facet_summaries, facet_summary, get_facets
+from think.facets import facet_summaries, facet_summary, get_active_facets, get_facets
 
 # Use the permanent fixtures in fixtures/journal/facets/
 FIXTURES_PATH = Path(__file__).parent.parent / "fixtures" / "journal"
@@ -224,3 +224,91 @@ def test_facet_summaries_mixed_entities(monkeypatch):
                 assert not lines[j].strip().startswith("- **Entities**:")
                 j += 1
             break
+
+
+def test_get_active_facets_with_occurrences(monkeypatch, tmp_path):
+    """Test get_active_facets() returns facets with occurrence events."""
+    # Create journal structure with events
+    journal = tmp_path / "journal"
+    facets_dir = journal / "facets"
+
+    # Create facet with occurrence events
+    work_events = facets_dir / "work" / "events"
+    work_events.mkdir(parents=True)
+    (work_events / "20240115.jsonl").write_text(
+        '{"title": "Meeting", "occurred": true}\n'
+        '{"title": "Call", "occurred": true}\n'
+    )
+
+    # Create facet with only anticipation events (should NOT be active)
+    personal_events = facets_dir / "personal" / "events"
+    personal_events.mkdir(parents=True)
+    (personal_events / "20240115.jsonl").write_text(
+        '{"title": "Future meeting", "occurred": false}\n'
+    )
+
+    # Create facet with no events file
+    (facets_dir / "empty" / "events").mkdir(parents=True)
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+
+    active = get_active_facets("20240115")
+
+    assert active == {"work"}
+
+
+def test_get_active_facets_mixed_events(monkeypatch, tmp_path):
+    """Test get_active_facets() with mixed occurrence and anticipation events."""
+    journal = tmp_path / "journal"
+    events_dir = journal / "facets" / "mixed" / "events"
+    events_dir.mkdir(parents=True)
+
+    # File with both types - should be active because it has at least one occurrence
+    (events_dir / "20240115.jsonl").write_text(
+        '{"title": "Future event", "occurred": false}\n'
+        '{"title": "Past event", "occurred": true}\n'
+    )
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+
+    active = get_active_facets("20240115")
+
+    assert active == {"mixed"}
+
+
+def test_get_active_facets_no_facets(monkeypatch, tmp_path):
+    """Test get_active_facets() when no facets directory exists."""
+    journal = tmp_path / "journal"
+    journal.mkdir()
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+
+    active = get_active_facets("20240115")
+
+    assert active == set()
+
+
+def test_get_active_facets_no_journal_path(monkeypatch):
+    """Test get_active_facets() without JOURNAL_PATH set."""
+    monkeypatch.setenv("JOURNAL_PATH", "")
+
+    with pytest.raises(RuntimeError, match="JOURNAL_PATH not set"):
+        get_active_facets("20240115")
+
+
+def test_get_active_facets_default_occurred(monkeypatch, tmp_path):
+    """Test get_active_facets() treats missing 'occurred' field as True."""
+    journal = tmp_path / "journal"
+    events_dir = journal / "facets" / "legacy" / "events"
+    events_dir.mkdir(parents=True)
+
+    # Event without explicit occurred field - should default to True (active)
+    (events_dir / "20240115.jsonl").write_text(
+        '{"title": "Meeting without occurred field"}\n'
+    )
+
+    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+
+    active = get_active_facets("20240115")
+
+    assert active == {"legacy"}

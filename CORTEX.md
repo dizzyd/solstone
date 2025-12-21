@@ -250,9 +250,11 @@ The `.json` file for a persona can include:
   - Lower numbers run first (e.g., priority 10 runs before priority 50)
   - Used to control the order when multiple agents have the same schedule
 - `multi_facet`: Boolean flag for facet-aware agents (default: false)
-  - When true, the agent is spawned once for each facet in the journal
+  - When true, the agent is spawned once for each **active** facet (see Multi-Facet Agents section)
   - Each instance receives a facet-specific prompt with the facet name
   - Useful for creating per-facet reports, newsletters, or analyses
+- `always`: Override active facet detection for multi-facet agents (default: false)
+  - When true, agent runs for all non-muted facets regardless of activity
 
 ## MCP Tools Integration
 
@@ -299,18 +301,31 @@ Scheduled agents run in priority order (lower numbers first):
 
 ### Multi-Facet Agents
 When an agent has `"multi_facet": true`:
-1. The agent is spawned once for each facet in `<journal>/facets/`
+1. The agent is spawned once for each **active** facet
 2. Each instance receives a prompt including the facet name
 3. The agent should call `get_facet(facet_name)` to load facet context
 4. This enables per-facet reports, newsletters, and analyses
 
-Example configuration:
+**Active Facet Detection**: By default, multi-facet agents only run for facets that had activity the previous day. Activity is determined by the presence of occurrence events (not anticipations) in `facets/{facet}/events/{day}.jsonl`. This prevents unnecessary agent runs for inactive facets.
+
+To force an agent to run for all facets regardless of activity, set `"always": true`:
+
 ```json
 {
   "title": "Facet Newsletter Generator",
   "schedule": "daily",
   "priority": 10,
   "multi_facet": true,
+  "tools": "journal,facets"
+}
+```
+
+```json
+{
+  "title": "Facet Auditor",
+  "schedule": "daily",
+  "multi_facet": true,
+  "always": true,
   "tools": "journal,facets"
 }
 ```
