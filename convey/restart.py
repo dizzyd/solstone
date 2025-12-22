@@ -4,16 +4,28 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import threading
 import time
+from pathlib import Path
 
 from think.callosum import CallosumConnection
 from think.utils import setup_cli
 
 
+def _tail_lines(path: Path, n: int = 10) -> list[str]:
+    """Return the last n lines of a file."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+            return [line.rstrip("\n") for line in lines[-n:]]
+    except (OSError, IOError):
+        return []
+
+
 def wait_for_convey_restart(
-    timeout: float = 5.0,
+    timeout: float = 30.0,
 ) -> tuple[bool, list[tuple[float, str, str]]]:
     """Restart convey service and wait for it to be ready.
 
@@ -138,18 +150,30 @@ def main() -> None:
     parser.add_argument(
         "--timeout",
         type=float,
-        default=5.0,
-        help="Maximum seconds to wait for restart (default: 5.0)",
+        default=30.0,
+        help="Maximum seconds to wait for restart (default: 30.0)",
     )
 
     args = setup_cli(parser)
 
     success, logs = wait_for_convey_restart(timeout=args.timeout)
 
+    # Always show last 10 lines of convey.log
+    journal = os.getenv("JOURNAL_PATH")
+    if journal:
+        log_path = Path(journal) / "health" / "convey.log"
+        tail = _tail_lines(log_path, 10)
+        if tail:
+            print("\nLast 10 lines of convey.log:", file=sys.stderr)
+            print("-" * 60, file=sys.stderr)
+            for line in tail:
+                print(line, file=sys.stderr)
+            print("-" * 60, file=sys.stderr)
+
     if not success:
         print("\nERROR: Convey service failed to restart", file=sys.stderr)
         if logs:
-            print("\nCollected logs:", file=sys.stderr)
+            print("\nCollected Callosum logs:", file=sys.stderr)
             print("-" * 60, file=sys.stderr)
             for timestamp, stream, line in logs:
                 # Format timestamp as readable time
