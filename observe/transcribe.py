@@ -260,9 +260,21 @@ class Transcriber:
                 # Mix to mono for clips
                 data = data.mean(axis=1)
 
-            # Extract date from parent directory (YYYYMMDD) and time from filename
-            day_str = raw_path.parent.name
-            time_part = raw_path.stem.split("_")[0]
+            # Extract date and time based on path structure
+            # Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> parent=YYYYMMDD, stem=HHMMSS_...
+            # Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> grandparent=YYYYMMDD, parent=HHMMSS_LEN
+            from think.utils import segment_key
+
+            parent_segment = segment_key(raw_path.parent.name)
+            if parent_segment:
+                # Segment dir: extract from grandparent and parent
+                day_str = raw_path.parent.parent.name
+                time_part = raw_path.parent.name.split("_")[0]
+            else:
+                # Day root: extract from parent and filename
+                day_str = raw_path.parent.name
+                time_part = raw_path.stem.split("_")[0]
+
             base_dt = datetime.datetime.strptime(
                 f"{day_str}_{time_part}", "%Y%m%d_%H%M%S"
             )
@@ -319,29 +331,46 @@ class Transcriber:
     def _get_json_path(self, audio_path: Path) -> Path:
         """Generate the corresponding JSONL path in timestamp directory.
 
-        Maps audio filename suffix to JSONL name:
-        - audio.flac -> audio.jsonl
-        - mic_audio.flac -> mic_audio.jsonl
-        - <source>_audio.flac -> <source>_audio.jsonl
+        Handles both locations:
+        - Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> YYYYMMDD/HHMMSS_LEN/audio.jsonl
+        - Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> YYYYMMDD/HHMMSS_LEN/audio.jsonl
         """
         from observe.utils import extract_descriptive_suffix
         from think.utils import segment_key
 
+        # Check if already in segment directory (parent is HHMMSS_LEN)
+        parent_segment = segment_key(audio_path.parent.name)
+        if parent_segment:
+            # Already in segment dir - use stem directly as suffix
+            return audio_path.parent / f"{audio_path.stem}.jsonl"
+
+        # Day root - derive segment from filename
         segment = segment_key(audio_path.stem)
         if segment is None:
             raise ValueError(f"Invalid audio filename: {audio_path.stem}")
         segment_dir = audio_path.parent / segment
         segment_dir.mkdir(exist_ok=True)
 
-        # Derive JSON filename from audio filename suffix
         suffix = extract_descriptive_suffix(audio_path.stem)
         return segment_dir / f"{suffix}.jsonl"
 
     def _get_embeddings_dir(self, audio_path: Path) -> Path:
-        """Get directory for storing speaker embeddings."""
+        """Get directory for storing speaker embeddings.
+
+        Handles both locations:
+        - Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> YYYYMMDD/HHMMSS_LEN/audio/
+        - Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> YYYYMMDD/HHMMSS_LEN/audio/
+        """
         from observe.utils import extract_descriptive_suffix
         from think.utils import segment_key
 
+        # Check if already in segment directory (parent is HHMMSS_LEN)
+        parent_segment = segment_key(audio_path.parent.name)
+        if parent_segment:
+            # Already in segment dir - use stem directly
+            return audio_path.parent / audio_path.stem
+
+        # Day root - derive segment from filename
         segment = segment_key(audio_path.stem)
         if segment is None:
             raise ValueError(f"Invalid audio filename: {audio_path.stem}")
@@ -411,9 +440,20 @@ class Transcriber:
                     transcript_items = result[:-1]
 
             # Add audio file reference to metadata
-            from observe.utils import extract_descriptive_suffix
+            # Day root: stem is HHMMSS_LEN_suffix, need to extract suffix
+            # Segment dir: stem is already the suffix (e.g., "audio")
+            from think.utils import segment_key
 
-            suffix = extract_descriptive_suffix(raw_path.stem)
+            parent_segment = segment_key(raw_path.parent.name)
+            if parent_segment:
+                # Segment dir: stem is already the suffix
+                suffix = raw_path.stem
+            else:
+                # Day root: extract suffix from HHMMSS_LEN_suffix format
+                from observe.utils import extract_descriptive_suffix
+
+                suffix = extract_descriptive_suffix(raw_path.stem)
+
             metadata["raw"] = f"{suffix}.flac"
 
             # Extract source from <source>_audio pattern
@@ -437,13 +477,19 @@ class Transcriber:
             logging.error(f"Failed to transcribe {raw_path}: {e}", exc_info=True)
             return False
 
-    def _handle_raw(self, raw_path: Path) -> None:
-        """Process a raw audio file."""
+    def _handle_raw(self, raw_path: Path, redo: bool = False) -> None:
+        """Process a raw audio file.
+
+        Args:
+            raw_path: Path to audio file
+            redo: If True, skip "already processed" check and don't move file
+                  (for reprocessing files already in segment directories)
+        """
         start_time = time.time()
 
-        # Skip if already processed
+        # Skip if already processed (unless redo mode)
         json_path = self._get_json_path(raw_path)
-        if json_path.exists():
+        if not redo and json_path.exists():
             logging.info(f"Already processed, moving to timestamp dir: {raw_path}")
             self._move_to_segment(raw_path)
             return
@@ -464,7 +510,11 @@ class Transcriber:
         # Transcribe
         success = self._transcribe(raw_path, turns, speakers)
         if success:
-            moved_path = self._move_to_segment(raw_path)
+            # In redo mode, file is already in segment dir - don't move
+            if redo:
+                final_path = raw_path
+            else:
+                final_path = self._move_to_segment(raw_path)
 
             # Save speaker embeddings
             if embeddings.size > 0:
@@ -478,10 +528,10 @@ class Transcriber:
             duration_ms = int((time.time() - start_time) * 1000)
 
             try:
-                rel_input = moved_path.relative_to(journal_path)
+                rel_input = final_path.relative_to(journal_path)
                 rel_output = json_path.relative_to(journal_path)
             except ValueError:
-                rel_input = moved_path
+                rel_input = final_path
                 rel_output = json_path
 
             callosum_send(
@@ -494,6 +544,8 @@ class Transcriber:
 
 
 def main():
+    from think.utils import segment_key
+
     parser = argparse.ArgumentParser(
         description="Transcribe audio files using Gemini with speaker diarization"
     )
@@ -501,6 +553,11 @@ def main():
         "audio_path",
         type=str,
         help="Path to audio file to process (.flac or .m4a)",
+    )
+    parser.add_argument(
+        "--redo",
+        action="store_true",
+        help="Reprocess file already in segment directory, overwriting outputs",
     )
     args = setup_cli(parser)
 
@@ -526,10 +583,19 @@ def main():
             f"Supported formats: {', '.join(supported_formats)}"
         )
 
+    # Validate --redo requires file to be in segment directory
+    if args.redo:
+        parent_segment = segment_key(audio_path.parent.name)
+        if not parent_segment:
+            parser.error(
+                f"--redo requires audio file to be in a segment directory (HHMMSS_LEN/), "
+                f"but parent is: {audio_path.parent.name}"
+            )
+
     logging.info(f"Processing audio: {audio_path}")
 
     transcriber = Transcriber(api_key)
-    transcriber._handle_raw(audio_path)
+    transcriber._handle_raw(audio_path, redo=args.redo)
 
 
 if __name__ == "__main__":
