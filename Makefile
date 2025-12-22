@@ -1,7 +1,7 @@
 # Sunstone Makefile
 # Python-based AI-driven desktop journaling toolkit
 
-.PHONY: install deps test test-apps test-app lint format check clean dev full all convey-restart screenshot
+.PHONY: install deps test test-apps test-app lint format check clean dev full all
 
 # Default target - install package in editable mode
 all: install
@@ -198,29 +198,3 @@ pre-commit:
 # Quick check before committing
 pre-push: format lint-flake8 test
 	@echo "Ready to push!"
-
-# Restart Convey web service via supervisor
-convey-restart:
-	unset JOURNAL_PATH && convey-restart -v
-
-# Capture screenshot of a Convey view
-screenshot:
-	@if [ -z "$(VIEW)" ]; then \
-		echo "ERROR: VIEW parameter is required"; \
-		echo ""; \
-		echo "Usage: make screenshot VIEW=<route> [OUTPUT=path] [SCRIPT=\"js...\"]"; \
-		echo ""; \
-		echo "Parameters:"; \
-		echo "  VIEW     - Route to screenshot (e.g., /, /facets, /search)"; \
-		echo "  OUTPUT   - Optional output path (default: logs/screenshot.png)"; \
-		echo "  SCRIPT   - Optional JavaScript to execute before screenshot"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make screenshot VIEW=/"; \
-		echo "  make screenshot VIEW=/facets OUTPUT=screenshots/facets.png"; \
-		echo "  make screenshot VIEW=/ SCRIPT=\"document.querySelector('nav').style.display='none'\""; \
-		echo ""; \
-		echo "Note: Run 'make convey-restart' first if you've changed code in convey/ or apps/"; \
-		exit 1; \
-	fi
-	unset JOURNAL_PATH && convey-screenshot -v $(VIEW) $(if $(OUTPUT),-o $(OUTPUT)) $(if $(SCRIPT),--script "$(SCRIPT)")
