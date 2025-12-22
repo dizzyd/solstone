@@ -441,7 +441,7 @@ let form, input, backendToggle, currentBackend;
 const backends = {
   anthropic: { next: 'google', label: 'Claude' },
   google: { next: 'openai', label: 'Gemini' },
-  openai: { next: 'anthropic', label: 'GPT-4' }
+  openai: { next: 'anthropic', label: 'GPT' }
 };
 
 /**
@@ -465,7 +465,7 @@ function initAppBarControls() {
     return;
   }
 
-  currentBackend = backendToggle.dataset.backend || 'anthropic';
+  currentBackend = backendToggle.dataset.backend;
 
   backendToggle.addEventListener('click', () => {
     currentBackend = backends[currentBackend].next;

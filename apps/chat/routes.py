@@ -118,13 +118,16 @@ def generate_chat_title(message: str) -> str:
 
 @chat_bp.route("/api/send", methods=["POST"])
 def send_message() -> Any:
-    from convey import state
-
     payload = request.get_json(force=True)
     message = payload.get("message", "")
     attachments = payload.get("attachments", [])
-    backend = payload.get("backend", state.chat_backend)
+    backend = payload.get("backend")
     continue_chat = payload.get("continue_chat")  # chat_id to continue
+
+    if not backend:
+        resp = jsonify({"error": "backend is required"})
+        resp.status_code = 400
+        return resp
 
     # For continuation, we need to find the last agent in the thread
     config: dict[str, Any] = {}

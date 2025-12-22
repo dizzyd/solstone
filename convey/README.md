@@ -37,7 +37,7 @@ Convey uses an **app plugin system** where all functional views are implemented 
 ```
 convey/
   __init__.py        - Flask app factory, app registry, context processors
-  state.py           - global state (journal_root, chat_backend)
+  state.py           - global state (journal_root)
   bridge.py          - Callosum WebSocket bridge for real-time events
   utils.py           - shared helpers (format_date, spawn_agent, etc.)
   screenshot.py      - screenshot utility for testing
