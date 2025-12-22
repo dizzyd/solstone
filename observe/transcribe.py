@@ -144,11 +144,9 @@ def transcribe_turns(
 class Transcriber:
     def __init__(
         self,
-        journal_dir: Path,
         api_key: str,
         prompt_name: str = "transcribe",
     ):
-        self.journal_dir = journal_dir
         self.client = genai.Client(api_key=api_key)
 
         try:
@@ -156,7 +154,6 @@ class Transcriber:
         except PromptNotFoundError as exc:
             raise SystemExit(str(exc)) from exc
 
-        self.prompt_path = prompt_data.path
         self.prompt_text = prompt_data.text
 
     def _move_to_segment(self, audio_path: Path) -> Path:
@@ -263,11 +260,11 @@ class Transcriber:
                 # Mix to mono for clips
                 data = data.mean(axis=1)
 
-            # Extract timestamp from filename
+            # Extract date from parent directory (YYYYMMDD) and time from filename
+            day_str = raw_path.parent.name
             time_part = raw_path.stem.split("_")[0]
-            today = datetime.date.today().strftime("%Y%m%d")
             base_dt = datetime.datetime.strptime(
-                f"{today}_{time_part}", "%Y%m%d_%H%M%S"
+                f"{day_str}_{time_part}", "%Y%m%d_%H%M%S"
             )
 
             # Convert diarization turns to format for transcription
@@ -531,7 +528,7 @@ def main():
 
     logging.info(f"Processing audio: {audio_path}")
 
-    transcriber = Transcriber(journal, api_key)
+    transcriber = Transcriber(api_key)
     transcriber._handle_raw(audio_path)
 
 
