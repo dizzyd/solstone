@@ -373,6 +373,26 @@ def segment_content(day: str, segment_key: str) -> Any:
                 requests = source.get("requests", [])
                 is_basic = len(requests) <= 1
 
+                # Extract participant boxes for meeting frames
+                participants = []
+                meeting_analysis = source.get("meeting_analysis")
+                if meeting_analysis:
+                    for p in meeting_analysis.get("participants", []):
+                        box = p.get("box_2d")
+                        # Only include participants with video and valid box_2d
+                        if p.get("video") and box and len(box) == 4:
+                            y_min, x_min, y_max, x_max = box
+                            participants.append(
+                                {
+                                    "name": p.get("name", "Unknown"),
+                                    "status": p.get("status", "unknown"),
+                                    "top": y_min / 10,
+                                    "left": x_min / 10,
+                                    "height": (y_max - y_min) / 10,
+                                    "width": (x_max - x_min) / 10,
+                                }
+                            )
+
                 chunks.append(
                     {
                         "type": "screen",
@@ -385,6 +405,7 @@ def segment_content(day: str, segment_key: str) -> Any:
                             "monitor": monitor,
                             "offset": offset,
                             "analysis": source.get("analysis"),
+                            "participants": participants if participants else None,
                         },
                         "thumb_url": thumb_url,
                         "basic": is_basic,

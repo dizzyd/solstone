@@ -435,7 +435,9 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   padding: 0 20px;
 }
 
-.tr-modal-img-wrap img {
+.tr-modal-img-wrap img,
+.tr-modal-img-container img {
+  display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -449,6 +451,61 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   line-height: 1.5;
   text-align: center;
   flex-shrink: 0;
+}
+
+/* Participant bounding boxes in modal */
+.tr-modal-img-container {
+  position: relative;
+  display: inline-block;
+}
+
+.tr-participant-box {
+  position: absolute;
+  border: 2px dashed #9ca3af;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.tr-participant-box[data-status="speaking"] { border-color: #fbbf24; }
+.tr-participant-box[data-status="active"] { border-color: #4ade80; }
+.tr-participant-box[data-status="muted"] { border-color: #f87171; }
+.tr-participant-box[data-status="presenting"] { border-color: #60a5fa; }
+.tr-participant-box[data-status="unknown"] { border-color: #9ca3af; }
+
+.tr-participant-label {
+  position: absolute;
+  left: 0;
+  bottom: -20px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(156, 163, 175, 0.9);
+  color: #000;
+}
+
+.tr-participant-box[data-status="speaking"] .tr-participant-label {
+  background: rgba(251, 191, 36, 0.9);
+  color: #000;
+}
+.tr-participant-box[data-status="active"] .tr-participant-label {
+  background: rgba(74, 222, 128, 0.9);
+  color: #000;
+}
+.tr-participant-box[data-status="muted"] .tr-participant-label {
+  background: rgba(248, 113, 113, 0.9);
+  color: #000;
+}
+.tr-participant-box[data-status="presenting"] .tr-participant-label {
+  background: rgba(96, 165, 250, 0.9);
+  color: #000;
+}
+.tr-participant-box[data-status="unknown"] .tr-participant-label {
+  background: rgba(156, 163, 175, 0.9);
+  color: #000;
 }
 
 /* Unified timeline view */
@@ -1208,8 +1265,25 @@ body.has-date-nav .workspace:has(.tr-wrap) {
       const analysis = f.source_ref?.analysis || {};
       const category = analysis.visible || '';
       const description = analysis.visual_description || '';
+      const participants = f.source_ref?.participants || [];
       const hasPrev = currentFrameIndex > 0;
       const hasNext = currentFrameIndex < allScreenFrames.length - 1;
+
+      // Build participant overlay boxes HTML
+      const participantBoxesHtml = participants.map(p => `
+        <div class="tr-participant-box" data-status="${escapeHtml(p.status)}"
+             style="top: ${p.top}%; left: ${p.left}%; width: ${p.width}%; height: ${p.height}%;">
+          <span class="tr-participant-label">${escapeHtml(p.name)}</span>
+        </div>
+      `).join('');
+
+      // Use container with overlays if participants exist, otherwise plain img
+      const imgHtml = participants.length > 0
+        ? `<div class="tr-modal-img-container">
+            <img src="${f.thumb_url}" alt="Screenshot">
+            ${participantBoxesHtml}
+          </div>`
+        : `<img src="${f.thumb_url}" alt="Screenshot">`;
 
       modal.innerHTML = `
         <div class="tr-modal-nav${hasPrev ? '' : ' disabled'}" data-dir="prev" title="Previous frame (Left arrow)">
@@ -1222,7 +1296,7 @@ body.has-date-nav .workspace:has(.tr-wrap) {
             <button class="tr-modal-close" title="Close (Esc)">&times;</button>
           </div>
           <div class="tr-modal-img-wrap">
-            <img src="${f.thumb_url}" alt="Screenshot">
+            ${imgHtml}
           </div>
           ${description ? `<div class="tr-modal-description">${escapeHtml(description)}</div>` : ''}
         </div>
