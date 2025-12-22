@@ -38,25 +38,28 @@ dev: pyproject.toml
 	@touch .package-installed
 	@touch .deps-installed
 
+# Test environment - use fixtures journal for all tests
+TEST_ENV = JOURNAL_PATH=fixtures/journal
+
 # Run core tests (excluding integration and app tests)
 test: .deps-installed
 	@echo "Running core tests..."
-	pytest tests/ -q --cov=. --ignore=tests/integration
+	$(TEST_ENV) pytest tests/ -q --cov=. --ignore=tests/integration
 
 # Run core tests with verbose output
 test-verbose: .deps-installed
 	@echo "Running core tests with verbose output..."
-	pytest tests/ -v --cov=. --cov-report=term-missing --ignore=tests/integration
+	$(TEST_ENV) pytest tests/ -v --cov=. --cov-report=term-missing --ignore=tests/integration
 
 # Run app tests
 test-apps: .deps-installed
 	@echo "Running app tests..."
-	pytest apps/ -q
+	$(TEST_ENV) pytest apps/ -q
 
 # Run app tests with verbose output
 test-apps-verbose: .deps-installed
 	@echo "Running app tests with verbose output..."
-	pytest apps/ -v
+	$(TEST_ENV) pytest apps/ -v
 
 # Run specific app tests
 test-app: .deps-installed
@@ -65,7 +68,7 @@ test-app: .deps-installed
 		echo "Example: make test-app APP=todos"; \
 		exit 1; \
 	fi
-	pytest apps/$(APP)/tests/ -v
+	$(TEST_ENV) pytest apps/$(APP)/tests/ -v
 
 # Run specific test file or pattern
 test-only: .deps-installed
@@ -75,17 +78,17 @@ test-only: .deps-installed
 		echo "Example: make test-only TEST=\"-k test_function_name\""; \
 		exit 1; \
 	fi
-	pytest $(TEST)
+	$(TEST_ENV) pytest $(TEST)
 
 # Run integration tests
 test-integration: .deps-installed
 	@echo "Running integration tests..."
-	pytest tests/integration/ -v --tb=short
+	$(TEST_ENV) pytest tests/integration/ -v --tb=short
 
 # Run integration tests with coverage
 test-integration-cov: .deps-installed
 	@echo "Running integration tests with coverage..."
-	pytest tests/integration/ -v --cov=. --cov-report=term-missing
+	$(TEST_ENV) pytest tests/integration/ -v --cov=. --cov-report=term-missing
 
 # Run specific integration test
 test-integration-only: .deps-installed
@@ -94,12 +97,12 @@ test-integration-only: .deps-installed
 		echo "Example: make test-integration-only TEST=test_api.py"; \
 		exit 1; \
 	fi
-	pytest tests/integration/$(TEST)
+	$(TEST_ENV) pytest tests/integration/$(TEST)
 
 # Run all tests (core + apps + integration)
 test-all: .deps-installed
 	@echo "Running all tests (core + apps + integration)..."
-	pytest tests/ -v --cov=. && pytest apps/ -v --cov=. --cov-append
+	$(TEST_ENV) pytest tests/ -v --cov=. && $(TEST_ENV) pytest apps/ -v --cov=. --cov-append
 
 # Auto-format code
 format: .deps-installed
@@ -168,8 +171,8 @@ watch:
 
 # Generate coverage report (core + apps, excluding core integration tests)
 coverage: .deps-installed
-	pytest tests/ --cov=. --cov-report=html --cov-report=term --ignore=tests/integration
-	pytest apps/ --cov=. --cov-report=html --cov-report=term --cov-append
+	$(TEST_ENV) pytest tests/ --cov=. --cov-report=html --cov-report=term --ignore=tests/integration
+	$(TEST_ENV) pytest apps/ --cov=. --cov-report=html --cov-report=term --cov-append
 	@echo "Coverage report generated in htmlcov/index.html"
 
 # Update dependencies to latest versions
