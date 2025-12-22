@@ -23,6 +23,7 @@ from dbus_next.constants import BusType
 from observe.gnome.dbus import (
     get_idle_time_ms,
     is_screen_locked,
+    is_sink_muted,
 )
 from observe.gnome.screencast import Screencaster, StreamInfo
 from observe.hear import AudioRecorder
@@ -65,6 +66,10 @@ class Observer:
         self.cached_is_active = False
         self.cached_idle_time_ms = 0
         self.cached_screen_locked = False
+        self.cached_is_muted = False
+
+        # Mute state at segment start (determines save format)
+        self.segment_is_muted = False
 
     async def setup(self):
         """Initialize audio devices and DBus connection."""
@@ -102,10 +107,12 @@ class Observer:
         """
         idle_time = await get_idle_time_ms(self.bus)
         screen_locked = await is_screen_locked(self.bus)
+        sink_muted = await is_sink_muted()
 
         # Cache values for status events
         self.cached_idle_time_ms = idle_time
         self.cached_screen_locked = screen_locked
+        self.cached_is_muted = sink_muted
 
         is_idle = (idle_time > IDLE_THRESHOLD_MS) or screen_locked
         has_audio_activity = self.threshold_hits >= MIN_HITS_FOR_SAVE
@@ -139,6 +146,60 @@ class Observer:
         time_part = dt.strftime("%H%M%S")
         return date_part, time_part
 
+    def _save_audio_segment(
+        self, day_dir, time_part: str, duration: int, is_muted: bool
+    ) -> list[str]:
+        """
+        Save accumulated audio buffer to disk.
+
+        Args:
+            day_dir: Path to the day directory
+            time_part: Timestamp string (HHMMSS)
+            duration: Segment duration in seconds
+            is_muted: Whether to save as split mono files (muted) or stereo (unmuted)
+
+        Returns:
+            List of saved filenames (empty if nothing saved)
+        """
+        if self.accumulated_audio_buffer.size == 0:
+            logger.warning("No audio buffer to save")
+            return []
+
+        if is_muted:
+            # Split mode: save mic and sys as separate mono files
+            mic_data = self.accumulated_audio_buffer[:, 0]
+            sys_data = self.accumulated_audio_buffer[:, 1]
+
+            mic_bytes = self.audio_recorder.create_mono_flac_bytes(mic_data)
+            sys_bytes = self.audio_recorder.create_mono_flac_bytes(sys_data)
+
+            mic_name = f"{time_part}_{duration}_mic_audio.flac"
+            sys_name = f"{time_part}_{duration}_sys_audio.flac"
+
+            mic_path = day_dir / mic_name
+            sys_path = day_dir / sys_name
+
+            with open(mic_path, "wb") as f:
+                f.write(mic_bytes)
+            with open(sys_path, "wb") as f:
+                f.write(sys_bytes)
+
+            logger.info(f"Saved split audio (muted): {mic_path}, {sys_path}")
+            return [mic_name, sys_name]
+        else:
+            # Normal mode: save combined stereo file
+            flac_bytes = self.audio_recorder.create_flac_bytes(
+                self.accumulated_audio_buffer
+            )
+            audio_name = f"{time_part}_{duration}_audio.flac"
+            flac_path = day_dir / audio_name
+
+            with open(flac_path, "wb") as f:
+                f.write(flac_bytes)
+
+            logger.info(f"Saved audio to {flac_path}")
+            return [audio_name]
+
     async def handle_boundary(self, is_active: bool):
         """
         Handle window boundary rollover.
@@ -153,17 +214,15 @@ class Observer:
 
         # Save audio if we have enough threshold hits
         did_save_audio = self.threshold_hits >= MIN_HITS_FOR_SAVE
+        audio_files: list[str] = []
         if did_save_audio:
-            if self.accumulated_audio_buffer.size > 0:
-                flac_bytes = self.audio_recorder.create_flac_bytes(
-                    self.accumulated_audio_buffer
+            audio_files = self._save_audio_segment(
+                day_dir, time_part, duration, self.segment_is_muted
+            )
+            if audio_files:
+                logger.info(
+                    f"Saved {len(audio_files)} audio file(s) ({self.threshold_hits} hits)"
                 )
-                flac_path = day_dir / f"{time_part}_{duration}_audio.flac"
-                with open(flac_path, "wb") as f:
-                    f.write(flac_bytes)
-                logger.info(f"Saved audio to {flac_path} ({self.threshold_hits} hits)")
-            else:
-                logger.warning("Threshold hits met but no audio buffer")
         else:
             logger.debug(
                 f"Skipping audio save (only {self.threshold_hits}/{MIN_HITS_FOR_SAVE} hits)"
@@ -199,16 +258,16 @@ class Observer:
         self.start_at = time.time()  # Wall-clock for filenames
         self.start_at_mono = time.monotonic()  # Monotonic for elapsed
 
+        # Update segment mute state for new segment
+        self.segment_is_muted = self.cached_is_muted
+
         # Start new screencast if active AND screen not locked
         # (is_active can be True due to audio activity even when locked)
         if is_active and not self.cached_screen_locked:
             await self.initialize_screencast()
 
         # Emit observing event with what we saved this boundary
-        files = []
-        if did_save_audio:
-            files.append(f"{time_part}_{duration}_audio.flac")
-        files.extend(screen_files)
+        files = audio_files + screen_files
 
         if files:
             segment = f"{time_part}_{duration}"
@@ -300,6 +359,7 @@ class Observer:
             "active": self.cached_is_active,
             "idle_time_ms": self.cached_idle_time_ms,
             "screen_locked": self.cached_screen_locked,
+            "sink_muted": self.cached_is_muted,
         }
 
         self.callosum.emit(
@@ -334,6 +394,7 @@ class Observer:
 
         # Start screencast immediately if active and screen not locked
         is_active = await self.check_activity_status()
+        self.segment_is_muted = self.cached_is_muted  # Sync initial mute state
         if is_active and not self.cached_screen_locked:
             try:
                 await self.initialize_screencast()
@@ -383,6 +444,15 @@ class Observer:
             # Transition from idle to active
             activation_edge = is_active and not self.screencast_running
 
+            # Detect mute state transition
+            mute_transition = self.cached_is_muted != self.segment_is_muted
+            if mute_transition:
+                logger.info(
+                    f"Mute state changed: "
+                    f"{'muted' if self.segment_is_muted else 'unmuted'} -> "
+                    f"{'muted' if self.cached_is_muted else 'unmuted'}"
+                )
+
             # Capture audio buffer for this chunk
             audio_chunk = self.audio_recorder.get_buffers()
 
@@ -407,11 +477,14 @@ class Observer:
             # Check for window boundary (use monotonic to avoid DST/clock jumps)
             now_mono = time.monotonic()
             elapsed = now_mono - self.start_at_mono
-            is_boundary = (elapsed >= self.interval) or activation_edge
+            is_boundary = (
+                (elapsed >= self.interval) or activation_edge or mute_transition
+            )
 
             if is_boundary:
                 logger.info(
                     f"Boundary: elapsed={elapsed:.1f}s edge={activation_edge} "
+                    f"mute_change={mute_transition} "
                     f"hits={self.threshold_hits}/{MIN_HITS_FOR_SAVE}"
                 )
                 await self.handle_boundary(is_active)
@@ -447,21 +520,16 @@ class Observer:
     async def shutdown(self):
         """Clean shutdown of observer."""
         # Perform final boundary logic without restarting screencast
-        if (
-            self.threshold_hits >= MIN_HITS_FOR_SAVE
-            and self.accumulated_audio_buffer.size > 0
-        ):
+        if self.threshold_hits >= MIN_HITS_FOR_SAVE:
             date_part, time_part = self.get_timestamp_parts(self.start_at)
             duration = int(time.time() - self.start_at)
             day_dir = day_path(date_part)
 
-            flac_bytes = self.audio_recorder.create_flac_bytes(
-                self.accumulated_audio_buffer
+            audio_files = self._save_audio_segment(
+                day_dir, time_part, duration, self.segment_is_muted
             )
-            flac_path = day_dir / f"{time_part}_{duration}_audio.flac"
-            with open(flac_path, "wb") as f:
-                f.write(flac_bytes)
-            logger.info(f"Saved final audio to {flac_path}")
+            if audio_files:
+                logger.info(f"Saved final audio: {len(audio_files)} file(s)")
 
         # Stop screencast if running
         if self.screencast_running:

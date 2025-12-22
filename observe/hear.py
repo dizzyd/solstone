@@ -152,6 +152,26 @@ class AudioRecorder:
 
         return buf.getvalue()
 
+    def create_mono_flac_bytes(self, mono_data: np.ndarray) -> bytes:
+        """Create FLAC bytes from mono audio data."""
+        if mono_data is None or mono_data.size == 0:
+            logging.warning("Mono audio data is empty. Returning empty bytes.")
+            return b""
+
+        # Convert to int16
+        audio_data = (np.clip(mono_data, -1.0, 1.0) * 32767).astype(np.int16)
+
+        buf = io.BytesIO()
+        try:
+            sf.write(buf, audio_data, SAMPLE_RATE, format="FLAC")
+        except Exception as e:
+            logging.error(
+                f"Error creating mono FLAC: {e}. Audio shape: {audio_data.shape}"
+            )
+            return b""
+
+        return buf.getvalue()
+
     def start_recording(self):
         """Start the recording thread."""
         self._running = True
@@ -593,10 +613,13 @@ def format_audio(
         if source:
             entry_parts.append(f"({source})")
 
-        # Speaker
+        # Speaker - handle both int (legacy) and string (diarization) formats
         speaker = entry.get("speaker")
         if speaker is not None:
-            entry_parts.append(f"Speaker {speaker}:")
+            if isinstance(speaker, int):
+                entry_parts.append(f"Speaker {speaker}:")
+            else:
+                entry_parts.append(f"{speaker}:")
         else:
             entry_parts.append("")
 

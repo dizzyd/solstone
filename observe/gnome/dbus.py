@@ -1,5 +1,7 @@
 """GNOME Shell and Mutter DBus interface primitives."""
 
+import asyncio
+import logging
 import os
 
 import gi
@@ -123,3 +125,39 @@ def get_monitor_geometries() -> list[dict]:
 
     # Assign position labels using shared algorithm
     return assign_monitor_positions(geometries)
+
+
+async def is_sink_muted() -> bool:
+    """
+    Check if the default audio sink is muted using PulseAudio.
+
+    Uses `pactl get-sink-mute @DEFAULT_SINK@` to query mute status.
+
+    Returns:
+        True if muted, False otherwise (including on error).
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "pactl",
+            "get-sink-mute",
+            "@DEFAULT_SINK@",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            stderr_text = stderr.decode().strip() if stderr else ""
+            logger.warning(f"pactl failed (rc={proc.returncode}): {stderr_text}")
+            return False
+
+        output = stdout.decode().strip()
+        return "Mute: yes" in output
+
+    except FileNotFoundError:
+        logger.warning("pactl not found, assuming unmuted")
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking sink mute status: {e}")
+        return False
