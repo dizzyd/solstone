@@ -577,7 +577,10 @@ def format_todos(
 
     Returns:
         Tuple of (chunks, meta) where:
-            - chunks: List of {"timestamp": int, "markdown": str} dicts, one per item
+            - chunks: List of dicts with keys:
+                - timestamp: int (unix ms)
+                - markdown: str
+                - source: dict (original todo entry)
             - meta: Dict with optional "header" and "error" keys
     """
     ctx = context or {}
@@ -637,7 +640,13 @@ def format_todos(
         # Format as list item using existing display_line
         markdown = f"* {item.display_line()}"
 
-        chunks.append({"timestamp": ts, "markdown": markdown})
+        chunks.append(
+            {
+                "timestamp": ts,
+                "markdown": markdown,
+                "source": entry,
+            }
+        )
 
     # Report skipped entries
     if skipped_count > 0:

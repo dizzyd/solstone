@@ -31,7 +31,10 @@ def format_events(
 
     Returns:
         Tuple of (chunks, meta) where:
-            - chunks: List of {"timestamp": int, "markdown": str} dicts, one per event
+            - chunks: List of dicts with keys:
+                - timestamp: int (unix ms)
+                - markdown: str
+                - source: dict (original event entry)
             - meta: Dict with optional "header" and "error" keys
     """
     ctx = context or {}
@@ -147,7 +150,13 @@ def format_events(
             lines.append(details)
             lines.append("")
 
-        chunks.append({"timestamp": ts, "markdown": "\n".join(lines)})
+        chunks.append(
+            {
+                "timestamp": ts,
+                "markdown": "\n".join(lines),
+                "source": event,
+            }
+        )
 
     # Report skipped entries
     if skipped_count > 0:

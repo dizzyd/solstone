@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +36,10 @@ def format_screen(
 
     Returns:
         Tuple of (chunks, meta) where:
-            - chunks: List of {"timestamp": int, "markdown": str} dicts, one per frame
+            - chunks: List of dicts with keys:
+                - timestamp: int (unix ms)
+                - markdown: str
+                - source: dict (original frame entry)
             - meta: Dict with optional "header" and "error" keys
     """
     ctx = context or {}
@@ -96,6 +100,7 @@ def format_screen(
     # Extract base timestamp from segment directory (HHMMSS_LEN)
     # Expected structure: YYYYMMDD/HHMMSS_LEN/screen.jsonl
     base_hour = base_minute = base_second = 0
+    base_timestamp_ms = 0  # Unix timestamp in milliseconds for segment start
     if file_path:
         try:
             from think.utils import segment_parse
@@ -107,6 +112,13 @@ def format_screen(
                 base_hour = start_time.hour
                 base_minute = start_time.minute
                 base_second = start_time.second
+
+                # Try to get day from grandparent directory for unix timestamp
+                day_dir = file_path.parent.parent.name
+                if len(day_dir) == 8 and day_dir.isdigit():
+                    day_date = datetime.strptime(day_dir, "%Y%m%d").date()
+                    dt = datetime.combine(day_date, start_time)
+                    base_timestamp_ms = int(dt.timestamp() * 1000)
         except (ValueError, AttributeError):
             pass
 
@@ -163,7 +175,16 @@ def format_screen(
             lines.append("```")
             lines.append("")
 
-        chunks.append({"timestamp": int(frame_offset), "markdown": "\n".join(lines)})
+        # Calculate absolute unix timestamp in milliseconds
+        frame_timestamp_ms = base_timestamp_ms + int(frame_offset * 1000)
+
+        chunks.append(
+            {
+                "timestamp": frame_timestamp_ms,
+                "markdown": "\n".join(lines),
+                "source": frame,
+            }
+        )
 
     # Indexer metadata - topic is always "screen" for screen analysis
     meta["indexer"] = {"topic": "screen"}

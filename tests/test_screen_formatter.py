@@ -209,8 +209,8 @@ def test_format_screen_returns_chunks_with_timestamps():
     chunks, meta = format_screen(frames)
 
     assert len(chunks) == 2
-    assert chunks[0]["timestamp"] == 0
-    assert chunks[1]["timestamp"] == 30
+    assert chunks[0]["timestamp"] == 0  # 0 seconds = 0ms
+    assert chunks[1]["timestamp"] == 30000  # 30 seconds = 30000ms
     assert "Frame 1" in chunks[0]["markdown"]
     assert "Frame 2" in chunks[1]["markdown"]
 

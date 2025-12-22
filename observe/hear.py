@@ -472,7 +472,10 @@ def format_audio(
 
     Returns:
         Tuple of (chunks, meta) where:
-            - chunks: List of {"timestamp": int, "markdown": str} dicts
+            - chunks: List of dicts with keys:
+                - timestamp: int (unix ms)
+                - markdown: str
+                - source: dict (original transcript entry)
             - meta: Dict with optional "header" and "error" keys
     """
     ctx = context or {}
@@ -536,8 +539,8 @@ def format_audio(
             # Format as "2024-06-15 10:05a"
             time_formatted = dt.strftime("%Y-%m-%d %I:%M%p").lower()
             header_parts.append(f"Start: {time_formatted}")
-            # Calculate base timestamp for entries
-            base_timestamp = int(dt.timestamp())
+            # Calculate base timestamp for entries (milliseconds)
+            base_timestamp = int(dt.timestamp() * 1000)
         except ValueError:
             pass
 
@@ -578,10 +581,10 @@ def format_audio(
         entry_timestamp = base_timestamp
         if start:
             entry_parts.append(f"[{start}]")
-            # Parse timestamp for chunk ordering (HH:MM:SS format)
+            # Parse timestamp for chunk ordering (HH:MM:SS format, offset in ms)
             try:
                 h, m, s = map(int, start.split(":"))
-                entry_timestamp = base_timestamp + h * 3600 + m * 60 + s
+                entry_timestamp = base_timestamp + (h * 3600 + m * 60 + s) * 1000
             except (ValueError, AttributeError):
                 pass
 
@@ -609,7 +612,13 @@ def format_audio(
         else:
             continue  # Skip empty entries
 
-        chunks.append({"timestamp": entry_timestamp, "markdown": markdown})
+        chunks.append(
+            {
+                "timestamp": entry_timestamp,
+                "markdown": markdown,
+                "source": entry,
+            }
+        )
 
     # Indexer metadata - topic is always "audio" for audio transcripts
     meta["indexer"] = {"topic": "audio"}

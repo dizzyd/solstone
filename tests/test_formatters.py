@@ -191,7 +191,7 @@ class TestFormatScreen:
         assert len(chunks) == 1  # 1 frame chunk
         assert "header" in meta
         assert "Frame Analyses" in meta["header"]
-        assert chunks[0]["timestamp"] == 5
+        assert chunks[0]["timestamp"] == 5000  # 5 seconds = 5000ms
         assert "**Category:** code" in chunks[0]["markdown"]
         assert "def hello()" in chunks[0]["markdown"]
 
@@ -267,7 +267,7 @@ class TestFormatScreen:
 
         # Should only have 1 frame chunk (metadata is extracted)
         assert len(chunks) == 1
-        assert chunks[0]["timestamp"] == 5
+        assert chunks[0]["timestamp"] == 5000  # 5 seconds = 5000ms
 
     def test_format_screen_skipped_entries_error(self):
         """Test that skipped entries are reported in meta.error."""
@@ -1533,3 +1533,109 @@ class TestFormatterIndexerMetadata:
 
         assert "indexer" in meta
         assert meta["indexer"]["topic"] == "todo"
+
+
+class TestFormatterSourceKey:
+    """Tests verifying formatters return source key with original entry."""
+
+    def test_format_audio_returns_source(self):
+        """Test format_audio returns source with original entry."""
+        from observe.hear import format_audio
+
+        entry = {"start": "00:00:01", "source": "mic", "speaker": 1, "text": "Hello"}
+        entries = [entry]
+        chunks, meta = format_audio(entries)
+
+        assert len(chunks) == 1
+        assert "source" in chunks[0]
+        assert chunks[0]["source"] is entry
+        assert chunks[0]["source"]["text"] == "Hello"
+
+    def test_format_screen_returns_source(self):
+        """Test format_screen returns source with original frame."""
+        from observe.screen import format_screen
+
+        frame = {
+            "timestamp": 5,
+            "analysis": {"visible": "code"},
+            "extra_field": "value",
+        }
+        entries = [frame]
+        chunks, meta = format_screen(entries)
+
+        assert len(chunks) == 1
+        assert "source" in chunks[0]
+        assert chunks[0]["source"] is frame
+        assert chunks[0]["source"]["extra_field"] == "value"
+
+    def test_format_events_returns_source(self):
+        """Test format_events returns source with original event."""
+        from think.events import format_events
+
+        event = {"type": "meeting", "title": "Test", "occurred": True, "custom": "data"}
+        entries = [event]
+        chunks, meta = format_events(entries)
+
+        assert len(chunks) == 1
+        assert "source" in chunks[0]
+        assert chunks[0]["source"] is event
+        assert chunks[0]["source"]["custom"] == "data"
+
+    def test_format_entities_returns_source(self):
+        """Test format_entities returns source with original entity."""
+        from think.entities import format_entities
+
+        entity = {
+            "type": "Person",
+            "name": "Alice",
+            "description": "Test",
+            "custom": 123,
+        }
+        entries = [entity]
+        chunks, meta = format_entities(entries)
+
+        assert len(chunks) == 1
+        assert "source" in chunks[0]
+        assert chunks[0]["source"] is entity
+        assert chunks[0]["source"]["custom"] == 123
+
+    def test_format_todos_returns_source(self):
+        """Test format_todos returns source with original entry."""
+        from apps.todos.todo import format_todos
+
+        entry = {"text": "Test task", "completed": False, "priority": "high"}
+        entries = [entry]
+        chunks, meta = format_todos(entries)
+
+        assert len(chunks) == 1
+        assert "source" in chunks[0]
+        assert chunks[0]["source"] is entry
+        assert chunks[0]["source"]["priority"] == "high"
+
+    def test_format_audio_timestamp_in_milliseconds(self):
+        """Test format_audio returns timestamp in milliseconds."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"start": "00:00:00", "text": "First"},
+            {"start": "00:00:01", "text": "Second"},
+        ]
+        chunks, meta = format_audio(entries)
+
+        # Without path context, base_timestamp is 0, so offsets are in ms
+        assert chunks[0]["timestamp"] == 0
+        assert chunks[1]["timestamp"] == 1000  # 1 second = 1000ms
+
+    def test_format_screen_timestamp_in_milliseconds(self):
+        """Test format_screen returns timestamp in milliseconds."""
+        from observe.screen import format_screen
+
+        entries = [
+            {"timestamp": 0, "analysis": {}},
+            {"timestamp": 1, "analysis": {}},
+        ]
+        chunks, meta = format_screen(entries)
+
+        # Without path context, base_timestamp_ms is 0, so offsets are in ms
+        assert chunks[0]["timestamp"] == 0
+        assert chunks[1]["timestamp"] == 1000  # 1 second = 1000ms

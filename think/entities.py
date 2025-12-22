@@ -629,7 +629,10 @@ def format_entities(
 
     Returns:
         Tuple of (chunks, meta) where:
-            - chunks: List of {"timestamp": int, "markdown": str} dicts, one per entity
+            - chunks: List of dicts with keys:
+                - timestamp: int (unix ms)
+                - markdown: str
+                - source: dict (original entity entry)
             - meta: Dict with optional "header" and "error" keys
     """
     from datetime import datetime
@@ -751,6 +754,7 @@ def format_entities(
             {
                 "timestamp": ts,
                 "markdown": "\n".join(lines),
+                "source": entity,
             }
         )
 

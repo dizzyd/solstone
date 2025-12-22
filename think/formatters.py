@@ -11,7 +11,8 @@ Supported file types:
 Output contract: All formatters return tuple[list[dict], dict] where:
     - list[dict]: Chunks, each with:
         - markdown: str (formatted markdown for this chunk)
-        - timestamp: int (optional - unix timestamp or segment offset)
+        - timestamp: int (optional - unix timestamp in milliseconds for ordering)
+        - source: dict (optional - original entry from JSONL for enriched streams)
     - dict: Metadata about the formatting with optional keys:
         - header: str - Optional header markdown (metadata summary, context, etc.)
         - error: str - Optional error/warning message (e.g., skipped entries)
