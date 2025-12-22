@@ -61,7 +61,7 @@ def decode_frames(
     Args:
         video_path: Path to the raw video file
         frames: List of frame dicts from screen.jsonl, each containing:
-            - frame_id (int): Sequential frame number from video
+            - frame_id (int): 1-based sequential frame number from video
             - box_2d (list[int], optional): [y_min, x_min, y_max, x_max] change region
             Additional fields (timestamp, etc.) are preserved but not used
         annotate_boxes: Draw red borders around box_2d regions (default True)
@@ -93,8 +93,15 @@ def decode_frames(
 
     import av
 
-    # Build a map of frame_id -> (index, frame_dict) for quick lookup
-    frame_map = {f["frame_id"]: (i, f) for i, f in enumerate(frames)}
+    # Build a map of zero-based frame index -> (index, frame_dict) for lookup
+    # JSONL frame_id values are 1-based, so convert to zero-based for decoding.
+    frame_map = {}
+    for i, frame in enumerate(frames):
+        frame_id = frame.get("frame_id")
+        if frame_id is None:
+            continue
+        frame_index = frame_id - 1 if frame_id > 0 else frame_id
+        frame_map[frame_index] = (i, frame)
 
     # Initialize result list with Nones
     results: list[Image.Image | None] = [None] * len(frames)

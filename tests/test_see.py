@@ -47,3 +47,44 @@ def test_decode_frames_missing_frame_id():
 
     with pytest.raises(ValueError, match="must have 'frame_id' field"):
         decode_frames("dummy.mp4", frames)
+
+
+def test_decode_frames_uses_one_based_frame_ids(monkeypatch):
+    """Test decode_frames maps 1-based frame_id values to decoded frames."""
+    import numpy as np
+
+    class FakeFrame:
+        def __init__(self, color: int):
+            self.pts = 1
+            self._color = color
+
+        def to_ndarray(self, format: str):
+            assert format == "rgb24"
+            return np.full((2, 2, 3), self._color, dtype=np.uint8)
+
+    class FakeContainer:
+        def __init__(self):
+            self.streams = type("Streams", (), {"video": [object()]})
+            self._frames = [FakeFrame(10), FakeFrame(20)]
+
+        def decode(self, stream):
+            return iter(self._frames)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeAv:
+        @staticmethod
+        def open(path):
+            return FakeContainer()
+
+    monkeypatch.setitem(__import__("sys").modules, "av", FakeAv)
+
+    frames = [{"frame_id": 1}, {"frame_id": 2}]
+    images = decode_frames("dummy.mp4", frames, annotate_boxes=False)
+
+    assert images[0].getpixel((0, 0)) == (10, 10, 10)
+    assert images[1].getpixel((0, 0)) == (20, 20, 20)
