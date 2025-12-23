@@ -1,10 +1,6 @@
 """Tests for observe.transcribe validation logic."""
 
 import json
-import tempfile
-from pathlib import Path
-
-import pytest
 
 from observe.transcribe import validate_transcription
 

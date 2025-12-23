@@ -49,18 +49,19 @@ def get_hf_token() -> str:
 
 def diarize(
     audio_path: Path,
-) -> tuple[list[dict], np.ndarray, dict]:
+) -> tuple[list[dict], np.ndarray, dict, list[dict]]:
     """Run speaker diarization and extract per-turn embeddings.
 
     Args:
         audio_path: Path to audio file (FLAC, WAV, etc.)
 
     Returns:
-        Tuple of (turns, embeddings, timings) where:
+        Tuple of (turns, embeddings, timings, overlaps) where:
         - turns: List of dicts with "start", "end", "speaker" keys
           Speaker labels are human-readable: "Speaker 1", "Speaker 2", etc.
         - embeddings: numpy array of shape (num_turns, 256)
         - timings: Dict with timing information for each stage
+        - overlaps: List of dicts with "start", "end" keys for overlapping speech
 
     Raises:
         DiarizationError: If diarization fails (missing token, access denied, etc.)
@@ -144,10 +145,19 @@ def diarize(
             }
         )
 
+    # Extract overlapping speech regions
+    overlap_timeline = diarization.get_overlap()
+    overlaps: list[dict] = [
+        {"start": float(seg.start), "end": float(seg.end)} for seg in overlap_timeline
+    ]
+    if overlaps:
+        total_overlap = sum(o["end"] - o["start"] for o in overlaps)
+        logging.info(f"  Found {len(overlaps)} overlap regions ({total_overlap:.1f}s)")
+
     if not raw_turns:
         logging.info("No speech detected.")
         timings["total"] = timings["pipeline_load"] + timings["diarization"]
-        return [], np.array([]), timings
+        return [], np.array([]), timings, overlaps
 
     n_speakers = len(speaker_map)
     logging.info(f"  Found {len(raw_turns)} turns, {n_speakers} speakers")
@@ -163,7 +173,7 @@ def diarize(
     if not turns:
         logging.info("No turns remaining after filtering.")
         timings["total"] = timings["pipeline_load"] + timings["diarization"]
-        return [], np.array([]), timings
+        return [], np.array([]), timings, overlaps
 
     # Load embedding model
     logging.info("Loading embedding model...")
@@ -203,7 +213,7 @@ def diarize(
         + timings["embedding"]
     )
 
-    return turns, embeddings, timings
+    return turns, embeddings, timings, overlaps
 
 
 def save_speaker_embeddings(

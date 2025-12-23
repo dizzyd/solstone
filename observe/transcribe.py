@@ -19,12 +19,14 @@ from google import genai
 
 from observe.diarize import DiarizationError, diarize, save_speaker_embeddings
 from observe.hear import SAMPLE_RATE
+from observe.utils import extract_descriptive_suffix
 from think.callosum import callosum_send
 from think.entities import load_entity_names
 from think.models import GEMINI_FLASH
 from think.utils import (
     PromptNotFoundError,
     load_prompt,
+    segment_key,
     setup_cli,
 )
 
@@ -103,7 +105,7 @@ def transcribe_turns(
     prompt_text: str,
     context_text: str,
     turns: List[Dict[str, object]],
-) -> dict:
+) -> list:
     """Send audio turns to Gemini and return the parsed JSON result.
 
     Args:
@@ -111,7 +113,7 @@ def transcribe_turns(
         model: Model name
         prompt_text: System prompt
         context_text: Entity and speaker context
-        turns: List of turn dicts with "start", "end", "speaker", "bytes"
+        turns: List of turn dicts with "start", "speaker", "bytes"
     """
     from google.genai import types
 
@@ -158,9 +160,6 @@ class Transcriber:
 
     def _move_to_segment(self, audio_path: Path) -> Path:
         """Move audio file to its segment and return new path."""
-        from observe.utils import extract_descriptive_suffix
-        from think.utils import segment_key
-
         segment = segment_key(audio_path.stem)
         if segment is None:
             raise ValueError(f"Invalid audio filename: {audio_path.stem}")
@@ -221,16 +220,18 @@ class Transcriber:
 
         return temp_path
 
-    def _process_audio(
-        self, raw_path: Path
-    ) -> tuple[List[Dict[str, object]], np.ndarray, list[str]] | None:
+    def _process_audio(self, raw_path: Path) -> dict | None:
         """Process audio file with diarization and return turns for transcription.
 
         Returns:
-            Tuple of (turns, embeddings, speakers) or None on error
+            Dict with keys or None on error:
             - turns: List of dicts with "start" (HH:MM:SS), "speaker", "bytes"
             - embeddings: numpy array (num_turns, 256)
             - speakers: List of unique speaker labels
+            - diarization: Dict with raw diarization data for metadata storage
+              - turns: List of dicts with "start", "end" (floats), "speaker"
+              - overlaps: List of dicts with "start", "end" (floats)
+              - timings: Dict with timing info
         """
         try:
             # Prepare audio (convert m4a if needed)
@@ -239,7 +240,7 @@ class Transcriber:
 
             try:
                 # Run diarization
-                diarization_turns, embeddings, timings = diarize(audio_path)
+                diarization_turns, embeddings, timings, overlaps = diarize(audio_path)
             finally:
                 # Clean up temp file if created
                 if is_temp and audio_path.exists():
@@ -247,7 +248,16 @@ class Transcriber:
 
             if not diarization_turns:
                 logging.info(f"No speech detected in {raw_path}")
-                return [], np.array([]), []
+                return {
+                    "turns": [],
+                    "embeddings": np.array([]),
+                    "speakers": [],
+                    "diarization": {
+                        "turns": [],
+                        "overlaps": overlaps,
+                        "timings": timings,
+                    },
+                }
 
             logging.info(
                 f"Diarization complete: {len(diarization_turns)} turns, "
@@ -263,8 +273,6 @@ class Transcriber:
             # Extract date and time based on path structure
             # Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> parent=YYYYMMDD, stem=HHMMSS_...
             # Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> grandparent=YYYYMMDD, parent=HHMMSS_LEN
-            from think.utils import segment_key
-
             parent_segment = segment_key(raw_path.parent.name)
             if parent_segment:
                 # Segment dir: extract from grandparent and parent
@@ -319,7 +327,16 @@ class Transcriber:
                 f"speakers: {', '.join(speakers)}"
             )
 
-            return processed, embeddings, speakers
+            return {
+                "turns": processed,
+                "embeddings": embeddings,
+                "speakers": speakers,
+                "diarization": {
+                    "turns": diarization_turns,
+                    "overlaps": overlaps,
+                    "timings": timings,
+                },
+            }
 
         except DiarizationError as e:
             logging.error(f"Diarization failed for {raw_path}: {e}")
@@ -335,9 +352,6 @@ class Transcriber:
         - Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> YYYYMMDD/HHMMSS_LEN/audio.jsonl
         - Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> YYYYMMDD/HHMMSS_LEN/audio.jsonl
         """
-        from observe.utils import extract_descriptive_suffix
-        from think.utils import segment_key
-
         # Check if already in segment directory (parent is HHMMSS_LEN)
         parent_segment = segment_key(audio_path.parent.name)
         if parent_segment:
@@ -361,9 +375,6 @@ class Transcriber:
         - Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> YYYYMMDD/HHMMSS_LEN/audio/
         - Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> YYYYMMDD/HHMMSS_LEN/audio/
         """
-        from observe.utils import extract_descriptive_suffix
-        from think.utils import segment_key
-
         # Check if already in segment directory (parent is HHMMSS_LEN)
         parent_segment = segment_key(audio_path.parent.name)
         if parent_segment:
@@ -384,6 +395,7 @@ class Transcriber:
         raw_path: Path,
         turns: List[Dict[str, object]],
         speakers: list[str],
+        diarization_data: dict | None = None,
     ) -> bool:
         """Transcribe turns using Gemini and save JSONL.
 
@@ -391,6 +403,8 @@ class Transcriber:
             raw_path: Path to the raw audio file
             turns: List of audio turns to transcribe
             speakers: List of speaker labels to pass to Gemini
+            diarization_data: Optional dict with raw diarization data to include
+                in metadata (turns, overlaps, timings)
         """
         json_path = self._get_json_path(raw_path)
 
@@ -442,19 +456,24 @@ class Transcriber:
             # Add audio file reference to metadata
             # Day root: stem is HHMMSS_LEN_suffix, need to extract suffix
             # Segment dir: stem is already the suffix (e.g., "audio")
-            from think.utils import segment_key
-
             parent_segment = segment_key(raw_path.parent.name)
             if parent_segment:
                 # Segment dir: stem is already the suffix
                 suffix = raw_path.stem
             else:
                 # Day root: extract suffix from HHMMSS_LEN_suffix format
-                from observe.utils import extract_descriptive_suffix
-
                 suffix = extract_descriptive_suffix(raw_path.stem)
 
             metadata["raw"] = f"{suffix}.flac"
+
+            # Add diarization data if provided
+            if diarization_data:
+                metadata["diarization"] = {
+                    "turns": diarization_data.get("turns", []),
+                    "overlaps": diarization_data.get("overlaps", []),
+                    "timings": diarization_data.get("timings", {}),
+                    "speakers": speakers,
+                }
 
             # Extract source from <source>_audio pattern
             # mic_audio -> "mic", sys_audio -> "sys", phone_audio -> "phone", etc.
@@ -499,7 +518,10 @@ class Transcriber:
         if result is None:
             raise SystemExit(1)
 
-        turns, embeddings, speakers = result
+        turns = result["turns"]
+        embeddings = result["embeddings"]
+        speakers = result["speakers"]
+        diarization_data = result["diarization"]
 
         # Skip if no speech detected
         if len(turns) == 0:
@@ -508,7 +530,7 @@ class Transcriber:
             return
 
         # Transcribe
-        success = self._transcribe(raw_path, turns, speakers)
+        success = self._transcribe(raw_path, turns, speakers, diarization_data)
         if success:
             # In redo mode, file is already in segment dir - don't move
             if redo:
@@ -544,8 +566,6 @@ class Transcriber:
 
 
 def main():
-    from think.utils import segment_key
-
     parser = argparse.ArgumentParser(
         description="Transcribe audio files using Gemini with speaker diarization"
     )

@@ -553,6 +553,11 @@ Example transcript file:
   - `id` – unique import identifier
   - `facet` – facet name for entity extraction
   - `setting` – contextual setting description
+- `diarization` – object with raw diarization data from pyannote (optional):
+  - `turns` – array of speaker turns with `start`, `end` (floats in seconds), `speaker`
+  - `overlaps` – array of overlapping speech regions with `start`, `end` (floats in seconds)
+  - `timings` – object with processing durations: `pipeline_load`, `diarization`, `emb_model_load`, `embedding`, `total`
+  - `speakers` – array of unique speaker labels (e.g., ["Speaker 1", "Speaker 2"])
 
 **Transcript segments (subsequent lines):**
 - `start` – timestamp in HH:MM:SS format (required)
