@@ -206,26 +206,35 @@ def _populate_screen_cache(day: str, segment_key: str) -> list[dict]:
             images = decode_frames(video_path, frames, annotate_boxes=True)
 
             # Cache JPEG bytes and build metadata
-            for frame, img in zip(frames, images):
-                if img is None:
-                    continue
+            try:
+                for frame, img in zip(frames, images):
+                    if img is None:
+                        continue
 
-                frame_id = frame["frame_id"]
-                jpeg_bytes = image_to_jpeg_bytes(img)
-                _screen_cache["frames"][(filename, frame_id)] = jpeg_bytes
-                img.close()
+                    frame_id = frame["frame_id"]
+                    jpeg_bytes = image_to_jpeg_bytes(img)
+                    _screen_cache["frames"][(filename, frame_id)] = jpeg_bytes
+                    img.close()
 
-                # Build metadata for frontend
-                meta = {
-                    "frame_id": frame_id,
-                    "filename": filename,
-                    "monitor": monitor,
-                    "timestamp": frame.get("timestamp", 0),
-                    "box_2d": frame.get("box_2d"),
-                    "requests": frame.get("requests", []),
-                    "analysis": frame.get("analysis"),
-                }
-                all_metadata.append(meta)
+                    # Build metadata for frontend
+                    meta = {
+                        "frame_id": frame_id,
+                        "filename": filename,
+                        "monitor": monitor,
+                        "timestamp": frame.get("timestamp", 0),
+                        "box_2d": frame.get("box_2d"),
+                        "requests": frame.get("requests", []),
+                        "analysis": frame.get("analysis"),
+                    }
+                    all_metadata.append(meta)
+            finally:
+                # Ensure all PIL Images are closed even on error or early exit
+                for img in images:
+                    if img is not None:
+                        try:
+                            img.close()
+                        except Exception:
+                            pass
 
         except Exception:
             # Skip files that fail to load
