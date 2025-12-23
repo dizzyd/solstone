@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import threading
 import time
@@ -175,6 +176,10 @@ def main() -> None:
     )
 
     args = setup_cli(parser)
+
+    journal_path = os.environ.get("JOURNAL_PATH", "(not set)")
+    print(f"Journal: {journal_path}")
+    print(f"Timeout: {args.timeout}s")
 
     success, logs = wait_for_convey_restart(timeout=args.timeout, verbose=args.verbose)
 
