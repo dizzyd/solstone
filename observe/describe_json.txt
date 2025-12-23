@@ -1,6 +1,6 @@
 # Screenshot Context Analysis
 
-You are analyzing a desktop screenshot cropped to focus on a specific area.
+You are analyzing a desktop screenshot from a screencast recording.
 
 Respond with JSON describing the context:
 

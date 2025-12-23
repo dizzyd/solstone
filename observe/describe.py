@@ -3,8 +3,7 @@
 Describe screencast videos by detecting significant frame changes.
 
 Processes per-monitor screencast files (.webm/.mp4/.mov), detects changes using
-block-based SSIM, and qualifies frames that meet the 400x400 threshold for
-Gemini processing.
+RMS-based comparison, and sends full frames to Gemini for analysis.
 """
 
 from __future__ import annotations
@@ -21,8 +20,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import av
-import numpy as np
-from PIL import Image
+from PIL import Image, ImageChops, ImageStat
 
 from think.callosum import callosum_send
 from think.utils import setup_cli
@@ -77,6 +75,11 @@ CONFIG = _load_config()
 class VideoProcessor:
     """Process per-monitor screencast videos and detect significant frame changes."""
 
+    # RMS threshold for frame qualification (5% difference)
+    RMS_THRESHOLD = 0.05
+    # Downsample size for RMS comparison
+    COMPARE_SIZE = (160, 90)
+
     def __init__(self, video_path: Path):
         self.video_path = video_path
         self.width: Optional[int] = None
@@ -92,11 +95,15 @@ class VideoProcessor:
         """
         Process video and return qualified frames.
 
+        Uses RMS-based comparison on downsampled frames to detect significant
+        changes. Caches the downsampled version of the last qualified frame
+        to avoid repeated resizing.
+
         Returns:
-            List of qualified frames with timestamp, frame data (as bytes),
-            and change boxes.
+            List of qualified frames with timestamp and frame_bytes.
         """
-        last_qualified: Optional[np.ndarray] = None
+        # Cache for downsampled last qualified frame
+        last_qualified_small: Optional[Image.Image] = None
 
         try:
             with av.open(str(self.video_path)) as container:
@@ -114,83 +121,63 @@ class VideoProcessor:
                     timestamp = frame.time if frame.time is not None else 0.0
                     frame_count += 1
 
-                    # First frame: always qualify with full frame bounds
-                    if last_qualified is None:
-                        box_2d = [0, 0, self.height, self.width]
+                    # Convert to PIL for comparison and bytes conversion
+                    arr_rgb = frame.to_ndarray(format="rgb24")
+                    pil_img = Image.fromarray(arr_rgb)
+                    del arr_rgb
 
-                        # Convert to PIL for bytes conversion
-                        arr_rgb = frame.to_ndarray(format="rgb24")
-                        pil_img = Image.fromarray(arr_rgb)
+                    # Downsample for comparison
+                    current_small = self._downsample(pil_img)
 
-                        # Convert frame to bytes immediately
-                        crop_bytes = self._frame_to_crop_bytes(pil_img, box_2d)
-
-                        # Clean up PIL image and RGB array
+                    # First frame: always qualify (RMS vs nothing = 100% different)
+                    if last_qualified_small is None:
+                        frame_bytes = self._frame_to_bytes(pil_img)
                         pil_img.close()
-                        del arr_rgb
 
                         self.qualified_frames.append(
                             {
                                 "frame_id": frame_count,
                                 "timestamp": timestamp,
-                                "box_2d": box_2d,
-                                "crop_bytes": crop_bytes,
+                                "frame_bytes": frame_bytes,
                             }
                         )
 
-                        # Store grayscale numpy array for comparison
-                        last_qualified = frame.to_ndarray(format="gray")
-
+                        last_qualified_small = current_small
                         logger.debug(f"First frame at {timestamp:.2f}s")
                         continue
 
-                    # Compare current frame with last qualified
-                    frame_gray = frame.to_ndarray(format="gray")
-                    boxes = self._compare_frames(last_qualified, frame_gray)
+                    # Compare current frame with last qualified using RMS
+                    rms = self._rms_diff(last_qualified_small, current_small)
 
-                    if not boxes:
+                    if rms < self.RMS_THRESHOLD:
+                        # Not enough change - skip this frame
+                        current_small.close()
+                        pil_img.close()
                         continue
 
-                    # Find largest box by area
-                    largest_box = max(
-                        boxes,
-                        key=lambda b: (b["box_2d"][2] - b["box_2d"][0])
-                        * (b["box_2d"][3] - b["box_2d"][1]),
+                    # Qualified - convert full frame to bytes
+                    frame_bytes = self._frame_to_bytes(pil_img)
+                    pil_img.close()
+
+                    self.qualified_frames.append(
+                        {
+                            "frame_id": frame_count,
+                            "timestamp": timestamp,
+                            "frame_bytes": frame_bytes,
+                        }
                     )
 
-                    y_min, x_min, y_max, x_max = largest_box["box_2d"]
-                    box_width = x_max - x_min
-                    box_height = y_max - y_min
+                    # Update cached downsampled frame
+                    last_qualified_small.close()
+                    last_qualified_small = current_small
 
-                    # Qualify if largest box meets threshold
-                    if box_width >= 400 and box_height >= 400:
-                        arr = frame.to_ndarray(format="rgb24")
-                        frame_pil = Image.fromarray(arr)
-                        del arr
+                    logger.debug(
+                        f"Qualified frame at {timestamp:.2f}s (RMS: {rms:.3f})"
+                    )
 
-                        # Convert frame to bytes immediately
-                        crop_bytes = self._frame_to_crop_bytes(
-                            frame_pil, largest_box["box_2d"]
-                        )
-
-                        frame_pil.close()
-
-                        self.qualified_frames.append(
-                            {
-                                "frame_id": frame_count,
-                                "timestamp": timestamp,
-                                "box_2d": largest_box["box_2d"],
-                                "crop_bytes": crop_bytes,
-                            }
-                        )
-
-                        # Store grayscale numpy array for comparison
-                        last_qualified = frame_gray
-
-                        logger.debug(
-                            f"Qualified frame at {timestamp:.2f}s "
-                            f"(box: {box_width}x{box_height})"
-                        )
+                # Clean up last cached frame
+                if last_qualified_small is not None:
+                    last_qualified_small.close()
 
                 logger.info(
                     f"Processed {frame_count} frames from {self.video_path.name}, "
@@ -205,172 +192,41 @@ class VideoProcessor:
 
         return self.qualified_frames
 
-    def _frame_to_crop_bytes(
-        self,
-        img: Image.Image,
-        box_2d: list,
-    ) -> bytes:
+    def _downsample(self, img: Image.Image) -> Image.Image:
+        """Downsample image to comparison size."""
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        return img.resize(self.COMPARE_SIZE, Image.BILINEAR)
+
+    def _rms_diff(self, img1: Image.Image, img2: Image.Image) -> float:
         """
-        Convert cropped change region to PNG bytes.
+        Compute RMS difference between two images, normalized to [0, 1].
+
+        Both images should already be downsampled to COMPARE_SIZE.
+        """
+        diff = ImageChops.difference(img1, img2)
+        stat = ImageStat.Stat(diff)
+        # Normalize RMS to [0, 1] by dividing by 255 per channel
+        rms = sum(stat.rms) / (len(stat.rms) * 255.0)
+        return float(rms)
+
+    def _frame_to_bytes(self, img: Image.Image) -> bytes:
+        """
+        Convert full frame to PNG bytes.
 
         Parameters
         ----------
         img : Image.Image
-            PIL Image to convert (full frame)
-        box_2d : list
-            Change box [y_min, x_min, y_max, x_max]
+            PIL Image to convert
 
         Returns
         -------
         bytes
-            Crop image as PNG bytes
+            Image as PNG bytes
         """
-        y_min, x_min, y_max, x_max = box_2d
-
-        # Expand bounds by 50px in all directions where possible
-        img_width, img_height = img.size
-        expanded_x_min = max(0, x_min - 50)
-        expanded_y_min = max(0, y_min - 50)
-        expanded_x_max = min(img_width, x_max + 50)
-        expanded_y_max = min(img_height, y_max + 50)
-
-        # Crop to expanded region
-        cropped = img.crop(
-            (expanded_x_min, expanded_y_min, expanded_x_max, expanded_y_max)
-        )
-
-        # Convert to PNG bytes (compress_level=1 for speed)
-        crop_io = io.BytesIO()
-        cropped.save(crop_io, format="PNG", compress_level=1)
-        crop_bytes = crop_io.getvalue()
-        crop_io.close()
-        cropped.close()
-
-        # img is closed by caller
-
-        return crop_bytes
-
-    def _load_full_frame(self, frame_id: int) -> Image.Image:
-        """Load a full frame by 1-based frame_id for meeting analysis."""
-        with av.open(str(self.video_path)) as container:
-            stream = container.streams.video[0]
-            stream.thread_type = "AUTO"
-            stream.codec_context.thread_count = 0
-
-            frame_count = 0
-            for frame in container.decode(video=0):
-                if frame.pts is None:
-                    continue
-
-                frame_count += 1
-                if frame_count == frame_id:
-                    arr = frame.to_ndarray(format="rgb24")
-                    return Image.fromarray(arr)
-
-        raise ValueError(
-            f"Frame {frame_id} not found in {self.video_path}"
-        )
-
-    def _compare_frames(
-        self,
-        frame1: np.ndarray,
-        frame2: np.ndarray,
-        mad_threshold: float = 1.5,
-    ) -> List[dict]:
-        """
-        Compare two grayscale frames and return changed region boxes.
-
-        Parameters
-        ----------
-        frame1 : np.ndarray
-            First grayscale frame
-        frame2 : np.ndarray
-            Second grayscale frame
-        mad_threshold : float
-            Mean Absolute Difference threshold for early bailout (default: 1.5)
-            If downsampled MAD is below this, skip expensive SSIM computation
-
-        Returns
-        -------
-        List[dict]
-            Boxes with 'box_2d' key containing [y_min, x_min, y_max, x_max]
-        """
-        # Fast pre-filter: compute MAD on 1/4-scale downsampled images
-        # This is extremely fast (pure NumPy) and eliminates unchanged frames
-        small1 = frame1[::4, ::4].astype(np.int16)
-        small2 = frame2[::4, ::4].astype(np.int16)
-        mad = np.abs(small1 - small2).mean()
-
-        if mad < mad_threshold:
-            # No significant change detected - skip expensive SSIM
-            return []
-
-        return self._compute_ssim_boxes(frame1, frame2)
-
-    def _compute_ssim_boxes(
-        self,
-        frame1: np.ndarray,
-        frame2: np.ndarray,
-        block_size: int = 160,
-        ssim_threshold: float = 0.90,
-        margin: int = 5,
-        downsample_factor: int = 4,
-    ) -> List[dict]:
-        """
-        Compare two grayscale frames using block-based SSIM.
-
-        Downsamples before SSIM for speed, computes full SSIM map once,
-        then pools to blocks. Much faster than 200+ per-block SSIM calls.
-        """
-        from math import ceil
-
-        from skimage.metrics import structural_similarity as ssim
-
-        # Store original dimensions for final boxing
-        H_orig, W_orig = frame1.shape
-
-        # 1) Downsample by factor (e.g., 4x) for faster SSIM
-        small1 = frame1[::downsample_factor, ::downsample_factor]
-        small2 = frame2[::downsample_factor, ::downsample_factor]
-
-        # 2) Convert to float32 in [0, 1] to avoid float64 upcasting
-        small1 = small1.astype(np.float32) / 255.0
-        small2 = small2.astype(np.float32) / 255.0
-
-        # 3) Compute SSIM map once on downsampled images
-        _, ssim_map = ssim(
-            small1,
-            small2,
-            data_range=1.0,  # float32 in [0, 1]
-            full=True,
-            gaussian_weights=False,  # uniform window, matches previous behavior
-            use_sample_covariance=False,  # speed boost
-            channel_axis=None,  # grayscale
-        )
-
-        H, W = ssim_map.shape
-        # Block size in downsampled space
-        block_size_down = block_size // downsample_factor
-        rows = ceil(H / block_size_down)
-        cols = ceil(W / block_size_down)
-
-        # 4) Pad to block grid for clean vectorized pooling
-        pad_h = rows * block_size_down - H
-        pad_w = cols * block_size_down - W
-        if pad_h or pad_w:
-            ssim_map = np.pad(ssim_map, ((0, pad_h), (0, pad_w)), mode="edge")
-
-        # 5) Vectorized block mean pooling
-        block_means = ssim_map.reshape(
-            rows, block_size_down, cols, block_size_down
-        ).mean(axis=(1, 3))
-        changed = (block_means < ssim_threshold).tolist()
-
-        # 6) Reuse shared grouping and boxing logic from utils (uses original dimensions)
-        from observe.utils import _blocks_to_boxes, _group_changed_blocks
-
-        groups = _group_changed_blocks(changed, rows, cols)
-        return _blocks_to_boxes(groups, block_size, W_orig, H_orig, margin)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", compress_level=1)
+        return buf.getvalue()
 
     def _user_contents(self, prompt: str, image, entities: bool = False) -> list:
         """Build contents list with optional entity context."""
@@ -419,7 +275,7 @@ class VideoProcessor:
         use_prompt : str
             Prompt template filename to use (default: describe_json.txt)
         max_concurrent : int
-            Maximum number of concurrent API requests (default: 5)
+            Maximum number of concurrent API requests (default: 10)
         output_path : Optional[Path]
             Path to write JSONL output (when None, no output file is written)
         """
@@ -467,13 +323,13 @@ class VideoProcessor:
 
         # Create vision requests for all qualified frames
         for frame_data in qualified_frames:
-            # Load crop image from bytes - keep it open until request completes
-            crop_img = Image.open(io.BytesIO(frame_data["crop_bytes"]))
+            # Load frame image from bytes - keep it open until request completes
+            frame_img = Image.open(io.BytesIO(frame_data["frame_bytes"]))
 
             req = batch.create(
                 contents=self._user_contents(
                     "Analyze this screenshot frame from a screencast recording.",
-                    crop_img,
+                    frame_img,
                 ),
                 model=GEMINI_LITE,
                 system_instruction=system_instruction,
@@ -486,14 +342,13 @@ class VideoProcessor:
             # Attach metadata for tracking (store bytes, not PIL images)
             req.frame_id = frame_data["frame_id"]
             req.timestamp = frame_data["timestamp"]
-            req.box_2d = frame_data["box_2d"]
             req.retry_count = 0
-            req.crop_bytes = frame_data["crop_bytes"]  # Store bytes for reuse
+            req.frame_bytes = frame_data["frame_bytes"]  # Store bytes for reuse
             req.request_type = RequestType.DESCRIBE_JSON
             req.json_analysis = None  # Will store the JSON analysis result
             req.meeting_analysis = None  # Will store meeting analysis if applicable
             req.requests = []  # Track all requests for this frame
-            req.initial_image = crop_img  # Keep reference to close after completion
+            req.initial_image = frame_img  # Keep reference to close after completion
 
             batch.add(req)
 
@@ -569,14 +424,14 @@ class VideoProcessor:
                 # Check for meeting analysis
                 if visible_category == "meeting":
                     logger.info(f"Frame {req.frame_id}: Triggering meeting analysis")
-                    # Load full frame on-demand for meeting analysis
-                    full_image = self._load_full_frame(req.frame_id)
+                    # Reload frame image from cached bytes (already full frame)
+                    meeting_img = Image.open(io.BytesIO(req.frame_bytes))
 
                     batch.update(
                         req,
                         contents=self._user_contents(
                             "Analyze this meeting screenshot.",
-                            full_image,
+                            meeting_img,
                             entities=True,
                         ),
                         model=GEMINI_LITE,
@@ -587,7 +442,7 @@ class VideoProcessor:
                     )
                     # Don't close yet - batch needs it for encoding
                     # Store reference for cleanup later
-                    req.meeting_image = full_image
+                    req.meeting_image = meeting_img
 
                     # Close initial image since DESCRIBE_JSON is complete
                     if hasattr(req, "initial_image") and req.initial_image:
@@ -604,15 +459,15 @@ class VideoProcessor:
                     logger.info(
                         f"Frame {req.frame_id}: Triggering text extraction for category '{visible_category}'"
                     )
-                    # Load crop image from cached bytes
-                    crop_img = Image.open(io.BytesIO(req.crop_bytes))
+                    # Reload frame image from cached bytes
+                    text_img = Image.open(io.BytesIO(req.frame_bytes))
 
                     # Update request for text extraction and re-add
                     batch.update(
                         req,
                         contents=self._user_contents(
                             "Extract text from this screenshot frame.",
-                            crop_img,
+                            text_img,
                             entities=True,
                         ),
                         model=GEMINI_LITE,
@@ -623,7 +478,7 @@ class VideoProcessor:
                     )
                     # Don't close yet - batch needs it for encoding
                     # Store reference for cleanup later
-                    req.text_image = crop_img
+                    req.text_image = text_img
 
                     # Close initial image since DESCRIBE_JSON is complete
                     if hasattr(req, "initial_image") and req.initial_image:
@@ -638,7 +493,6 @@ class VideoProcessor:
             result = {
                 "frame_id": req.frame_id,
                 "timestamp": req.timestamp,
-                "box_2d": req.box_2d,
                 "requests": req.requests,
             }
 
@@ -678,7 +532,7 @@ class VideoProcessor:
                 req.text_image = None
 
             # Aggressively clear heavy fields now that request is finalized
-            req.crop_bytes = None
+            req.frame_bytes = None
             req.json_analysis = None
             req.meeting_analysis = None
 
@@ -729,7 +583,6 @@ def output_qualified_frames(
             {
                 "frame_id": frame["frame_id"],
                 "timestamp": frame["timestamp"],
-                "box_2d": frame["box_2d"],
             }
             for frame in qualified_frames
         ],

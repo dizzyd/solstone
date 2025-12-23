@@ -235,23 +235,6 @@ def add_module_stubs(request, monkeypatch):
     google_mod.genai = genai_mod
     sys.modules["google"] = google_mod
     sys.modules["google.genai"] = genai_mod
-    if "skimage.metrics" not in sys.modules:
-        metrics_mod = types.ModuleType("skimage.metrics")
-
-        def structural_similarity(a, b, full=False):
-            a = np.asarray(a, dtype=float)
-            b = np.asarray(b, dtype=float)
-            diff = np.mean(np.abs(a - b)) / 255.0
-            score = 1.0 - diff
-            if full:
-                return score, None
-            return score
-
-        metrics_mod.structural_similarity = structural_similarity
-        skimage_mod = types.ModuleType("skimage")
-        skimage_mod.metrics = metrics_mod
-        sys.modules["skimage"] = skimage_mod
-        sys.modules["skimage.metrics"] = metrics_mod
     if "cv2" not in sys.modules:
         cv2_mod = types.ModuleType("cv2")
         cv2_mod.COLOR_RGB2LAB = 0

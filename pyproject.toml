@@ -69,7 +69,6 @@ full = [
     "torch",
     "scipy",
     "opencv-python",
-    "scikit-image",
     "PyGObject",
     "watchdog",
     "claude-agent-sdk>=0.1.0",
