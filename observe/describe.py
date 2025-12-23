@@ -2,8 +2,9 @@
 """
 Describe screencast videos by detecting significant frame changes.
 
-Processes per-monitor .webm screencast files, detects changes using block-based SSIM,
-and qualifies frames that meet the 400x400 threshold for Gemini processing.
+Processes per-monitor screencast files (.webm/.mp4/.mov), detects changes using
+block-based SSIM, and qualifies frames that meet the 400x400 threshold for
+Gemini processing.
 """
 
 from __future__ import annotations
@@ -78,11 +79,8 @@ class VideoProcessor:
 
     def __init__(self, video_path: Path):
         self.video_path = video_path
-        # Get video dimensions
-        with av.open(str(self.video_path)) as container:
-            stream = container.streams.video[0]
-            self.width = stream.width
-            self.height = stream.height
+        self.width: Optional[int] = None
+        self.height: Optional[int] = None
         # Store qualified frames as simple list
         self.qualified_frames: List[dict] = []
         # Load entity names for vision analysis context
@@ -105,6 +103,8 @@ class VideoProcessor:
                 stream = container.streams.video[0]
                 stream.thread_type = "AUTO"
                 stream.codec_context.thread_count = 0
+                self.width = stream.width
+                self.height = stream.height
 
                 frame_count = 0
                 for frame in container.decode(video=0):
@@ -123,7 +123,7 @@ class VideoProcessor:
                         pil_img = Image.fromarray(arr_rgb)
 
                         # Convert frame to bytes immediately
-                        crop_bytes, full_bytes = self._frame_to_bytes(pil_img, box_2d)
+                        crop_bytes = self._frame_to_crop_bytes(pil_img, box_2d)
 
                         # Clean up PIL image and RGB array
                         pil_img.close()
@@ -135,7 +135,6 @@ class VideoProcessor:
                                 "timestamp": timestamp,
                                 "box_2d": box_2d,
                                 "crop_bytes": crop_bytes,
-                                "full_bytes": full_bytes,
                             }
                         )
 
@@ -170,7 +169,7 @@ class VideoProcessor:
                         del arr
 
                         # Convert frame to bytes immediately
-                        crop_bytes, full_bytes = self._frame_to_bytes(
+                        crop_bytes = self._frame_to_crop_bytes(
                             frame_pil, largest_box["box_2d"]
                         )
 
@@ -182,7 +181,6 @@ class VideoProcessor:
                                 "timestamp": timestamp,
                                 "box_2d": largest_box["box_2d"],
                                 "crop_bytes": crop_bytes,
-                                "full_bytes": full_bytes,
                             }
                         )
 
@@ -207,13 +205,13 @@ class VideoProcessor:
 
         return self.qualified_frames
 
-    def _frame_to_bytes(
+    def _frame_to_crop_bytes(
         self,
         img: Image.Image,
         box_2d: list,
-    ) -> tuple[bytes, bytes]:
+    ) -> bytes:
         """
-        Convert frame to bytes - both crop region and full frame.
+        Convert cropped change region to PNG bytes.
 
         Parameters
         ----------
@@ -224,8 +222,8 @@ class VideoProcessor:
 
         Returns
         -------
-        tuple[bytes, bytes]
-            (crop_bytes, full_frame_bytes) as PNG bytes
+        bytes
+            Crop image as PNG bytes
         """
         y_min, x_min, y_max, x_max = box_2d
 
@@ -248,15 +246,30 @@ class VideoProcessor:
         crop_io.close()
         cropped.close()
 
-        # Full frame bytes
-        full_io = io.BytesIO()
-        img.save(full_io, format="PNG", compress_level=1)
-        full_bytes = full_io.getvalue()
-        full_io.close()
-
         # img is closed by caller
 
-        return crop_bytes, full_bytes
+        return crop_bytes
+
+    def _load_full_frame(self, frame_id: int) -> Image.Image:
+        """Load a full frame by 1-based frame_id for meeting analysis."""
+        with av.open(str(self.video_path)) as container:
+            stream = container.streams.video[0]
+            stream.thread_type = "AUTO"
+            stream.codec_context.thread_count = 0
+
+            frame_count = 0
+            for frame in container.decode(video=0):
+                if frame.pts is None:
+                    continue
+
+                frame_count += 1
+                if frame_count == frame_id:
+                    arr = frame.to_ndarray(format="rgb24")
+                    return Image.fromarray(arr)
+
+        raise ValueError(
+            f"Frame {frame_id} not found in {self.video_path}"
+        )
 
     def _compare_frames(
         self,
@@ -395,7 +408,7 @@ class VideoProcessor:
     async def process_with_vision(
         self,
         use_prompt: str = "describe_json.txt",
-        max_concurrent: int = 5,
+        max_concurrent: int = 10,
         output_path: Optional[Path] = None,
     ) -> None:
         """
@@ -408,7 +421,7 @@ class VideoProcessor:
         max_concurrent : int
             Maximum number of concurrent API requests (default: 5)
         output_path : Optional[Path]
-            Path to write JSONL output (default: {video_stem}.jsonl)
+            Path to write JSONL output (when None, no output file is written)
         """
         from think.batch import GeminiBatch
         from think.models import GEMINI_LITE
@@ -476,7 +489,6 @@ class VideoProcessor:
             req.box_2d = frame_data["box_2d"]
             req.retry_count = 0
             req.crop_bytes = frame_data["crop_bytes"]  # Store bytes for reuse
-            req.full_bytes = frame_data["full_bytes"]  # Store for meeting analysis
             req.request_type = RequestType.DESCRIBE_JSON
             req.json_analysis = None  # Will store the JSON analysis result
             req.meeting_analysis = None  # Will store meeting analysis if applicable
@@ -557,8 +569,8 @@ class VideoProcessor:
                 # Check for meeting analysis
                 if visible_category == "meeting":
                     logger.info(f"Frame {req.frame_id}: Triggering meeting analysis")
-                    # Load full frame from cached bytes
-                    full_image = Image.open(io.BytesIO(req.full_bytes))
+                    # Load full frame on-demand for meeting analysis
+                    full_image = self._load_full_frame(req.frame_id)
 
                     batch.update(
                         req,
@@ -667,7 +679,6 @@ class VideoProcessor:
 
             # Aggressively clear heavy fields now that request is finalized
             req.crop_bytes = None
-            req.full_bytes = None
             req.json_analysis = None
             req.meeting_analysis = None
 

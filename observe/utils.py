@@ -5,8 +5,6 @@ import logging
 import re
 from pathlib import Path
 
-from think.utils import segment_key
-
 logger = logging.getLogger(__name__)
 
 
