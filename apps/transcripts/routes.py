@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import os
 import re
 from datetime import date
@@ -22,21 +21,12 @@ from convey import state
 from convey.utils import DATE_RE, format_date
 from observe.hear import format_audio
 from observe.screen import format_screen
-from observe.see import decode_frames, image_to_jpeg_bytes
-from observe.utils import load_analysis_frames
 from think.cluster import cluster_scan, cluster_segments
 from think.utils import day_dirs, day_path
 from think.utils import segment_key as validate_segment_key
 
 # Regex for HHMMSS time format validation
 TIME_RE = re.compile(r"\d{6}")
-
-# Single-segment screenshot cache (flushed when different segment requested)
-_screen_cache: dict = {
-    "segment": None,  # (day, segment_key) tuple or None
-    "frames": {},  # {(filename, frame_id): jpeg_bytes}
-    "metadata": [],  # List of frame records with monitor info
-}
 
 transcripts_bp = Blueprint(
     "app:transcripts",
@@ -137,116 +127,6 @@ def api_stats(month: str):
     return jsonify(stats)
 
 
-def _populate_screen_cache(day: str, segment_key: str) -> list[dict]:
-    """Load and cache all screen frames for a segment.
-
-    Populates the global _screen_cache with decoded JPEG frames and returns
-    frame metadata. If already cached for this segment, returns cached metadata.
-
-    Args:
-        day: Day in YYYYMMDD format
-        segment_key: Segment directory name (HHMMSS_LEN format)
-
-    Returns:
-        List of frame metadata dicts with keys: frame_id, filename, monitor,
-        timestamp, box_2d, requests, analysis
-    """
-    day_dir = str(day_path(day))
-    segment_dir = os.path.join(day_dir, segment_key)
-
-    # Check if we already have this segment cached
-    cache_key = (day, segment_key)
-    if _screen_cache["segment"] == cache_key:
-        return _screen_cache["metadata"]
-
-    # Flush cache and load new segment
-    _screen_cache["segment"] = cache_key
-    _screen_cache["frames"] = {}
-    _screen_cache["metadata"] = []
-
-    # Find all *screen.jsonl files in segment
-    screen_files = glob(os.path.join(segment_dir, "*screen.jsonl"))
-    if not screen_files:
-        return []
-
-    all_metadata = []
-
-    for jsonl_path in sorted(screen_files):
-        filename = os.path.basename(jsonl_path)
-        # Extract monitor name from filename (e.g., "center_DP-3_screen.jsonl" -> "center_DP-3")
-        monitor = (
-            filename.replace("_screen.jsonl", "") if filename != "screen.jsonl" else ""
-        )
-
-        try:
-            all_frames = load_analysis_frames(jsonl_path)
-
-            # First line is header with {"raw": "path"}, frames have frame_id
-            frames = [f for f in all_frames if "frame_id" in f]
-            if not frames:
-                continue
-
-            # Get video path from header
-            raw_video_path = None
-            if (
-                all_frames
-                and "raw" in all_frames[0]
-                and "frame_id" not in all_frames[0]
-            ):
-                raw_video_path = all_frames[0].get("raw")
-
-            if not raw_video_path:
-                continue
-
-            video_path = os.path.join(segment_dir, raw_video_path)
-            if not os.path.isfile(video_path):
-                continue
-
-            # Decode all frames from video
-            images = decode_frames(video_path, frames, annotate_boxes=True)
-
-            # Cache JPEG bytes and build metadata
-            try:
-                for frame, img in zip(frames, images):
-                    if img is None:
-                        continue
-
-                    frame_id = frame["frame_id"]
-                    jpeg_bytes = image_to_jpeg_bytes(img)
-                    _screen_cache["frames"][(filename, frame_id)] = jpeg_bytes
-                    img.close()
-
-                    # Build metadata for frontend
-                    meta = {
-                        "frame_id": frame_id,
-                        "filename": filename,
-                        "monitor": monitor,
-                        "timestamp": frame.get("timestamp", 0),
-                        "box_2d": frame.get("box_2d"),
-                        "requests": frame.get("requests", []),
-                        "analysis": frame.get("analysis"),
-                    }
-                    all_metadata.append(meta)
-            finally:
-                # Ensure all PIL Images are closed even on error or early exit
-                for img in images:
-                    if img is not None:
-                        try:
-                            img.close()
-                        except Exception:
-                            pass
-
-        except Exception:
-            # Skip files that fail to load
-            continue
-
-    # Sort by timestamp
-    all_metadata.sort(key=lambda f: f["timestamp"])
-    _screen_cache["metadata"] = all_metadata
-
-    return all_metadata
-
-
 def _load_jsonl(path: str) -> list[dict]:
     """Load JSONL file and return list of entries."""
     import json
@@ -292,6 +172,7 @@ def segment_content(day: str, segment_key: str) -> Any:
             - markdown: formatted content
             - source_ref: key fields from source for media lookup
         - audio_file: URL to segment audio file (if exists)
+        - video_files: dict mapping jsonl filename to video URL for client-side decoding
         - segment_key: segment directory name
     """
     if not re.fullmatch(DATE_RE.pattern, day):
@@ -307,6 +188,7 @@ def segment_content(day: str, segment_key: str) -> Any:
 
     chunks: list[dict] = []
     audio_file_url = None
+    video_files: dict[str, str] = {}  # jsonl filename -> video URL
 
     # Process audio files
     audio_files = glob(os.path.join(segment_dir, "*audio.jsonl"))
@@ -346,9 +228,7 @@ def segment_content(day: str, segment_key: str) -> Any:
         except Exception:
             continue
 
-    # Process screen files - also populate cache for thumbnails
-    _populate_screen_cache(day, segment_key)
-
+    # Process screen files and collect video URLs for client-side decoding
     screen_files = glob(os.path.join(segment_dir, "*screen.jsonl"))
     for screen_path in sorted(screen_files):
         try:
@@ -362,6 +242,21 @@ def segment_content(day: str, segment_key: str) -> Any:
                 else ""
             )
 
+            # Extract video URL from header (first entry without frame_id)
+            raw_video = None
+            for entry in entries:
+                if "frame_id" not in entry and "raw" in entry:
+                    raw_video = entry["raw"]
+                    break
+
+            if raw_video:
+                video_path = os.path.join(segment_dir, raw_video)
+                if os.path.isfile(video_path):
+                    rel_path = f"{segment_key}/{raw_video}"
+                    video_files[filename] = (
+                        f"/app/transcripts/api/serve_file/{day}/{rel_path.replace('/', '__')}"
+                    )
+
             for chunk in formatted_chunks:
                 source = chunk.get("source", {})
                 frame_id = source.get("frame_id")
@@ -369,13 +264,6 @@ def segment_content(day: str, segment_key: str) -> Any:
 
                 # Calculate wall-clock time from segment start + offset
                 time_str = _format_time_from_offset(segment_key, offset)
-
-                # Build thumbnail URL if frame_id exists and is cached
-                thumb_url = None
-                if frame_id is not None and (filename, frame_id) in _screen_cache.get(
-                    "frames", {}
-                ):
-                    thumb_url = f"/app/transcripts/api/screen_frame/{day}/{segment_key}/{filename}/{frame_id}"
 
                 # Basic frames have <= 1 vision request (just DESCRIBE_JSON)
                 # Enhanced frames have > 1 (added text extraction or meeting analysis)
@@ -402,6 +290,9 @@ def segment_content(day: str, segment_key: str) -> Any:
                                 }
                             )
 
+                # Include box_2d for client-side bounding box drawing
+                box_2d = source.get("box_2d")
+
                 chunks.append(
                     {
                         "type": "screen",
@@ -413,10 +304,10 @@ def segment_content(day: str, segment_key: str) -> Any:
                             "filename": filename,
                             "monitor": monitor,
                             "offset": offset,
+                            "box_2d": box_2d,
                             "analysis": source.get("analysis"),
                             "participants": participants if participants else None,
                         },
-                        "thumb_url": thumb_url,
                         "basic": is_basic,
                     }
                 )
@@ -430,33 +321,7 @@ def segment_content(day: str, segment_key: str) -> Any:
         {
             "chunks": chunks,
             "audio_file": audio_file_url,
+            "video_files": video_files,
             "segment_key": segment_key,
         }
     )
-
-
-@transcripts_bp.route("/api/screen_frame/<day>/<segment_key>/<filename>/<int:frame_id>")
-def screen_frame(day: str, segment_key: str, filename: str, frame_id: int) -> Any:
-    """Serve a cached frame image as JPEG."""
-    if not re.fullmatch(DATE_RE.pattern, day):
-        return "", 404
-
-    if not validate_segment_key(segment_key):
-        return "", 404
-
-    if not filename.endswith("screen.jsonl"):
-        return "", 404
-
-    # Check cache matches requested segment
-    cache_key = (day, segment_key)
-    if _screen_cache["segment"] != cache_key:
-        return jsonify({"error": "Segment not cached. Load frames list first."}), 404
-
-    frame_key = (filename, frame_id)
-    if frame_key not in _screen_cache["frames"]:
-        return jsonify({"error": "Frame not found in cache."}), 404
-
-    jpeg_bytes = _screen_cache["frames"][frame_key]
-    buffer = io.BytesIO(jpeg_bytes)
-    buffer.seek(0)
-    return send_file(buffer, mimetype="image/jpeg")

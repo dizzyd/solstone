@@ -436,12 +436,17 @@ body.has-date-nav .workspace:has(.tr-wrap) {
 }
 
 .tr-modal-img-wrap img,
-.tr-modal-img-container img {
+.tr-modal-img-wrap canvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: 8px;
+  background: #1f2937;
+}
+
+.tr-modal-img-wrap canvas.loading {
+  animation: tr-pulse 1.5s ease-in-out infinite;
 }
 
 .tr-modal-description {
@@ -451,61 +456,6 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   line-height: 1.5;
   text-align: center;
   flex-shrink: 0;
-}
-
-/* Participant bounding boxes in modal */
-.tr-modal-img-container {
-  position: relative;
-  display: inline-block;
-}
-
-.tr-participant-box {
-  position: absolute;
-  border: 2px dashed #9ca3af;
-  pointer-events: none;
-  box-sizing: border-box;
-}
-
-.tr-participant-box[data-status="speaking"] { border-color: #fbbf24; }
-.tr-participant-box[data-status="active"] { border-color: #4ade80; }
-.tr-participant-box[data-status="muted"] { border-color: #f87171; }
-.tr-participant-box[data-status="presenting"] { border-color: #60a5fa; }
-.tr-participant-box[data-status="unknown"] { border-color: #9ca3af; }
-
-.tr-participant-label {
-  position: absolute;
-  left: 0;
-  bottom: -20px;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: rgba(156, 163, 175, 0.9);
-  color: #000;
-}
-
-.tr-participant-box[data-status="speaking"] .tr-participant-label {
-  background: rgba(251, 191, 36, 0.9);
-  color: #000;
-}
-.tr-participant-box[data-status="active"] .tr-participant-label {
-  background: rgba(74, 222, 128, 0.9);
-  color: #000;
-}
-.tr-participant-box[data-status="muted"] .tr-participant-label {
-  background: rgba(248, 113, 113, 0.9);
-  color: #000;
-}
-.tr-participant-box[data-status="presenting"] .tr-participant-label {
-  background: rgba(96, 165, 250, 0.9);
-  color: #000;
-}
-.tr-participant-box[data-status="unknown"] .tr-participant-label {
-  background: rgba(156, 163, 175, 0.9);
-  color: #000;
 }
 
 /* Unified timeline view */
@@ -592,6 +542,16 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   border-radius: 6px;
   object-fit: cover;
   border: 1px solid #e5e7eb;
+  background: #f3f4f6;
+}
+
+.tr-entry-thumb.loading {
+  animation: tr-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tr-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .tr-entry-screen .tr-entry-content {
@@ -731,11 +691,17 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 
-.tr-group-item img {
+.tr-group-item img,
+.tr-group-item canvas {
   width: 100%;
   aspect-ratio: 16/9;
   object-fit: cover;
   display: block;
+  background: #f3f4f6;
+}
+
+.tr-group-item canvas.loading {
+  animation: tr-pulse 1.5s ease-in-out infinite;
 }
 
 .tr-group-item-badge {
@@ -846,6 +812,198 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   // Modal state - all screen frames for navigation
   let allScreenFrames = [];
   let currentFrameIndex = -1;
+
+  // ========================================
+  // FrameCapture - Client-side video frame decoder
+  // ========================================
+  class FrameCapture {
+    constructor() {
+      // Map of video URL -> { video, ready, width, height }
+      this.videos = new Map();
+      // Frame cache: "url|timestamp" -> ImageBitmap
+      this.frameCache = new Map();
+      // Pending capture promises for deduplication
+      this.pending = new Map();
+    }
+
+    // Load video and wait for metadata
+    loadVideo(url) {
+      if (this.videos.has(url)) {
+        const entry = this.videos.get(url);
+        if (entry.ready) return Promise.resolve(entry);
+        return entry.promise;
+      }
+
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
+
+      const promise = new Promise((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          const entry = this.videos.get(url);
+          entry.ready = true;
+          entry.width = video.videoWidth;
+          entry.height = video.videoHeight;
+          resolve(entry);
+        };
+        video.onerror = () => reject(new Error(`Failed to load video: ${url}`));
+        video.src = url;
+      });
+
+      this.videos.set(url, { video, ready: false, width: 0, height: 0, promise });
+      return promise;
+    }
+
+    // Preload multiple videos
+    preloadVideos(urls) {
+      return Promise.all(urls.map(url => this.loadVideo(url).catch(() => null)));
+    }
+
+    // Clear all loaded videos
+    clear() {
+      for (const entry of this.videos.values()) {
+        entry.video.src = '';
+        entry.video.load();
+      }
+      this.videos.clear();
+      this.frameCache.clear();
+      this.pending.clear();
+    }
+
+    // Capture frame at timestamp, optionally draw to canvas
+    async captureFrame(videoUrl, timestamp, options = {}) {
+      const cacheKey = `${videoUrl}|${timestamp}`;
+
+      // Check cache first
+      if (this.frameCache.has(cacheKey)) {
+        return this.frameCache.get(cacheKey);
+      }
+
+      // Deduplicate concurrent requests for same frame
+      if (this.pending.has(cacheKey)) {
+        return this.pending.get(cacheKey);
+      }
+
+      const capturePromise = this._doCapture(videoUrl, timestamp, cacheKey);
+      this.pending.set(cacheKey, capturePromise);
+
+      try {
+        return await capturePromise;
+      } finally {
+        this.pending.delete(cacheKey);
+      }
+    }
+
+    async _doCapture(videoUrl, timestamp, cacheKey) {
+      const entry = await this.loadVideo(videoUrl);
+      const video = entry.video;
+
+      // Seek to timestamp
+      return new Promise((resolve, reject) => {
+        const onSeeked = () => {
+          video.removeEventListener('seeked', onSeeked);
+          video.removeEventListener('error', onError);
+
+          // Create ImageBitmap from video frame
+          createImageBitmap(video)
+            .then(bitmap => {
+              this.frameCache.set(cacheKey, bitmap);
+              resolve(bitmap);
+            })
+            .catch(reject);
+        };
+
+        const onError = () => {
+          video.removeEventListener('seeked', onSeeked);
+          video.removeEventListener('error', onError);
+          reject(new Error('Video seek failed'));
+        };
+
+        video.addEventListener('seeked', onSeeked);
+        video.addEventListener('error', onError);
+        video.currentTime = timestamp;
+      });
+    }
+
+    // Draw frame to canvas with optional annotations
+    async drawToCanvas(canvas, videoUrl, timestamp, options = {}) {
+      const { boxCoords, participants, width, height } = options;
+
+      try {
+        const bitmap = await this.captureFrame(videoUrl, timestamp);
+
+        // Set canvas size
+        canvas.width = width || bitmap.width;
+        canvas.height = height || bitmap.height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+        // Draw bounding box if provided (box_2d is [x_min, y_min, x_max, y_max])
+        if (boxCoords && boxCoords.length === 4) {
+          const [xMin, yMin, xMax, yMax] = boxCoords;
+          const scaleX = canvas.width / bitmap.width;
+          const scaleY = canvas.height / bitmap.height;
+
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(
+            xMin * scaleX,
+            yMin * scaleY,
+            (xMax - xMin) * scaleX,
+            (yMax - yMin) * scaleY
+          );
+        }
+
+        // Draw participant boxes if provided
+        if (participants && participants.length > 0) {
+          for (const p of participants) {
+            const x = (p.left / 100) * canvas.width;
+            const y = (p.top / 100) * canvas.height;
+            const w = (p.width / 100) * canvas.width;
+            const h = (p.height / 100) * canvas.height;
+
+            // Status-based colors
+            const colors = {
+              speaking: '#fbbf24',
+              active: '#4ade80',
+              muted: '#f87171',
+              presenting: '#60a5fa',
+              unknown: '#9ca3af'
+            };
+            ctx.strokeStyle = colors[p.status] || colors.unknown;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(x, y, w, h);
+            ctx.setLineDash([]);
+
+            // Label background
+            const labelY = y + h + 16;
+            ctx.font = '11px system-ui, sans-serif';
+            const textWidth = ctx.measureText(p.name).width;
+            ctx.fillStyle = colors[p.status] || colors.unknown;
+            ctx.fillRect(x, y + h + 2, textWidth + 8, 16);
+
+            // Label text
+            ctx.fillStyle = '#000';
+            ctx.fillText(p.name, x + 4, labelY - 3);
+          }
+        }
+
+        canvas.classList.remove('loading');
+        return true;
+      } catch (err) {
+        canvas.classList.remove('loading');
+        console.warn('Frame capture failed:', err);
+        return false;
+      }
+    }
+  }
+
+  // Global frame capture instance
+  let frameCapture = new FrameCapture();
 
   // Utilities
   const y = (m) => (m - START) * ppm;
@@ -1016,13 +1174,16 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   // Unified timeline state
   let segmentData = null;
   let segmentAudioEl = null;
+  let currentVideoFiles = {}; // filename -> video URL mapping
 
   function loadSegmentContent(seg) {
     const showAudio = audioCheck.checked;
     const showScreen = screenCheck.checked;
 
-    // Clear old data and show loading message immediately
+    // Clear old data, videos, and show loading message immediately
     segmentData = null;
+    currentVideoFiles = {};
+    frameCapture.clear();
     panel.innerHTML = '<div class="tr-unified-empty"><p>Loading segment...</p></div>';
 
     // Use new unified segment endpoint
@@ -1030,7 +1191,17 @@ body.has-date-nav .workspace:has(.tr-wrap) {
       .then(r => r.json())
       .then(data => {
         segmentData = data;
-        renderSegmentTimeline(data, showAudio, showScreen);
+        currentVideoFiles = data.video_files || {};
+
+        // Preload all videos for this segment
+        const videoUrls = Object.values(currentVideoFiles);
+        if (videoUrls.length > 0) {
+          frameCapture.preloadVideos(videoUrls).then(() => {
+            renderSegmentTimeline(data, showAudio, showScreen);
+          });
+        } else {
+          renderSegmentTimeline(data, showAudio, showScreen);
+        }
       })
       .catch(() => {
         panel.innerHTML = '<p>Error loading transcript.</p>';
@@ -1131,6 +1302,47 @@ body.has-date-nav .workspace:has(.tr-wrap) {
         if (!isNaN(frameIdx)) openImageModal(frameIdx);
       });
     });
+
+    // Set up lazy loading for canvas thumbnails using IntersectionObserver
+    setupLazyCanvasLoading();
+  }
+
+  // Lazy load canvas thumbnails when they become visible
+  function setupLazyCanvasLoading() {
+    const canvases = panel.querySelectorAll('canvas[data-video-url]');
+    if (canvases.length === 0) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const canvas = entry.target;
+          observer.unobserve(canvas);
+          loadCanvasThumbnail(canvas);
+        }
+      }
+    }, { rootMargin: '100px' });
+
+    canvases.forEach(canvas => observer.observe(canvas));
+  }
+
+  // Load a single canvas thumbnail
+  function loadCanvasThumbnail(canvas) {
+    const videoUrl = canvas.dataset.videoUrl;
+    const timestamp = parseFloat(canvas.dataset.timestamp);
+    const boxCoordsStr = canvas.dataset.boxCoords;
+    const boxCoords = boxCoordsStr ? JSON.parse(boxCoordsStr) : null;
+
+    if (!videoUrl || isNaN(timestamp)) {
+      canvas.classList.remove('loading');
+      return;
+    }
+
+    // Draw at thumbnail size (120x68)
+    frameCapture.drawToCanvas(canvas, videoUrl, timestamp, {
+      boxCoords,
+      width: 120,
+      height: 68
+    });
   }
 
   function groupBasicScreenFrames(chunks) {
@@ -1172,8 +1384,18 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   }
 
   function findFrameIndex(chunk) {
-    // Find this chunk's index in allScreenFrames by matching thumb_url
-    return allScreenFrames.findIndex(f => f.thumb_url === chunk.thumb_url);
+    // Find this chunk's index in allScreenFrames by matching source_ref
+    const ref = chunk.source_ref;
+    return allScreenFrames.findIndex(f =>
+      f.source_ref?.filename === ref?.filename &&
+      f.source_ref?.frame_id === ref?.frame_id
+    );
+  }
+
+  // Get video URL for a chunk
+  function getVideoUrlForChunk(chunk) {
+    const filename = chunk.source_ref?.filename;
+    return filename ? currentVideoFiles[filename] : null;
   }
 
   function renderScreenGroup(group, idx) {
@@ -1193,15 +1415,19 @@ body.has-date-nav .workspace:has(.tr-wrap) {
     // Grid of thumbnails (hidden until expanded)
     html += '<div class="tr-group-grid">';
     for (const entry of group.entries) {
-      const thumbUrl = entry.thumb_url;
+      const videoUrl = getVideoUrlForChunk(entry);
+      const timestamp = entry.source_ref?.offset || 0;
+      const boxCoords = entry.source_ref?.box_2d;
       const analysis = entry.source_ref?.analysis || {};
       const category = analysis.visible || 'unknown';
       const description = analysis.visual_description || category;
       const frameIdx = findFrameIndex(entry);
 
-      if (thumbUrl) {
+      if (videoUrl) {
         html += `<div class="tr-group-item" data-frame-idx="${frameIdx}" title="${escapeHtml(description)}">`;
-        html += `<img src="${thumbUrl}" alt="${escapeHtml(category)}" loading="lazy">`;
+        html += `<canvas class="loading" data-video-url="${escapeHtml(videoUrl)}" data-timestamp="${timestamp}"`;
+        if (boxCoords) html += ` data-box-coords='${JSON.stringify(boxCoords)}'`;
+        html += `></canvas>`;
         html += `<span class="tr-group-item-badge">${escapeHtml(category)}</span>`;
         html += '</div>';
       }
@@ -1215,15 +1441,19 @@ body.has-date-nav .workspace:has(.tr-wrap) {
   function renderEnhancedScreenEntry(chunk, idx) {
     const timeStr = chunk.time || '';
     const monitor = chunk.source_ref?.monitor || '';
-    const thumbUrl = chunk.thumb_url;
+    const videoUrl = getVideoUrlForChunk(chunk);
+    const timestamp = chunk.source_ref?.offset || 0;
+    const boxCoords = chunk.source_ref?.box_2d;
     const frameIdx = findFrameIndex(chunk);
 
     let html = `<div class="tr-entry tr-entry-screen" data-idx="${idx}" data-frame-idx="${frameIdx}" data-type="screen">`;
     html += `<div class="tr-entry-time">${timeStr}</div>`;
     html += '<div class="tr-entry-content">';
 
-    if (thumbUrl) {
-      html += `<img class="tr-entry-thumb" src="${thumbUrl}" alt="Frame at ${timeStr}" loading="lazy">`;
+    if (videoUrl) {
+      html += `<canvas class="tr-entry-thumb loading" data-video-url="${escapeHtml(videoUrl)}" data-timestamp="${timestamp}"`;
+      if (boxCoords) html += ` data-box-coords='${JSON.stringify(boxCoords)}'`;
+      html += `></canvas>`;
     }
 
     html += '<div class="tr-entry-desc">';
@@ -1269,22 +1499,6 @@ body.has-date-nav .workspace:has(.tr-wrap) {
       const hasPrev = currentFrameIndex > 0;
       const hasNext = currentFrameIndex < allScreenFrames.length - 1;
 
-      // Build participant overlay boxes HTML
-      const participantBoxesHtml = participants.map(p => `
-        <div class="tr-participant-box" data-status="${escapeHtml(p.status)}"
-             style="top: ${p.top}%; left: ${p.left}%; width: ${p.width}%; height: ${p.height}%;">
-          <span class="tr-participant-label">${escapeHtml(p.name)}</span>
-        </div>
-      `).join('');
-
-      // Use container with overlays if participants exist, otherwise plain img
-      const imgHtml = participants.length > 0
-        ? `<div class="tr-modal-img-container">
-            <img src="${f.thumb_url}" alt="Screenshot">
-            ${participantBoxesHtml}
-          </div>`
-        : `<img src="${f.thumb_url}" alt="Screenshot">`;
-
       modal.innerHTML = `
         <div class="tr-modal-nav${hasPrev ? '' : ' disabled'}" data-dir="prev" title="Previous frame (Left arrow)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -1296,7 +1510,7 @@ body.has-date-nav .workspace:has(.tr-wrap) {
             <button class="tr-modal-close" title="Close (Esc)">&times;</button>
           </div>
           <div class="tr-modal-img-wrap">
-            ${imgHtml}
+            <canvas id="trModalCanvas" class="loading"></canvas>
           </div>
           ${description ? `<div class="tr-modal-description">${escapeHtml(description)}</div>` : ''}
         </div>
@@ -1304,6 +1518,22 @@ body.has-date-nav .workspace:has(.tr-wrap) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
         </div>
       `;
+
+      // Draw frame to modal canvas
+      const canvas = modal.querySelector('#trModalCanvas');
+      const videoUrl = getVideoUrlForChunk(f);
+      const timestamp = f.source_ref?.offset || 0;
+      const boxCoords = f.source_ref?.box_2d;
+
+      if (videoUrl) {
+        frameCapture.drawToCanvas(canvas, videoUrl, timestamp, {
+          boxCoords,
+          participants
+          // No width/height - use full resolution
+        });
+      } else {
+        canvas.classList.remove('loading');
+      }
     };
 
     const navigateFrame = (delta) => {
