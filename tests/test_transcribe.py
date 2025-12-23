@@ -5,6 +5,20 @@ import json
 from observe.transcribe import validate_transcription
 
 
+def _extract_metadata_and_items(result: list) -> tuple[dict, list]:
+    """Return metadata dict and transcript items following transcribe output rules."""
+    metadata = {}
+    transcript_items = result
+    if result and isinstance(result[-1], dict):
+        last_item = result[-1]
+        if "start" not in last_item and (
+            "topics" in last_item or "setting" in last_item
+        ):
+            metadata = last_item
+            transcript_items = result[:-1]
+    return metadata, transcript_items
+
+
 def test_validate_empty_result():
     """Empty result should be valid."""
     result = []
@@ -69,8 +83,8 @@ def test_validate_missing_start_field():
     assert "missing 'start' field" in error
 
 
-def test_validate_invalid_timestamp_format():
-    """Invalid timestamp format should fail."""
+def test_validate_unpadded_timestamp_format():
+    """Unpadded timestamp format should pass."""
     result = [
         {
             "start": "1:2:3",  # Should be HH:MM:SS
@@ -174,15 +188,7 @@ def test_jsonl_format_with_metadata():
     ]
 
     # Extract metadata and transcript items (mimics _transcribe logic)
-    metadata = {}
-    transcript_items = result
-    if result and isinstance(result[-1], dict):
-        last_item = result[-1]
-        if "start" not in last_item and (
-            "topics" in last_item or "setting" in last_item
-        ):
-            metadata = last_item
-            transcript_items = result[:-1]
+    metadata, transcript_items = _extract_metadata_and_items(result)
 
     # Write JSONL format
     jsonl_lines = [json.dumps(metadata)]
@@ -214,15 +220,7 @@ def test_jsonl_format_without_metadata():
     ]
 
     # Extract metadata and transcript items (mimics _transcribe logic)
-    metadata = {}
-    transcript_items = result
-    if result and isinstance(result[-1], dict):
-        last_item = result[-1]
-        if "start" not in last_item and (
-            "topics" in last_item or "setting" in last_item
-        ):
-            metadata = last_item
-            transcript_items = result[:-1]
+    metadata, transcript_items = _extract_metadata_and_items(result)
 
     # Write JSONL format
     jsonl_lines = [json.dumps(metadata)]
@@ -248,15 +246,7 @@ def test_jsonl_format_empty_result():
     result = []
 
     # Extract metadata and transcript items (mimics _transcribe logic)
-    metadata = {}
-    transcript_items = result
-    if result and isinstance(result[-1], dict):
-        last_item = result[-1]
-        if "start" not in last_item and (
-            "topics" in last_item or "setting" in last_item
-        ):
-            metadata = last_item
-            transcript_items = result[:-1]
+    metadata, transcript_items = _extract_metadata_and_items(result)
 
     # Write JSONL format
     jsonl_lines = [json.dumps(metadata)]

@@ -21,7 +21,7 @@ Follow these guidelines:
    - Consider the format, context, and audio quality to make your determination
 
 4. Output Format:
-   - Use the following JSON format for your output. Each JSON object must include
+   - Use the following JSON format for your output. Each JSON object should include
      `start` (timestamp as `HH:MM:SS`) and `speaker` (the provided label like "Speaker 1")
      in addition to the `text` and `description` fields. Finish with a
      single object summarizing the overall recording using the `topics` and

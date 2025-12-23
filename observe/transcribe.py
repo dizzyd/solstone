@@ -158,13 +158,24 @@ class Transcriber:
 
         self.prompt_text = prompt_data.text
 
-    def _move_to_segment(self, audio_path: Path) -> Path:
-        """Move audio file to its segment and return new path."""
+    def _segment_info(self, audio_path: Path) -> tuple[Path, str, bool]:
+        """Return segment directory, descriptive suffix, and whether already in segment."""
+        parent_segment = segment_key(audio_path.parent.name)
+        if parent_segment:
+            return audio_path.parent, audio_path.stem, True
+
         segment = segment_key(audio_path.stem)
         if segment is None:
             raise ValueError(f"Invalid audio filename: {audio_path.stem}")
-        suffix = extract_descriptive_suffix(audio_path.stem)
         segment_dir = audio_path.parent / segment
+        suffix = extract_descriptive_suffix(audio_path.stem)
+        return segment_dir, suffix, False
+
+    def _move_to_segment(self, audio_path: Path) -> Path:
+        """Move audio file to its segment and return new path."""
+        segment_dir, suffix, in_segment = self._segment_info(audio_path)
+        if in_segment:
+            return audio_path
         try:
             segment_dir.mkdir(exist_ok=True)
             new_path = segment_dir / f"{suffix}.flac"
@@ -233,18 +244,13 @@ class Transcriber:
               - overlaps: List of dicts with "start", "end" (floats)
               - timings: Dict with timing info
         """
-        try:
-            # Prepare audio (convert m4a if needed)
-            audio_path = self._prepare_audio(raw_path)
-            is_temp = audio_path != raw_path
+        # Prepare audio (convert m4a if needed)
+        audio_path = self._prepare_audio(raw_path)
+        is_temp = audio_path != raw_path
 
-            try:
-                # Run diarization
-                diarization_turns, embeddings, timings, overlaps = diarize(audio_path)
-            finally:
-                # Clean up temp file if created
-                if is_temp and audio_path.exists():
-                    audio_path.unlink()
+        try:
+            # Run diarization
+            diarization_turns, embeddings, timings, overlaps = diarize(audio_path)
 
             if not diarization_turns:
                 logging.info(f"No speech detected in {raw_path}")
@@ -265,7 +271,7 @@ class Transcriber:
             )
 
             # Load audio for extracting turn clips
-            data, sr = sf.read(raw_path, dtype="float32")
+            data, sr = sf.read(audio_path, dtype="float32")
             if data.ndim == 2:
                 # Mix to mono for clips
                 data = data.mean(axis=1)
@@ -344,6 +350,10 @@ class Transcriber:
         except Exception as e:
             logging.error(f"Error processing {raw_path}: {e}", exc_info=True)
             return None
+        finally:
+            # Clean up temp file if created
+            if is_temp and audio_path.exists():
+                audio_path.unlink()
 
     def _get_json_path(self, audio_path: Path) -> Path:
         """Generate the corresponding JSONL path in timestamp directory.
@@ -352,20 +362,9 @@ class Transcriber:
         - Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> YYYYMMDD/HHMMSS_LEN/audio.jsonl
         - Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> YYYYMMDD/HHMMSS_LEN/audio.jsonl
         """
-        # Check if already in segment directory (parent is HHMMSS_LEN)
-        parent_segment = segment_key(audio_path.parent.name)
-        if parent_segment:
-            # Already in segment dir - use stem directly as suffix
-            return audio_path.parent / f"{audio_path.stem}.jsonl"
-
-        # Day root - derive segment from filename
-        segment = segment_key(audio_path.stem)
-        if segment is None:
-            raise ValueError(f"Invalid audio filename: {audio_path.stem}")
-        segment_dir = audio_path.parent / segment
-        segment_dir.mkdir(exist_ok=True)
-
-        suffix = extract_descriptive_suffix(audio_path.stem)
+        segment_dir, suffix, in_segment = self._segment_info(audio_path)
+        if not in_segment:
+            segment_dir.mkdir(exist_ok=True)
         return segment_dir / f"{suffix}.jsonl"
 
     def _get_embeddings_dir(self, audio_path: Path) -> Path:
@@ -375,19 +374,7 @@ class Transcriber:
         - Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> YYYYMMDD/HHMMSS_LEN/audio/
         - Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> YYYYMMDD/HHMMSS_LEN/audio/
         """
-        # Check if already in segment directory (parent is HHMMSS_LEN)
-        parent_segment = segment_key(audio_path.parent.name)
-        if parent_segment:
-            # Already in segment dir - use stem directly
-            return audio_path.parent / audio_path.stem
-
-        # Day root - derive segment from filename
-        segment = segment_key(audio_path.stem)
-        if segment is None:
-            raise ValueError(f"Invalid audio filename: {audio_path.stem}")
-        suffix = extract_descriptive_suffix(audio_path.stem)
-        segment_dir = audio_path.parent / segment
-
+        segment_dir, suffix, _ = self._segment_info(audio_path)
         return segment_dir / suffix
 
     def _transcribe(
@@ -424,7 +411,6 @@ class Transcriber:
             context_text = "\n".join(context_parts)
 
             # Try transcription with validation and retry logic
-            result = None
             for attempt in range(2):
                 result = transcribe_turns(
                     self.client, MODEL, self.prompt_text, context_text, turns
@@ -456,13 +442,7 @@ class Transcriber:
             # Add audio file reference to metadata
             # Day root: stem is HHMMSS_LEN_suffix, need to extract suffix
             # Segment dir: stem is already the suffix (e.g., "audio")
-            parent_segment = segment_key(raw_path.parent.name)
-            if parent_segment:
-                # Segment dir: stem is already the suffix
-                suffix = raw_path.stem
-            else:
-                # Day root: extract suffix from HHMMSS_LEN_suffix format
-                suffix = extract_descriptive_suffix(raw_path.stem)
+            _, suffix, _ = self._segment_info(raw_path)
 
             metadata["raw"] = f"{suffix}.flac"
 
