@@ -254,7 +254,8 @@ class TestFormatScreen:
 
         chunks, meta = format_screen(entries)
 
-        assert "**Meeting:**" in chunks[0]["markdown"]
+        # New meeting formatter uses "**Meeting** (platform)" format
+        assert "**Meeting**" in chunks[0]["markdown"]
         assert "Alice" in chunks[0]["markdown"]
 
     def test_format_screen_extracts_metadata(self):

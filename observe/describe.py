@@ -40,7 +40,7 @@ class RequestType(Enum):
 
 def _discover_category_prompts() -> dict[str, dict]:
     """
-    Discover available category prompts from describe/ directory.
+    Discover available category prompts from categories/ directory.
 
     Each category has a .txt prompt and .json metadata file.
 
@@ -49,7 +49,7 @@ def _discover_category_prompts() -> dict[str, dict]:
     dict[str, dict]
         Mapping of category name to metadata (including 'prompt' text)
     """
-    describe_dir = Path(__file__).parent / "describe"
+    describe_dir = Path(__file__).parent / "categories"
     if not describe_dir.exists():
         logger.warning(f"Category prompts directory not found: {describe_dir}")
         return {}

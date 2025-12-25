@@ -11,12 +11,85 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from observe.utils import load_analysis_frames, parse_screen_filename
 
 logger = logging.getLogger(__name__)
+
+# Cache for discovered category formatters
+_formatter_cache: dict[str, Callable | None] = {}
+
+
+def _discover_categories() -> list[str]:
+    """Discover available categories from observe/describe/ directory.
+
+    Categories are defined by .json metadata files in the describe/ package.
+
+    Returns:
+        List of category names (e.g., ["meeting", "messaging", ...])
+    """
+    describe_dir = Path(__file__).parent / "categories"
+    if not describe_dir.exists():
+        return []
+    return sorted(p.stem for p in describe_dir.glob("*.json"))
+
+
+# Discover categories at module load time
+CATEGORIES = _discover_categories()
+
+
+def _load_category_formatter(category: str) -> Callable | None:
+    """Load formatter for a category from observe.categories.<category>.
+
+    Args:
+        category: Category name (e.g., "meeting", "messaging")
+
+    Returns:
+        The format function or None if not found
+    """
+    if category in _formatter_cache:
+        return _formatter_cache[category]
+
+    try:
+        module = import_module(f"observe.categories.{category}")
+        formatter = getattr(module, "format", None)
+        _formatter_cache[category] = formatter
+        return formatter
+    except (ImportError, AttributeError) as e:
+        logger.debug(f"No formatter for category {category}: {e}")
+        _formatter_cache[category] = None
+        return None
+
+
+def _format_category_content(category: str, content: Any, context: dict) -> str:
+    """Format category-specific content to markdown.
+
+    Tries discovered formatter first, falls back to default rendering.
+
+    Args:
+        category: Category name
+        content: Category content (str for markdown, dict for JSON)
+        context: Dict with frame, file_path, timestamp_str
+
+    Returns:
+        Formatted markdown string
+    """
+    # Try discovered formatter
+    formatter = _load_category_formatter(category)
+    if formatter:
+        result = formatter(content, context)
+        if result:
+            return result
+
+    # Default formatting
+    if isinstance(content, str):
+        return f"**{category.title()}:**\n\n{content.strip()}\n"
+    elif isinstance(content, dict):
+        return f"**{category.title()}:**\n\n```json\n{json.dumps(content, indent=2)}\n```\n"
+    return ""
 
 
 def format_screen(
@@ -157,19 +230,31 @@ def format_screen(
                 lines.append(description)
                 lines.append("")
 
-        # Add category-specific content if present
+        # Build context for category formatters
+        timestamp_str = f"{abs_hour:02d}:{abs_minute:02d}:{abs_second:02d}"
+        format_context = {
+            "frame": frame,
+            "file_path": file_path,
+            "timestamp_str": timestamp_str,
+        }
+
+        # Add category-specific content using formatter dispatch
         # New format uses category name as key (e.g., "meeting", "messaging")
         # Old format used "extracted_text" and "meeting_analysis"
-        text_categories = ["messaging", "browsing", "reading", "productivity"]
-        for cat in text_categories:
-            if cat in frame:
-                lines.append(f"**{cat.title()}:**")
-                lines.append("")
-                lines.append(frame[cat].strip())
-                lines.append("")
-                break
-        else:
-            # Fall back to legacy extracted_text field
+        has_category_content = False
+        for cat in CATEGORIES:
+            content = frame.get(cat)
+            # Also check legacy "meeting_analysis" key for meeting
+            if cat == "meeting" and not content:
+                content = frame.get("meeting_analysis")
+            if content:
+                formatted = _format_category_content(cat, content, format_context)
+                if formatted:
+                    lines.append(formatted)
+                    has_category_content = True
+
+        # Fall back to legacy extracted_text field if no category content
+        if not has_category_content:
             extracted_text = frame.get("extracted_text")
             if extracted_text:
                 lines.append("**Extracted Text:**")
@@ -178,16 +263,6 @@ def format_screen(
                 lines.append(extracted_text.strip())
                 lines.append("```")
                 lines.append("")
-
-        # Add meeting analysis if present (new: "meeting", old: "meeting_analysis")
-        meeting = frame.get("meeting") or frame.get("meeting_analysis")
-        if meeting:
-            lines.append("**Meeting:**")
-            lines.append("")
-            lines.append("```json")
-            lines.append(json.dumps(meeting, indent=2))
-            lines.append("```")
-            lines.append("")
 
         # Calculate absolute unix timestamp in milliseconds
         frame_timestamp_ms = base_timestamp_ms + int(frame_offset * 1000)

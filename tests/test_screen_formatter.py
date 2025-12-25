@@ -2,7 +2,13 @@
 
 from pathlib import Path
 
-from observe.screen import format_screen, format_screen_text
+from observe.screen import (
+    CATEGORIES,
+    _discover_categories,
+    _load_category_formatter,
+    format_screen,
+    format_screen_text,
+)
 
 
 def test_format_screen_extracts_segment_from_directory():
@@ -258,3 +264,166 @@ def test_format_screen_returns_indexer_metadata():
 
     assert "indexer" in meta
     assert meta["indexer"]["topic"] == "screen"
+
+
+def test_load_category_formatter_finds_meeting():
+    """Test that meeting formatter can be loaded from describe/."""
+    formatter = _load_category_formatter("meeting")
+    assert formatter is not None
+    assert callable(formatter)
+
+
+def test_load_category_formatter_returns_none_for_missing():
+    """Test that missing formatter returns None without error."""
+    formatter = _load_category_formatter("nonexistent_category")
+    assert formatter is None
+
+
+def test_load_category_formatter_caches_result():
+    """Test that formatter loading is cached."""
+    # Clear cache first
+    from observe.screen import _formatter_cache
+
+    _formatter_cache.clear()
+
+    # First call loads
+    formatter1 = _load_category_formatter("meeting")
+    # Second call should return cached
+    formatter2 = _load_category_formatter("meeting")
+
+    assert formatter1 is formatter2
+    assert "meeting" in _formatter_cache
+
+
+def test_meeting_formatter_output():
+    """Test that meeting formatter produces expected markdown."""
+    from observe.categories.meeting import format as meeting_format
+
+    content = {
+        "platform": "zoom",
+        "participants": [
+            {"name": "Alice", "status": "speaking", "video": True},
+            {"name": "Bob", "status": "muted", "video": False},
+        ],
+        "screen_share": {
+            "presenter": "Alice",
+            "description": "Showing slides",
+            "formatted_text": "# Slide Title\n\nBullet points...",
+        },
+    }
+
+    result = meeting_format(content, {})
+
+    assert "**Meeting** (zoom)" in result
+    assert "📹 Alice (speaking)" in result
+    assert "🔇 Bob (muted)" in result
+    assert "**Screen Share by Alice:**" in result
+    assert "*Showing slides*" in result
+    assert "# Slide Title" in result
+
+
+def test_format_screen_uses_meeting_formatter():
+    """Test that format_screen uses the meeting formatter for meeting content."""
+    frames = [
+        {
+            "timestamp": 0,
+            "analysis": {
+                "primary": "meeting",
+                "visual_description": "Video call",
+            },
+            "meeting": {
+                "platform": "meet",
+                "participants": [
+                    {"name": "Test User", "status": "active", "video": True},
+                ],
+                "screen_share": None,
+            },
+        },
+    ]
+
+    context = {
+        "file_path": Path("20240101/120000/screen.jsonl"),
+        "include_entity_context": False,
+    }
+
+    chunks, meta = format_screen(frames, context)
+    markdown = chunks[0]["markdown"]
+
+    # Should use meeting formatter, not JSON dump
+    assert "**Meeting** (meet)" in markdown
+    assert "📹 Test User (active)" in markdown
+    # Should NOT have JSON code block (that was the old format)
+    assert "```json" not in markdown
+
+
+def test_format_screen_falls_back_for_missing_formatter():
+    """Test that categories without .py formatter use default formatting."""
+    frames = [
+        {
+            "timestamp": 0,
+            "analysis": {
+                "primary": "messaging",
+                "visual_description": "Chat app",
+            },
+            "messaging": "**Alice**: Hello!\n**Bob**: Hi there!",
+        },
+    ]
+
+    context = {"include_entity_context": False}
+
+    chunks, meta = format_screen(frames, context)
+    markdown = chunks[0]["markdown"]
+
+    # Should use default text formatting
+    assert "**Messaging:**" in markdown
+    assert "**Alice**: Hello!" in markdown
+
+
+def test_format_screen_handles_multiple_categories():
+    """Test that both primary and secondary categories are formatted."""
+    frames = [
+        {
+            "timestamp": 0,
+            "analysis": {
+                "primary": "meeting",
+                "secondary": "productivity",
+                "overlap": False,
+                "visual_description": "Meeting with shared doc",
+            },
+            "meeting": {
+                "platform": "teams",
+                "participants": [{"name": "User", "status": "active", "video": True}],
+                "screen_share": None,
+            },
+            "productivity": "| Task | Status |\n|------|--------|\n| Review | Done |",
+        },
+    ]
+
+    context = {"include_entity_context": False}
+
+    chunks, meta = format_screen(frames, context)
+    markdown = chunks[0]["markdown"]
+
+    # Both categories should be present
+    assert "**Meeting** (teams)" in markdown
+    assert "**Productivity:**" in markdown
+    assert "| Task | Status |" in markdown
+
+
+def test_categories_list():
+    """Test that CATEGORIES includes expected values."""
+    assert "meeting" in CATEGORIES
+    assert "messaging" in CATEGORIES
+    assert "browsing" in CATEGORIES
+    assert "reading" in CATEGORIES
+    assert "productivity" in CATEGORIES
+
+
+def test_discover_categories_finds_json_files():
+    """Test that _discover_categories finds categories from .json files."""
+    categories = _discover_categories()
+    # Should find categories defined by .json files in describe/
+    assert len(categories) > 0
+    assert "meeting" in categories
+    # Should be sorted
+    assert categories == sorted(categories)
