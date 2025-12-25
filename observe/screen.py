@@ -157,20 +157,32 @@ def format_screen(
                 lines.append(description)
                 lines.append("")
 
-        # Add extracted text if present
-        extracted_text = frame.get("extracted_text")
-        if extracted_text:
-            lines.append("**Extracted Text:**")
-            lines.append("")
-            lines.append("```")
-            lines.append(extracted_text.strip())
-            lines.append("```")
-            lines.append("")
+        # Add category-specific content if present
+        # New format uses category name as key (e.g., "meeting", "messaging")
+        # Old format used "extracted_text" and "meeting_analysis"
+        text_categories = ["messaging", "browsing", "reading", "productivity"]
+        for cat in text_categories:
+            if cat in frame:
+                lines.append(f"**{cat.title()}:**")
+                lines.append("")
+                lines.append(frame[cat].strip())
+                lines.append("")
+                break
+        else:
+            # Fall back to legacy extracted_text field
+            extracted_text = frame.get("extracted_text")
+            if extracted_text:
+                lines.append("**Extracted Text:**")
+                lines.append("")
+                lines.append("```")
+                lines.append(extracted_text.strip())
+                lines.append("```")
+                lines.append("")
 
-        # Add meeting analysis if present
-        meeting = frame.get("meeting_analysis")
+        # Add meeting analysis if present (new: "meeting", old: "meeting_analysis")
+        meeting = frame.get("meeting") or frame.get("meeting_analysis")
         if meeting:
-            lines.append("**Meeting Analysis:**")
+            lines.append("**Meeting:**")
             lines.append("")
             lines.append("```json")
             lines.append(json.dumps(meeting, indent=2))

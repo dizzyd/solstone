@@ -1,81 +1,107 @@
-"""Tests for observe/describe.py config loading."""
+"""Tests for observe/describe.py category prompt discovery."""
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 
-def test_config_loads_successfully():
-    """Test that config loads successfully on import."""
-    from observe.describe import CONFIG
+def test_category_prompts_discovered():
+    """Test that category prompts are discovered on import."""
+    from observe.describe import CATEGORY_PROMPTS
 
-    assert "text_extraction_categories" in CONFIG
-    assert isinstance(CONFIG["text_extraction_categories"], list)
-    assert len(CONFIG["text_extraction_categories"]) > 0
-
-
-def test_config_has_expected_categories():
-    """Test that config contains text extraction categories."""
-    from observe.describe import CONFIG
-
-    # Verify structure, not specific values (config can change)
-    assert "text_extraction_categories" in CONFIG
-    assert isinstance(CONFIG["text_extraction_categories"], list)
-    # Should have at least one category configured
-    assert len(CONFIG["text_extraction_categories"]) > 0
-    # All entries should be non-empty strings
-    for category in CONFIG["text_extraction_categories"]:
-        assert isinstance(category, str)
-        assert len(category) > 0
+    # Should have discovered some category prompts
+    assert len(CATEGORY_PROMPTS) > 0
+    # Meeting should be one of them
+    assert "meeting" in CATEGORY_PROMPTS
 
 
-def test_config_loading_with_missing_file(tmp_path):
-    """Test that config loading fails gracefully when file is missing."""
-    from observe.describe import _load_config
+def test_category_prompts_have_required_fields():
+    """Test that discovered categories have required metadata."""
+    from observe.describe import CATEGORY_PROMPTS
 
-    with patch("observe.describe.Path") as mock_path:
-        # Mock the config path to point to non-existent file
-        mock_config_path = tmp_path / "nonexistent.json"
-        mock_path.return_value.parent = tmp_path
-        mock_path.return_value.__truediv__.return_value = mock_config_path
-
-        with pytest.raises(SystemExit) as exc_info:
-            _load_config()
-        assert exc_info.value.code == 1
-
-
-def test_config_loading_with_invalid_json(tmp_path):
-    """Test that config loading fails gracefully with invalid JSON."""
-    from observe.describe import _load_config
-
-    # Create invalid JSON file
-    invalid_json_path = tmp_path / "describe.json"
-    invalid_json_path.write_text("{ invalid json }")
-
-    with patch("observe.describe.Path") as mock_path:
-        mock_path.return_value.parent = tmp_path
-        mock_path.return_value.__truediv__.return_value = invalid_json_path
-
-        with pytest.raises(SystemExit) as exc_info:
-            _load_config()
-        assert exc_info.value.code == 1
+    for category, metadata in CATEGORY_PROMPTS.items():
+        # Each category should have 'output' and 'prompt' fields
+        assert "output" in metadata, f"Category {category} missing 'output' field"
+        assert "prompt" in metadata, f"Category {category} missing 'prompt' field"
+        # Output should be 'json' or 'markdown'
+        assert metadata["output"] in (
+            "json",
+            "markdown",
+        ), f"Category {category} has invalid output: {metadata['output']}"
+        # Prompt should be non-empty string
+        assert isinstance(metadata["prompt"], str)
+        assert len(metadata["prompt"]) > 0
 
 
-def test_config_loading_with_valid_json(tmp_path):
-    """Test that config loading succeeds with valid JSON."""
-    from observe.describe import _load_config
+def test_meeting_category_is_json():
+    """Test that meeting category outputs JSON."""
+    from observe.describe import CATEGORY_PROMPTS
 
-    # Create valid JSON file
-    valid_json_path = tmp_path / "describe.json"
-    config_data = {"text_extraction_categories": ["code", "messaging", "reading"]}
-    valid_json_path.write_text(json.dumps(config_data))
+    assert "meeting" in CATEGORY_PROMPTS
+    assert CATEGORY_PROMPTS["meeting"]["output"] == "json"
+
+
+def test_text_categories_are_markdown():
+    """Test that text-based categories output markdown."""
+    from observe.describe import CATEGORY_PROMPTS
+
+    text_categories = ["messaging", "browsing", "reading", "productivity"]
+    for category in text_categories:
+        if category in CATEGORY_PROMPTS:
+            assert (
+                CATEGORY_PROMPTS[category]["output"] == "markdown"
+            ), f"Category {category} should output markdown"
+
+
+def test_discover_category_prompts_with_missing_dir(tmp_path):
+    """Test that discovery handles missing directory gracefully."""
+    from observe.describe import _discover_category_prompts
 
     with patch("observe.describe.Path") as mock_path:
-        mock_path.return_value.parent = tmp_path
-        mock_path.return_value.__truediv__.return_value = valid_json_path
+        # Mock to point to non-existent directory
+        mock_describe_dir = tmp_path / "nonexistent"
+        mock_path.return_value.parent.__truediv__.return_value = mock_describe_dir
 
-        config = _load_config()
-        assert config == config_data
+        result = _discover_category_prompts()
+        assert result == {}
+
+
+def test_discover_category_prompts_with_valid_dir(tmp_path):
+    """Test that discovery works with valid category files."""
+    from observe.describe import _discover_category_prompts
+
+    # Create test category directory
+    describe_dir = tmp_path / "describe"
+    describe_dir.mkdir()
+
+    # Create test category files
+    (describe_dir / "test.json").write_text('{"output": "markdown"}')
+    (describe_dir / "test.txt").write_text("Test prompt content")
+
+    with patch("observe.describe.Path") as mock_path:
+        mock_path.return_value.parent.__truediv__.return_value = describe_dir
+
+        result = _discover_category_prompts()
+        assert "test" in result
+        assert result["test"]["output"] == "markdown"
+        assert result["test"]["prompt"] == "Test prompt content"
+
+
+def test_discover_category_prompts_skips_incomplete(tmp_path):
+    """Test that discovery skips categories without matching txt file."""
+    from observe.describe import _discover_category_prompts
+
+    # Create test category directory
+    describe_dir = tmp_path / "describe"
+    describe_dir.mkdir()
+
+    # Create JSON without matching txt
+    (describe_dir / "incomplete.json").write_text('{"output": "json"}')
+
+    with patch("observe.describe.Path") as mock_path:
+        mock_path.return_value.parent.__truediv__.return_value = describe_dir
+
+        result = _discover_category_prompts()
+        assert "incomplete" not in result

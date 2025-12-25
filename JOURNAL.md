@@ -577,30 +577,37 @@ Example frame record:
   "frame_id": 123,
   "timestamp": 45.67,
   "requests": [
-    {"type": "describe_json", "model": "gemini-2.0-flash-lite", "duration": 0.5}
+    {"type": "describe", "model": "gemini-2.5-flash-lite", "duration": 0.5},
+    {"type": "category", "category": "reading", "model": "gemini-3-flash", "duration": 1.2}
   ],
   "analysis": {
-    "visual_description": "A terminal window showing command output with green text on dark background.",
-    "visible": "terminal"
-  }
+    "visual_description": "Documentation page showing API reference.",
+    "primary": "reading",
+    "secondary": "none",
+    "overlap": true
+  },
+  "reading": "# API Reference\n\n## Authentication\n\nUse Bearer tokens..."
 }
 ```
 
 **Common fields:**
 - `frame_id` – sequential frame number in the video
 - `timestamp` – time in seconds from video start
-- `requests` – list of vision API requests made for this frame
-- `analysis` – categorization and visual description from initial analysis
+- `requests` – list of vision API requests made for this frame (type: "describe" for initial, "category" for follow-ups)
+- `analysis` – categorization result with `primary`, `secondary`, `overlap`, and `visual_description`
 
-**Optional fields (conditional processing):**
-- `extracted_text` – present when frame contains messaging, browsing, reading, or productivity content
-- `meeting_analysis` – present when frame contains video conferencing, includes participant detection and bounding boxes
+**Category-specific fields (conditional processing):**
+- `messaging` – markdown content when frame contains chat/email apps
+- `browsing` – markdown content when frame contains web browsing
+- `reading` – markdown content when frame contains documents/articles
+- `productivity` – markdown content when frame contains spreadsheets/slides/calendars
+- `meeting` – JSON object when frame contains video conferencing, includes participant detection and bounding boxes
 - `error` – present when processing failed after retries
 
 The vision analysis uses multi-stage conditional processing:
 1. Initial categorization determines content type (terminal, code, messaging, meeting, browsing, reading, media, gaming, productivity)
-2. Text extraction triggered for categories: messaging, browsing, reading, productivity
-3. Meeting analysis triggered for meeting category, provides full-screen participant detection with entity recognition
+2. Category-specific follow-up prompts are discovered from `observe/describe/` directory
+3. Follow-ups triggered for: messaging, browsing, reading, productivity (markdown output), meeting (JSON output)
 
 #### Event extracts
 

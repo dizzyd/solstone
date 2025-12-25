@@ -34,45 +34,49 @@ logger = logging.getLogger(__name__)
 class RequestType(Enum):
     """Type of vision analysis request."""
 
-    DESCRIBE_JSON = "describe_json"
-    DESCRIBE_TEXT = "describe_text"
-    DESCRIBE_MEETING = "describe_meeting"
+    DESCRIBE = "describe"  # Initial categorization
+    CATEGORY = "category"  # Category-specific follow-up
 
 
-def _load_config() -> dict:
+def _discover_category_prompts() -> dict[str, dict]:
     """
-    Load describe.json configuration file.
+    Discover available category prompts from describe/ directory.
+
+    Each category has a .txt prompt and .json metadata file.
 
     Returns
     -------
-    dict
-        Configuration dictionary
-
-    Raises
-    ------
-    SystemExit
-        If config file is missing or invalid
+    dict[str, dict]
+        Mapping of category name to metadata (including 'prompt' text)
     """
-    config_path = Path(__file__).parent / "describe.json"
-    if not config_path.exists():
-        logger.error(f"Configuration file not found: {config_path}")
-        raise SystemExit(1)
+    describe_dir = Path(__file__).parent / "describe"
+    if not describe_dir.exists():
+        logger.warning(f"Category prompts directory not found: {describe_dir}")
+        return {}
 
-    try:
-        with open(config_path) as f:
-            config = json.load(f)
-        logger.debug(f"Loaded configuration from {config_path}")
-        return config
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in configuration file {config_path}: {e}")
-        raise SystemExit(1)
-    except Exception as e:
-        logger.error(f"Failed to load configuration from {config_path}: {e}")
-        raise SystemExit(1)
+    categories = {}
+    for json_path in describe_dir.glob("*.json"):
+        category = json_path.stem
+        txt_path = describe_dir / f"{category}.txt"
+
+        if not txt_path.exists():
+            logger.warning(f"Missing prompt file for category {category}: {txt_path}")
+            continue
+
+        try:
+            with open(json_path) as f:
+                metadata = json.load(f)
+            metadata["prompt"] = txt_path.read_text()
+            categories[category] = metadata
+            logger.debug(f"Loaded category prompt: {category}")
+        except Exception as e:
+            logger.warning(f"Failed to load category {category}: {e}")
+
+    return categories
 
 
-# Load configuration at module level
-CONFIG = _load_config()
+# Discover category prompts at module level
+CATEGORY_PROMPTS = _discover_category_prompts()
 
 
 class VideoProcessor:
@@ -231,9 +235,9 @@ class VideoProcessor:
         img.save(buf, format="PNG", compress_level=1)
         return buf.getvalue()
 
-    def _get_follow_up_prompt(self, category: str) -> Optional[str]:
+    def _get_category_prompt(self, category: str) -> Optional[dict]:
         """
-        Map category to follow-up prompt type.
+        Get category prompt metadata if available.
 
         Parameters
         ----------
@@ -242,15 +246,10 @@ class VideoProcessor:
 
         Returns
         -------
-        Optional[str]
-            "meeting", "text", or None if no follow-up needed
+        Optional[dict]
+            Category metadata with 'prompt' and 'output' keys, or None if no follow-up
         """
-        if category == "meeting":
-            return "meeting"
-        text_categories = CONFIG.get("text_extraction_categories", [])
-        if category in text_categories:
-            return "text"
-        return None
+        return CATEGORY_PROMPTS.get(category)
 
     def _user_contents(self, prompt: str, image, entities: bool = False) -> list:
         """Build contents list with optional entity context."""
@@ -287,7 +286,7 @@ class VideoProcessor:
 
     async def process_with_vision(
         self,
-        use_prompt: str = "describe_json.txt",
+        use_prompt: str = "describe.txt",
         max_concurrent: int = 10,
         output_path: Optional[Path] = None,
     ) -> None:
@@ -297,7 +296,7 @@ class VideoProcessor:
         Parameters
         ----------
         use_prompt : str
-            Prompt template filename to use (default: describe_json.txt)
+            Prompt template filename to use (default: describe.txt)
         max_concurrent : int
             Maximum number of concurrent API requests (default: 10)
         output_path : Optional[Path]
@@ -306,26 +305,12 @@ class VideoProcessor:
         from think.batch import GeminiBatch
         from think.models import GEMINI_FLASH, GEMINI_LITE
 
-        # Load prompt templates
+        # Load primary categorization prompt
         prompt_path = Path(__file__).parent / use_prompt
         if not prompt_path.exists():
             raise FileNotFoundError(f"Prompt template not found: {prompt_path}")
 
         system_instruction = prompt_path.read_text()
-
-        # Load text extraction prompt
-        text_prompt_path = Path(__file__).parent / "describe_text.txt"
-        if not text_prompt_path.exists():
-            raise FileNotFoundError(f"Text prompt not found: {text_prompt_path}")
-
-        text_system_instruction = text_prompt_path.read_text()
-
-        # Load meeting analysis prompt
-        meeting_prompt_path = Path(__file__).parent / "describe_meeting.txt"
-        if not meeting_prompt_path.exists():
-            raise FileNotFoundError(f"Meeting prompt not found: {meeting_prompt_path}")
-
-        meeting_system_instruction = meeting_prompt_path.read_text()
 
         # Process video to get qualified frames (synchronous)
         qualified_frames = self.process()
@@ -368,14 +353,13 @@ class VideoProcessor:
             req.timestamp = frame_data["timestamp"]
             req.retry_count = 0
             req.frame_bytes = frame_data["frame_bytes"]  # Store bytes for reuse
-            req.request_type = RequestType.DESCRIBE_JSON
+            req.request_type = RequestType.DESCRIBE
             req.json_analysis = None  # Will store the JSON analysis result
-            req.meeting_analysis = None  # Will store meeting analysis if applicable
-            req.extracted_text = None  # Will store text extraction if applicable
+            req.category_results = {}  # Will store category-specific results
             req.requests = []  # Track all requests for this frame
             req.initial_image = frame_img  # Keep reference to close after completion
             req.pending_follow_ups = 0  # Track how many follow-ups are pending
-            req.follow_up_source = None  # "primary" or "secondary"
+            req.follow_up_category = None  # Category name for follow-up requests
 
             batch.add(req)
 
@@ -393,8 +377,8 @@ class VideoProcessor:
 
         # Stream results as they complete, with retry logic
         async for req in batch.drain_batch():
-            # Only count initial DESCRIBE_JSON requests as frames (not follow-ups)
-            if req.request_type == RequestType.DESCRIBE_JSON:
+            # Only count initial DESCRIBE requests as frames (not follow-ups)
+            if req.request_type == RequestType.DESCRIBE:
                 total_frames += 1
 
             # Check for errors
@@ -403,7 +387,7 @@ class VideoProcessor:
 
             # Handle based on request type
             if not has_error:
-                if req.request_type == RequestType.DESCRIBE_JSON:
+                if req.request_type == RequestType.DESCRIBE:
                     # Parse JSON analysis
                     try:
                         analysis = json.loads(req.response)
@@ -411,17 +395,20 @@ class VideoProcessor:
                     except json.JSONDecodeError as e:
                         has_error = True
                         error_msg = f"Invalid JSON response: {e}"
-                elif req.request_type == RequestType.DESCRIBE_MEETING:
-                    # Parse meeting analysis
-                    try:
-                        meeting_data = json.loads(req.response)
-                        req.meeting_analysis = meeting_data  # Store meeting analysis
-                    except json.JSONDecodeError as e:
-                        has_error = True
-                        error_msg = f"Invalid JSON response: {e}"
-                elif req.request_type == RequestType.DESCRIBE_TEXT:
-                    # Store text extraction result
-                    req.extracted_text = req.response
+                elif req.request_type == RequestType.CATEGORY:
+                    # Handle category-specific follow-up result
+                    category = req.follow_up_category
+                    cat_meta = self._get_category_prompt(category)
+                    if cat_meta and cat_meta.get("output") == "json":
+                        try:
+                            result = json.loads(req.response)
+                            req.category_results[category] = result
+                        except json.JSONDecodeError as e:
+                            has_error = True
+                            error_msg = f"Invalid JSON response for {category}: {e}"
+                    else:
+                        # Markdown output - store as-is
+                        req.category_results[category] = req.response
 
             # Retry logic (up to 5 attempts total, so 4 retries)
             if has_error and req.retry_count < 4:
@@ -433,7 +420,7 @@ class VideoProcessor:
                 continue  # Don't output, wait for retry result
 
             # Track failure after all retries exhausted (only for initial requests)
-            if has_error and req.request_type == RequestType.DESCRIBE_JSON:
+            if has_error and req.request_type == RequestType.DESCRIBE:
                 failed_frames += 1
 
             # Record this request's result (after retries are done)
@@ -444,164 +431,97 @@ class VideoProcessor:
             }
             if req.retry_count > 0:
                 request_record["retries"] = req.retry_count
-            if req.follow_up_source:
-                request_record["source"] = req.follow_up_source
+            if req.follow_up_category:
+                request_record["category"] = req.follow_up_category
 
             req.requests.append(request_record)
 
             # Check if we should trigger follow-up analysis
             should_process_further = (
                 not has_error
-                and req.request_type == RequestType.DESCRIBE_JSON
+                and req.request_type == RequestType.DESCRIBE
                 and req.json_analysis
             )
 
             if should_process_further:
-                # Extract categories from new simplified format
+                # Extract categories from analysis
                 primary = req.json_analysis.get("primary", "")
                 secondary = req.json_analysis.get("secondary", "none")
                 overlap = req.json_analysis.get("overlap", True)
 
-                # Determine follow-up types
-                primary_prompt_type = self._get_follow_up_prompt(primary)
-                secondary_prompt_type = (
-                    self._get_follow_up_prompt(secondary)
+                # Determine which categories have follow-up prompts
+                primary_meta = self._get_category_prompt(primary)
+                secondary_meta = (
+                    self._get_category_prompt(secondary)
                     if secondary != "none"
                     else None
                 )
 
-                # Build follow-up list with category context for focus guidance
-                # Each entry: (prompt_type, source, focus_categories, ignore_category)
-                # Primary always triggers if it has a follow-up type
-                # Secondary triggers only if overlap=false AND different type
+                # Build follow-up list: each category with a prompt gets a follow-up
+                # Primary always triggers if it has a prompt
+                # Secondary triggers only if overlap=false
                 follow_ups = []
 
-                has_secondary = secondary != "none"
-                same_follow_up_type = (
-                    primary_prompt_type
-                    and secondary_prompt_type
-                    and primary_prompt_type == secondary_prompt_type
-                )
+                if primary_meta:
+                    follow_ups.append((primary, primary_meta))
 
-                if primary_prompt_type:
-                    if same_follow_up_type:
-                        # Both categories need same follow-up - focus on both
-                        follow_ups.append(
-                            (primary_prompt_type, "primary", [primary, secondary], None)
-                        )
-                    elif has_secondary:
-                        # Different types - focus on primary, ignore secondary
-                        follow_ups.append(
-                            (primary_prompt_type, "primary", [primary], secondary)
-                        )
-                    else:
-                        # No secondary - no focus guidance needed
-                        follow_ups.append(
-                            (primary_prompt_type, "primary", [primary], None)
-                        )
+                if not overlap and secondary_meta:
+                    follow_ups.append((secondary, secondary_meta))
 
-                if (
-                    not overlap
-                    and secondary_prompt_type
-                    and secondary_prompt_type != primary_prompt_type
-                ):
-                    # Secondary needs different follow-up - focus on it, ignore primary
-                    follow_ups.append(
-                        (secondary_prompt_type, "secondary", [secondary], primary)
-                    )
-
-                # Create follow-up requests (all use full frame)
+                # Create follow-up requests
                 if follow_ups:
-                    # Load full frame for follow-up processing
                     full_img = Image.open(io.BytesIO(req.frame_bytes))
                     req.pending_follow_ups = len(follow_ups)
 
-                    # Close initial image since DESCRIBE_JSON is complete
+                    # Close initial image since DESCRIBE is complete
                     if hasattr(req, "initial_image") and req.initial_image:
                         req.initial_image.close()
                         req.initial_image = None
 
-                    for i, (prompt_type, source, focus_cats, ignore_cat) in enumerate(
-                        follow_ups
-                    ):
+                    for i, (category, cat_meta) in enumerate(follow_ups):
                         if i == 0:
-                            # Reuse original request for first follow-up
                             follow_req = req
                         else:
-                            # Create new request for additional follow-ups
                             follow_req = batch.create(contents=[])
-                            # Copy essential metadata
                             follow_req.frame_id = req.frame_id
                             follow_req.timestamp = req.timestamp
                             follow_req.frame_bytes = req.frame_bytes
                             follow_req.json_analysis = req.json_analysis
-                            follow_req.meeting_analysis = req.meeting_analysis
-                            follow_req.extracted_text = req.extracted_text
+                            follow_req.category_results = req.category_results
                             follow_req.requests = req.requests
                             follow_req.pending_follow_ups = req.pending_follow_ups
 
-                        follow_req.follow_up_source = source
+                        follow_req.follow_up_category = category
                         follow_req.retry_count = 0
+                        follow_req.request_type = RequestType.CATEGORY
 
-                        # Build focus guidance suffix
-                        focus_suffix = ""
-                        if len(focus_cats) > 1:
-                            # Multiple categories to focus on (same follow-up type)
-                            cats_str = " and ".join(focus_cats)
-                            focus_suffix = f" Focus on both the {cats_str} content."
-                        elif ignore_cat:
-                            # Single category, ignore the other
-                            focus_suffix = (
-                                f" Focus on the {focus_cats[0]} content, "
-                                f"not the {ignore_cat} content."
-                            )
+                        # Determine output format from metadata
+                        is_json = cat_meta.get("output") == "json"
 
-                        if prompt_type == "meeting":
-                            batch.update(
-                                follow_req,
-                                contents=self._user_contents(
-                                    f"Analyze this meeting screenshot.{focus_suffix}",
-                                    full_img,
-                                    entities=True,
-                                ),
-                                model=GEMINI_FLASH,
-                                system_instruction=meeting_system_instruction,
-                                json_output=True,
-                                max_output_tokens=10240,
-                                thinking_budget=6144,
-                            )
-                            follow_req.request_type = RequestType.DESCRIBE_MEETING
-                        else:  # text
-                            batch.update(
-                                follow_req,
-                                contents=self._user_contents(
-                                    f"Extract text from this screenshot.{focus_suffix}",
-                                    full_img,
-                                    entities=True,
-                                ),
-                                model=GEMINI_FLASH,
-                                system_instruction=text_system_instruction,
-                                json_output=False,
-                                max_output_tokens=8192,
-                                thinking_budget=4096,
-                            )
-                            follow_req.request_type = RequestType.DESCRIBE_TEXT
+                        batch.update(
+                            follow_req,
+                            contents=self._user_contents(
+                                f"Analyze this {category} screenshot.",
+                                full_img,
+                                entities=True,
+                            ),
+                            model=GEMINI_FLASH,
+                            system_instruction=cat_meta["prompt"],
+                            json_output=is_json,
+                            max_output_tokens=10240 if is_json else 8192,
+                            thinking_budget=6144 if is_json else 4096,
+                        )
 
                     logger.info(
                         f"Frame {req.frame_id}: {len(follow_ups)} follow-up(s) - "
-                        f"{', '.join(pt for pt, _ , _, _ in follow_ups)}"
+                        f"{', '.join(cat for cat, _ in follow_ups)}"
                     )
 
-                    # Close full_img after all follow-up requests are created
                     full_img.close()
-
                     continue  # Don't output yet, wait for follow-ups
 
             # Handle follow-up completion for parallel requests
-            if req.request_type in (
-                RequestType.DESCRIBE_MEETING,
-                RequestType.DESCRIBE_TEXT,
-            ):
+            if req.request_type == RequestType.CATEGORY:
                 # Store result in frame_results for merging
                 if req.frame_id not in frame_results:
                     frame_results[req.frame_id] = {
@@ -616,11 +536,9 @@ class VideoProcessor:
 
                 result = frame_results[req.frame_id]
 
-                # Merge this follow-up's result
-                if req.meeting_analysis:
-                    result["meeting_analysis"] = req.meeting_analysis
-                if req.extracted_text:
-                    result["extracted_text"] = req.extracted_text
+                # Merge this follow-up's category result
+                for category, cat_result in req.category_results.items():
+                    result[category] = cat_result
 
                 # Update requests list (avoid duplicates by using shared list)
                 result["requests"] = req.requests
@@ -646,12 +564,11 @@ class VideoProcessor:
                     # Aggressively clear heavy fields
                     req.frame_bytes = None
                     req.json_analysis = None
-                    req.meeting_analysis = None
-                    req.extracted_text = None
+                    req.category_results = None
 
                 continue
 
-            # Final output for frames with no follow-ups (DESCRIBE_JSON only)
+            # Final output for frames with no follow-ups (DESCRIBE only)
             result = {
                 "frame_id": req.frame_id,
                 "timestamp": req.timestamp,
@@ -682,8 +599,7 @@ class VideoProcessor:
             # Aggressively clear heavy fields now that request is finalized
             req.frame_bytes = None
             req.json_analysis = None
-            req.meeting_analysis = None
-            req.extracted_text = None
+            req.category_results = None
 
         # Close output file
         if output_file:
@@ -753,8 +669,8 @@ async def async_main():
     parser.add_argument(
         "--prompt",
         type=str,
-        default="describe_json.txt",
-        help="Prompt template to use (default: describe_json.txt)",
+        default="describe.txt",
+        help="Prompt template to use (default: describe.txt)",
     )
     parser.add_argument(
         "-j",

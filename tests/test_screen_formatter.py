@@ -190,16 +190,16 @@ def test_format_screen_includes_entity_context():
     assert "Alice, Bob, ProjectX" in markdown
 
 
-def test_format_screen_includes_extracted_text():
-    """Test that extracted text is included in output."""
+def test_format_screen_includes_category_content():
+    """Test that category-specific content is included in output."""
     frames = [
         {
             "timestamp": 0,
             "analysis": {
-                "primary": "terminal",
-                "visual_description": "Terminal window",
+                "primary": "productivity",
+                "visual_description": "Spreadsheet view",
             },
-            "extracted_text": "$ python test.py\nAll tests passed",
+            "productivity": "| Name | Value |\n|------|-------|\n| Test | 123 |",
         },
     ]
 
@@ -211,10 +211,10 @@ def test_format_screen_includes_extracted_text():
     chunks, meta = format_screen(frames, context)
     markdown = "\n".join([meta.get("header", "")] + [c["markdown"] for c in chunks])
 
-    # Should include extracted text in code block
-    assert "**Extracted Text:**" in markdown
-    assert "$ python test.py" in markdown
-    assert "All tests passed" in markdown
+    # Should include category content
+    assert "**Productivity:**" in markdown
+    assert "| Name | Value |" in markdown
+    assert "| Test | 123 |" in markdown
 
 
 def test_format_screen_returns_chunks_with_timestamps():

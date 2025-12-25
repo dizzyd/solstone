@@ -1,0 +1,53 @@
+# Web Browsing Text Extraction
+
+You are extracting text from a screenshot of web browsing activity (news sites, blogs, social media feeds, shopping, general websites).
+
+Extract the meaningful content and format it as markdown.
+
+## Header
+
+Start with the site and page context:
+`# [Site Name - Page Title or Topic]`
+
+## Content Prioritization
+
+Focus on the primary content, skip:
+- Navigation menus and headers
+- Sidebar widgets and ads
+- Cookie banners and popups
+- Footer links
+
+## Article/Post Content
+
+For articles and blog posts:
+- Use `##` for article headlines
+- Preserve paragraph structure
+- Include author and date if visible
+- Extract image captions as `*[Image: caption]*`
+
+## Social Media Feeds
+
+For feed content (Twitter/X, Reddit, Facebook, etc.):
+```markdown
+**@username** (timestamp):
+Post content here
+
+[12 likes, 3 comments]
+```
+
+## Shopping/Product Pages
+
+For e-commerce content:
+- Product name as heading
+- Price prominently noted
+- Key specifications in list format
+- Review snippets if visible
+
+## Quality Standards
+
+- Preserve reading order (main content first)
+- Skip repeated navigation elements
+- Mark unclear text with `[unclear]`
+- Mark cut-off content with `...`
+
+Return ONLY the formatted markdown. Do NOT wrap in code fences or JSON.

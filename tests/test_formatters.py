@@ -182,10 +182,10 @@ class TestFormatScreen:
             {
                 "timestamp": 5,
                 "analysis": {
-                    "primary": "code",
-                    "visual_description": "Python code",
+                    "primary": "reading",
+                    "visual_description": "Documentation page",
                 },
-                "extracted_text": "def hello():\n    pass",
+                "reading": "# API Reference\n\ndef hello():\n    pass",
             }
         ]
 
@@ -195,7 +195,7 @@ class TestFormatScreen:
         assert "header" in meta
         assert "Frame Analyses" in meta["header"]
         assert chunks[0]["timestamp"] == 5000  # 5 seconds = 5000ms
-        assert "**Category:** code" in chunks[0]["markdown"]
+        assert "**Category:** reading" in chunks[0]["markdown"]
         assert "def hello()" in chunks[0]["markdown"]
 
     def test_format_screen_with_entity_context(self):
@@ -240,21 +240,21 @@ class TestFormatScreen:
         # Monitor info should be in the header, not per-frame
         assert "(left - DP-1)" in meta["header"]
 
-    def test_format_screen_meeting_analysis(self):
-        """Test screen formatting with meeting analysis."""
+    def test_format_screen_meeting(self):
+        """Test screen formatting with meeting data."""
         from observe.screen import format_screen
 
         entries = [
             {
                 "timestamp": 0,
-                "analysis": {},
-                "meeting_analysis": {"participants": ["Alice", "Bob"]},
+                "analysis": {"primary": "meeting"},
+                "meeting": {"participants": ["Alice", "Bob"]},
             }
         ]
 
         chunks, meta = format_screen(entries)
 
-        assert "Meeting Analysis" in chunks[0]["markdown"]
+        assert "**Meeting:**" in chunks[0]["markdown"]
         assert "Alice" in chunks[0]["markdown"]
 
     def test_format_screen_extracts_metadata(self):
