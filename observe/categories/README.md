@@ -66,3 +66,4 @@ def format(content: Any, context: dict) -> str:
 2. For categories with prompts here, a follow-up request extracts detailed content
 3. Results are stored in JSONL under the category name (e.g., `"meeting": {...}`)
 4. `observe/screen.py` formats JSONL to markdown, using custom formatters when available
+5. The formatter also supports legacy keys (`meeting_analysis`, `extracted_text`) for older data

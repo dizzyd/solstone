@@ -7,6 +7,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+VIDEO_EXTENSIONS = (".webm", ".mp4", ".mov")
+
 
 def extract_descriptive_suffix(filename: str) -> str:
     """

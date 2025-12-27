@@ -24,7 +24,7 @@ _formatter_cache: dict[str, Callable | None] = {}
 
 
 def _discover_categories() -> list[str]:
-    """Discover available categories from observe/describe/ directory.
+    """Discover available categories from observe/categories/ directory.
 
     Categories are defined by .json metadata files in the describe/ package.
 

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
-from observe.utils import load_analysis_frames
+from observe.utils import VIDEO_EXTENSIONS, load_analysis_frames
 from think.insight import scan_day as insight_scan_day
 from think.utils import day_dirs, setup_cli
 
@@ -43,13 +43,13 @@ class JournalStats:
         files.extend(day_dir.glob("*/screen.jsonl"))
         files.extend(day_dir.glob("*/*_screen.jsonl"))  # Split screen files
         files.extend(day_dir.glob("*/raw.flac"))
-        files.extend(day_dir.glob("*/screen.webm"))
+        for ext in VIDEO_EXTENSIONS:
+            files.extend(day_dir.glob(f"*/screen{ext}"))
         # Check day root for unprocessed files
         files.extend(day_dir.glob("*_raw.flac"))
         files.extend(day_dir.glob("*_raw.m4a"))
-        files.extend(day_dir.glob("*_screen.webm"))
-        files.extend(day_dir.glob("*_screen.mp4"))
-        files.extend(day_dir.glob("*_screen.mov"))
+        for ext in VIDEO_EXTENSIONS:
+            files.extend(day_dir.glob(f"*_screen{ext}"))
 
         insights = day_dir / "insights"
         if insights.is_dir():
@@ -246,9 +246,8 @@ class JournalStats:
         # --- Unprocessed files ---
         unprocessed = list(day_dir.glob("*_raw.flac"))
         unprocessed.extend(day_dir.glob("*_raw.m4a"))
-        unprocessed.extend(day_dir.glob("*_screen.webm"))
-        unprocessed.extend(day_dir.glob("*_screen.mp4"))
-        unprocessed.extend(day_dir.glob("*_screen.mov"))
+        for ext in VIDEO_EXTENSIONS:
+            unprocessed.extend(day_dir.glob(f"*_screen{ext}"))
         stats["unprocessed_files"] = len(unprocessed)
 
         # --- Insight summaries ---

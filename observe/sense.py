@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from observe.utils import VIDEO_EXTENSIONS
 from think.callosum import CallosumConnection
 from think.runner import ManagedProcess as RunnerManagedProcess
 from think.utils import day_path, setup_cli
@@ -580,9 +581,8 @@ def scan_day(day_dir: Path) -> dict[str, list[str]]:
     unprocessed = []
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*.flac")))
     unprocessed.extend(sorted(p.name for p in day_dir.glob("*.m4a")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.webm")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.mp4")))
-    unprocessed.extend(sorted(p.name for p in day_dir.glob("*.mov")))
+    for ext in VIDEO_EXTENSIONS:
+        unprocessed.extend(sorted(p.name for p in day_dir.glob(f"*{ext}")))
 
     return {"processed": processed, "unprocessed": unprocessed}
 
@@ -616,9 +616,8 @@ def main():
     sensor.register("*.m4a", "transcribe", ["observe-transcribe", "{file}"])
 
     # Video files: any HHMMSS_*.webm, HHMMSS_*.mp4, HHMMSS_*.mov in day root
-    sensor.register("*.webm", "describe", ["observe-describe", "{file}"])
-    sensor.register("*.mp4", "describe", ["observe-describe", "{file}"])
-    sensor.register("*.mov", "describe", ["observe-describe", "{file}"])
+    for ext in VIDEO_EXTENSIONS:
+        sensor.register(f"*{ext}", "describe", ["observe-describe", "{file}"])
 
     if args.day:
         # Batch mode: process specific day
