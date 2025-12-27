@@ -337,7 +337,7 @@ function renderRecentChats() {
     list.className = 'recent-chats-list';
 
     for (const chat of chats) {
-      const chatId = chat.chat_id || chat.agent_id;  // Support legacy records
+      const chatId = chat.chat_id;
       const item = document.createElement('a');
       item.className = 'recent-chat-item';
       item.href = `#${chatId}`;

@@ -69,9 +69,7 @@ def add_entity(facet_name: str) -> Any:
 
     etype = data.get("type", "").strip()
     name = data.get("name", "").strip()
-    # Support both "desc" and "description" for backwards compatibility
-    desc = data.get("desc", "") or data.get("description", "")
-    desc = desc.strip()
+    desc = data.get("description", "").strip()
 
     if not etype or not name:
         return jsonify({"error": "Type and name are required"}), 400

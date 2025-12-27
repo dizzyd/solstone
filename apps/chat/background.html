@@ -10,7 +10,7 @@ AppServices.register('chat', {
     {% if recent_chats %}
     {% for chat in recent_chats %}
     {
-      chat_id: '{{ chat.chat_id or chat.agent_id }}',
+      chat_id: '{{ chat.chat_id }}',
       title: {{ chat.title|default('(untitled)')|tojson }},
       ts: {{ chat.ts|default(0) }},
       unread: {{ 'true' if chat.unread else 'false' }},

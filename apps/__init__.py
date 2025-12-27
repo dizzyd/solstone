@@ -26,7 +26,7 @@ app.json fields (all optional):
     {
       "icon": "🏠",           # Emoji icon for menu bar (default: "📦")
       "label": "Custom Label", # Display label (default: title-cased app name)
-      "facets": true,          # Enable facet integration (default: true)
+      "facets": {},            # Facet options: {"disabled": true} to hide, {"muted": true} to show disabled facets
       "date_nav": true,        # Show date navigation bar (default: false)
       "allow_future_dates": true  # Allow future dates in month picker (default: false)
     }
@@ -67,9 +67,10 @@ class App:
     background_template: Optional[str] = None
 
     # Facet configuration (optional, default {})
-    # Can be bool (backwards compat) or dict with options:
+    # Options:
+    #   - disabled: If true, facets bar is hidden for this app
     #   - muted: Include facets marked as disabled in facet.json
-    facets_config: bool | dict = field(default_factory=dict)
+    facets_config: dict = field(default_factory=dict)
 
     # Date navigation (renders date nav below facet bar)
     date_nav: bool = False
@@ -79,17 +80,11 @@ class App:
 
     def facets_enabled(self) -> bool:
         """Check if facets are enabled for this app."""
-        if isinstance(self.facets_config, bool):
-            return self.facets_config
-        if isinstance(self.facets_config, dict):
-            return not self.facets_config.get("disabled", False)
-        return True
+        return not self.facets_config.get("disabled", False)
 
     def show_muted_facets(self) -> bool:
         """Check if muted/disabled facets should be shown."""
-        if isinstance(self.facets_config, dict):
-            return self.facets_config.get("muted", False)
-        return False
+        return self.facets_config.get("muted", False)
 
     def date_nav_enabled(self) -> bool:
         """Check if date nav is enabled for this app."""
@@ -174,14 +169,9 @@ class AppRegistry:
         icon = metadata.get("icon", "📦")
         label = metadata.get("label", app_name.replace("_", " ").title())
 
-        # Parse facets config: can be bool or dict
-        facets_raw = metadata.get("facets", {})
-        if isinstance(facets_raw, bool):
-            # Backwards compat: true means enabled, false means disabled
-            facets_config = facets_raw
-        elif isinstance(facets_raw, dict):
-            facets_config = facets_raw
-        else:
+        # Parse facets config
+        facets_config = metadata.get("facets", {})
+        if not isinstance(facets_config, dict):
             facets_config = {}
 
         # Date navigation

@@ -1072,7 +1072,7 @@ function attachDetectedEntity(entity, starButton) {
     body: JSON.stringify({
       type: entity.type,
       name: entity.name,
-      desc: entity.desc || ''
+      description: entity.desc || ''
     })
   })
   .then(response => response.json())

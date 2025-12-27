@@ -1,5 +1,5 @@
 {
   "icon": "⚡",
   "label": "Live Events",
-  "facets": false
+  "facets": {"disabled": true}
 }

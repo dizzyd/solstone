@@ -15,28 +15,24 @@ from think.models import GEMINI_LITE, gemini_generate
 logger = logging.getLogger(__name__)
 
 
-def normalize_chat(chat_data: dict, fallback_id: str | None = None) -> dict:
-    """Normalize a chat record to ensure required fields exist.
-
-    Handles legacy records that may be missing chat_id or thread.
+def _load_chat(chat_id: str) -> dict | None:
+    """Load a chat record by ID, injecting chat_id from filename.
 
     Args:
-        chat_data: Raw chat record dict
-        fallback_id: ID to use if chat_id/agent_id missing (e.g., filename stem)
+        chat_id: The chat ID (filename stem)
 
     Returns:
-        Normalized chat dict with chat_id and thread guaranteed
+        Chat data dict with chat_id injected, or None if not found
     """
-    # Ensure chat_id exists
-    if "chat_id" not in chat_data:
-        chat_data["chat_id"] = chat_data.get("agent_id", fallback_id)
+    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    chat_file = chats_dir / f"{chat_id}.json"
 
-    # Ensure thread exists
-    if "thread" not in chat_data:
-        legacy_id = chat_data.get("agent_id", chat_data.get("chat_id"))
-        if legacy_id:
-            chat_data["thread"] = [legacy_id]
+    if not chat_file.exists():
+        return None
 
+    chat_data = load_json(chat_file)
+    if chat_data:
+        chat_data["chat_id"] = chat_id
     return chat_data
 
 
@@ -48,10 +44,10 @@ chat_bp = Blueprint(
 
 
 def _load_all_chats() -> tuple[list[dict], int]:
-    """Load and normalize all chat records.
+    """Load all chat records.
 
     Returns:
-        Tuple of (chats list, unread count). Each chat dict has chat_id normalized.
+        Tuple of (chats list, unread count). Each chat dict has chat_id injected.
     """
     chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
     chats = []
@@ -61,7 +57,7 @@ def _load_all_chats() -> tuple[list[dict], int]:
         for chat_file in chats_dir.glob("*.json"):
             chat_data = load_json(chat_file)
             if chat_data:
-                normalize_chat(chat_data, chat_file.stem)
+                chat_data["chat_id"] = chat_file.stem
                 chats.append(chat_data)
                 if chat_data.get("unread"):
                     unread_count += 1
@@ -129,20 +125,21 @@ def send_message() -> Any:
         resp.status_code = 400
         return resp
 
-    # For continuation, we need to find the last agent in the thread
+    # For continuation, derive thread to find last agent
     config: dict[str, Any] = {}
-    chats_dir = get_app_storage_path("chat", "chats")
-    existing_chat = None
+    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    is_continuation = False
 
-    if continue_chat:
-        chat_file = chats_dir / f"{continue_chat}.json"
-        if chat_file.exists():
-            existing_chat = load_json(chat_file)
-            if existing_chat:
-                normalize_chat(existing_chat, continue_chat)
-                # Continue from the last agent in the thread
-                last_agent = existing_chat["thread"][-1]
-                config["continue_from"] = last_agent
+    if continue_chat and (chats_dir / f"{continue_chat}.json").exists():
+        from muse.cortex_client import get_agent_thread
+
+        # Derive thread from chat_id (which equals first agent_id)
+        try:
+            thread = get_agent_thread(continue_chat)
+            config["continue_from"] = thread[-1]
+            is_continuation = True
+        except FileNotFoundError:
+            pass  # Chat exists but agent file missing - treat as new
 
     if backend == "openai":
         key_name = "OPENAI_API_KEY"
@@ -182,26 +179,25 @@ def send_message() -> Any:
 
         ts = int(time.time() * 1000)
 
-        if existing_chat:
-            # Continuation: append new agent to existing chat's thread
-            existing_chat["thread"].append(agent_id)
-            existing_chat["updated_ts"] = ts
-            chat_file = chats_dir / f"{continue_chat}.json"
-            save_json(chat_file, existing_chat)
+        if is_continuation:
+            # Continuation: update timestamp only (thread is derived from agents)
+            chat_data = load_json(chats_dir / f"{continue_chat}.json")
+            if chat_data:
+                chat_data["updated_ts"] = ts
+                save_json(chats_dir / f"{continue_chat}.json", chat_data)
             chat_id = continue_chat
         else:
-            # New chat: create record with thread array
+            # New chat: create metadata record (no thread stored)
             chat_id = agent_id
             title = generate_chat_title(message)
             chat_record = {
-                "chat_id": chat_id,
-                "thread": [agent_id],
                 "ts": ts,
                 "facet": facet,
                 "title": title,
             }
-            chat_file = chats_dir / f"{chat_id}.json"
-            save_json(chat_file, chat_record)
+            # Ensure chats directory exists for new chats
+            chats_dir = get_app_storage_path("chat", "chats")
+            save_json(chats_dir / f"{chat_id}.json", chat_record)
 
         return jsonify(chat_id=chat_id, agent_id=agent_id)
     except Exception as e:
@@ -225,27 +221,22 @@ def list_chats() -> Any:
 def chat_events(chat_id: str) -> Any:
     """Return all events from a chat thread.
 
-    Loads the chat record, then hydrates events from all agents in the thread.
+    Derives thread from agent files, then hydrates events from all agents.
     For active chats, client should subscribe to WebSocket for real-time updates.
     """
-    from muse.cortex_client import get_agent_status, read_agent_events
+    from muse.cortex_client import get_agent_status, get_agent_thread, read_agent_events
 
-    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
-    chat_file = chats_dir / f"{chat_id}.json"
-
-    if not chat_file.exists():
+    chat = _load_chat(chat_id)
+    if not chat:
         resp = jsonify({"error": f"Chat not found: {chat_id}"})
         resp.status_code = 404
         return resp
 
-    chat = load_json(chat_file)
-    if not chat:
-        resp = jsonify({"error": f"Failed to load chat: {chat_id}"})
-        resp.status_code = 500
-        return resp
-
-    normalize_chat(chat, chat_id)
-    thread = chat["thread"]
+    # Derive thread from agent files (chat_id = first agent_id)
+    try:
+        thread = get_agent_thread(chat_id)
+    except FileNotFoundError:
+        thread = [chat_id]  # Fallback for very new agents
 
     # Hydrate events from all agents in the thread
     all_events = []
@@ -290,18 +281,10 @@ def get_chat(chat_id: str) -> Any:
     Returns:
         Chat metadata JSON or 404 if not found
     """
-    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
-    chat_file = chats_dir / f"{chat_id}.json"
-
-    if not chat_file.exists():
+    chat_data = _load_chat(chat_id)
+    if not chat_data:
         resp = jsonify({"error": f"Chat not found: {chat_id}"})
         resp.status_code = 404
-        return resp
-
-    chat_data = load_json(chat_file)
-    if not chat_data:
-        resp = jsonify({"error": f"Failed to load chat: {chat_id}"})
-        resp.status_code = 500
         return resp
 
     return jsonify(chat_data)
@@ -311,34 +294,33 @@ def get_chat(chat_id: str) -> Any:
 def find_chat_by_agent(agent_id: str) -> Any:
     """Find the chat that contains a given agent_id in its thread.
 
-    This is used by the background service to find which chat a completion
-    event belongs to, since continuation agents have different IDs than
-    the chat itself.
+    Uses get_agent_thread() to derive the thread from agent files, then
+    looks up the chat by the root agent ID (which equals chat_id).
 
     Args:
         agent_id: The agent ID to search for
 
     Returns:
-        Chat metadata JSON or 404 if not found in any thread
+        Chat metadata JSON or 404 if not found
     """
-    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    from muse.cortex_client import get_agent_thread
 
-    if not chats_dir.exists():
-        resp = jsonify({"error": "No chats found"})
+    try:
+        # Derive thread from agent - first element is the root/chat_id
+        thread = get_agent_thread(agent_id)
+        chat_id = thread[0]
+    except FileNotFoundError:
+        resp = jsonify({"error": f"Agent not found: {agent_id}"})
         resp.status_code = 404
         return resp
 
-    # Search all chats for one containing this agent_id in its thread
-    for chat_file in chats_dir.glob("*.json"):
-        chat_data = load_json(chat_file)
-        if chat_data:
-            normalize_chat(chat_data, chat_file.stem)
-            if agent_id in chat_data.get("thread", []):
-                return jsonify(chat_data)
+    chat_data = _load_chat(chat_id)
+    if not chat_data:
+        resp = jsonify({"error": f"Chat not found for agent: {agent_id}"})
+        resp.status_code = 404
+        return resp
 
-    resp = jsonify({"error": f"No chat found containing agent: {agent_id}"})
-    resp.status_code = 404
-    return resp
+    return jsonify(chat_data)
 
 
 @chat_bp.route("/api/chat/<chat_id>/read", methods=["POST"])
@@ -456,7 +438,7 @@ def list_bookmarks() -> Any:
                         # Filter by facet if specified
                         if facet is not None and chat_data.get("facet") != facet:
                             continue
-                        normalize_chat(chat_data, link.stem)
+                        chat_data["chat_id"] = link.stem
                         bookmarks.append(chat_data)
 
     # Sort by bookmarked timestamp, newest first
