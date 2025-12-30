@@ -107,9 +107,21 @@
 }
 #messages .tool-placard .tool-name { font-weight: bold; color: #1976d2; }
 #messages .tool-placard .tool-status { font-size: 0.9em; color: #666; margin-left: 0.5em; }
+#messages .tool-placard .tool-params { margin-left: 0.5em; display: inline; }
+#messages .tool-placard .tool-param {
+  display: inline-block;
+  background: rgba(0,0,0,0.08);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+  margin-left: 0.3em;
+  font-size: 0.9em;
+  color: #555;
+}
+#messages .tool-placard .tool-param .param-label { color: #888; }
 #messages .tool-placard.completed { background: #e8f5e9; border-color: #4caf50; }
 #messages .tool-placard.completed:hover { background: #d4f0d7; }
 #messages .tool-placard.completed .tool-name { color: #2e7d32; }
+#messages .tool-placard.completed .tool-param { background: rgba(0,0,0,0.06); }
 
 #messages .agent-update {
   background: #fff3e0;
@@ -283,6 +295,14 @@ const searchBase = '{{ url_for('app:search.index') }}';
 
 // Recent chats data
 let allChats = [];
+
+// Format day from YYYYMMDD to M/D
+function formatDay(dayStr) {
+  if (!dayStr || dayStr.length !== 8) return dayStr;
+  const month = parseInt(dayStr.substring(4, 6), 10);
+  const day = parseInt(dayStr.substring(6, 8), 10);
+  return `${month}/${day}`;
+}
 
 // Format timestamp as relative time
 function formatRelativeTime(ts) {
@@ -947,6 +967,33 @@ function cleanupOldPlacards() {
   }
 }
 
+// Format tool args into display-friendly params (query, facet, day, topic, etc.)
+function formatToolParams(args) {
+  if (!args) return [];
+  const params = [];
+
+  if (args.query) {
+    params.push({label: 'query', value: args.query});
+  }
+  if (args.facet) {
+    params.push({label: 'facet', value: args.facet});
+  }
+  if (args.day) {
+    params.push({label: 'day', value: formatDay(args.day)});
+  }
+  if (args.day_from) {
+    params.push({label: 'from', value: formatDay(args.day_from)});
+  }
+  if (args.day_to) {
+    params.push({label: 'to', value: formatDay(args.day_to)});
+  }
+  if (args.topic) {
+    params.push({label: 'topic', value: args.topic});
+  }
+
+  return params;
+}
+
 function addToolPlacard(toolName, event, callId){
   const div=document.createElement('div');
   div.className='tool-placard';
@@ -955,6 +1002,25 @@ function addToolPlacard(toolName, event, callId){
   nameSpan.className='tool-name';
   nameSpan.textContent='🔧 ' + toolName;
   div.appendChild(nameSpan);
+
+  // Add parameter pills if args present
+  const args = event && event.args;
+  const params = formatToolParams(args);
+  if (params.length > 0) {
+    const paramsSpan = document.createElement('span');
+    paramsSpan.className = 'tool-params';
+    params.forEach(p => {
+      const pill = document.createElement('span');
+      pill.className = 'tool-param';
+      const label = document.createElement('span');
+      label.className = 'param-label';
+      label.textContent = p.label + ': ';
+      pill.appendChild(label);
+      pill.appendChild(document.createTextNode(p.value));
+      paramsSpan.appendChild(pill);
+    });
+    div.appendChild(paramsSpan);
+  }
 
   const statusSpan=document.createElement('span');
   statusSpan.className='tool-status';
@@ -1259,9 +1325,7 @@ function handleToolStart(event) {
     const dateMatch = args.query.match(/\b(\d{8}|\d{4}-\d{2}-\d{2})\b/);
     if(dateMatch) {
       const dateRaw = dateMatch[1].replace(/-/g, '');
-      const month = parseInt(dateRaw.substring(4, 6), 10);
-      const day = parseInt(dateRaw.substring(6, 8), 10);
-      dateStr = ` on ${month}/${day}`;
+      dateStr = ` on ${formatDay(dateRaw)}`;
     }
 
     const url = searchBase + '#q=' + encodeURIComponent(args.query);
@@ -1285,13 +1349,6 @@ function handleToolStart(event) {
 
 // Create resource card for get_resource tool
 function createResourceCard(uri) {
-  // Helper to format date from YYYYMMDD to M/D
-  function formatDate(dateStr) {
-    const month = parseInt(dateStr.substring(4, 6), 10);
-    const day = parseInt(dateStr.substring(6, 8), 10);
-    return `${month}/${day}`;
-  }
-
   // Helper to format time from HHMMSS to HH:MM
   function formatTime(timeStr) {
     const hours = timeStr.substring(0, 2);
@@ -1304,7 +1361,7 @@ function createResourceCard(uri) {
   if(match) {
     const date = match[1];
     const topic = match[2];
-    const dateStr = formatDate(date);
+    const dateStr = formatDay(date);
     const topicDisplay = topic.charAt(0).toUpperCase() + topic.slice(1);
 
     return {
@@ -1320,7 +1377,7 @@ function createResourceCard(uri) {
     const date = match[2];
     const time = match[3];
     const length = match[4];
-    const dateStr = formatDate(date);
+    const dateStr = formatDay(date);
     const timeStr = formatTime(time);
 
     const modeText = mode === 'full' ? 'full' : mode === 'audio' ? 'audio-only' : 'screen-only';
@@ -1336,7 +1393,7 @@ function createResourceCard(uri) {
   if(match) {
     const date = match[1];
     const filename = match[2];
-    const dateStr = formatDate(date);
+    const dateStr = formatDay(date);
 
     // Determine media type from filename
     let description = filename;
