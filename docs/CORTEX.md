@@ -46,6 +46,10 @@ Requests are created via `cortex_request()` from `muse.cortex_client`, which bro
   "facet": "my-project",          // Optional: project context
   "save": "analysis.md",             // Optional: save result to file in day directory
   "day": "20250109",                  // Optional: YYYYMMDD format, defaults to current day
+  "env": {                           // Optional: environment variables for subprocess
+    "API_KEY": "secret",
+    "DEBUG": "true"
+  },
   "handoff": {                       // Optional: chain to another agent on completion
     "persona": "reviewer",
     "prompt": "Review the analysis",
@@ -255,6 +259,11 @@ The `.json` file for a persona can include:
   - Useful for creating per-facet reports, newsletters, or analyses
 - `always`: Override active facet detection for multi-facet agents (default: false)
   - When true, agent runs for all non-muted facets regardless of activity
+- `env`: Environment variables to set for the agent subprocess (object)
+  - Keys are variable names, values are coerced to strings
+  - Request-level `env` overrides persona defaults
+  - Inherited by handoff agents unless explicitly overridden
+  - Note: `JOURNAL_PATH` cannot be overridden (always set by Cortex)
 
 ## MCP Tools Integration
 

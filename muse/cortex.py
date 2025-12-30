@@ -372,8 +372,11 @@ class CortexService:
             # Pass the full config through to the agent as NDJSON
             ndjson_input = json.dumps(config)
 
-            # Prepare environment
+            # Prepare environment - apply config overrides first, then force JOURNAL_PATH
             env = os.environ.copy()
+            env_overrides = config.get("env")
+            if env_overrides and isinstance(env_overrides, dict):
+                env.update({k: str(v) for k, v in env_overrides.items()})
             env["JOURNAL_PATH"] = str(self.journal_path)
 
             # Spawn the agent process
@@ -721,6 +724,13 @@ class CortexService:
             # Ensure we do not propagate parent handoff metadata.
             handoff_config.pop("handoff", None)
             handoff_config.pop("handoff_from", None)
+
+            # Inherit env from parent if not explicitly set in handoff config
+            if "env" not in handoff_config:
+                with self.lock:
+                    parent_env = self.agent_requests.get(parent_id, {}).get("env")
+                if parent_env:
+                    handoff_config["env"] = parent_env
 
             # Only pass through additional overrides if any remain.
             extra_config = handoff_config or None
