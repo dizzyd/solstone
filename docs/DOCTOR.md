@@ -16,7 +16,7 @@ export JOURNAL_PATH=$(grep JOURNAL_PATH .env | cut -d= -f2)
 
 ```bash
 # Check if supervisor services are running
-pgrep -af "observe-gnome|observe-sense|think-supervisor"
+pgrep -af "observer|observe-sense|think-supervisor"
 
 # Check Callosum socket exists
 ls -la $JOURNAL_PATH/health/callosum.sock
@@ -40,7 +40,7 @@ The supervisor (`think-supervisor`) manages these services:
 | Service | Command | Purpose | Auto-restart |
 |---------|---------|---------|--------------|
 | Callosum | (in-process) | Message bus for inter-service events | No |
-| Observer | `observe-gnome` | Screen/audio capture | Yes |
+| Observer | `observer` | Screen/audio capture (platform-detected) | Yes |
 | Sense | `observe-sense` | File detection, processing dispatch | Yes |
 
 Cortex (agent execution) connects to Callosum but runs independently via `muse-cortex`.
@@ -62,7 +62,7 @@ See [CALLOSUM.md](CALLOSUM.md) for message protocol and [CORTEX.md](CORTEX.md) f
 
 ```bash
 # Tail current observer log
-tail -f $JOURNAL_PATH/health/observe-gnome.log
+tail -f $JOURNAL_PATH/health/observer.log
 
 # Find today's logs
 ls -la $JOURNAL_PATH/$(date +%Y%m%d)/health/
@@ -132,7 +132,7 @@ See [CORTEX.md](CORTEX.md) for complete event schemas and agent configuration.
 
 ```bash
 # Check observer log for errors
-tail -50 $JOURNAL_PATH/health/observe-gnome.log | grep -i error
+tail -50 $JOURNAL_PATH/health/observer.log | grep -i error
 
 # Check if observer is emitting status (supervisor.status will show stale_heartbeats)
 # Health is derived from observe.status Callosum events
