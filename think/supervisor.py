@@ -993,12 +993,13 @@ def _handle_segment_observed(message: dict) -> None:
 
     # Spawn agents configured for segment schedule
     agents = get_agents()
-    for persona_id, config in agents.items():
-        if config.get("schedule") == "segment":
+    for persona_id, agent_config in agents.items():
+        if agent_config.get("schedule") == "segment":
             try:
                 cortex_request(
                     prompt=f"Processing segment {segment} from {day}. Use available tools to analyze this specific recording window.",
                     persona=persona_id,
+                    config={"env": {"SEGMENT_KEY": segment}},
                 )
                 logging.info(f"Spawned segment agent: {persona_id}")
             except Exception as e:

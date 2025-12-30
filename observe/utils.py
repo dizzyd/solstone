@@ -60,6 +60,91 @@ def extract_descriptive_suffix(filename: str) -> str:
         return "raw"
 
 
+def get_segment_key(media_path: Path) -> str | None:
+    """
+    Extract segment key from a media file path.
+
+    Checks parent directory first (for files already in segment dirs),
+    then falls back to filename stem (for files in day root).
+
+    Parameters
+    ----------
+    media_path : Path
+        Path to media file (audio or video)
+
+    Returns
+    -------
+    str or None
+        Segment key in HHMMSS_LEN format, or None if not found
+
+    Examples
+    --------
+    >>> get_segment_key(Path("/journal/20250101/143022_300/audio.flac"))
+    "143022_300"
+    >>> get_segment_key(Path("/journal/20250101/143022_300_audio.flac"))
+    "143022_300"
+    >>> get_segment_key(Path("/journal/20250101/random.txt"))
+    None
+    """
+    from think.utils import segment_key
+
+    # Check if parent directory is a segment (file already moved)
+    parent_segment = segment_key(media_path.parent.name)
+    if parent_segment:
+        return parent_segment
+
+    # Check if filename contains segment (file in day root)
+    return segment_key(media_path.stem)
+
+
+def segment_and_suffix(media_path: Path) -> tuple[str, str]:
+    """
+    Extract segment key and descriptive suffix from a media file path.
+
+    Handles both files in day root (YYYYMMDD/HHMMSS_LEN_suffix.ext) and
+    files already in segment directories (YYYYMMDD/HHMMSS_LEN/suffix.ext).
+
+    Parameters
+    ----------
+    media_path : Path
+        Path to media file (audio or video)
+
+    Returns
+    -------
+    tuple[str, str]
+        (segment_key, suffix) - e.g., ("143022_300", "audio")
+
+    Raises
+    ------
+    ValueError
+        If the path doesn't contain a valid segment key
+
+    Examples
+    --------
+    >>> segment_and_suffix(Path("/journal/20250101/143022_300_audio.flac"))
+    ("143022_300", "audio")
+    >>> segment_and_suffix(Path("/journal/20250101/143022_300/audio.flac"))
+    ("143022_300", "audio")
+    """
+    from think.utils import segment_key
+
+    # Check if parent directory is a segment (file already moved)
+    parent_segment = segment_key(media_path.parent.name)
+    if parent_segment:
+        # File is in segment dir - stem is the suffix
+        return parent_segment, media_path.stem
+
+    # File is in day root - extract segment from filename
+    segment = segment_key(media_path.stem)
+    if segment is None:
+        raise ValueError(
+            f"Invalid media filename: {media_path.stem} (must contain HHMMSS_LEN)"
+        )
+
+    suffix = extract_descriptive_suffix(media_path.stem)
+    return segment, suffix
+
+
 def parse_screen_filename(filename: str) -> tuple[str, str]:
     """
     Parse position and connector from a per-monitor screen filename.

@@ -19,16 +19,15 @@ from google import genai
 
 from observe.diarize import DiarizationError, diarize, save_speaker_embeddings
 from observe.hear import SAMPLE_RATE
-from observe.utils import extract_descriptive_suffix
+from observe.utils import (
+    extract_descriptive_suffix,
+    get_segment_key,
+    segment_and_suffix,
+)
 from think.callosum import callosum_send
 from think.entities import load_entity_names
 from think.models import GEMINI_FLASH
-from think.utils import (
-    PromptNotFoundError,
-    load_prompt,
-    segment_key,
-    setup_cli,
-)
+from think.utils import PromptNotFoundError, load_prompt, setup_cli
 
 # Constants
 MODEL = GEMINI_FLASH
@@ -160,16 +159,11 @@ class Transcriber:
 
     def _segment_info(self, audio_path: Path) -> tuple[Path, str, bool]:
         """Return segment directory, descriptive suffix, and whether already in segment."""
-        parent_segment = segment_key(audio_path.parent.name)
-        if parent_segment:
-            return audio_path.parent, audio_path.stem, True
-
-        segment = segment_key(audio_path.stem)
-        if segment is None:
-            raise ValueError(f"Invalid audio filename: {audio_path.stem}")
-        segment_dir = audio_path.parent / segment
-        suffix = extract_descriptive_suffix(audio_path.stem)
-        return segment_dir, suffix, False
+        segment, suffix = segment_and_suffix(audio_path)
+        in_segment = get_segment_key(audio_path.parent) is not None
+        if in_segment:
+            return audio_path.parent, suffix, True
+        return audio_path.parent / segment, suffix, False
 
     def _move_to_segment(self, audio_path: Path) -> Path:
         """Move audio file to its segment and return new path."""
@@ -279,17 +273,15 @@ class Transcriber:
                 data = data.mean(axis=1)
 
             # Extract date and time based on path structure
-            # Day root: YYYYMMDD/HHMMSS_LEN_audio.flac -> parent=YYYYMMDD, stem=HHMMSS_...
-            # Segment dir: YYYYMMDD/HHMMSS_LEN/audio.flac -> grandparent=YYYYMMDD, parent=HHMMSS_LEN
-            parent_segment = segment_key(raw_path.parent.name)
-            if parent_segment:
-                # Segment dir: extract from grandparent and parent
+            segment = get_segment_key(raw_path)
+            time_part = (
+                segment.split("_")[0] if segment else raw_path.stem.split("_")[0]
+            )
+            # Day dir is parent or grandparent depending on whether file is in segment
+            if get_segment_key(raw_path.parent) is not None:
                 day_str = raw_path.parent.parent.name
-                time_part = raw_path.parent.name.split("_")[0]
             else:
-                # Day root: extract from parent and filename
                 day_str = raw_path.parent.name
-                time_part = raw_path.stem.split("_")[0]
 
             base_dt = datetime.datetime.strptime(
                 f"{day_str}_{time_part}", "%Y%m%d_%H%M%S"
@@ -488,6 +480,11 @@ class Transcriber:
         """
         start_time = time.time()
 
+        # Set segment key for token usage logging
+        segment = get_segment_key(raw_path)
+        if segment:
+            os.environ["SEGMENT_KEY"] = segment
+
         # Skip if already processed (unless redo mode)
         json_path = self._get_json_path(raw_path)
         if not redo and json_path.exists():
@@ -585,8 +582,7 @@ def main():
 
     # Validate --redo requires file to be in segment directory
     if args.redo:
-        parent_segment = segment_key(audio_path.parent.name)
-        if not parent_segment:
+        if get_segment_key(audio_path.parent) is None:
             parser.error(
                 f"--redo requires audio file to be in a segment directory (HHMMSS_LEN/), "
                 f"but parent is: {audio_path.parent.name}"

@@ -25,6 +25,7 @@ from typing import List, Optional
 import av
 from PIL import Image, ImageChops, ImageStat
 
+from observe.utils import segment_and_suffix
 from think.callosum import callosum_send
 from think.utils import setup_cli
 
@@ -36,25 +37,6 @@ class RequestType(Enum):
 
     DESCRIBE = "describe"  # Initial categorization
     CATEGORY = "category"  # Category-specific follow-up
-
-
-def _segment_and_suffix(media_path: Path) -> tuple[str, str]:
-    """Return segment key and descriptive suffix for a media path."""
-    from observe.utils import extract_descriptive_suffix
-    from think.utils import segment_key
-
-    segment = segment_key(media_path.stem)
-    if segment is None:
-        raise ValueError(
-            f"Invalid video filename: {media_path.stem} (must be HHMMSS_LEN format)"
-        )
-    try:
-        suffix = extract_descriptive_suffix(media_path.stem)
-    except ValueError as exc:
-        raise ValueError(
-            f"Invalid video filename: {media_path.stem} (must be HHMMSS_LEN format)"
-        ) from exc
-    return segment, suffix
 
 
 def _discover_categories() -> dict[str, dict]:
@@ -357,7 +339,7 @@ class VideoProcessor:
 
     def _move_to_segment(self, media_path: Path) -> Path:
         """Move media file to its segment and return new path."""
-        segment, suffix = _segment_and_suffix(media_path)
+        segment, suffix = segment_and_suffix(media_path)
         segment_dir = media_path.parent / segment
         try:
             segment_dir.mkdir(exist_ok=True)
@@ -771,9 +753,13 @@ async def async_main():
     if not args.frames_only:
         # Extract segment and suffix for output naming
         try:
-            segment, suffix = _segment_and_suffix(video_path)
+            segment, suffix = segment_and_suffix(video_path)
         except ValueError as exc:
             parser.error(str(exc))
+
+        # Set segment key for token usage logging
+        os.environ["SEGMENT_KEY"] = segment
+
         segment_dir = video_path.parent / segment
         segment_dir.mkdir(exist_ok=True)
         # Output JSONL matches input filename pattern (e.g., center_DP-3_screen.jsonl)

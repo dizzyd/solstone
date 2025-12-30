@@ -318,6 +318,10 @@ def main() -> None:
     )
     args = setup_cli(parser)
 
+    # Set segment key for token usage logging
+    if args.segment:
+        os.environ["SEGMENT_KEY"] = args.segment
+
     # Resolve insight key or path to metadata
     all_insights = get_insights()
     topic_arg = args.topic

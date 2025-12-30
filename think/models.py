@@ -267,6 +267,11 @@ def log_token_usage(
             "usage": normalized_usage,
         }
 
+        # Add segment from env if available (set by observe/transcribe, observe/describe, think/insight)
+        segment = os.getenv("SEGMENT_KEY")
+        if segment:
+            token_data["segment"] = segment
+
         # Save to journal/tokens/<YYYYMMDD>.jsonl (one file per day)
         tokens_dir = Path(journal) / "tokens"
         tokens_dir.mkdir(exist_ok=True)
