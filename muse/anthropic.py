@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Anthropic Claude backed agent implementation.
 
-This module exposes :class:`AgentSession` for interacting with Anthropic's
-Claude API and is used by the ``muse-agents`` CLI.
+This module provides the Anthropic Claude backend for the ``muse-agents`` CLI.
 """
 
 from __future__ import annotations
@@ -25,16 +24,6 @@ from .agents import JSONEventCallback, ThinkingEvent
 # Default values are now handled internally
 _DEFAULT_MODEL = CLAUDE_SONNET_4
 _DEFAULT_MAX_TOKENS = 8096 * 2
-
-
-def setup_logging(verbose: bool) -> logging.Logger:
-    """Return app logger configured for ``verbose``."""
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG)
-        os.environ["ANTHROPIC_LOG"] = "debug"
-    else:
-        logging.basicConfig(level=logging.INFO)
-    return logging.getLogger(__name__)
 
 
 class ToolExecutor:
@@ -369,19 +358,6 @@ async def run_agent(
         raise
 
 
-async def run_prompt(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
-    on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
-) -> str:
-    """Convenience helper to run ``prompt`` (alias for run_agent)."""
-    return await run_agent(prompt, config=config, on_event=on_event, persona=persona)
-
-
 __all__ = [
     "run_agent",
-    "run_prompt",
-    "setup_logging",
 ]

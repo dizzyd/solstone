@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import sys
 import time
@@ -11,6 +12,15 @@ from pathlib import Path
 from typing import Any, Callable, Literal, Optional, TypedDict, Union
 
 from think.utils import setup_cli
+
+LOG = logging.getLogger("muse.agents")
+
+
+def setup_logging(verbose: bool = False) -> logging.Logger:
+    """Configure logging for agent CLI."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, stream=sys.stdout)
+    return LOG
 
 
 class ToolStartEvent(TypedDict, total=False):
@@ -267,10 +277,7 @@ async def main_async() -> None:
 
     args = setup_cli(parser)
 
-    # Import openai for logging setup
-    from . import openai as openai_mod
-
-    app_logger = openai_mod.setup_logging(args.verbose)
+    app_logger = setup_logging(args.verbose)
 
     # Always write to stdout only
     event_writer = JSONEventWriter(None)

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Gemini backed agent implementation.
 
-This module exposes :class:`AgentSession` for interacting with Google's Gemini
-API. It is utilised by the unified ``muse-agents`` CLI.
+This module provides the Google Gemini backend for the ``muse-agents`` CLI.
 """
 
 from __future__ import annotations
@@ -24,17 +23,6 @@ from .agents import JSONEventCallback, ThinkingEvent
 # Default values are now handled internally
 _DEFAULT_MODEL = GEMINI_FLASH
 _DEFAULT_MAX_TOKENS = 8192
-
-
-def setup_logging(verbose: bool) -> logging.Logger:
-    """Return app logger configured for ``verbose``."""
-
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
-
-    return logging.getLogger(__name__)
 
 
 class ToolLoggingHooks:
@@ -119,12 +107,6 @@ class ToolLoggingHooks:
             return result
 
         session.call_tool = wrapped  # type: ignore[assignment]
-
-    async def call_filtered_tool(self, name: str, arguments: dict | None = None) -> Any:
-        """Call a tool through the session with logging."""
-        if not self.session:
-            raise RuntimeError("Session not attached")
-        return await self.session.call_tool(name=name, arguments=arguments)
 
 
 async def run_agent(
@@ -287,6 +269,8 @@ async def run_agent(
             callback.emit(thinking_event)
 
         text = response.text
+        if not text:
+            raise RuntimeError("Model returned empty response")
         callback.emit({"event": "finish", "result": text})
         return text
     except Exception as exc:
@@ -301,19 +285,6 @@ async def run_agent(
         raise
 
 
-async def run_prompt(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
-    on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
-) -> str:
-    """Convenience helper to run ``prompt`` (alias for run_agent)."""
-    return await run_agent(prompt, config=config, on_event=on_event, persona=persona)
-
-
 __all__ = [
     "run_agent",
-    "run_prompt",
-    "setup_logging",
 ]

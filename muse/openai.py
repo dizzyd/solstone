@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 import time
 import traceback
 from typing import Any, Callable, Dict, Optional
@@ -87,12 +86,6 @@ _DEFAULT_MAX_TOKENS = int(os.getenv("OPENAI_AGENT_MAX_TOKENS", "16384"))
 _DEFAULT_MAX_TURNS = int(os.getenv("OPENAI_AGENT_MAX_TURNS", "64"))
 
 LOG = logging.getLogger("muse.openai")
-
-
-def setup_logging(verbose: bool = False) -> logging.Logger:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, stream=sys.stdout)
-    return LOG
 
 
 def _now_ms() -> int:
@@ -492,24 +485,6 @@ async def run_agent(
         pass
 
 
-async def run_prompt(
-    prompt: str,
-    *,
-    config: Optional[Dict[str, Any]] = None,
-    on_event: Optional[Callable[[dict], None]] = None,
-    persona: str = "default",
-) -> str:
-    """Alias for run_agent for CLI parity."""
-    return await run_agent(
-        prompt,
-        config=config,
-        on_event=on_event,
-        persona=persona,
-    )
-
-
 __all__ = [
     "run_agent",
-    "run_prompt",
-    "setup_logging",
 ]
