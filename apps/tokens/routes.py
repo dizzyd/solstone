@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from flask import Blueprint, jsonify, render_template, request
 
@@ -40,7 +40,7 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
     """
     Read and aggregate token usage data for a given day.
 
-    Returns dict with daily summary and breakdowns by provider, model, token type, and context.
+    Returns dict with daily summary and breakdowns by provider, model, token type, context, and segment.
     """
     log_path = _get_token_log_path(day)
 
@@ -51,11 +51,13 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
                 "requests": 0,
                 "tokens": 0,
                 "cost": 0.0,
+                "segment_avg_cost": 0.0,
             },
             "by_provider": [],
             "by_model": [],
             "by_token_type": {},
             "by_context": [],
+            "by_segment": [],
         }
 
     # Accumulators
@@ -84,6 +86,15 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
     )
 
     by_context: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "requests": 0,
+            "tokens": 0,
+            "cost": 0.0,
+            "models": set(),
+        }
+    )
+
+    by_segment: Dict[str, Dict[str, Any]] = defaultdict(
         lambda: {
             "requests": 0,
             "tokens": 0,
@@ -178,6 +189,13 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
             by_context[context_prefix]["cost"] += entry_cost
             by_context[context_prefix]["models"].add(model)
 
+            # Update segment breakdown
+            segment = entry.get("segment") or "[unattributed]"
+            by_segment[segment]["requests"] += 1
+            by_segment[segment]["tokens"] += total_entry_tokens
+            by_segment[segment]["cost"] += entry_cost
+            by_segment[segment]["models"].add(model)
+
             # Update token type breakdown
             token_types["input"]["tokens"] += input_tokens
             token_types["input"]["cost"] += entry_input_cost
@@ -243,6 +261,30 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
     ]
     context_list.sort(key=lambda x: x["cost"], reverse=True)
 
+    # Build segment list (exclude [unattributed] from avg calculation)
+    segment_list = [
+        {
+            "segment": seg,
+            "requests": data["requests"],
+            "tokens": data["tokens"],
+            "cost": round(data["cost"], 6),
+            "models_used": sorted(list(data["models"])),
+            "percent": round(
+                (data["cost"] / total_cost * 100) if total_cost > 0 else 0, 1
+            ),
+        }
+        for seg, data in by_segment.items()
+    ]
+    segment_list.sort(key=lambda x: x["cost"], reverse=True)
+
+    # Calculate segment average (excluding unattributed)
+    attributed_segments = [s for s in segment_list if s["segment"] != "[unattributed]"]
+    segment_count = len(attributed_segments)
+    segment_total_cost = sum(s["cost"] for s in attributed_segments)
+    segment_avg_cost = (
+        round(segment_total_cost / segment_count, 6) if segment_count > 0 else 0.0
+    )
+
     # Calculate cached/reasoning percentages for display annotations
     # - cached_tokens are a subset of input_tokens (reduce cost)
     # - reasoning_tokens are part of output_tokens (billed as output)
@@ -285,11 +327,13 @@ def _aggregate_token_data(day: str) -> Dict[str, Any]:
             "requests": total_requests,
             "tokens": total_tokens,
             "cost": round(total_cost, 6),
+            "segment_avg_cost": segment_avg_cost,
         },
         "by_provider": provider_list,
         "by_model": model_list,
         "by_token_type": token_types,
         "by_context": context_list,
+        "by_segment": segment_list,
     }
 
 
