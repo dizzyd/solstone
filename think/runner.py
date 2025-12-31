@@ -209,10 +209,10 @@ class ManagedProcess:
             RuntimeError: If process fails to spawn
 
         Example:
-            managed = ManagedProcess.spawn(["observe-gnome", "-v"])
-            # Logs to: {JOURNAL}/{YYYYMMDD}/health/{ref}_observe-gnome.log
-            # Symlinks: {YYYYMMDD}/health/observe-gnome.log (day-level)
-            #           health/observe-gnome.log (journal-level)
+            managed = ManagedProcess.spawn(["observer", "-v"])
+            # Logs to: {JOURNAL}/{YYYYMMDD}/health/{ref}_observer.log
+            # Symlinks: {YYYYMMDD}/health/observer.log (day-level)
+            #           health/observer.log (journal-level)
 
             # With explicit correlation ID:
             managed = ManagedProcess.spawn(

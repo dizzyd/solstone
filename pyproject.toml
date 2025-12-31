@@ -64,9 +64,7 @@ dependencies = [
 full = [
     "soundcard",
     "soundfile",
-    "pyannote.audio",
-    "deepfilternet",
-    "torch",
+    "pyannote.audio>=4,<5",
     "scipy",
     "opencv-python",
     "PyGObject",
@@ -113,6 +111,7 @@ think-manage = "think.manage:main"
 muse-cortex = "muse.cortex:main"
 think-callosum = "think.callosum:main"
 think-messages = "think.messages:main"
+observer = "observe.observer:main"
 observe-gnome = "observe.gnome.observer:main"
 observe-macos = "observe.macos.observer:main"
 observe-transcribe = "observe.transcribe:main"

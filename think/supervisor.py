@@ -749,10 +749,10 @@ def collect_status(procs: list[ManagedProcess]) -> dict:
 
 
 def start_observers() -> list[ManagedProcess]:
-    """Launch observe-gnome and observe-sense with output logging."""
+    """Launch observer (platform-detected) and observe-sense with output logging."""
     procs: list[ManagedProcess] = []
     commands = {
-        "observer": ["observe-gnome", "-v"],
+        "observer": ["observer", "-v"],
         "sense": ["observe-sense", "-v"],
     }
     for name, cmd in commands.items():
@@ -1140,7 +1140,7 @@ def parse_args() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-observers",
         action="store_true",
-        help="Do not automatically start observe-gnome and observe-sense",
+        help="Do not automatically start observer and observe-sense",
     )
     parser.add_argument(
         "--no-daily",

@@ -170,7 +170,7 @@ def test_start_runners(tmp_path, mock_callosum, monkeypatch):
 
     procs = mod.start_observers()
     assert len(procs) == 2
-    assert any(cmd == ["observe-gnome", "-v"] for cmd, _, _ in started)
+    assert any(cmd == ["observer", "-v"] for cmd, _, _ in started)
     assert any(cmd == ["observe-sense", "-v"] for cmd, _, _ in started)
     # Check that stdout and stderr capture pipes
     for cmd, stdout, stderr in started:

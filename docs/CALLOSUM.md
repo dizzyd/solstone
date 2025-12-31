@@ -53,7 +53,7 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 **Purpose:** Real-time stdout/stderr streaming and process exit events
 
 ### `observe` - Multimodal capture processing events
-**Source:** `observe/gnome/observer.py`, `observe/sense.py`, `observe/describe.py`, `observe/transcribe.py`
+**Source:** `observe/observer.py` (delegates to `observe/gnome/observer.py` or `observe/macos/observer.py`), `observe/sense.py`, `observe/describe.py`, `observe/transcribe.py`
 **Events:** `status`, `observing`, `detected`, `described`, `transcribed`, `observed`
 **Fields:**
 - `status`: Periodic state (every 5s while running)
