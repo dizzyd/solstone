@@ -98,7 +98,7 @@ async def test_send_notification(monkeypatch):
     await mod.send_notification("test message", alert_key=("test", "key"))
     assert len(called) == 1
     assert called[0]["message"] == "test message"
-    assert called[0]["title"] == "Sunstone Supervisor"
+    assert called[0]["title"] == "solstone Supervisor"
     assert ("test", "key") in mod._notification_ids
     assert mod._notification_ids[("test", "key")] == "test-notification-id"
 

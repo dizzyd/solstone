@@ -1,4 +1,4 @@
-# sunstone-convey
+# solstone-convey
 
 Web-based journal review interface built with Flask. It exposes a few small views for exploring daily summaries and entity data stored inside a **journal** folder.
 

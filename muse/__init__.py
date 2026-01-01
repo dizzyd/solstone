@@ -1,1 +1,1 @@
-"""Muse - AI Agent orchestration and execution system for Sunstone."""
+"""Muse - AI Agent orchestration and execution system for solstone."""

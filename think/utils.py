@@ -725,7 +725,7 @@ def get_agent(persona: str = "default", facet: str | None = None) -> dict:
 
 
 def create_mcp_client(http_uri: str) -> Any:
-    """Return a FastMCP HTTP client for Sunstone tools."""
+    """Return a FastMCP HTTP client for solstone tools."""
 
     http_uri = http_uri.strip()
     if not http_uri:

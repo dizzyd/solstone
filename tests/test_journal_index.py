@@ -37,8 +37,8 @@ class TestSanitizeFtsQuery:
 
     def test_complex_query_with_or_and_quotes(self):
         """Complex query with OR and quoted phrases."""
-        result = sanitize_fts_query('sunstone OR pbc OR "public benefit"')
-        assert result == 'sunstone OR pbc OR "public benefit"'
+        result = sanitize_fts_query('solstone OR pbc OR "public benefit"')
+        assert result == 'solstone OR pbc OR "public benefit"'
 
     def test_dot_replaced_with_space(self):
         """Dots are replaced with spaces."""

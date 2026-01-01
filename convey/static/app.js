@@ -907,7 +907,7 @@ window.AppServices = {
    */
   notifications: {
     _stack: [],
-    _history: JSON.parse(localStorage.getItem('sunstone:notification_history') || '[]'),
+    _history: JSON.parse(localStorage.getItem('solstone:notification_history') || '[]'),
     _nextId: 1,
     _container: null,
 
@@ -1032,7 +1032,7 @@ window.AppServices = {
 
       // Persist to localStorage
       try {
-        localStorage.setItem('sunstone:notification_history', JSON.stringify(this._history));
+        localStorage.setItem('solstone:notification_history', JSON.stringify(this._history));
       } catch (e) {
         // localStorage may be full or disabled
         console.warn('[Notifications] Failed to persist history:', e);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MCP server for Sunstone journal assistant.
+"""MCP server for solstone journal assistant.
 
 This module creates the FastMCP server instance and registers all tools and resources
 from the muse/tools/ and muse/resources/ directories.
@@ -13,7 +13,7 @@ from typing import Any, Callable, TypeVar
 from fastmcp import FastMCP
 
 # Create the MCP server instance
-mcp = FastMCP("sunstone")
+mcp = FastMCP("solstone")
 
 # Add annotation hints for all MCP tools
 HINTS = {"readOnlyHint": True, "openWorldHint": False}
@@ -194,7 +194,7 @@ def main() -> None:
 
     from think.utils import setup_cli
 
-    parser = argparse.ArgumentParser(description="Sunstone MCP Tools Server")
+    parser = argparse.ArgumentParser(description="solstone MCP Tools Server")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],

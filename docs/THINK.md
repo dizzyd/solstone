@@ -1,4 +1,4 @@
-# sunstone-think
+# solstone-think
 
 Post-processing utilities for clustering and summarising captured data. The tools leverage the Gemini API to analyse transcriptions and screenshots. All commands work with a **journal** directory that holds daily folders in `YYYYMMDD` format.
 
@@ -53,7 +53,7 @@ minimal service and timer that process yesterday's folder every morning at
 
 ```ini
 [Unit]
-Description=Process sunstone journal
+Description=Process solstone journal
 
 [Service]
 Type=oneshot

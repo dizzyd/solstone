@@ -1,4 +1,4 @@
-# Sunstone Makefile
+# solstone Makefile
 # Python-based AI-driven desktop journaling toolkit
 
 .PHONY: install deps test test-apps test-app lint format check clean dev full all

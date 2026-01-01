@@ -1,4 +1,4 @@
-# Sunstone Diagnostic Guide
+# solstone Diagnostic Guide
 
 Quick reference for debugging and diagnosing issues. For detailed specifications, see linked documentation.
 

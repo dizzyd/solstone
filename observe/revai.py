@@ -177,14 +177,14 @@ def transcribe_file(media_path: Path, **kwargs) -> dict:
     return get_transcript_json(token, job_id)
 
 
-def convert_revai_to_sunstone(revai_json: dict) -> list:
-    """Convert Rev.ai transcript format to Sunstone transcript format.
+def convert_revai_to_solstone(revai_json: dict) -> list:
+    """Convert Rev.ai transcript format to solstone transcript format.
 
     Args:
         revai_json: Dict with Rev.ai transcript structure (monologues with elements)
 
     Returns:
-        List of transcript entries in Sunstone format
+        List of transcript entries in solstone format
     """
     result = []
 
@@ -284,7 +284,7 @@ def convert_revai_to_sunstone(revai_json: dict) -> list:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Rev AI transcription CLI (high-quality + diarization). If a .json file is provided, converts it to Sunstone format instead of transcribing."
+        description="Rev AI transcription CLI (high-quality + diarization). If a .json file is provided, converts it to solstone format instead of transcribing."
     )
     parser.add_argument(
         "media", help="Path to audio/video file or Rev AI JSON file to convert"
@@ -367,7 +367,7 @@ def main():
     # Check if input is a JSON file - if so, convert instead of transcribe
     if media_path.suffix.lower() == ".json":
         logging.info(
-            "Detected JSON input - converting Rev AI format to Sunstone format"
+            "Detected JSON input - converting Rev AI format to solstone format"
         )
 
         # Load the Rev AI JSON
@@ -377,19 +377,19 @@ def main():
         except json.JSONDecodeError as e:
             die(f"Invalid JSON file: {e}")
 
-        # Convert to Sunstone format
-        sunstone_transcript = convert_revai_to_sunstone(revai_data)
+        # Convert to solstone format
+        solstone_transcript = convert_revai_to_solstone(revai_data)
 
         # Output the result
         if args.output:
             out_path = Path(args.output).expanduser().resolve()
             out_path.write_text(
-                json.dumps(sunstone_transcript, indent=2, ensure_ascii=False),
+                json.dumps(solstone_transcript, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
             logging.info("Wrote converted transcript to %s", out_path)
         else:
-            print(json.dumps(sunstone_transcript, indent=2, ensure_ascii=False))
+            print(json.dumps(solstone_transcript, indent=2, ensure_ascii=False))
 
         return
 

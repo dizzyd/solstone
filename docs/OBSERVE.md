@@ -18,17 +18,41 @@ Multimodal capture and AI-powered analysis of desktop activity.
 ```
 observer (platform-detected capture)
        ↓
-   Raw media files (*.flac, *.webm)
+   Raw media files (*.flac, *.webm, tmux_*.jsonl)
        ↓
 observe-sense (coordination)
    ├── observe-transcribe → audio.jsonl
    └── observe-describe → screen.jsonl
 ```
 
+## Observer State Machine
+
+The GNOME observer operates in three modes based on activity:
+
+```
+          SCREENCAST
+         ↗         ↘
+    (screen)    (screen idle)
+       ↑            ↓
+     IDLE ←----→ TMUX
+         (tmux active)
+```
+
+**Mode priority**: Screen activity always wins over tmux (user is physically present).
+
+| Mode | Trigger | Captures |
+|------|---------|----------|
+| SCREENCAST | Screen active (not idle/locked/power-save) | Video + Audio |
+| TMUX | Screen idle but tmux has recent client activity | Terminal content + Audio |
+| IDLE | Both screen and tmux inactive | Audio only (if threshold met) |
+
+Mode transitions trigger segment boundaries (like mute transitions do).
+
 ## Key Components
 
 - **observer.py** - Unified entry point with platform detection
 - **gnome/observer.py**, **macos/observer.py** - Platform-specific capture using native APIs
+- **tmux/capture.py** - Tmux capture library (integrated into GNOME observer for fallback capture)
 - **sense.py** - File watcher that dispatches transcription and description jobs
 - **transcribe.py** - Audio processing with Whisper/Rev.ai and pyannote diarization
 - **describe.py** - Vision analysis with Gemini, category-based prompts

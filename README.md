@@ -1,9 +1,9 @@
-<img src="logo.png" alt="Sunstone Logo" width="300">
+<img src="logo.png" alt="solstone Logo" width="300">
 
-# Sunstone
+# solstone
 Navigate Work Intelligently
 
-A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal capture, analysis, and intelligent navigation of workplace activities. Sunstone organizes captured data under a **journal** directory containing daily `YYYYMMDD` folders, enabling powerful temporal analysis and review.
+A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal capture, analysis, and intelligent navigation of workplace activities. solstone organizes captured data under a **journal** directory containing daily `YYYYMMDD` folders, enabling powerful temporal analysis and review.
 
 ## 🚀 Features
 
@@ -33,7 +33,7 @@ A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal
 
 - **MCP Server** 🛰️ - `muse-mcp-tools` launches Model Context Protocol server
 - **Cortex** 🧩 - `muse-cortex` provides agent-based task execution
-- **Help** ❓ - `sunstone` lists all available commands
+- **Help** ❓ - `solstone` lists all available commands
 
 ## 📦 Installation
 

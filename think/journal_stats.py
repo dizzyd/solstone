@@ -478,7 +478,7 @@ class JournalStats:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Scan a sunstone journal and generate statistics"
+        description="Scan a solstone journal and generate statistics"
     )
     parser.add_argument(
         "--no-cache",

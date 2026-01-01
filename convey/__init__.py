@@ -43,7 +43,7 @@ def create_app(journal: str = "") -> Flask:
         ]
     )
 
-    app.secret_key = os.getenv("CONVEY_SECRET", "sunstone-secret")
+    app.secret_key = os.getenv("CONVEY_SECRET", "solstone-secret")
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
     # Register root blueprint (login, logout, /, favicon)

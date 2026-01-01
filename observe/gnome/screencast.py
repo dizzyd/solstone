@@ -67,7 +67,7 @@ def _get_restore_token_path() -> Path:
     state_home = os.environ.get("XDG_STATE_HOME")
     if not state_home:
         state_home = os.path.join(os.path.expanduser("~"), ".local", "state")
-    return Path(state_home) / "sunstone" / "screencast_restore_token"
+    return Path(state_home) / "solstone" / "screencast_restore_token"
 
 
 def _load_restore_token() -> str | None:

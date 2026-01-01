@@ -184,7 +184,7 @@ def test_load_entity_names_spoken_mode(monkeypatch):
                 ("Company", "Acme Corporation (ACME)", "Tech company"),
                 ("Company", "Widget Inc", "Manufacturing company"),
                 ("Company", "Google", "Search engine"),
-                ("Project", "Sunstone Project (SUN)", "AI journaling"),
+                ("Project", "solstone Project (SUN)", "AI journaling"),
                 ("Project", "Project X", "Secret project"),
                 ("Tool", "Hammer", "For hitting things"),
                 ("Tool", "Docker", "Container runtime"),
@@ -217,8 +217,8 @@ def test_load_entity_names_spoken_mode(monkeypatch):
         # Company: "Google" (single word) -> ["Google"]
         assert "Google" in result
 
-        # Project: "Sunstone Project (SUN)" -> ["Sunstone", "SUN"] (uniform processing)
-        assert "Sunstone" in result  # First word
+        # Project: "solstone Project (SUN)" -> ["solstone", "SUN"] (uniform processing)
+        assert "solstone" in result  # First word
         assert "SUN" in result  # From parens
 
         # Project: "Project X" (no parens) -> ["Project"] (first word only)

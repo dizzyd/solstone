@@ -1,6 +1,6 @@
 # Integration Tests
 
-This directory contains integration tests for Sunstone that are separate from the unit tests in the parent `tests/` directory.
+This directory contains integration tests for solstone that are separate from the unit tests in the parent `tests/` directory.
 
 ## Purpose
 

@@ -1,6 +1,6 @@
 # Muse Module
 
-AI agent system and MCP tooling for Sunstone.
+AI agent system and MCP tooling for solstone.
 
 ## Commands
 

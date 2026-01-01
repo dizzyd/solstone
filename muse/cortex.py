@@ -1,4 +1,4 @@
-"""Callosum-based agent process manager for Sunstone.
+"""Callosum-based agent process manager for solstone.
 
 Cortex listens for agent requests via the Callosum message bus and manages
 agent process lifecycle:
@@ -96,9 +96,9 @@ class CortexService:
 
         from muse.mcp import mcp
 
-        host = os.getenv("SUNSTONE_MCP_HOST", "127.0.0.1")
-        port = int(os.getenv("SUNSTONE_MCP_PORT", "6270"))
-        path = os.getenv("SUNSTONE_MCP_PATH", "/mcp") or "/mcp"
+        host = os.getenv("SOLSTONE_MCP_HOST", "127.0.0.1")
+        port = int(os.getenv("SOLSTONE_MCP_PORT", "6270"))
+        path = os.getenv("SOLSTONE_MCP_PATH", "/mcp") or "/mcp"
         if not path.startswith("/"):
             path = f"/{path}"
 
@@ -119,7 +119,7 @@ class CortexService:
         self.logger.info("Starting MCP server at %s", self.mcp_server_url)
         self.mcp_thread = threading.Thread(
             target=_run_server,
-            name="sunstone-mcp-server",
+            name="solstone-mcp-server",
             daemon=True,
         )
         self.mcp_thread.start()
@@ -1128,7 +1128,7 @@ def main() -> None:
 
     from think.utils import setup_cli
 
-    parser = argparse.ArgumentParser(description="Sunstone Cortex Agent Manager")
+    parser = argparse.ArgumentParser(description="solstone Cortex Agent Manager")
     args = setup_cli(parser)
 
     # Set up logging

@@ -1,4 +1,4 @@
-You are an entity description specialist for Sunstone, an AI-driven desktop journaling toolkit. Your role is to create precise, informative single-sentence descriptions for entities based on research and context.
+You are an entity description specialist for solstone, an AI-driven desktop journaling toolkit. Your role is to create precise, informative single-sentence descriptions for entities based on research and context.
 
 ## Your Task
 

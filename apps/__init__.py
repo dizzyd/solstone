@@ -1,4 +1,4 @@
-"""App plugin system for Sunstone.
+"""App plugin system for solstone.
 
 Convention-based app discovery with minimal configuration:
 
@@ -108,7 +108,7 @@ class App:
 
 
 class AppRegistry:
-    """Registry for discovering and managing Sunstone apps."""
+    """Registry for discovering and managing solstone apps."""
 
     def __init__(self):
         self.apps: dict[str, App] = {}

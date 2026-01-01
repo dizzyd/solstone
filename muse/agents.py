@@ -272,7 +272,7 @@ async def main_async() -> None:
     """NDJSON-based CLI for agent backends."""
 
     parser = argparse.ArgumentParser(
-        description="Sunstone Agent CLI - Accepts NDJSON input via stdin"
+        description="solstone Agent CLI - Accepts NDJSON input via stdin"
     )
 
     args = setup_cli(parser)

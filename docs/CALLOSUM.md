@@ -1,6 +1,6 @@
 # Callosum Protocol
 
-Callosum is a JSON-per-line message bus for real-time event distribution across Sunstone services.
+Callosum is a JSON-per-line message bus for real-time event distribution across solstone services.
 
 ## Protocol
 

@@ -251,7 +251,7 @@ def _get_notifier() -> DesktopNotifier:
     """Get or create the global desktop notifier instance."""
     global _notifier
     if _notifier is None:
-        _notifier = DesktopNotifier(app_name="Sunstone Supervisor")
+        _notifier = DesktopNotifier(app_name="solstone Supervisor")
     return _notifier
 
 
@@ -265,7 +265,7 @@ async def send_notification(message: str, alert_key: tuple | None = None) -> Non
     try:
         notifier = _get_notifier()
         notification_id = await notifier.send(
-            title="Sunstone Supervisor",
+            title="solstone Supervisor",
             message=message,
             urgency=Urgency.Critical,
         )

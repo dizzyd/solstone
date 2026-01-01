@@ -1,10 +1,10 @@
 # Development Guidelines & Contribution Standards
 
-This document provides comprehensive guidelines for contributing to Sunstone, whether you're an AI assistant, human developer, or automated system.
+This document provides comprehensive guidelines for contributing to solstone, whether you're an AI assistant, human developer, or automated system.
 
 ## 📋 Project Overview
 
-**Sunstone** is a Python-based AI-driven desktop journaling toolkit that provides:
+**solstone** is a Python-based AI-driven desktop journaling toolkit that provides:
 
 * **observe/** - Multimodal capture (audio + visual) and AI-powered analysis
 * **think/** - Data post-processing, summarization, and intelligent insights
@@ -17,7 +17,7 @@ The project uses a modular architecture where each package can operate independe
 
 ## 🔑 Key Concepts
 
-Understanding these core concepts is essential for working with Sunstone:
+Understanding these core concepts is essential for working with solstone:
 
 * **Journal**: Central data structure organized as `JOURNAL_PATH/YYYYMMDD/` directories. All captured data, transcripts, and analysis artifacts are stored here. See [docs/JOURNAL.md](docs/JOURNAL.md).
 
@@ -36,7 +36,7 @@ Understanding these core concepts is essential for working with Sunstone:
 ## 🏗️ Project Structure
 
 ```
-sunstone/
+solstone/
 ├── observe/        # Multimodal capture & AI analysis
 ├── think/          # Data post-processing & AI analysis
 ├── convey/         # Web app frontend & backend
@@ -78,7 +78,7 @@ Each package has a README.md symlink pointing to its documentation in `docs/`.
 * Agents process via `muse-agents` command with persona configurations
 
 **Command Reference**:
-See `pyproject.toml` `[project.scripts]` for the authoritative, current list of CLI entry points (e.g., `sunstone`, `think-*`, `observe-*`, `muse-*`, `convey*`).
+See `pyproject.toml` `[project.scripts]` for the authoritative, current list of CLI entry points (e.g., `solstone`, `think-*`, `observe-*`, `muse-*`, `convey*`).
 
 ---
 
@@ -241,7 +241,7 @@ make clean-install # Clean and reinstall
 * **Insight Templates**: `think/insights/*.txt` and `*.json`
 
 ### Getting Help
-* Run `sunstone` for CLI command list
+* Run `solstone` for CLI command list
 * Check [docs/DOCTOR.md](docs/DOCTOR.md) for debugging and diagnostics
 * Browse `docs/` for all subsystem documentation
 * Review test files in `tests/` for usage examples

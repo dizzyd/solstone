@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OpenAI-backed agent implementation for the Sunstone `muse-agents` CLI.
+OpenAI-backed agent implementation for the solstone `muse-agents` CLI.
 
 - Connects to a local MCP server over Streamable HTTP
 - Runs an agent with streaming to surface tool args/results and (when available) reasoning summaries
@@ -292,7 +292,7 @@ async def run_agent(
             # Create agent with or without MCP servers
             mcp_servers_list = [mcp_server] if mcp_server else []
             agent = Agent(
-                name="SunstoneCLI",
+                name="solstoneCLI",
                 instructions=system_instruction,
                 model=model,
                 model_settings=model_settings,

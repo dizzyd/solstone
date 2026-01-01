@@ -13,13 +13,13 @@ from .utils import setup_cli
 def get_parser_help(module_name: str, func_name: str = "main") -> Tuple[str, str]:
     """Return description and usage for a command without triggering side effects."""
     # Skip self to prevent infinite recursion
-    if module_name == "think.sunstone":
-        return "Print available sunstone commands with descriptions.", ""
+    if module_name == "think.solstone":
+        return "Print available solstone commands with descriptions.", ""
 
     logging.info(f"Getting parser help for module: {module_name}")
 
     pytest_env: Optional[str] = os.environ.get("PYTEST_CURRENT_TEST")
-    os.environ["PYTEST_CURRENT_TEST"] = "sunstone-discover"
+    os.environ["PYTEST_CURRENT_TEST"] = "solstone-discover"
     try:
         logging.debug(f"Importing module: {module_name}")
         module = importlib.import_module(module_name)
@@ -76,7 +76,7 @@ def get_parser_help(module_name: str, func_name: str = "main") -> Tuple[str, str
 
 
 def discover_commands() -> List[Tuple[str, str, str]]:
-    """Return available sunstone commands discovered via entry points."""
+    """Return available solstone commands discovered via entry points."""
     logging.info("Starting command discovery")
     commands = []
 
@@ -90,16 +90,16 @@ def discover_commands() -> List[Tuple[str, str, str]]:
 
     logging.info(f"Found {len(scripts)} console scripts")
 
-    sunstone_eps = [
+    solstone_eps = [
         ep
         for ep in scripts
-        if ep.value.startswith(("hear.", "see.", "think.", "convey."))
+        if ep.value.startswith(("think.", "convey.", "observe.", "muse."))
     ]
-    logging.info(f"Found {len(sunstone_eps)} sunstone entry points")
+    logging.info(f"Found {len(solstone_eps)} solstone entry points")
 
-    sunstone_eps.sort(key=lambda ep: ep.name)
+    solstone_eps.sort(key=lambda ep: ep.name)
 
-    for ep in sunstone_eps:
+    for ep in solstone_eps:
         logging.debug(f"Processing entry point: {ep.name} -> {ep.value}")
         module_path, func_name = ep.value.split(":")
         description, usage = get_parser_help(module_path, func_name)
@@ -111,14 +111,14 @@ def discover_commands() -> List[Tuple[str, str, str]]:
 
 
 def main() -> None:
-    """Print available sunstone commands with descriptions."""
+    """Print available solstone commands with descriptions."""
     parser = argparse.ArgumentParser(
-        description="Print available sunstone commands with descriptions."
+        description="Print available solstone commands with descriptions."
     )
 
     setup_cli(parser)
 
-    logging.info("Starting sunstone command discovery")
+    logging.info("Starting solstone command discovery")
 
     journal_path = os.environ.get("JOURNAL_PATH", "not set")
     print(f"JOURNAL_PATH={journal_path}\n")

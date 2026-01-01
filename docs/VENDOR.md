@@ -1,6 +1,6 @@
 # Third-Party Vendor Libraries
 
-This directory contains third-party JavaScript libraries used across Sunstone apps.
+This directory contains third-party JavaScript libraries used across solstone apps.
 
 ## Purpose
 

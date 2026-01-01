@@ -13,7 +13,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from observe.hear import load_transcript
-from observe.revai import convert_revai_to_sunstone, transcribe_file
+from observe.revai import convert_revai_to_solstone, transcribe_file
 from think.callosum import CallosumConnection
 from think.detect_created import detect_created
 from think.detect_transcript import detect_transcript_json, detect_transcript_segment
@@ -413,10 +413,10 @@ def audio_transcribe(
         logger.error(f"Failed to transcribe audio: {e}")
         raise
 
-    # Convert to Sunstone format
-    sunstone_transcript = convert_revai_to_sunstone(revai_json)
+    # Convert to solstone format
+    solstone_transcript = convert_revai_to_solstone(revai_json)
 
-    if not sunstone_transcript:
+    if not solstone_transcript:
         logger.warning("No transcript entries found")
         return created_files, revai_json
 
@@ -425,7 +425,7 @@ def audio_transcribe(
     current_chunk = []
     chunk_start_time = None
 
-    for entry in sunstone_transcript:
+    for entry in solstone_transcript:
         # Parse the timestamp from the entry
         start_str = entry.get("start", "00:00:00")
         h, m, s = map(int, start_str.split(":"))

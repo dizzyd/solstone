@@ -1,10 +1,10 @@
-# Sunstone Journal Guide
+# solstone Journal Guide
 
 This document describes the layout of a **journal** directory where all captures, extracts, and insights are stored. Each dated `YYYYMMDD` folder is referred to as a **day**, and within each day captured content is organized into **segments** (timestamped duration folders). Each segment folder uses the format `HHMMSS_LEN/` where `HHMMSS` is the start time and `LEN` is the duration in seconds. This folder name serves as the **segment key**, uniquely identifying the segment within a given day.
 
 ## The Three-Layer Architecture
 
-Sunstone transforms raw recordings into actionable understanding through a three-layer pipeline:
+solstone transforms raw recordings into actionable understanding through a three-layer pipeline:
 
 ```
 ┌─────────────────────────────────────┐
@@ -182,7 +182,7 @@ Optional fields:
 
 ### Facet Entities
 
-Entities in Sunstone use a two-state system: **detected** (daily discoveries) and **attached** (promoted/persistent). This agent-driven architecture automatically identifies entities from journal content while allowing manual curation.
+Entities in solstone use a two-state system: **detected** (daily discoveries) and **attached** (promoted/persistent). This agent-driven architecture automatically identifies entities from journal content while allowing manual curation.
 
 #### Entity Storage Structure
 

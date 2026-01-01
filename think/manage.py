@@ -1,4 +1,4 @@
-"""Interactive service manager for Sunstone supervisor.
+"""Interactive service manager for solstone supervisor.
 
 Connects to the Callosum message bus to display real-time service status
 and provides keyboard controls for restarting services.
@@ -25,12 +25,12 @@ def _get_notifier() -> DesktopNotifier:
     """Get or create the global desktop notifier instance."""
     global _notifier
     if _notifier is None:
-        _notifier = DesktopNotifier(app_name="Sunstone Manager")
+        _notifier = DesktopNotifier(app_name="solstone Manager")
     return _notifier
 
 
 class ServiceManager:
-    """Interactive TUI for managing Sunstone services."""
+    """Interactive TUI for managing solstone services."""
 
     def __init__(self):
         self.services = []  # From supervisor/status events
@@ -106,7 +106,7 @@ class ServiceManager:
                 self.active_notifications.pop(service, None)
 
             notif_id = await notifier.send(
-                title="Sunstone Manager",
+                title="solstone Manager",
                 message=message,
                 urgency=Urgency.Critical,
                 on_dismissed=on_dismissed,
@@ -511,7 +511,7 @@ class ServiceManager:
         output.append(t.home + t.clear)
 
         # Title
-        title = "Sunstone Service Manager"
+        title = "solstone Service Manager"
         output.append(t.bold + t.cyan + title.center(t.width) + t.normal)
         output.append("")
 
@@ -673,7 +673,7 @@ class ServiceManager:
 def main() -> None:
     """CLI entry point for service manager."""
     parser = argparse.ArgumentParser(
-        description="Interactive service manager for Sunstone supervisor"
+        description="Interactive service manager for solstone supervisor"
     )
     setup_cli(parser)
 

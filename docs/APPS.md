@@ -1,8 +1,8 @@
-# Sunstone App Development Guide
+# solstone App Development Guide
 
 **Complete guide for building apps in the `apps/` directory.**
 
-Apps are the primary way to extend Sunstone's web interface (Convey). Each app is a self-contained module discovered automatically using **convention over configuration**—no base classes or manual registration required.
+Apps are the primary way to extend solstone's web interface (Convey). Each app is a self-contained module discovered automatically using **convention over configuration**—no base classes or manual registration required.
 
 > **How to use this document:** This guide serves as a catalog of patterns and references. Each section points to authoritative source files—read those files alongside this guide for complete details. When in doubt, the source code is the definitive reference.
 
@@ -284,7 +284,7 @@ from muse.mcp import register_tool, HINTS
 
 ### 7. `insights/` - App Insights
 
-Define custom insight prompts that integrate with Sunstone's insight generation system.
+Define custom insight prompts that integrate with solstone's insight generation system.
 
 **Key Points:**
 - Create `insights/` directory with `.txt` (prompt) + `.json` (metadata) file pairs
@@ -304,7 +304,7 @@ Define custom insight prompts that integrate with Sunstone's insight generation 
 
 ### 8. `agents/` - App Agents
 
-Define custom agent personas that integrate with Sunstone's Cortex agent system.
+Define custom agent personas that integrate with solstone's Cortex agent system.
 
 **Key Points:**
 - Create `agents/` directory with `.txt` (prompt) + `.json` (metadata) file pairs

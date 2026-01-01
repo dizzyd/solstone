@@ -1,6 +1,6 @@
 """Callosum: WebSocket-like broadcast message bus over Unix domain sockets.
 
-Provides real-time event distribution across Sunstone services using a simple
+Provides real-time event distribution across solstone services using a simple
 broadcast protocol. All messages require 'tract' and 'event' fields.
 """
 
