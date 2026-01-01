@@ -2,9 +2,15 @@
 """
 Unified observer for audio and screencast capture.
 
-Continuously captures audio and manages screencast recording based on activity.
+Continuously captures audio and manages screencast/tmux recording based on activity.
 Creates 5-minute windows, saving audio if voice activity detected and recording
-screencasts during active segments. Each monitor is recorded as a separate file.
+screencasts during active segments. When screen is idle but tmux sessions are active,
+captures tmux terminal content instead.
+
+State machine:
+    SCREENCAST: Screen is active, recording video
+    TMUX: Screen is idle but tmux has recent activity
+    IDLE: Both screen and tmux are inactive
 """
 
 import argparse
@@ -28,6 +34,7 @@ from observe.gnome.dbus import (
 )
 from observe.gnome.screencast import Screencaster, StreamInfo
 from observe.hear import AudioRecorder
+from observe.tmux.capture import TmuxCapture, write_captures_jsonl
 from think.callosum import CallosumConnection
 from think.utils import day_path, setup_cli
 
@@ -39,14 +46,20 @@ RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 CHUNK_DURATION = 5  # seconds
 
+# Capture modes
+MODE_IDLE = "idle"
+MODE_SCREENCAST = "screencast"
+MODE_TMUX = "tmux"
+
 
 class Observer:
-    """Unified audio and screencast observer."""
+    """Unified audio and screencast/tmux observer."""
 
     def __init__(self, interval: int = 300):
         self.interval = interval
         self.audio_recorder = AudioRecorder()
         self.screencaster = Screencaster()
+        self.tmux_capture = TmuxCapture()
         self.bus: MessageBus | None = None
         self.running = True
         self.callosum: CallosumConnection | None = None
@@ -56,12 +69,19 @@ class Observer:
         self.start_at_mono = time.monotonic()  # Monotonic for elapsed calculations
         self.threshold_hits = 0
         self.accumulated_audio_buffer = np.array([], dtype=np.float32).reshape(0, 2)
-        self.screencast_running = False
+
+        # Mode tracking (replaces screencast_running boolean)
+        self.current_mode = MODE_IDLE
 
         # Multi-file screencast tracking
         self.current_streams: list[StreamInfo] = []
         self.pending_finalizations: list[tuple[str, str]] | None = None
         self.last_screencast_sizes: dict[str, int] = {}
+
+        # Tmux capture tracking
+        self.tmux_captures: list[dict] = []
+        self.tmux_capture_id = 0
+        self.tmux_sessions_seen: set[str] = set()
 
         # Activity status cache (updated each loop)
         self.cached_is_active = False
@@ -69,6 +89,7 @@ class Observer:
         self.cached_screen_locked = False
         self.cached_is_muted = False
         self.cached_power_save = False
+        self.cached_tmux_active = False
 
         # Mute state at segment start (determines save format)
         self.segment_is_muted = False
@@ -96,6 +117,12 @@ class Observer:
             return False
         logger.info("Screencast portal connected")
 
+        # Check tmux availability
+        if self.tmux_capture.is_available():
+            logger.info("Tmux available for fallback capture")
+        else:
+            logger.info("Tmux not available (will only use screencast)")
+
         # Start Callosum connection for status events
         self.callosum = CallosumConnection()
         self.callosum.start()
@@ -103,12 +130,12 @@ class Observer:
 
         return True
 
-    async def check_activity_status(self) -> bool:
+    async def check_activity_status(self) -> str:
         """
-        Check system activity status and cache values.
+        Check system activity status and determine capture mode.
 
         Returns:
-            True if user is active (not idle/locked/power-save, OR has audio activity)
+            Capture mode: MODE_SCREENCAST, MODE_TMUX, or MODE_IDLE
         """
         idle_time = await get_idle_time_ms(self.bus)
         screen_locked = await is_screen_locked(self.bus)
@@ -121,14 +148,30 @@ class Observer:
         self.cached_is_muted = sink_muted
         self.cached_power_save = power_save
 
-        is_idle = (idle_time > IDLE_THRESHOLD_MS) or screen_locked or power_save
+        # Determine screen activity
+        screen_idle = (idle_time > IDLE_THRESHOLD_MS) or screen_locked or power_save
+        screen_active = not screen_idle
+
+        # Check tmux activity (only if screen is idle)
+        if screen_active:
+            tmux_active = False
+        else:
+            tmux_active = self.tmux_capture.is_active(poll_interval=CHUNK_DURATION)
+        self.cached_tmux_active = tmux_active
+
+        # Determine mode with priority: screen > tmux > idle
+        if screen_active:
+            mode = MODE_SCREENCAST
+        elif tmux_active:
+            mode = MODE_TMUX
+        else:
+            mode = MODE_IDLE
+
+        # Cache legacy is_active for audio threshold logic
         has_audio_activity = self.threshold_hits >= MIN_HITS_FOR_SAVE
-        is_active = (not is_idle) or has_audio_activity
+        self.cached_is_active = screen_active or tmux_active or has_audio_activity
 
-        # Cache result
-        self.cached_is_active = is_active
-
-        return is_active
+        return mode
 
     def compute_rms(self, audio_buffer: np.ndarray) -> float:
         """Compute per-channel RMS and return maximum (stereo: mic=left, sys=right)."""
@@ -207,12 +250,12 @@ class Observer:
             logger.info(f"Saved audio to {flac_path}")
             return [audio_name]
 
-    async def handle_boundary(self, is_active: bool):
+    async def handle_boundary(self, new_mode: str):
         """
         Handle window boundary rollover.
 
         Args:
-            is_active: Whether system is currently active
+            new_mode: The mode for the new segment
         """
         # Get timestamp parts for this window and calculate duration
         date_part, time_part = self.get_timestamp_parts(self.start_at)
@@ -239,14 +282,13 @@ class Observer:
         self.accumulated_audio_buffer = np.array([], dtype=np.float32).reshape(0, 2)
         self.threshold_hits = 0
 
-        # Handle screencast rollover
+        # Handle screencast rollover (if we were in screencast mode)
         stopped_streams: list[StreamInfo] = []
         screen_files: list[str] = []
 
-        if self.screencast_running:
+        if self.current_mode == MODE_SCREENCAST:
             logger.info("Stopping previous screencast")
             stopped_streams = await self.screencaster.stop()
-            self.screencast_running = False
             self.current_streams = []
             self.last_screencast_sizes = {}
 
@@ -261,6 +303,19 @@ class Observer:
             if finalizations:
                 self.pending_finalizations = finalizations
 
+        # Handle tmux capture save (if we were in tmux mode)
+        tmux_files: list[str] = []
+        if self.current_mode == MODE_TMUX and self.tmux_captures:
+            segment_key = f"{time_part}_{duration}"
+            segment_dir = day_dir / segment_key
+            tmux_files = write_captures_jsonl(self.tmux_captures, segment_dir)
+
+        # Reset tmux state
+        self.tmux_captures = []
+        self.tmux_capture_id = 0
+        self.tmux_sessions_seen = set()
+        self.tmux_capture.reset_hashes()
+
         # Reset timing for new window
         self.start_at = time.time()  # Wall-clock for filenames
         self.start_at_mono = time.monotonic()  # Monotonic for elapsed
@@ -268,13 +323,19 @@ class Observer:
         # Update segment mute state for new segment
         self.segment_is_muted = self.cached_is_muted
 
-        # Start new screencast if active AND screen not locked
-        # (is_active can be True due to audio activity even when locked)
-        if is_active and not self.cached_screen_locked:
+        # Update mode
+        old_mode = self.current_mode
+        self.current_mode = new_mode
+
+        # Start new capture based on mode
+        if new_mode == MODE_SCREENCAST and not self.cached_screen_locked:
             await self.initialize_screencast()
+        # MODE_TMUX doesn't need initialization, captures happen in main loop
+
+        logger.info(f"Mode transition: {old_mode} -> {new_mode}")
 
         # Emit observing event with what we saved this boundary
-        files = audio_files + screen_files
+        files = audio_files + screen_files + tmux_files
 
         if files:
             segment = f"{time_part}_{duration}"
@@ -311,7 +372,6 @@ class Observer:
             logger.error("No streams returned from screencast start")
             raise RuntimeError("No streams available")
 
-        self.screencast_running = True
         self.current_streams = streams
         self.last_screencast_sizes = {s.temp_path: 0 for s in streams}
 
@@ -321,13 +381,37 @@ class Observer:
 
         return True
 
+    def capture_tmux(self):
+        """Poll tmux and accumulate captures for this chunk."""
+        active_sessions = self.tmux_capture.get_active_sessions(CHUNK_DURATION)
+        if not active_sessions:
+            return
+
+        ts = time.time()
+
+        for session_info in active_sessions:
+            session = session_info["session"]
+            self.tmux_sessions_seen.add(session)
+
+            result = self.tmux_capture.capture_changed(session)
+            if not result:
+                continue
+
+            self.tmux_capture_id += 1
+            relative_ts = ts - self.start_at
+            capture_dict = self.tmux_capture.result_to_dict(
+                result, self.tmux_capture_id, relative_ts
+            )
+            self.tmux_captures.append(capture_dict)
+            logger.debug(f"Captured tmux session {session}: {len(result.panes)} panes")
+
     def emit_status(self):
         """Emit observe.status event with current state."""
         journal_path = os.getenv("JOURNAL_PATH", "")
+        elapsed = int(time.monotonic() - self.start_at_mono)
 
         # Calculate screencast info
-        if self.screencast_running and self.current_streams:
-            elapsed = int(time.monotonic() - self.start_at_mono)
+        if self.current_mode == MODE_SCREENCAST and self.current_streams:
             streams_info = []
             for stream in self.current_streams:
                 try:
@@ -356,6 +440,17 @@ class Observer:
         else:
             screencast_info = {"recording": False, "files_growing": False}
 
+        # Calculate tmux info
+        if self.current_mode == MODE_TMUX:
+            tmux_info = {
+                "capturing": True,
+                "captures": len(self.tmux_captures),
+                "sessions": sorted(self.tmux_sessions_seen),
+                "window_elapsed_seconds": elapsed,
+            }
+        else:
+            tmux_info = {"capturing": False}
+
         # Audio info
         audio_info = {
             "threshold_hits": self.threshold_hits,
@@ -369,12 +464,15 @@ class Observer:
             "screen_locked": self.cached_screen_locked,
             "sink_muted": self.cached_is_muted,
             "power_save": self.cached_power_save,
+            "tmux_active": self.cached_tmux_active,
         }
 
         self.callosum.emit(
             "observe",
             "status",
+            mode=self.current_mode,
             screencast=screencast_info,
+            tmux=tmux_info,
             audio=audio_info,
             activity=activity_info,
         )
@@ -401,16 +499,21 @@ class Observer:
         """Run the main observer loop."""
         logger.info(f"Starting observer loop (interval={self.interval}s)")
 
-        # Start screencast immediately if active and screen not locked
-        is_active = await self.check_activity_status()
+        # Determine initial mode
+        new_mode = await self.check_activity_status()
         self.segment_is_muted = self.cached_is_muted  # Sync initial mute state
-        if is_active and not self.cached_screen_locked:
+        self.current_mode = new_mode
+
+        # Start initial capture based on mode
+        if new_mode == MODE_SCREENCAST and not self.cached_screen_locked:
             try:
                 await self.initialize_screencast()
             except RuntimeError:
                 # Failed to start screencast, exit
                 self.running = False
                 return
+
+        logger.info(f"Initial mode: {self.current_mode}")
 
         while self.running:
             # Sleep for chunk duration
@@ -425,14 +528,13 @@ class Observer:
                         logger.warning(f"Pending screencast not found: {temp_path}")
                 self.pending_finalizations = None
 
-            # Check activity status
-            is_active = await self.check_activity_status()
+            # Check activity status and determine new mode
+            new_mode = await self.check_activity_status()
 
             # Check for GStreamer failure mid-recording
-            if self.screencast_running and not self.screencaster.is_healthy():
+            if self.current_mode == MODE_SCREENCAST and not self.screencaster.is_healthy():
                 logger.warning("Screencast recording failed, stopping gracefully")
                 stopped_streams = await self.screencaster.stop()
-                self.screencast_running = False
 
                 # Finalize whatever we have
                 if stopped_streams:
@@ -449,9 +551,13 @@ class Observer:
 
                 self.current_streams = []
                 self.last_screencast_sizes = {}
+                # Force recalculate mode without screencast
+                self.current_mode = MODE_IDLE
 
-            # Transition from idle to active
-            activation_edge = is_active and not self.screencast_running
+            # Detect mode transition
+            mode_transition = new_mode != self.current_mode
+            if mode_transition:
+                logger.info(f"Mode changing: {self.current_mode} -> {new_mode}")
 
             # Detect mute state transition
             mute_transition = self.cached_is_muted != self.segment_is_muted
@@ -483,23 +589,27 @@ class Observer:
             else:
                 logger.debug("No audio data in chunk")
 
+            # Capture tmux if in tmux mode
+            if self.current_mode == MODE_TMUX:
+                self.capture_tmux()
+
             # Check for window boundary (use monotonic to avoid DST/clock jumps)
             now_mono = time.monotonic()
             elapsed = now_mono - self.start_at_mono
             is_boundary = (
-                (elapsed >= self.interval) or activation_edge or mute_transition
+                (elapsed >= self.interval) or mode_transition or mute_transition
             )
 
             if is_boundary:
                 logger.info(
-                    f"Boundary: elapsed={elapsed:.1f}s edge={activation_edge} "
+                    f"Boundary: elapsed={elapsed:.1f}s mode_change={mode_transition} "
                     f"mute_change={mute_transition} "
                     f"hits={self.threshold_hits}/{MIN_HITS_FOR_SAVE}"
                 )
-                await self.handle_boundary(is_active)
+                await self.handle_boundary(new_mode)
 
             # Check if screencast files are actively growing (for health reporting)
-            if self.screencast_running and self.current_streams:
+            if self.current_mode == MODE_SCREENCAST and self.current_streams:
                 any_growing = False
                 for stream in self.current_streams:
                     if os.path.exists(stream.temp_path):
@@ -521,12 +631,13 @@ class Observer:
 
     async def shutdown(self):
         """Clean shutdown of observer."""
-        # Perform final boundary logic without restarting screencast
-        if self.threshold_hits >= MIN_HITS_FOR_SAVE:
-            date_part, time_part = self.get_timestamp_parts(self.start_at)
-            duration = int(time.time() - self.start_at)
-            day_dir = day_path(date_part)
+        # Get timestamp parts for final save
+        date_part, time_part = self.get_timestamp_parts(self.start_at)
+        duration = int(time.time() - self.start_at)
+        day_dir = day_path(date_part)
 
+        # Save final audio if threshold met
+        if self.threshold_hits >= MIN_HITS_FOR_SAVE:
             audio_files = self._save_audio_segment(
                 day_dir, time_part, duration, self.segment_is_muted
             )
@@ -534,17 +645,13 @@ class Observer:
                 logger.info(f"Saved final audio: {len(audio_files)} file(s)")
 
         # Stop screencast if running
-        if self.screencast_running:
+        if self.current_mode == MODE_SCREENCAST:
             logger.info("Stopping screencast for shutdown")
             stopped_streams = await self.screencaster.stop()
 
             if stopped_streams:
                 # Brief delay for files to be written
                 await asyncio.sleep(0.5)
-
-                duration = int(time.time() - self.start_at)
-                date_part, time_part = self.get_timestamp_parts(self.start_at)
-                day_dir = day_path(date_part)
 
                 for stream in stopped_streams:
                     if os.path.exists(stream.temp_path):
@@ -557,7 +664,13 @@ class Observer:
                             f"Screencast file not found after shutdown: {stream.temp_path}"
                         )
 
-            self.screencast_running = False
+        # Save tmux captures if in tmux mode
+        if self.current_mode == MODE_TMUX and self.tmux_captures:
+            segment_key = f"{time_part}_{duration}"
+            segment_dir = day_dir / segment_key
+            tmux_files = write_captures_jsonl(self.tmux_captures, segment_dir)
+            if tmux_files:
+                logger.info(f"Saved final tmux captures: {len(tmux_files)} file(s)")
 
         # Process any remaining pending finalizations
         if self.pending_finalizations:
@@ -616,7 +729,7 @@ async def async_main(args):
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Unified audio and screencast observer for journaling."
+        description="Unified audio, screencast, and tmux observer for journaling."
     )
     parser.add_argument(
         "--interval",
