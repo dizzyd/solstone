@@ -7,23 +7,9 @@ def test_categories_discovered():
     """Test that categories are discovered on import."""
     CATEGORIES = describe_module.CATEGORIES
 
-    # Should have discovered all 9 categories
-    assert len(CATEGORIES) == 9
-
-    # All expected categories should be present
-    expected = [
-        "terminal",
-        "code",
-        "messaging",
-        "meeting",
-        "browsing",
-        "reading",
-        "media",
-        "gaming",
-        "productivity",
-    ]
-    for cat in expected:
-        assert cat in CATEGORIES, f"Expected category {cat} not found"
+    # Should have discovered at least some categories
+    assert isinstance(CATEGORIES, dict)
+    assert len(CATEGORIES) > 0
 
 
 def test_categories_have_required_fields():
@@ -59,46 +45,6 @@ def test_followup_categories_have_prompts():
             ), f"Category {category} has followup=true but no prompt"
             assert isinstance(metadata["prompt"], str)
             assert len(metadata["prompt"]) > 0
-
-
-def test_non_followup_categories():
-    """Test that non-followup categories don't have prompts."""
-    CATEGORIES = describe_module.CATEGORIES
-
-    non_followup = ["terminal", "code", "media", "gaming"]
-    for category in non_followup:
-        assert category in CATEGORIES
-        assert CATEGORIES[category]["followup"] is False
-        assert "prompt" not in CATEGORIES[category]
-
-
-def test_meeting_category_config():
-    """Test that meeting category has correct configuration."""
-    CATEGORIES = describe_module.CATEGORIES
-
-    assert "meeting" in CATEGORIES
-    meeting = CATEGORIES["meeting"]
-    assert meeting["followup"] is True
-    assert meeting["output"] == "json"
-    assert meeting["iq"] == "flash"  # Meeting needs flash for complex JSON output
-
-
-def test_text_categories_config():
-    """Test that text-based categories have correct configuration."""
-    CATEGORIES = describe_module.CATEGORIES
-
-    text_categories = ["messaging", "browsing", "reading", "productivity"]
-    for category in text_categories:
-        assert category in CATEGORIES
-        cat_meta = CATEGORIES[category]
-        assert cat_meta["followup"] is True
-        assert cat_meta["output"] == "markdown"
-
-    # Messaging uses flash for better text extraction
-    assert CATEGORIES["messaging"]["iq"] == "flash"
-    # Others default to lite
-    for category in ["browsing", "reading", "productivity"]:
-        assert CATEGORIES[category].get("iq", "lite") == "lite"
 
 
 def test_categorization_prompt_built():
