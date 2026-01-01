@@ -1,0 +1,77 @@
+# Meeting Speaker Detection
+
+## Objective
+
+Identify meetings in this segment and extract participant names. This output feeds into occurrence extraction to populate meeting participant lists.
+
+## Input Types
+
+### With Screen Activity (Live Capture)
+
+A meeting is detected when screen activity shows a video conferencing application:
+- Zoom, Google Meet, Microsoft Teams, Webex, or similar
+- Participant panels or video tiles visible
+- Meeting controls or UI elements present
+
+Extract participant names from:
+1. **Visible participant list/panel** on screen (highest confidence)
+2. **Names spoken in conversation** - direct address ("Thanks, Sarah"), mentions ("John was saying...")
+3. **Self-introductions** ("Hi, I'm Alex from...")
+
+### Audio Only (Import)
+
+When no screen activity is present, a meeting is detected when audio shows:
+- Multiple speakers with conversational turn-taking
+- Meeting-style patterns: agenda items, discussion, decisions, action items
+- Professional/work context evident from topics
+
+Extract names from:
+1. **Names spoken in conversation** - direct address and mentions
+2. **Self-introductions**
+3. **Setting/topics metadata** if available from transcription
+
+## Boundary Detection
+
+If the segment spans two distinct meetings (one ending, another starting):
+- Look for farewell patterns followed by new greetings
+- Different participant set appears
+- Significant topic shift with new introductions
+
+Report each meeting separately with its own time range and participants.
+
+## Output Format
+
+Structure your output clearly for occurrence extraction:
+
+### Meeting Detection
+
+State whether meeting(s) were detected and the detection basis:
+- **Detected**: Yes / No
+- **Source**: Screen (video call UI visible) / Audio-only (conversation patterns)
+
+### Meeting 1
+
+- **Time**: HH:MM:SS - HH:MM:SS
+- **Platform**: Zoom / Meet / Teams / etc. (if visible, omit for audio-only)
+- **Participants**:
+  - Name (evidence: where/how detected)
+  - Name (evidence: where/how detected)
+
+### Meeting 2 (if segment contains two meetings)
+
+Same structure as above.
+
+## What to Ignore
+
+- Podcasts, videos, or streaming content being watched
+- Music or background audio
+- Single-speaker recordings without meeting context
+- Phone calls (no video conferencing UI)
+
+## No Meeting Case
+
+If no meeting is detected, output:
+
+### Meeting Detection
+- **Detected**: No
+- **Reason**: [Brief explanation - e.g., "No video call UI visible, single speaker only"]
