@@ -15,4 +15,4 @@ fixtures/journal/tokens/*.json
 *.sqlite
 *.log
 config*.py
-.full-installed
+.installed
