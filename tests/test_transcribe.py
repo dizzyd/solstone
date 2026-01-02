@@ -4,8 +4,22 @@
 """Tests for observe.transcribe validation logic."""
 
 import json
+import shutil
+import tempfile
+from pathlib import Path
 
-from observe.transcribe import validate_transcription
+import numpy as np
+import pytest
+import soundfile as sf
+
+from observe.transcribe import Transcriber, validate_transcription
+
+
+class _MockTranscriber:
+    """Mock transcriber for testing _prepare_audio without API key."""
+
+    def _prepare_audio(self, raw_path):
+        return Transcriber._prepare_audio(self, raw_path)
 
 
 def _extract_metadata_and_items(result: list) -> tuple[dict, list]:
@@ -263,3 +277,138 @@ def test_jsonl_format_empty_result():
     # Only line should be empty metadata
     first = json.loads(lines[0])
     assert first == {}
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_prepare_audio_multi_track_m4a():
+    """Test that _prepare_audio mixes multiple M4A audio streams together."""
+    import subprocess
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create two mono FLAC files to combine into multi-track M4A
+        track0_path = Path(tmpdir) / "track0.flac"
+        track1_path = Path(tmpdir) / "track1.flac"
+        m4a_path = Path(tmpdir) / "test.m4a"
+
+        # Track 0: silence (system audio - no content)
+        # Track 1: 440Hz sine wave (microphone - has voice)
+        sample_rate = 16000
+        duration = 1.0  # 1 second
+        t = np.linspace(0, duration, int(sample_rate * duration), dtype=np.float32)
+
+        track0_data = np.zeros_like(t)  # Silence
+        track1_data = 0.5 * np.sin(2 * np.pi * 440 * t)  # 440Hz tone
+
+        sf.write(track0_path, track0_data, sample_rate, format="FLAC")
+        sf.write(track1_path, track1_data, sample_rate, format="FLAC")
+
+        # Use ffmpeg to create multi-track M4A (same structure as sck-cli output)
+        # This creates an M4A with 2 separate mono audio streams
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(track0_path),
+                "-i",
+                str(track1_path),
+                "-map",
+                "0:a",
+                "-map",
+                "1:a",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                str(m4a_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"ffmpeg failed: {result.stderr}"
+
+        transcriber = _MockTranscriber()
+        temp_flac = transcriber._prepare_audio(m4a_path)
+
+        try:
+            assert temp_flac.exists()
+            assert temp_flac.suffix == ".flac"
+
+            # Read the output and verify both streams were mixed
+            mixed_data, sr = sf.read(temp_flac, dtype="float32")
+
+            # The mixed audio should have content from track 1 (the sine wave)
+            # AAC compression affects amplitude, so use loose threshold
+            rms = np.sqrt(np.mean(mixed_data**2))
+            assert rms > 0.1, f"Mixed audio should contain signal, got RMS={rms}"
+
+            # Verify sample rate matches expected
+            assert sr == 16000
+        finally:
+            if temp_flac.exists():
+                temp_flac.unlink()
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_prepare_audio_single_stream_m4a():
+    """Test that _prepare_audio handles single-stream M4A correctly."""
+    import subprocess
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        track_path = Path(tmpdir) / "track.flac"
+        m4a_path = Path(tmpdir) / "single.m4a"
+
+        # Single track with 440Hz sine wave
+        sample_rate = 16000
+        duration = 0.5
+        t = np.linspace(0, duration, int(sample_rate * duration), dtype=np.float32)
+        track_data = 0.5 * np.sin(2 * np.pi * 440 * t)
+
+        sf.write(track_path, track_data, sample_rate, format="FLAC")
+
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(track_path),
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                str(m4a_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"ffmpeg failed: {result.stderr}"
+
+        transcriber = _MockTranscriber()
+        temp_flac = transcriber._prepare_audio(m4a_path)
+
+        try:
+            assert temp_flac.exists()
+
+            mixed_data, sr = sf.read(temp_flac, dtype="float32")
+            rms = np.sqrt(np.mean(mixed_data**2))
+            # Single stream should preserve the signal
+            assert rms > 0.3, f"Single stream should have strong signal, got RMS={rms}"
+        finally:
+            if temp_flac.exists():
+                temp_flac.unlink()
+
+
+def test_prepare_audio_flac_passthrough():
+    """Test that _prepare_audio returns FLAC files unchanged."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        flac_path = Path(tmpdir) / "test.flac"
+
+        sample_rate = 16000
+        data = np.zeros(sample_rate, dtype=np.float32)
+        sf.write(flac_path, data, sample_rate, format="FLAC")
+
+        transcriber = _MockTranscriber()
+        result = transcriber._prepare_audio(flac_path)
+
+        # FLAC should be returned as-is (not converted)
+        assert result == flac_path

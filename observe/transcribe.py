@@ -22,11 +22,7 @@ from google import genai
 
 from observe.diarize import DiarizationError, diarize, save_speaker_embeddings
 from observe.hear import SAMPLE_RATE
-from observe.utils import (
-    extract_descriptive_suffix,
-    get_segment_key,
-    segment_and_suffix,
-)
+from observe.utils import get_segment_key, segment_and_suffix
 from think.callosum import callosum_send
 from think.entities import load_entity_names
 from think.models import GEMINI_FLASH
@@ -187,7 +183,10 @@ class Transcriber:
         """Prepare audio file for diarization, converting if needed.
 
         Returns path to a file suitable for diarization (mono or stereo FLAC/WAV).
-        For m4a files, converts to temporary FLAC.
+        For m4a files, converts to temporary FLAC, mixing all audio streams.
+
+        M4A files from sck-cli contain two mono streams: track 0 = system audio,
+        track 1 = microphone. Both are decoded and mixed together.
         """
         import av
 
@@ -196,34 +195,61 @@ class Transcriber:
 
         logging.info(f"Converting m4a to FLAC for diarization: {raw_path}")
 
+        # First pass: count streams
         container = av.open(str(raw_path))
-        audio_streams = list(container.streams.audio)
-
-        if len(audio_streams) == 0:
-            container.close()
-            raise ValueError(f"No audio streams found in {raw_path}")
-
-        # Decode to mono for diarization
-        stream = audio_streams[0]
-        resampler = av.audio.resampler.AudioResampler(
-            format="flt", layout="mono", rate=SAMPLE_RATE
-        )
-        chunks = []
-        for frame in container.decode(stream):
-            for out_frame in resampler.resample(frame):
-                arr = out_frame.to_ndarray()
-                chunks.append(arr)
-
+        num_streams = len(list(container.streams.audio))
         container.close()
 
-        if not chunks:
+        if num_streams == 0:
+            raise ValueError(f"No audio streams found in {raw_path}")
+
+        # Decode each stream separately (PyAV requires fresh container per stream)
+        # sck-cli produces: track 0 = system audio, track 1 = microphone
+        stream_data = []
+        for stream_idx in range(num_streams):
+            container = av.open(str(raw_path))
+            stream = list(container.streams.audio)[stream_idx]
+
+            resampler = av.audio.resampler.AudioResampler(
+                format="flt", layout="mono", rate=SAMPLE_RATE
+            )
+            chunks = []
+            for frame in container.decode(stream):
+                for out_frame in resampler.resample(frame):
+                    arr = out_frame.to_ndarray()
+                    chunks.append(arr)
+
+            container.close()
+
+            if chunks:
+                combined = np.concatenate(chunks, axis=1).flatten()
+                stream_data.append(combined)
+                logging.info(
+                    f"  Stream {stream_idx}: {len(combined)} samples "
+                    f"({len(combined) / SAMPLE_RATE:.1f}s)"
+                )
+
+        if not stream_data:
             raise ValueError(f"No audio data decoded from {raw_path}")
 
-        combined = np.concatenate(chunks, axis=1).flatten()
+        # Mix all streams together
+        if len(stream_data) == 1:
+            mixed = stream_data[0]
+        else:
+            # Pad shorter streams to match longest
+            max_len = max(len(s) for s in stream_data)
+            padded = []
+            for s in stream_data:
+                if len(s) < max_len:
+                    s = np.pad(s, (0, max_len - len(s)), mode="constant")
+                padded.append(s)
+            # Average all streams
+            mixed = np.mean(padded, axis=0)
+            logging.info(f"  Mixed {len(stream_data)} streams -> {len(mixed)} samples")
 
         # Write to temporary FLAC in same directory
         temp_path = raw_path.with_suffix(".tmp.flac")
-        audio_int16 = (np.clip(combined, -1.0, 1.0) * 32767).astype(np.int16)
+        audio_int16 = (np.clip(mixed, -1.0, 1.0) * 32767).astype(np.int16)
         sf.write(temp_path, audio_int16, SAMPLE_RATE, format="FLAC")
 
         return temp_path
