@@ -124,7 +124,7 @@ class MacOSObserver:
 
         return is_active
 
-    def get_timestamp_parts(self, timestamp: float = None) -> tuple[str, str]:
+    def get_timestamp_parts(self, timestamp: float | None = None) -> tuple[str, str]:
         """
         Get date and time parts from timestamp.
 
@@ -158,12 +158,12 @@ class MacOSObserver:
             logger.warning(f"Audio file not found for threshold check: {audio_path}")
             return False
 
+        container = None
         try:
             container = av.open(audio_path)
             audio_streams = list(container.streams.audio)
 
             if not audio_streams:
-                container.close()
                 logger.warning(f"No audio streams in {audio_path}")
                 return False
 
@@ -178,8 +178,6 @@ class MacOSObserver:
                 if arr.ndim > 1:
                     arr = arr.mean(axis=0)
                 samples.append(arr.flatten())
-
-            container.close()
 
             if not samples:
                 logger.warning(f"No audio samples decoded from {audio_path}")
@@ -211,6 +209,9 @@ class MacOSObserver:
             logger.warning(f"Error checking audio threshold for {audio_path}: {e}")
             # On error, keep the file (safer default)
             return True
+        finally:
+            if container is not None:
+                container.close()
 
     def handle_boundary(self, is_active: bool):
         """
@@ -326,16 +327,27 @@ class MacOSObserver:
         return True
 
     def emit_status(self):
-        """Emit observe.status event with current state."""
+        """Emit observe.status event with current state.
+
+        Event structure matches Linux observer for compatibility:
+        - mode: "screencast" or "idle" (macOS doesn't have tmux mode)
+        - screencast: recording status and display info
+        - tmux: always empty (not supported on macOS)
+        - audio: always empty (macOS checks threshold at boundary, not real-time)
+        - activity: system activity status
+        """
         if not self.callosum:
             return
 
         journal_path = os.getenv("JOURNAL_PATH", "")
 
-        # Build capture info
+        # Determine mode (macOS is binary: screencast or idle)
+        mode = "screencast" if self.capture_running else "idle"
+
+        # Build screencast info (matches Linux observer structure)
         if self.capture_running and self.current_displays:
             elapsed = int(time.monotonic() - self.start_at_mono)
-            displays_info = []
+            streams_info = []
             for display in self.current_displays:
                 try:
                     rel_file = (
@@ -346,22 +358,31 @@ class MacOSObserver:
                 except ValueError:
                     rel_file = display.temp_path
 
-                displays_info.append(
+                streams_info.append(
                     {
                         "position": display.position,
-                        "display_id": display.display_id,
+                        "connector": str(display.display_id),
                         "file": rel_file,
                     }
                 )
 
-            capture_info = {
+            screencast_info = {
                 "recording": True,
-                "displays": displays_info,
+                "streams": streams_info,
                 "window_elapsed_seconds": elapsed,
                 "files_growing": self.files_growing,
             }
         else:
-            capture_info = {"recording": False, "files_growing": False}
+            screencast_info = {"recording": False, "files_growing": False}
+
+        # Tmux info (not supported on macOS)
+        tmux_info = {"capturing": False}
+
+        # Audio info (macOS checks threshold at boundary, not real-time)
+        audio_info = {
+            "threshold_hits": 0,
+            "will_save": False,
+        }
 
         # Activity info
         activity_info = {
@@ -375,7 +396,10 @@ class MacOSObserver:
         self.callosum.emit(
             "observe",
             "status",
-            capture=capture_info,
+            mode=mode,
+            screencast=screencast_info,
+            tmux=tmux_info,
+            audio=audio_info,
             activity=activity_info,
         )
 

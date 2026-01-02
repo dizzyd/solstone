@@ -10,13 +10,19 @@ and outputs JSONL metadata to stdout with display geometry information.
 
 import json
 import logging
+import select
 import signal
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from observe.utils import assign_monitor_positions
+
+# Timeout for reading metadata from sck-cli (seconds)
+METADATA_TIMEOUT = 5.0
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +76,7 @@ class ScreenCaptureKitManager:
         self.process: Optional[subprocess.Popen] = None
         self.displays: list[DisplayInfo] = []
         self.audio: Optional[AudioInfo] = None
-        self.output_base: Optional[Path] = None
+        self._output_threads: list[threading.Thread] = []
 
     def start(
         self,
@@ -102,8 +108,6 @@ class ScreenCaptureKitManager:
             >>> output_base = day_dir / ".120000"  # Hidden temp file
             >>> displays, audio = manager.start(output_base, duration=300)
         """
-        self.output_base = output_base
-
         # Build command
         cmd = [
             self.sck_cli_path,
@@ -122,6 +126,7 @@ class ScreenCaptureKitManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                bufsize=1,  # Line buffering for real-time output
             )
         except FileNotFoundError:
             raise RuntimeError(f"sck-cli not found at: {self.sck_cli_path}")
@@ -133,13 +138,34 @@ class ScreenCaptureKitManager:
         displays_raw = []
         audio_info = None
 
-        # Read lines until we get all metadata (sck-cli outputs then starts capture)
-        # We need to read non-blocking since the process keeps running
+        # Read lines until we get both display and audio metadata.
+        # Use select() with timeout to avoid blocking forever - the process
+        # keeps running for the capture duration but outputs metadata upfront.
+        # Note: "for line in file:" uses block buffering which can hang.
+        deadline = time.monotonic() + METADATA_TIMEOUT
+        stdout_fd = self.process.stdout.fileno()
+
         try:
-            for line in self.process.stdout:
+            while time.monotonic() < deadline:
+                # Wait for data with remaining timeout
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+
+                readable, _, _ = select.select([stdout_fd], [], [], min(remaining, 1.0))
+                if not readable:
+                    # No data yet, keep polling until deadline
+                    continue
+
+                line = self.process.stdout.readline()
+                if not line:
+                    # EOF - process closed stdout
+                    break
+
                 line = line.strip()
                 if not line:
                     continue
+
                 try:
                     data = json.loads(line)
                     if data.get("type") == "display":
@@ -147,16 +173,11 @@ class ScreenCaptureKitManager:
                     elif data.get("type") == "audio":
                         audio_info = data
                 except json.JSONDecodeError:
-                    # Not JSON, might be a log message - ignore
+                    # Not JSON, just a log message (already logged above)
                     pass
 
-                # sck-cli outputs all metadata before starting capture
-                # Once we have both displays and audio (or displays only if no audio)
-                # we can stop reading. But we also need to not block forever.
-                # Actually, sck-cli flushes stdout after metadata, so readline
-                # will return empty when no more data. But process is still running.
-                # We break after getting audio info or when stdout blocks.
-                if audio_info is not None:
+                # Break once we have both display and audio info
+                if displays_raw and audio_info is not None:
                     break
         except Exception as e:
             logger.warning(f"Error reading sck-cli stdout: {e}")
@@ -218,6 +239,22 @@ class ScreenCaptureKitManager:
         if self.audio:
             logger.info(f"  Audio: {self.audio.temp_path} ({self.audio.tracks})")
 
+        # Start background threads to log remaining stdout/stderr in real-time
+        self._output_threads = [
+            threading.Thread(
+                target=self._stream_stdout,
+                daemon=True,
+                name="sck-cli-stdout",
+            ),
+            threading.Thread(
+                target=self._stream_stderr,
+                daemon=True,
+                name="sck-cli-stderr",
+            ),
+        ]
+        for thread in self._output_threads:
+            thread.start()
+
         return self.displays, self.audio
 
     def stop(self) -> None:
@@ -243,7 +280,38 @@ class ScreenCaptureKitManager:
             except Exception as e:
                 logger.warning(f"Error stopping sck-cli: {e}")
 
+        # Wait for output threads to finish (they exit when pipes close)
+        for thread in self._output_threads:
+            thread.join(timeout=1)
+        self._output_threads = []
+
         self.process = None
+
+    def _stream_stdout(self) -> None:
+        """Background thread: stream remaining stdout lines to logger."""
+        if self.process is None or self.process.stdout is None:
+            return
+
+        try:
+            for line in self.process.stdout:
+                line = line.strip()
+                if line:
+                    logger.info(f"sck-cli: {line}")
+        except Exception as e:
+            logger.debug(f"Error reading sck-cli stdout: {e}")
+
+    def _stream_stderr(self) -> None:
+        """Background thread: stream stderr lines to logger."""
+        if self.process is None or self.process.stderr is None:
+            return
+
+        try:
+            for line in self.process.stderr:
+                line = line.strip()
+                if line:
+                    logger.info(f"sck-cli stderr: {line}")
+        except Exception as e:
+            logger.debug(f"Error reading sck-cli stderr: {e}")
 
     def is_running(self) -> bool:
         """

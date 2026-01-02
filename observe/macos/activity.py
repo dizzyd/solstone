@@ -3,8 +3,8 @@
 
 """macOS system activity detection using PyObjC.
 
-This module mirrors the GNOME dbus.py structure, providing activity detection
-primitives using native macOS APIs via PyObjC.
+This module mirrors the observe/gnome/activity.py structure, providing activity
+detection primitives using native macOS APIs via PyObjC.
 """
 
 import logging
