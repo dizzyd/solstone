@@ -2,7 +2,7 @@
 
 This document provides comprehensive guidelines for contributing to solstone, whether you're an AI assistant, human developer, or automated system.
 
-## 📋 Project Overview
+## Project Overview
 
 **solstone** is a Python-based AI-driven desktop journaling toolkit that provides:
 
@@ -15,7 +15,7 @@ The project uses a modular architecture where each package can operate independe
 
 ---
 
-## 🔑 Key Concepts
+## Key Concepts
 
 Understanding these core concepts is essential for working with solstone:
 
@@ -33,7 +33,7 @@ Understanding these core concepts is essential for working with solstone:
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 solstone/
@@ -62,7 +62,7 @@ Each package has a README.md symlink pointing to its documentation in `docs/`.
 
 ---
 
-## 🏛️ Architecture & Data Flow
+## Architecture & Data Flow
 
 **Core Pipeline**: `observe` (capture) → JSON transcripts → `think` (analyze) → SQLite index → `convey` (web UI)
 
@@ -82,7 +82,7 @@ See `pyproject.toml` `[project.scripts]` for the authoritative, current list of 
 
 ---
 
-## 🧪 Testing with Fixtures
+## Testing with Fixtures
 
 ```python
 # Use comprehensive mock journal data for testing
@@ -94,7 +94,7 @@ The `fixtures/journal/` directory contains a complete mock journal structure wit
 
 ---
 
-## 💻 Coding Standards & Style
+## Coding Standards & Style
 
 ### Language & Tools
 * **Black** (`make format`) - Code formatting
@@ -117,7 +117,7 @@ The `fixtures/journal/` directory contains a complete mock journal structure wit
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## Testing & Quality Assurance
 
 ### Test Structure
 * **Framework**: pytest with coverage reporting
@@ -163,7 +163,7 @@ make check-all   # Format, lint, and test (run before commit)
 
 ---
 
-## 📝 Important Development Notes
+## Important Development Notes
 
 ### Environment Management
 * **JOURNAL_PATH**: The live journal path is stored in `.env`. To access it:
@@ -187,7 +187,7 @@ make check-all   # Format, lint, and test (run before commit)
 
 ---
 
-## 📦 Dependencies Management
+## Dependencies Management
 
 * **Minimize Dependencies**: Use standard library when possible
 * **Production**: Add to `dependencies` in `pyproject.toml`
@@ -196,7 +196,7 @@ make check-all   # Format, lint, and test (run before commit)
 
 ---
 
-## 🎯 Development Principles
+## Development Principles
 
 * **DRY, KISS, YAGNI**: Extract common logic, prefer simple solutions, don't over-engineer
 * **Single Responsibility**: Functions/classes do one thing well
@@ -207,7 +207,7 @@ make check-all   # Format, lint, and test (run before commit)
 
 ---
 
-## 🚀 Quick Reference
+## Quick Reference
 
 ### Common Commands
 ```bash

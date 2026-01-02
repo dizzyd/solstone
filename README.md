@@ -2,170 +2,88 @@
 
 # solstone
 
+Navigate Life Intelligently
+
 solstone is an open source project maintained by sol pbc.
 
-Navigate Work Intelligently
+A Python-based desktop journaling toolkit that captures screen and audio activity, processes it with AI, and provides intelligent navigation through a web interface. All data is organized in a local journal directory with daily folders, enabling temporal analysis and full ownership of your information.
 
-A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal capture, analysis, and intelligent navigation of workplace activities. solstone organizes captured data under a **journal** directory containing daily `YYYYMMDD` folders, enabling powerful temporal analysis and review.
+## Platform Support
 
-## 🚀 Features
+- Linux (GNOME/X11 with PipeWire)
+- macOS
 
-### Core Modules
+## Key Capabilities
 
-- **Observe** 👁️👂 - Multimodal capture and analysis
-  - `observer` - Screen and audio capture (auto-detects platform)
-  - `observe-describe` - Analyzes visual changes with AI
-  - `observe-transcribe` - Transcribes audio with AI APIs
-  - `observe-sense` - Unified observation coordination
-  - *Supports Linux/GNOME and macOS*
+- **Multimodal Capture** - Screen recording and audio capture with automatic segmentation
+- **AI Transcription** - Speaker-diarized audio transcription with multiple backend support
+- **Visual Analysis** - AI-powered screen content categorization and extraction
+- **Intelligent Insights** - Automated daily summaries, meeting detection, and entity extraction
+- **Facet Organization** - Group content by project or context (work, personal, etc.)
+- **Web Interface** - Review transcripts, calendar views, entity tracking, and AI chat
+- **Agent System** - Extensible AI agents with MCP tool integration
 
-- **Think** 🧠 - Data processing and insights
-  - `think-insight` - Generates AI-powered insights and summaries
-  - `think-cluster` - Groups related content
-  - `think-indexer` - Builds searchable database
-  - `think-supervisor` - Orchestrates agent workflows
-  - `think-dream` - Full daily data pipeline
+## Architecture
 
-- **Convey** 🌐 - Web interface and review
-  - `convey` - Launch web UI (with `--password` for auth)
-  - Review facet-scoped entities, meetings, and tasks
-  - Live transcription monitoring
-  - Calendar view with daily summaries
-
-### Additional Tools
-
-- **MCP Server** 🛰️ - `muse-mcp-tools` launches Model Context Protocol server
-- **Cortex** 🧩 - `muse-cortex` provides agent-based task execution
-- **Help** ❓ - `solstone` lists all available commands
-
-## 📦 Installation
-
-### Basic Installation
-```bash
-# Install package in editable mode
-make install
-# or
-pip install -e .
+```
+observe (capture) --> think (analyze) --> convey (view)
+     |                     |                   |
+  raw media           JSON extracts        Flask web UI
+  (flac, webm)         (jsonl)
+                           |
+                       muse (AI agents)
 ```
 
-### Full Installation (with optional dependencies)
-```bash
-# Install with all optional dependencies (audio/video processing)
-make full
-# or
-pip install -e .[full]
-```
+## Requirements
 
-### Development Installation
-```bash
-# Install with development tools
-make dev
-# or
-pip install -e .[dev]
-```
+- Python 3.10 or later
+- At least one AI API key (Google, OpenAI, or Anthropic)
+- Platform-specific dependencies for screen/audio capture
 
-## ⚙️ Configuration
+## Quick Start
 
-Create a `.env` file in your project root or set these environment variables:
-
-```bash
-# Required
-JOURNAL_PATH=/path/to/your/journal  # Where all data is stored
-GOOGLE_API_KEY=your-api-key         # For Gemini AI services
-
-# Optional
-OPENAI_API_KEY=your-api-key         # For OpenAI services
-ANTHROPIC_API_KEY=your-api-key      # For Claude services
-```
-
-## 🎯 Quick Start
-
-1. **Set up environment**:
+1. Install the package:
    ```bash
-   cp .env.example .env  # If available
-   # Edit .env with your settings
+   pip install -e .
    ```
 
-2. **Start capturing**:
+2. Configure environment (copy `.env.example` to `.env` and add your settings):
    ```bash
-   # Use the supervisor to run all observation
+   JOURNAL_PATH=/path/to/your/journal
+   GOOGLE_API_KEY=your-api-key
+   ```
+
+3. Start the supervisor (handles capture and processing):
+   ```bash
    think-supervisor
    ```
 
-3. **Process captured data**:
+4. Launch the web interface:
    ```bash
-   # Run full processing pipeline for today
-   think-dream
-
-   # Or process specific date
-   think-dream 20240101
+   convey
    ```
 
-4. **Review in web UI**:
-   ```bash
-   # Launch web interface
-   convey --password your-password
-   # Open http://localhost:5000
-   ```
+## Documentation
 
-## 🧪 Testing
+| Topic | Document |
+|-------|----------|
+| Journal structure and data formats | [docs/JOURNAL.md](docs/JOURNAL.md) |
+| Capture and observation | [docs/OBSERVE.md](docs/OBSERVE.md) |
+| Processing and insights | [docs/THINK.md](docs/THINK.md) |
+| Web interface | [docs/CONVEY.md](docs/CONVEY.md) |
+| App development | [docs/APPS.md](docs/APPS.md) |
+| AI agents and Cortex | [docs/CORTEX.md](docs/CORTEX.md) |
+| Message bus protocol | [docs/CALLOSUM.md](docs/CALLOSUM.md) |
+| Troubleshooting | [docs/DOCTOR.md](docs/DOCTOR.md) |
 
-```bash
-# Run all tests with coverage
-make test
+## Development
 
-# Run specific tests
-make test-only TEST=tests/test_utils.py
+See [AGENTS.md](AGENTS.md) for development guidelines, coding standards, and testing instructions.
 
-# Run with verbose output
-make test-verbose
+## Contributing
 
-# Generate HTML coverage report
-make coverage
-```
-
-## 🔧 Development
-
-```bash
-# Format code
-make format
-
-# Run linting checks
-make lint
-
-# Type checking
-make check
-
-# Run all checks before committing
-make check-all
-
-# Clean build artifacts
-make clean
-```
-
-See the [Makefile](Makefile) for all available commands or run `make help`.
-
-## 📚 Documentation
-
-- [AGENTS.md](AGENTS.md) - Development guidelines and coding standards
-- [docs/](docs/) - All other documentation:
-  - [JOURNAL.md](docs/JOURNAL.md) - Journal directory structure and data organization
-  - [CORTEX.md](docs/CORTEX.md) - Agent system documentation
-  - [OBSERVE.md](docs/OBSERVE.md) - Multimodal capture and analysis
-  - [THINK.md](docs/THINK.md) - Data processing and AI analysis
-  - [CONVEY.md](docs/CONVEY.md) - Web interface and app development
-
-## 🤝 Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms and [AGENTS.md](AGENTS.md) for development guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0
-(AGPL-3.0-only).
-
-If you modify this software and allow users to interact with it over a network,
-you must make the complete corresponding source code of your modified version
-available to those users under the same license.
-
-See the LICENSE file for details.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See [LICENSE](LICENSE) for details.
