@@ -25,10 +25,10 @@ The `vendor/` directory provides:
 **Usage in App Templates**:
 ```html
 <!-- Using helper function (recommended) -->
-<script src="{{ vendor_lib('marked') }}"></script>
+<script src="&#123;&#123; vendor_lib('marked') &#125;&#125;"></script>
 
 <!-- Using explicit path -->
-<script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+<script src="&#123;&#123; url_for('static', filename='vendor/marked/marked.min.js') &#125;&#125;"></script>
 ```
 
 **Example**:

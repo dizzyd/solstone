@@ -95,7 +95,7 @@ The workspace template is included inside the app container (`app.html`).
 **Note:** The server-side `selected_facet` is also available client-side as `window.selectedFacet` (see JavaScript APIs below).
 
 **Vendor Libraries:**
-- Use `{{ vendor_lib('marked') }}` for markdown rendering
+- Use `&#123;&#123; vendor_lib('marked') &#125;&#125;` for markdown rendering
 - See [VENDOR.md](VENDOR.md) for available libraries
 
 **Reference implementations:**
@@ -160,7 +160,7 @@ Fixed bottom bar for forms, buttons, date pickers, search boxes.
 For apps with day-based navigation, include the shared date navigator:
 
 ```html
-{% include 'date_nav.html' %}
+&#123;% include 'date_nav.html' %&#125;
 ```
 
 This provides a unified `← Date →` control with:
