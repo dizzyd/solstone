@@ -180,7 +180,7 @@ All sck-cli requirements are met:
   - Configuration options
   - Troubleshooting guide
 - [ ] Update main README.md to mention macOS support
-- [ ] Document differences from GNOME observer
+- [ ] Document differences from Linux observer
 
 ### 6.2 Code Quality
 - [ ] Run `make format` to format all new code

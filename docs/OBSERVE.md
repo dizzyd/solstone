@@ -7,7 +7,7 @@ Multimodal capture and AI-powered analysis of desktop activity.
 | Command | Purpose |
 |---------|---------|
 | `observer` | Screen and audio capture (auto-detects platform) |
-| `observe-gnome` | Screen and audio capture on Linux/GNOME (direct) |
+| `observe-linux` | Screen and audio capture on Linux (direct) |
 | `observe-macos` | Screen and audio capture on macOS (direct) |
 | `observe-transcribe` | Audio transcription with speaker diarization |
 | `observe-describe` | Visual analysis of screen recordings |
@@ -27,7 +27,7 @@ observe-sense (coordination)
 
 ## Observer State Machine
 
-The GNOME observer operates in three modes based on activity:
+The Linux observer operates in three modes based on activity:
 
 ```
           SCREENCAST
@@ -51,8 +51,10 @@ Mode transitions trigger segment boundaries (like mute transitions do).
 ## Key Components
 
 - **observer.py** - Unified entry point with platform detection
-- **gnome/observer.py**, **macos/observer.py** - Platform-specific capture using native APIs
-- **tmux/capture.py** - Tmux capture library (integrated into GNOME observer for fallback capture)
+- **linux/observer.py**, **macos/observer.py** - Platform-specific capture using native APIs
+- **linux/screencast.py** - XDG Portal screencast with PipeWire + GStreamer
+- **gnome/activity.py** - GNOME-specific activity detection (idle, lock, power save)
+- **tmux/capture.py** - Tmux capture library (integrated into Linux observer for fallback capture)
 - **sense.py** - File watcher that dispatches transcription and description jobs
 - **transcribe.py** - Audio processing with Whisper/Rev.ai and pyannote diarization
 - **describe.py** - Vision analysis with Gemini, category-based prompts
