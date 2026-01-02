@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """MCP tools for entity management.
 
 This module provides the entity MCP tools for the entities app.

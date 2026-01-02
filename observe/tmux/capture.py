@@ -1,7 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Tmux terminal capture library.
 
 Provides functions for capturing tmux session content, designed for use
-by the GNOME observer for fallback capture when screen is idle.
+by the Linux observer for fallback capture when screen is idle.
 """
 
 import hashlib
@@ -103,10 +106,13 @@ class TmuxCapture:
         Returns:
             List of dicts with 'session' and 'activity' keys.
         """
-        output = run_tmux_command([
-            "list-clients",
-            "-F", "#{client_session} #{client_activity}",
-        ])
+        output = run_tmux_command(
+            [
+                "list-clients",
+                "-F",
+                "#{client_session} #{client_activity}",
+            ]
+        )
         if not output:
             return []
 
@@ -136,11 +142,15 @@ class TmuxCapture:
 
     def get_windows(self, session: str) -> list[WindowInfo]:
         """Get all windows for a session."""
-        output = run_tmux_command([
-            "list-windows",
-            "-t", session,
-            "-F", "#{window_active} #{window_id} #{window_index} #{window_name}",
-        ])
+        output = run_tmux_command(
+            [
+                "list-windows",
+                "-t",
+                session,
+                "-F",
+                "#{window_active} #{window_id} #{window_index} #{window_name}",
+            ]
+        )
         if not output:
             return []
 
@@ -154,12 +164,14 @@ class TmuxCapture:
 
             active_str, window_id, index_str, name = parts
             try:
-                windows.append(WindowInfo(
-                    id=window_id,
-                    index=int(index_str),
-                    name=name,
-                    active=(active_str == "1"),
-                ))
+                windows.append(
+                    WindowInfo(
+                        id=window_id,
+                        index=int(index_str),
+                        name=name,
+                        active=(active_str == "1"),
+                    )
+                )
             except ValueError:
                 continue
 
@@ -167,11 +179,15 @@ class TmuxCapture:
 
     def get_panes(self, window_id: str) -> list[PaneInfo]:
         """Get all panes for a window with layout info."""
-        output = run_tmux_command([
-            "list-panes",
-            "-t", window_id,
-            "-F", "#{pane_id} #{pane_index} #{pane_left} #{pane_top} #{pane_width} #{pane_height} #{pane_active}",
-        ])
+        output = run_tmux_command(
+            [
+                "list-panes",
+                "-t",
+                window_id,
+                "-F",
+                "#{pane_id} #{pane_index} #{pane_left} #{pane_top} #{pane_width} #{pane_height} #{pane_active}",
+            ]
+        )
         if not output:
             return []
 
@@ -184,15 +200,17 @@ class TmuxCapture:
                 continue
 
             try:
-                panes.append(PaneInfo(
-                    id=parts[0],
-                    index=int(parts[1]),
-                    left=int(parts[2]),
-                    top=int(parts[3]),
-                    width=int(parts[4]),
-                    height=int(parts[5]),
-                    active=(parts[6] == "1"),
-                ))
+                panes.append(
+                    PaneInfo(
+                        id=parts[0],
+                        index=int(parts[1]),
+                        left=int(parts[2]),
+                        top=int(parts[3]),
+                        width=int(parts[4]),
+                        height=int(parts[5]),
+                        active=(parts[6] == "1"),
+                    )
+                )
             except ValueError:
                 continue
 
@@ -200,12 +218,15 @@ class TmuxCapture:
 
     def capture_pane(self, pane_id: str) -> str:
         """Capture visible pane content with ANSI escape codes."""
-        output = run_tmux_command([
-            "capture-pane",
-            "-p",  # Print to stdout
-            "-e",  # Include escape sequences (ANSI codes)
-            "-t", pane_id,
-        ])
+        output = run_tmux_command(
+            [
+                "capture-pane",
+                "-p",  # Print to stdout
+                "-e",  # Include escape sequences (ANSI codes)
+                "-t",
+                pane_id,
+            ]
+        )
         return output if output else ""
 
     def capture_session(self, session: str) -> CaptureResult | None:

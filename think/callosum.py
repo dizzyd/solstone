@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Callosum: WebSocket-like broadcast message bus over Unix domain sockets.
 
 Provides real-time event distribution across solstone services using a simple

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Speaker diarization using pyannote pipeline with embedding extraction.
 
 This module provides speaker diarization (who spoke when) using the pyannote

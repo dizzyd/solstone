@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Bridge between Callosum message bus and WebSocket clients.
 
 Listens to all Callosum events (cortex, task, indexer, etc.) and broadcasts them

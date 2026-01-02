@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """
 macOS observer for audio and screencast capture using ScreenCaptureKit.
 
@@ -60,7 +63,7 @@ class MacOSObserver:
         self.start_at_mono = time.monotonic()  # Monotonic for elapsed calculations
         self.capture_running = False
 
-        # Multi-display tracking (similar to GNOME observer)
+        # Multi-display tracking (similar to Linux observer)
         self.current_displays: list[DisplayInfo] = []
         self.current_audio: AudioInfo | None = None
         self.pending_finalization: list[tuple[str, str]] | None = None
@@ -143,7 +146,7 @@ class MacOSObserver:
         Check if audio file has enough voice activity to save.
 
         Decodes the m4a file and applies the same 3-chunk RMS threshold
-        logic as GNOME observer uses for real-time audio.
+        logic as Linux observer uses for real-time audio.
 
         Args:
             audio_path: Path to the m4a audio file

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """
 Portal-based multi-monitor screencast recording.
 
@@ -24,7 +27,7 @@ from dbus_next import Variant, introspection
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 
-from observe.gnome.dbus import get_monitor_geometries
+from observe.gnome.activity import get_monitor_geometries
 
 # Workaround for dbus-next issue #122: portal has properties with hyphens
 # (e.g., "power-saver-enabled") which violate strict D-Bus naming validation.

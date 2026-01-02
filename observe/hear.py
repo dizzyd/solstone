@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Audio recording utilities for observe package."""
 
 from __future__ import annotations

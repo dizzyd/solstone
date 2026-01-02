@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Tests for observe/describe.py category discovery and configuration."""
 
 from observe import describe as describe_module

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Indexer package for journal content.
 
 This module provides the unified journal index for all content types.

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """MCP tools for resource operations.
 
 Note: These functions are registered as MCP tools by muse/mcp.py

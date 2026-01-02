@@ -1,6 +1,9 @@
 <img src="logo.png" alt="solstone Logo" width="300">
 
 # solstone
+
+solstone is an open source project maintained by sol pbc.
+
 Navigate Work Intelligently
 
 A comprehensive Python-based AI-driven desktop journaling toolkit for multimodal capture, analysis, and intelligent navigation of workplace activities. solstone organizes captured data under a **journal** directory containing daily `YYYYMMDD` folders, enabling powerful temporal analysis and review.
@@ -154,8 +157,15 @@ See the [Makefile](Makefile) for all available commands or run `make help`.
 
 ## 🤝 Contributing
 
-Please read [AGENTS.md](AGENTS.md) for development guidelines, coding standards, and contribution instructions.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms and [AGENTS.md](AGENTS.md) for development guidelines.
 
-## 📄 License
+## License
 
-MIT License - see LICENSE file for details
+This project is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0-only).
+
+If you modify this software and allow users to interact with it over a network,
+you must make the complete corresponding source code of your modified version
+available to those users under the same license.
+
+See the LICENSE file for details.

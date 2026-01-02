@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Facet-scoped entity utilities for detected and attached entities."""
 
 import hashlib

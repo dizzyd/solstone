@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Callosum-based agent process manager for solstone.
 
 Cortex listens for agent requests via the Callosum message bus and manages

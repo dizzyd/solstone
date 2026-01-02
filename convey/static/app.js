@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 sol pbc
+
 /**
  * App System JavaScript
  * Handles facet selection, menu interactions, and responsive UI for app.html

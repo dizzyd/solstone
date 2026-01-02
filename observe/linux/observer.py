@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """
 Unified observer for audio and screencast capture.
 
@@ -26,14 +29,14 @@ import numpy as np
 from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 
-from observe.gnome.dbus import (
+from observe.gnome.activity import (
     get_idle_time_ms,
     is_power_save_active,
     is_screen_locked,
-    is_sink_muted,
 )
-from observe.gnome.screencast import Screencaster, StreamInfo
 from observe.hear import AudioRecorder
+from observe.linux.audio import is_sink_muted
+from observe.linux.screencast import Screencaster, StreamInfo
 from observe.tmux.capture import TmuxCapture, write_captures_jsonl
 from think.callosum import CallosumConnection
 from think.utils import day_path, setup_cli
@@ -532,7 +535,10 @@ class Observer:
             new_mode = await self.check_activity_status()
 
             # Check for GStreamer failure mid-recording
-            if self.current_mode == MODE_SCREENCAST and not self.screencaster.is_healthy():
+            if (
+                self.current_mode == MODE_SCREENCAST
+                and not self.screencaster.is_healthy()
+            ):
                 logger.warning("Screencast recording failed, stopping gracefully")
                 stopped_streams = await self.screencaster.stop()
 

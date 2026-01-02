@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Self-contained fixtures for speakers app tests.
 
 These fixtures are fully standalone and only depend on pytest builtins.

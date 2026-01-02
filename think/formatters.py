@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Formatters framework for JSONL and Markdown files.
 
 This module provides a registry-based system for converting structured files

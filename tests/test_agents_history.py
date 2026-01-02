@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Tests for agents conversation history functions."""
 
 from muse.agents import format_tool_summary, parse_agent_events_to_turns

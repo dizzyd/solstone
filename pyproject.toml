@@ -8,14 +8,14 @@ version = "0.1.0"
 description = "Navigate Intelligently - A collection of utilities for multimodal navigation and analysis"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-only"}
 authors = [
     {name = "Jer+AI", email = "jeremie.miller@gmail.com"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -112,7 +112,7 @@ muse-cortex = "muse.cortex:main"
 think-callosum = "think.callosum:main"
 think-messages = "think.messages:main"
 observer = "observe.observer:main"
-observe-gnome = "observe.gnome.observer:main"
+observe-linux = "observe.linux.observer:main"
 observe-macos = "observe.macos.observer:main"
 observe-transcribe = "observe.transcribe:main"
 observe-describe = "observe.describe:main"

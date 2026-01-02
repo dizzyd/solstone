@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Formatter for tmux category content.
 
 Renders tmux terminal capture to markdown with pane contents.
@@ -33,7 +36,9 @@ def format(content: Any, context: dict) -> str:
     # Session and window header
     session = content.get("session", "unknown")
     window = content.get("window", {})
-    window_name = window.get("name", "unknown") if isinstance(window, dict) else "unknown"
+    window_name = (
+        window.get("name", "unknown") if isinstance(window, dict) else "unknown"
+    )
 
     lines.append(f"**Tmux** ({session}:{window_name})")
     lines.append("")

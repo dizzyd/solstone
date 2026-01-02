@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Formatter for meeting category content.
 
 Renders meeting analysis JSON to rich markdown with participants and screen share.

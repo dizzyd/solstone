@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Unit tests for the Callosum message bus.
 
 These tests use mocks to test logic in isolation without real I/O.

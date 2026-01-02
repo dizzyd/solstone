@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """ScreenCaptureKit integration via sck-cli subprocess.
 
 This module manages the sck-cli subprocess lifecycle for video and audio capture

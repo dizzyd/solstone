@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Interactive service manager for solstone supervisor.
 
 Connects to the Callosum message bus to display real-time service status

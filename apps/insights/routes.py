@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Insights app - browse daily insight markdown files."""
 
 from __future__ import annotations

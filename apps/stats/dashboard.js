@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 sol pbc
+
 // Dashboard module for client-side rendering
 const Dashboard = (function() {
   'use strict';

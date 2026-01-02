@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Todo checklist utilities shared across think components.
 
 Todos are stored as JSONL files with one JSON object per line. Line number (1-indexed)

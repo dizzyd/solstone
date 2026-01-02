@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Integration tests for the Callosum message bus.
 
 These tests use real servers, sockets, and I/O to validate core flows.

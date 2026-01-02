@@ -56,7 +56,7 @@ When adding a new third-party library:
 
 1. **Create subdirectory**: `vendor/{library_name}/`
 2. **Add minified file**: Copy production-ready `.min.js` file
-3. **Check license**: Ensure license is MIT-compatible and included
+3. **Check license**: Ensure license is AGPL-compatible and included
 4. **Update this manifest**: Add entry with version, purpose, and usage
 5. **Test**: Verify library loads and works in development
 

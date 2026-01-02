@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 sol pbc
+
 """Tests for Convey app endpoints.
 
 Tests that all apps with workspace.html can be accessed via /app/{app_name}.
