@@ -33,6 +33,15 @@ xcode-select --install  # Command line tools
 brew install python git ffmpeg
 ```
 
+**Screen/audio capture** requires [sck-cli](https://github.com/quartzjer/sck-cli):
+
+```bash
+git clone https://github.com/quartzjer/sck-cli.git
+cd sck-cli
+make
+sudo make install
+```
+
 ---
 
 ## Installation
