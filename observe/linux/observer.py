@@ -50,6 +50,7 @@ IDLE_THRESHOLD_MS = 5 * 60 * 1000  # 5 minutes
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 CHUNK_DURATION = 5  # seconds
+STALL_THRESHOLD_CHUNKS = 3  # Exit after this many chunks with no file growth
 
 # Host identification for multi-host scenarios
 _HOST = socket.gethostname()
@@ -107,6 +108,9 @@ class Observer:
 
         # Health tracking - whether screencast files are actively growing
         self.files_growing = False
+        self.stalled_chunks = (
+            0  # Consecutive chunks with no file growth in screencast mode
+        )
 
     async def setup(self):
         """Initialize audio devices and DBus connection."""
@@ -307,6 +311,7 @@ class Observer:
             stopped_streams = await self.screencaster.stop()
             self.current_streams = []
             self.last_screencast_sizes = {}
+            self.stalled_chunks = 0
 
             # Build finalization list and file names
             finalizations = []
@@ -407,6 +412,7 @@ class Observer:
 
         self.current_streams = streams
         self.last_screencast_sizes = {s.temp_path: 0 for s in streams}
+        self.stalled_chunks = 0
 
         logger.info(f"Started screencast with {len(streams)} stream(s)")
         for stream in streams:
@@ -603,6 +609,7 @@ class Observer:
 
                 self.current_streams = []
                 self.last_screencast_sizes = {}
+                self.stalled_chunks = 0
                 # Force recalculate mode without screencast
                 self.current_mode = MODE_IDLE
 
@@ -671,10 +678,23 @@ class Observer:
                             any_growing = True
                             self.last_screencast_sizes[stream.temp_path] = current_size
                 self.files_growing = any_growing
+
+                # Fail-fast: exit if screencast stalled (files not growing)
+                if any_growing:
+                    self.stalled_chunks = 0
+                else:
+                    self.stalled_chunks += 1
+                    if self.stalled_chunks >= STALL_THRESHOLD_CHUNKS:
+                        logger.error(
+                            f"Screencast stalled for {self.stalled_chunks} chunks "
+                            f"({self.stalled_chunks * CHUNK_DURATION}s), exiting"
+                        )
+                        self.running = False
             else:
                 self.files_growing = False
+                self.stalled_chunks = 0
 
-            # Emit status event (supervisor derives health from this)
+            # Emit status event
             self.emit_status()
 
         # Cleanup on exit
