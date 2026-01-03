@@ -74,7 +74,7 @@ All functional views are implemented as apps in `/apps/`. Each app:
 - Is automatically discovered and registered by `AppRegistry`
 - Can provide facet-scoped views and background services
 
-**Available apps:** home, todos, inbox, chat, agents, search, calendar, entities, news, stats, tokens, settings, import, live, dev
+Browse `/apps/` to see available apps.
 
 ### Core Routes
 

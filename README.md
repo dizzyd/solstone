@@ -34,37 +34,15 @@ observe (capture) --> think (analyze) --> convey (view)
                        muse (AI agents)
 ```
 
-## Requirements
+## Getting Started
 
-- Python 3.10 or later
-- AI API keys (Google, OpenAI, or Anthropic)
-- Platform-specific dependencies for screen/audio capture
-
-## Quick Start
-
-1. Install the package:
-   ```bash
-   pip install -e .
-   ```
-
-2. Configure environment (copy `.env.example` to `.env` and add your settings):
-   ```bash
-   JOURNAL_PATH=/path/to/your/journal
-   GOOGLE_API_KEY=your-api-key
-   ```
-
-3. Start the supervisor (handles capture and processing):
-   ```bash
-   think-supervisor
-   ```
-
-4. Launch the web interface:
-   http://localhost:8000/
+See **[docs/INSTALL.md](docs/INSTALL.md)** for complete setup instructions including system dependencies, API keys, and first-run configuration.
 
 ## Documentation
 
 | Topic | Document |
 |-------|----------|
+| **Installation and setup** | [docs/INSTALL.md](docs/INSTALL.md) |
 | Journal structure and data formats | [docs/JOURNAL.md](docs/JOURNAL.md) |
 | Capture and observation | [docs/OBSERVE.md](docs/OBSERVE.md) |
 | Processing and insights | [docs/THINK.md](docs/THINK.md) |
