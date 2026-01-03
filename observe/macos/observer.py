@@ -16,6 +16,7 @@ import logging
 import os
 import shutil
 import signal
+import socket
 import sys
 import time
 
@@ -40,6 +41,10 @@ CHUNK_DURATION = 5  # seconds
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 SAMPLE_RATE = 48000  # Standard audio sample rate
+
+# Host identification for multi-host scenarios
+_HOST = socket.gethostname()
+_PLATFORM = "darwin"
 
 
 class MacOSObserver:
@@ -284,6 +289,8 @@ class MacOSObserver:
                 "observing",
                 segment=segment,
                 files=saved_files,
+                host=_HOST,
+                platform=_PLATFORM,
             )
             logger.info(f"Segment observing: {segment} ({len(saved_files)} files)")
 
@@ -401,6 +408,8 @@ class MacOSObserver:
             tmux=tmux_info,
             audio=audio_info,
             activity=activity_info,
+            host=_HOST,
+            platform=_PLATFORM,
         )
 
     def finalize_screencast(self, temp_path: str, final_path: str):

@@ -22,6 +22,7 @@ import datetime
 import logging
 import os
 import signal
+import socket
 import sys
 import time
 
@@ -48,6 +49,10 @@ IDLE_THRESHOLD_MS = 5 * 60 * 1000  # 5 minutes
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 CHUNK_DURATION = 5  # seconds
+
+# Host identification for multi-host scenarios
+_HOST = socket.gethostname()
+_PLATFORM = "linux"
 
 # Capture modes
 MODE_IDLE = "idle"
@@ -347,6 +352,8 @@ class Observer:
                 "observing",
                 segment=segment,
                 files=files,
+                host=_HOST,
+                platform=_PLATFORM,
             )
             logger.info(f"Segment observing: {segment} ({len(files)} files)")
 
@@ -478,6 +485,8 @@ class Observer:
             tmux=tmux_info,
             audio=audio_info,
             activity=activity_info,
+            host=_HOST,
+            platform=_PLATFORM,
         )
 
     def finalize_screencast(self, temp_path: str, final_path: str):
