@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import random
 import re
 import secrets
 import time
@@ -239,6 +240,141 @@ def api_get_key(key_prefix: str) -> Any:
     )
 
 
+# === Segment collision helpers ===
+
+# Maximum attempts to find available segment key
+MAX_SEGMENT_ATTEMPTS = 100
+
+
+def _randomize_segment(segment: str) -> str | None:
+    """Apply random +/-1 to either time or duration component.
+
+    Args:
+        segment: Segment key in HHMMSS_LEN format
+
+    Returns:
+        Modified segment key, or None if modification would be invalid
+        (crosses midnight in either direction, or duration would be <= 0)
+    """
+    time_part, duration_str = segment.split("_")
+    h = int(time_part[:2])
+    m = int(time_part[2:4])
+    s = int(time_part[4:6])
+    dur = int(duration_str)
+
+    modify_time = random.choice([True, False])
+    delta = random.choice([1, -1])
+
+    if modify_time:
+        # Modify time component
+        total_seconds = h * 3600 + m * 60 + s + delta
+        if total_seconds < 0 or total_seconds >= 86400:
+            return None  # Would cross midnight
+        h = total_seconds // 3600
+        m = (total_seconds % 3600) // 60
+        s = total_seconds % 60
+    else:
+        # Modify duration component
+        dur = dur + delta
+        if dur <= 0:
+            return None  # Duration can't be zero or negative
+
+    return f"{h:02d}{m:02d}{s:02d}_{dur}"
+
+
+def _segment_exists(day_dir: Path, segment: str) -> bool:
+    """Check if segment key is already in use.
+
+    Args:
+        day_dir: Path to day directory
+        segment: Segment key in HHMMSS_LEN format
+
+    Returns:
+        True if segment directory or files with segment prefix exist
+    """
+    # Check for segment directory
+    if (day_dir / segment).exists():
+        return True
+    # Check for files starting with segment key
+    if list(day_dir.glob(f"{segment}_*")):
+        return True
+    return False
+
+
+def _find_available_segment(
+    day_dir: Path, segment: str, max_attempts: int = MAX_SEGMENT_ATTEMPTS
+) -> str | None:
+    """Find an available segment key using random modifications.
+
+    Uses a random walk approach: each attempt randomly modifies either
+    the time or duration by +/-1, exploring the space around the original.
+
+    Args:
+        day_dir: Path to day directory
+        segment: Original segment key in HHMMSS_LEN format
+        max_attempts: Maximum modification attempts before giving up
+
+    Returns:
+        Available segment key (may be original or modified), or None if
+        no available slot found after max_attempts
+    """
+    # Check if original is available
+    if not _segment_exists(day_dir, segment):
+        return segment
+
+    current = segment
+    tried = {segment}
+
+    for _ in range(max_attempts):
+        modified = _randomize_segment(current)
+
+        if modified is None:
+            # Invalid modification (hit boundary), try again from same position
+            continue
+
+        current = modified  # Always move to valid position
+
+        if modified in tried:
+            continue  # Already checked, don't recheck filesystem
+
+        tried.add(modified)
+
+        if not _segment_exists(day_dir, modified):
+            return modified
+
+    return None  # Exhausted attempts
+
+
+def _save_to_failed(day_dir: Path, files: list, segment: str) -> Path:
+    """Save files to failed directory for manual review.
+
+    Files are saved with their original segment key (not adjusted) since
+    the collision resolution failed.
+
+    Args:
+        day_dir: Path to day directory
+        files: List of file upload objects from request
+        segment: Original segment key (used in directory name)
+
+    Returns:
+        Path to the failed directory where files were saved
+    """
+    # Use segment in path for easier identification of failed uploads
+    failed_dir = day_dir / "remote" / "failed" / segment / str(int(time.time() * 1000))
+    failed_dir.mkdir(parents=True, exist_ok=True)
+
+    for upload in files:
+        if not upload.filename:
+            continue
+        filename = secure_filename(upload.filename)
+        if not filename:
+            continue
+        target_path = failed_dir / filename
+        upload.save(target_path)
+
+    return failed_dir
+
+
 # === Ingest API (key-protected) ===
 
 
@@ -292,7 +428,36 @@ def ingest_upload(key: str) -> Any:
     target_dir = day_path(day)
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save files
+    # Find available segment key (may differ from original if collision)
+    original_segment = segment
+    available_segment = _find_available_segment(target_dir, segment)
+
+    if available_segment is None:
+        # Exhausted attempts, save to failed directory
+        logger.error(
+            f"No available segment slot for {day}/{segment} from "
+            f"{remote.get('name')} after {MAX_SEGMENT_ATTEMPTS} attempts"
+        )
+        failed_dir = _save_to_failed(target_dir, files, segment)
+        return (
+            jsonify(
+                {
+                    "status": "failed",
+                    "error": f"No available segment slot after {MAX_SEGMENT_ATTEMPTS} attempts",
+                    "failed_path": str(failed_dir.relative_to(target_dir.parent)),
+                }
+            ),
+            507,
+        )  # Insufficient Storage
+
+    segment = available_segment
+    if segment != original_segment:
+        logger.info(
+            f"Segment collision resolved: {original_segment} -> {segment} "
+            f"for remote {remote.get('name')}"
+        )
+
+    # Save files with adjusted segment key in filenames
     saved_files = []
     total_bytes = 0
 
@@ -304,6 +469,10 @@ def ingest_upload(key: str) -> Any:
         filename = secure_filename(upload.filename)
         if not filename:
             continue
+
+        # Replace original segment with adjusted segment in filename
+        if original_segment != segment and original_segment in filename:
+            filename = filename.replace(original_segment, segment, 1)
 
         target_path = target_dir / filename
 

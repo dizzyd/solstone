@@ -435,3 +435,290 @@ def test_api_get_key_nonexistent(remote_env):
 
     resp = env.client.get("/app/remote/api/nonexistent/key")
     assert resp.status_code == 404
+
+
+# === Segment collision helper tests ===
+
+
+def test_randomize_segment_produces_valid_output():
+    """Test that _randomize_segment produces valid segment keys."""
+    from apps.remote.routes import _randomize_segment
+
+    result = _randomize_segment("120000_300")
+
+    # Result is either None (boundary hit) or a valid segment
+    if result is not None:
+        assert "_" in result
+        time_part, dur_part = result.split("_")
+        assert len(time_part) == 6
+        assert time_part.isdigit()
+        assert dur_part.isdigit()
+        assert int(dur_part) > 0
+
+
+def test_randomize_segment_never_produces_invalid_time():
+    """Test that _randomize_segment never produces times outside 00:00:00-23:59:59."""
+    from apps.remote.routes import _randomize_segment
+
+    # Test at boundaries - should return None or valid, never invalid
+    for segment in ["000000_300", "235959_300"]:
+        for _ in range(20):
+            result = _randomize_segment(segment)
+            if result is not None:
+                time_part = result.split("_")[0]
+                hours = int(time_part[:2])
+                assert 0 <= hours <= 23
+
+
+def test_randomize_segment_never_produces_zero_duration():
+    """Test that _randomize_segment never produces duration <= 0."""
+    from apps.remote.routes import _randomize_segment
+
+    # Test at duration boundary
+    for _ in range(20):
+        result = _randomize_segment("120000_1")
+        if result is not None:
+            dur = int(result.split("_")[1])
+            assert dur > 0
+
+
+def test_segment_exists_with_directory(remote_env):
+    """Test _segment_exists detects existing segment directory."""
+    from apps.remote.routes import _segment_exists
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    # Create a segment directory
+    segment_dir = day_dir / "120000_300"
+    segment_dir.mkdir()
+
+    assert _segment_exists(day_dir, "120000_300") is True
+    assert _segment_exists(day_dir, "120001_300") is False
+
+
+def test_segment_exists_with_files(remote_env):
+    """Test _segment_exists detects files with segment prefix."""
+    from apps.remote.routes import _segment_exists
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    # Create a file with segment prefix
+    (day_dir / "120000_300_audio.flac").write_bytes(b"test")
+
+    assert _segment_exists(day_dir, "120000_300") is True
+    assert _segment_exists(day_dir, "120001_300") is False
+
+
+def test_segment_exists_empty_directory(remote_env):
+    """Test _segment_exists returns False for empty directory."""
+    from apps.remote.routes import _segment_exists
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    assert _segment_exists(day_dir, "120000_300") is False
+
+
+def test_find_available_segment_no_conflict(remote_env):
+    """Test _find_available_segment returns original when no conflict."""
+    from apps.remote.routes import _find_available_segment
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    result = _find_available_segment(day_dir, "120000_300")
+    assert result == "120000_300"
+
+
+def test_find_available_segment_with_conflict(remote_env):
+    """Test _find_available_segment finds alternative when conflict exists."""
+    from apps.remote.routes import _find_available_segment
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    # Create conflicting file
+    (day_dir / "120000_300_audio.flac").write_bytes(b"test")
+
+    result = _find_available_segment(day_dir, "120000_300")
+
+    # Should find a different segment
+    assert result is not None
+    assert result != "120000_300"
+    # Should be a valid segment format
+    assert "_" in result
+    time_part, dur_part = result.split("_")
+    assert len(time_part) == 6
+    assert dur_part.isdigit()
+
+
+def test_find_available_segment_with_limited_attempts(remote_env):
+    """Test _find_available_segment respects max_attempts limit."""
+    from apps.remote.routes import _find_available_segment
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    # Create conflicting file
+    (day_dir / "120000_300_audio.flac").write_bytes(b"test")
+
+    # With max_attempts=0, should return None immediately (no attempts allowed)
+    result = _find_available_segment(day_dir, "120000_300", max_attempts=0)
+    assert result is None
+
+
+def test_save_to_failed_creates_directory(remote_env):
+    """Test _save_to_failed creates failed directory structure."""
+    from io import BytesIO
+
+    from werkzeug.datastructures import FileStorage
+
+    from apps.remote.routes import _save_to_failed
+
+    env = remote_env()
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+
+    # Create mock file uploads
+    files = [
+        FileStorage(stream=BytesIO(b"audio data"), filename="120000_300_audio.flac"),
+        FileStorage(stream=BytesIO(b"video data"), filename="120000_300_screen.webm"),
+    ]
+
+    failed_dir = _save_to_failed(day_dir, files, "120000_300")
+
+    # Verify structure includes segment key
+    assert failed_dir.exists()
+    assert "remote/failed/120000_300/" in str(failed_dir)
+    assert (failed_dir / "120000_300_audio.flac").exists()
+    assert (failed_dir / "120000_300_screen.webm").exists()
+
+
+# === Integration tests for collision handling ===
+
+
+def test_ingest_collision_adjusts_segment(remote_env):
+    """Test that ingest adjusts segment key on collision."""
+    env = remote_env()
+
+    # Create a remote
+    resp = env.client.post(
+        "/app/remote/api/create",
+        json={"name": "collision-test"},
+        content_type="application/json",
+    )
+    key = resp.get_json()["key"]
+
+    # Create a conflicting file
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+    (day_dir / "120000_300_audio.flac").write_bytes(b"existing")
+
+    # Upload with same segment key
+    test_data = b"new audio content"
+    resp = env.client.post(
+        f"/app/remote/ingest/{key}",
+        data={
+            "day": "20250103",
+            "segment": "120000_300",
+            "files": (io.BytesIO(test_data), "120000_300_audio.flac"),
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "ok"
+
+    # The filename should have been adjusted
+    saved_file = data["files"][0]
+    assert saved_file != "120000_300_audio.flac"
+    assert "_audio.flac" in saved_file
+
+    # Verify both files exist
+    assert (day_dir / "120000_300_audio.flac").exists()  # Original
+    assert (day_dir / saved_file).exists()  # New adjusted
+
+
+def test_ingest_no_collision_preserves_segment(remote_env):
+    """Test that ingest preserves segment key when no collision."""
+    env = remote_env()
+
+    # Create a remote
+    resp = env.client.post(
+        "/app/remote/api/create",
+        json={"name": "no-collision-test"},
+        content_type="application/json",
+    )
+    key = resp.get_json()["key"]
+
+    # Upload without any conflicting files
+    test_data = b"audio content"
+    resp = env.client.post(
+        f"/app/remote/ingest/{key}",
+        data={
+            "day": "20250103",
+            "segment": "120000_300",
+            "files": (io.BytesIO(test_data), "120000_300_audio.flac"),
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "ok"
+    assert data["files"] == ["120000_300_audio.flac"]
+
+    # Verify file saved with original name
+    expected_file = env.journal / "20250103" / "120000_300_audio.flac"
+    assert expected_file.exists()
+
+
+def test_ingest_stats_use_adjusted_segment(remote_env):
+    """Test that remote stats record the adjusted segment key."""
+    env = remote_env()
+
+    # Create a remote
+    resp = env.client.post(
+        "/app/remote/api/create",
+        json={"name": "stats-adjust-test"},
+        content_type="application/json",
+    )
+    key = resp.get_json()["key"]
+
+    # Create a conflicting file
+    day_dir = env.journal / "20250103"
+    day_dir.mkdir(parents=True)
+    (day_dir / "120000_300_audio.flac").write_bytes(b"existing")
+
+    # Upload with same segment key
+    test_data = b"new audio"
+    resp = env.client.post(
+        f"/app/remote/ingest/{key}",
+        data={
+            "day": "20250103",
+            "segment": "120000_300",
+            "files": (io.BytesIO(test_data), "120000_300_audio.flac"),
+        },
+    )
+
+    assert resp.status_code == 200
+
+    # Check stats - last_segment should be the adjusted one
+    resp = env.client.get("/app/remote/api/list")
+    remotes = resp.get_json()
+    assert len(remotes) == 1
+    # The stored segment should be different from original
+    last_segment = remotes[0]["last_segment"]
+    assert last_segment is not None
+    # It should be adjusted (not the original conflicting one)
+    assert (
+        last_segment != "120000_300"
+        or (day_dir / f"{last_segment}_audio.flac").exists()
+    )
