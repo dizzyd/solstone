@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -1047,12 +1048,46 @@ def _handle_observe_status(message: dict) -> None:
     _observe_status_state["ever_received"] = True
 
 
+def _handle_segment_event_log(message: dict) -> None:
+    """Log observe events with day+segment to segment/events.jsonl.
+
+    Any observe tract message with both day and segment fields gets logged
+    to JOURNAL_PATH/day/segment/events.jsonl if that directory exists.
+    """
+    if message.get("tract") != "observe":
+        return
+
+    day = message.get("day")
+    segment = message.get("segment")
+
+    if not day or not segment:
+        return
+
+    try:
+        journal_path = _get_journal_path()
+        segment_dir = journal_path / day / segment
+
+        # Only log if segment directory exists
+        if not segment_dir.is_dir():
+            return
+
+        events_file = segment_dir / "events.jsonl"
+
+        # Append event as JSON line
+        with open(events_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(message, ensure_ascii=False) + "\n")
+
+    except Exception as e:
+        logging.debug(f"Failed to log segment event: {e}")
+
+
 def _handle_callosum_message(message: dict) -> None:
     """Dispatch incoming Callosum messages to appropriate handlers."""
     _handle_task_request(message)
     _handle_supervisor_request(message)
     _handle_segment_observed(message)
     _handle_observe_status(message)
+    _handle_segment_event_log(message)
 
 
 async def supervise(

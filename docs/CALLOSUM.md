@@ -62,8 +62,8 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
   - From `sense.py`: `describe`, `transcribe` - Processing pipeline state (with `running`/`queued` sub-fields)
 - `observing`: `day`, `segment`, `files` - Recording window boundary crossed with saved files
   - Remote events include `remote` (remote name) from `apps/remote/routes.py`
-- `detected`: `file`, `handler`, `ref` - File detected and handler spawned
-- `described`/`transcribed`: `input`, `output`, `duration_ms` - Processing complete
+- `detected`: `day`, `segment`, `file`, `handler`, `ref`, `remote` - File detected and handler spawned
+- `described`/`transcribed`: `day`, `segment`, `input`, `output`, `duration_ms`, `remote` - Processing complete
 - `observed`: `day`, `segment`, `duration` - All files for segment fully processed
   - Batch mode (--day) events include `batch=true` to indicate non-live origin
   - Remote events include `remote` (remote name)
@@ -72,6 +72,7 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 **Health Model:** Fail-fast - observers exit if capture stalls (e.g., files not growing). Supervisor checks event freshness only.
 **Path Format:** Relative to `JOURNAL_PATH` (e.g., `20251102/163045_300_center_DP-3_screen.webm` for multi-monitor recordings)
 **Correlation:** `detected.ref` matches `logs.exec.ref` for the same handler process; `observed.segment` groups all files from same capture window
+**Event Log:** Any observe event with `day` + `segment` fields is logged to `<day>/<segment>/events.jsonl` by supervisor (if directory exists)
 
 ### `importer` - Media import and transcription processing
 **Source:** `think/importer.py`

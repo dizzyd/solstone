@@ -567,13 +567,22 @@ class Transcriber:
                 rel_input = final_path
                 rel_output = json_path
 
-            callosum_send(
-                "observe",
-                "transcribed",
-                input=str(rel_input),
-                output=str(rel_output),
-                duration_ms=duration_ms,
-            )
+            # Extract day from audio path (raw_path.parent is day dir)
+            day = raw_path.parent.name
+
+            event_fields = {
+                "input": str(rel_input),
+                "output": str(rel_output),
+                "duration_ms": duration_ms,
+            }
+            if day:
+                event_fields["day"] = day
+            if segment:
+                event_fields["segment"] = segment
+            remote = os.getenv("REMOTE_NAME")
+            if remote:
+                event_fields["remote"] = remote
+            callosum_send("observe", "transcribed", **event_fields)
 
 
 def main():

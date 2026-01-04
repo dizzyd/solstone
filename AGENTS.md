@@ -208,6 +208,7 @@ make check-all   # Format, lint, and test (run before commit)
 * **DRY, KISS, YAGNI**: Extract common logic, prefer simple solutions, don't over-engineer
 * **Single Responsibility**: Functions/classes do one thing well
 * **Conciseness & Maintainability**: Clear code over clever code
+* **Robustness**: Minimize assumptions that must be kept in sync across the codebase, avoid fragility and increasing maintenance burden.
 * **Security**: Never expose secrets, validate/sanitize all inputs
 * **Performance**: Profile before optimizing
 * **Git**: Small focused commits, descriptive branch names. Run git commands directly (not `git -C`) since you're already in the repo.

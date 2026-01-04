@@ -814,13 +814,22 @@ async def async_main():
 
                 duration_ms = int((time.time() - start_time) * 1000)
 
-                callosum_send(
-                    "observe",
-                    "described",
-                    input=str(rel_input),
-                    output=str(rel_output),
-                    duration_ms=duration_ms,
-                )
+                # Extract day from video path (video_path.parent is day dir)
+                day = video_path.parent.name
+
+                event_fields = {
+                    "input": str(rel_input),
+                    "output": str(rel_output),
+                    "duration_ms": duration_ms,
+                }
+                if day:
+                    event_fields["day"] = day
+                if segment:
+                    event_fields["segment"] = segment
+                remote = os.getenv("REMOTE_NAME")
+                if remote:
+                    event_fields["remote"] = remote
+                callosum_send("observe", "described", **event_fields)
     except Exception as e:
         logger.error(f"Failed to process {video_path}: {e}", exc_info=True)
         raise

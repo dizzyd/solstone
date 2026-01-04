@@ -185,6 +185,12 @@ class FileSensor:
         # Generate correlation ID for this handler run
         ref = str(int(time.time() * 1000))
 
+        # Create segment directory before emitting detected event
+        # This ensures the directory exists for event logging
+        if day and segment:
+            segment_dir = self.journal_dir / day / segment
+            segment_dir.mkdir(exist_ok=True)
+
         # Emit detected event with file and ref
         if self.callosum:
             try:
@@ -192,13 +198,18 @@ class FileSensor:
             except ValueError:
                 rel_file = file_path
 
-            self.callosum.emit(
-                "observe",
-                "detected",
-                file=str(rel_file),
-                handler=handler_name,
-                ref=ref,
-            )
+            event_fields = {
+                "file": str(rel_file),
+                "handler": handler_name,
+                "ref": ref,
+            }
+            if day:
+                event_fields["day"] = day
+            if segment:
+                event_fields["segment"] = segment
+            if remote:
+                event_fields["remote"] = remote
+            self.callosum.emit("observe", "detected", **event_fields)
 
         # Replace {file} placeholder with actual file path
         cmd = [str(file_path) if arg == "{file}" else arg for arg in command]
