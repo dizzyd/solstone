@@ -24,6 +24,7 @@ from convey import state
 from convey.utils import DATE_RE, format_date
 from observe.hear import format_audio
 from observe.screen import format_screen
+from observe.utils import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from think.cluster import cluster_scan, cluster_segments
 from think.utils import day_dirs, day_path
 from think.utils import segment_key as validate_segment_key
@@ -207,7 +208,8 @@ def segment_content(day: str, segment_key: str) -> Any:
                     raw_audio = entry["raw"]
                     break
 
-            if raw_audio:
+            # Validate raw points to an audio file (skip if not)
+            if raw_audio and raw_audio.endswith(AUDIO_EXTENSIONS):
                 rel_path = f"{segment_key}/{raw_audio}"
                 audio_file_url = f"/app/transcripts/api/serve_file/{day}/{rel_path.replace('/', '__')}"
 
@@ -252,7 +254,8 @@ def segment_content(day: str, segment_key: str) -> Any:
                     raw_video = entry["raw"]
                     break
 
-            if raw_video:
+            # Validate raw points to a video file (skip if not, e.g. tmux)
+            if raw_video and raw_video.endswith(VIDEO_EXTENSIONS):
                 video_path = os.path.join(segment_dir, raw_video)
                 if os.path.isfile(video_path):
                     rel_path = f"{segment_key}/{raw_video}"

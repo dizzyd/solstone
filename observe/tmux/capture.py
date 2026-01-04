@@ -358,7 +358,8 @@ def write_captures_jsonl(captures: list[dict], segment_dir: Path) -> list[str]:
     """Write tmux captures to JSONL files, grouped by session.
 
     Creates one file per session: tmux_{session}_screen.jsonl
-    Format matches screen.jsonl for unified formatting/indexing.
+    Frame entries match screen.jsonl format for unified formatting/indexing.
+    No header line since tmux captures have no raw media file.
 
     Args:
         captures: List of capture dicts from result_to_dict()
@@ -389,11 +390,7 @@ def write_captures_jsonl(captures: list[dict], segment_dir: Path) -> list[str]:
         output_path = segment_dir / filename
 
         with open(output_path, "w") as f:
-            # Header matching screen.jsonl format
-            header = {"raw": filename}
-            f.write(json.dumps(header) + "\n")
-
-            # Write each capture
+            # No header - tmux captures have no raw media file
             for capture in session_captures:
                 f.write(json.dumps(capture) + "\n")
 

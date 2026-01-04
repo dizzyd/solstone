@@ -833,10 +833,18 @@ def get_raw_file(day: str, name: str) -> tuple[str, str, Any]:
     # Determine MIME type from raw file extension
     if rel.endswith(".flac"):
         mime = "audio/flac"
+    elif rel.endswith(".ogg"):
+        mime = "audio/ogg"
+    elif rel.endswith(".m4a"):
+        mime = "audio/mp4"
     elif rel.endswith(".png"):
         mime = "image/png"
     elif rel.endswith(".webm"):
         mime = "video/webm"
+    elif rel.endswith(".mp4"):
+        mime = "video/mp4"
+    elif rel.endswith(".mov"):
+        mime = "video/quicktime"
     else:
         # Default fallback for unknown types
         mime = "application/octet-stream"

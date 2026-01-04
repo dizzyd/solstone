@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 sol pbc
 
-"""Utilities for working with screencasts and video files."""
+"""Utilities for working with media files (audio and video)."""
 
 import json
 import logging
@@ -11,6 +11,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 VIDEO_EXTENSIONS = (".webm", ".mp4", ".mov")
+AUDIO_EXTENSIONS = (".flac", ".ogg", ".m4a")
 
 
 def extract_descriptive_suffix(filename: str) -> str:

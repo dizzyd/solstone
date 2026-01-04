@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, redirect, render_template, url_for
 
 from convey import state
 from convey.utils import DATE_RE, format_date
+from observe.utils import VIDEO_EXTENSIONS
 from think.utils import day_path
 
 calendar_bp = Blueprint(
@@ -278,7 +279,10 @@ def _dev_screen_frames(day: str, timestamp: str, filename: str = "screen.jsonl")
         # Extract raw video path from header (first item if it only has "raw" key)
         raw_video_path = None
         if all_frames and "raw" in all_frames[0] and "frame_id" not in all_frames[0]:
-            raw_video_path = all_frames[0].get("raw")
+            raw_path = all_frames[0].get("raw")
+            # Validate raw points to a video file (skip if not, e.g. tmux)
+            if raw_path and raw_path.endswith(VIDEO_EXTENSIONS):
+                raw_video_path = raw_path
 
         # Decode and cache all frames from the video
         cache_key = (day, timestamp, filename)
