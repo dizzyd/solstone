@@ -208,9 +208,7 @@ def format_screen(
         # Add analysis if present
         analysis = frame.get("analysis", {})
         if analysis:
-            # New format: primary is a string category
-            # Fall back to legacy "visible" field for old data
-            category = analysis.get("primary", analysis.get("visible", "unknown"))
+            category = analysis.get("primary", "unknown")
             description = analysis.get("visual_description", "")
 
             lines.append(f"**Category:** {category}")
@@ -227,31 +225,13 @@ def format_screen(
             "timestamp_str": timestamp_str,
         }
 
-        # Add category-specific content using formatter dispatch
-        # New format uses category name as key (e.g., "meeting", "messaging")
-        # Old format used "extracted_text" and "meeting_analysis"
-        has_category_content = False
-        for cat in CATEGORIES:
-            content = frame.get(cat)
-            # Also check legacy "meeting_analysis" key for meeting
-            if cat == "meeting" and not content:
-                content = frame.get("meeting_analysis")
-            if content:
-                formatted = _format_category_content(cat, content, format_context)
+        # Add category-specific content from content dict
+        frame_content = frame.get("content", {})
+        for cat, cat_data in frame_content.items():
+            if cat_data:
+                formatted = _format_category_content(cat, cat_data, format_context)
                 if formatted:
                     lines.append(formatted)
-                    has_category_content = True
-
-        # Fall back to legacy extracted_text field if no category content
-        if not has_category_content:
-            extracted_text = frame.get("extracted_text")
-            if extracted_text:
-                lines.append("**Extracted Text:**")
-                lines.append("")
-                lines.append("```")
-                lines.append(extracted_text.strip())
-                lines.append("```")
-                lines.append("")
 
         # Calculate absolute unix timestamp in milliseconds
         frame_timestamp_ms = base_timestamp_ms + int(frame_offset * 1000)

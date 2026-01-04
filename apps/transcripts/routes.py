@@ -271,16 +271,15 @@ def segment_content(day: str, segment_key: str) -> Any:
                 # Calculate wall-clock time from segment start + offset
                 time_str = _format_time_from_offset(segment_key, offset)
 
-                # Basic frames have <= 1 vision request (just DESCRIBE_JSON)
-                # Enhanced frames have > 1 (added text extraction or meeting analysis)
-                requests = source.get("requests", [])
-                is_basic = len(requests) <= 1
+                # Basic frames have no enriched content
+                frame_content = source.get("content", {})
+                is_basic = not frame_content
 
                 # Extract participant boxes for meeting frames
                 participants = []
-                meeting_analysis = source.get("meeting_analysis")
-                if meeting_analysis:
-                    for p in meeting_analysis.get("participants", []):
+                meeting_data = frame_content.get("meeting")
+                if meeting_data:
+                    for p in meeting_data.get("participants", []):
                         box = p.get("box_2d")
                         # Only include participants with video and valid box_2d
                         if p.get("video") and box and len(box) == 4:

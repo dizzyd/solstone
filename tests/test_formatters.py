@@ -188,7 +188,9 @@ class TestFormatScreen:
                     "primary": "reading",
                     "visual_description": "Documentation page",
                 },
-                "reading": "# API Reference\n\ndef hello():\n    pass",
+                "content": {
+                    "reading": "# API Reference\n\ndef hello():\n    pass",
+                },
             }
         ]
 
@@ -251,7 +253,9 @@ class TestFormatScreen:
             {
                 "timestamp": 0,
                 "analysis": {"primary": "meeting"},
-                "meeting": {"participants": ["Alice", "Bob"]},
+                "content": {
+                    "meeting": {"participants": ["Alice", "Bob"]},
+                },
             }
         ]
 

@@ -607,9 +607,11 @@ class VideoProcessor:
 
                 result = frame_results[req.frame_id]
 
-                # Merge this follow-up's category result
+                # Merge this follow-up's category result into content dict
+                if "content" not in result:
+                    result["content"] = {}
                 for category, cat_result in req.category_results.items():
-                    result[category] = cat_result
+                    result["content"][category] = cat_result
 
                 # Update requests list (avoid duplicates by using shared list)
                 result["requests"] = req.requests

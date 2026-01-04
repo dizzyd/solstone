@@ -1601,7 +1601,7 @@ body.has-date-nav .workspace:has(.tr-wrap) {
       const frameId = entry.source_ref?.frame_id;
       const boxCoords = entry.source_ref?.box_2d;
       const analysis = entry.source_ref?.analysis || {};
-      const category = analysis.visible || 'unknown';
+      const category = analysis.primary || 'unknown';
       const description = analysis.visual_description || category;
       const frameIdx = findFrameIndex(entry);
 
@@ -1675,7 +1675,7 @@ body.has-date-nav .workspace:has(.tr-wrap) {
       const monitor = f.source_ref?.monitor || '';
       const monitorPos = getMonitorPosition(monitor);
       const analysis = f.source_ref?.analysis || {};
-      const category = analysis.visible || '';
+      const category = analysis.primary || '';
       const description = analysis.visual_description || '';
       const participants = f.source_ref?.participants || [];
       const hasPrev = currentFrameIndex > 0;

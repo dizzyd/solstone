@@ -207,7 +207,9 @@ def test_format_screen_includes_category_content():
                 "primary": "productivity",
                 "visual_description": "Spreadsheet view",
             },
-            "productivity": "| Name | Value |\n|------|-------|\n| Test | 123 |",
+            "content": {
+                "productivity": "| Name | Value |\n|------|-------|\n| Test | 123 |",
+            },
         },
     ]
 
@@ -333,12 +335,14 @@ def test_format_screen_uses_meeting_formatter():
                 "primary": "meeting",
                 "visual_description": "Video call",
             },
-            "meeting": {
-                "platform": "meet",
-                "participants": [
-                    {"name": "Test User", "status": "active", "video": True},
-                ],
-                "screen_share": None,
+            "content": {
+                "meeting": {
+                    "platform": "meet",
+                    "participants": [
+                        {"name": "Test User", "status": "active", "video": True},
+                    ],
+                    "screen_share": None,
+                },
             },
         },
     ]
@@ -367,7 +371,9 @@ def test_format_screen_falls_back_for_missing_formatter():
                 "primary": "messaging",
                 "visual_description": "Chat app",
             },
-            "messaging": "**Alice**: Hello!\n**Bob**: Hi there!",
+            "content": {
+                "messaging": "**Alice**: Hello!\n**Bob**: Hi there!",
+            },
         },
     ]
 
@@ -392,12 +398,16 @@ def test_format_screen_handles_multiple_categories():
                 "overlap": False,
                 "visual_description": "Meeting with shared doc",
             },
-            "meeting": {
-                "platform": "teams",
-                "participants": [{"name": "User", "status": "active", "video": True}],
-                "screen_share": None,
+            "content": {
+                "meeting": {
+                    "platform": "teams",
+                    "participants": [
+                        {"name": "User", "status": "active", "video": True}
+                    ],
+                    "screen_share": None,
+                },
+                "productivity": "| Task | Status |\n|------|--------|\n| Review | Done |",
             },
-            "productivity": "| Task | Status |\n|------|--------|\n| Review | Done |",
         },
     ]
 

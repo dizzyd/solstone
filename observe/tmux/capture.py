@@ -326,30 +326,37 @@ class TmuxCapture:
                 "secondary": "none",
                 "overlap": False,
             },
-            "tmux": {
-                "session": result.session,
-                "window": {
-                    "id": result.window.id,
-                    "index": result.window.index,
-                    "name": result.window.name,
+            "content": {
+                "tmux": {
+                    "session": result.session,
+                    "window": {
+                        "id": result.window.id,
+                        "index": result.window.index,
+                        "name": result.window.name,
+                    },
+                    "windows": [
+                        {
+                            "id": w.id,
+                            "index": w.index,
+                            "name": w.name,
+                            "active": w.active,
+                        }
+                        for w in result.windows
+                    ],
+                    "panes": [
+                        {
+                            "id": p.id,
+                            "index": p.index,
+                            "left": p.left,
+                            "top": p.top,
+                            "width": p.width,
+                            "height": p.height,
+                            "active": p.active,
+                            "content": p.content,
+                        }
+                        for p in result.panes
+                    ],
                 },
-                "windows": [
-                    {"id": w.id, "index": w.index, "name": w.name, "active": w.active}
-                    for w in result.windows
-                ],
-                "panes": [
-                    {
-                        "id": p.id,
-                        "index": p.index,
-                        "left": p.left,
-                        "top": p.top,
-                        "width": p.width,
-                        "height": p.height,
-                        "active": p.active,
-                        "content": p.content,
-                    }
-                    for p in result.panes
-                ],
             },
         }
 
@@ -376,7 +383,7 @@ def write_captures_jsonl(captures: list[dict], segment_dir: Path) -> list[str]:
     # Group captures by session
     by_session: dict[str, list[dict]] = {}
     for capture in captures:
-        session = capture.get("tmux", {}).get("session", "unknown")
+        session = capture.get("content", {}).get("tmux", {}).get("session", "unknown")
         if session not in by_session:
             by_session[session] = []
         by_session[session].append(capture)
