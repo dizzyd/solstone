@@ -104,6 +104,8 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 **Client Library:** `think/callosum.py` `CallosumConnection` class
 **Server:** `think/callosum.py` `CallosumServer` class
 
-**Convey Integration:** `convey.emit()` for non-blocking event emission from route handlers (uses shared bridge connection). See [APPS.md](APPS.md) for usage.
+**Convey Integration:**
+- `convey.emit()` - Non-blocking event emission from route handlers (uses shared bridge connection)
+- `apps.events` - Server-side event handlers via `@on_event` decorator (dispatched in thread pool)
 
-See code documentation for usage patterns and examples.
+See [APPS.md](APPS.md) for app event handler documentation and code for usage patterns.

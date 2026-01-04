@@ -46,11 +46,22 @@ def _broadcast_to_websockets(event: dict) -> None:
 
 
 def _broadcast_callosum_event(message: Dict[str, Any]) -> None:
-    """Broadcast Callosum event to all connected clients."""
+    """Broadcast Callosum event to WebSocket clients and server-side handlers."""
+    # Broadcast to WebSocket clients
     try:
         _broadcast_to_websockets(message)
     except Exception:  # pragma: no cover - defensive against socket errors
         logger.exception("Failed to broadcast %s event", message.get("tract"))
+
+    # Dispatch to server-side app event handlers
+    try:
+        from apps.events import dispatch
+
+        dispatch(message)
+    except Exception:  # pragma: no cover - defensive against handler errors
+        logger.exception(
+            "Failed to dispatch %s event to handlers", message.get("tract")
+        )
 
 
 def start_bridge() -> None:

@@ -38,6 +38,7 @@ apps/my_app/
 ├── workspace.html     # Required: Main content template
 ├── routes.py          # Optional: Flask blueprint (only if custom routes needed)
 ├── tools.py           # Optional: MCP tool extensions (auto-discovered)
+├── events.py          # Optional: Server-side event handlers (auto-discovered)
 ├── app.json           # Optional: Metadata (icon, label, facet support)
 ├── app_bar.html       # Optional: Bottom bar controls (forms, buttons)
 ├── background.html    # Optional: Background JavaScript service
@@ -53,6 +54,7 @@ apps/my_app/
 | `workspace.html` | **Yes** | Main app content (rendered in container) |
 | `routes.py` | No | Flask blueprint for custom routes (API endpoints, forms, etc.) |
 | `tools.py` | No | MCP tool extensions for AI agents (auto-discovered) |
+| `events.py` | No | Server-side Callosum event handlers (auto-discovered) |
 | `app.json` | No | Icon, label, facet support overrides |
 | `app_bar.html` | No | Bottom fixed bar for app controls |
 | `background.html` | No | Background service (WebSocket listeners) |
@@ -318,6 +320,23 @@ apps/my_app/tests/
 **Reference implementations:**
 - Fixture patterns: `apps/todos/tests/conftest.py`
 - Tool testing: `apps/todos/tests/test_tools.py`
+
+---
+
+### 10. `events.py` - Server-Side Event Handlers
+
+Define server-side handlers that react to Callosum events. Handlers run in Convey's thread pool, enabling reactive backend logic without creating new services.
+
+**Key Points:**
+- Create `events.py` with functions decorated with `@on_event(tract, event)`
+- Handlers receive an `EventContext` with message data and app context
+- Discovered at Convey startup; events processed serially with 30s timeout per handler
+- Errors are logged but don't affect other handlers or the web server
+- Wildcards supported: `@on_event("*", "*")` matches all events
+
+**Reference implementations:**
+- Framework: `apps/events.py` - `EventContext` dataclass, decorator, discovery
+- Example: `apps/dev/events.py` - Debug handler showing usage pattern
 
 ---
 

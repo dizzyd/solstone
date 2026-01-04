@@ -11,7 +11,9 @@ import os
 
 from flask import Flask
 
-from .bridge import start_bridge
+from apps.events import discover_handlers, start_dispatcher, stop_dispatcher
+
+from .bridge import start_bridge, stop_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +46,19 @@ def run_service(
         # WERKZEUG_RUN_MAIN is set to 'true' only in the child/main process
         should_start = not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
         if should_start:
+            # Discover and start event handlers before bridge
+            discover_handlers()
+            start_dispatcher()
             logger.info("Starting Callosum bridge")
             start_bridge()
         else:
             logger.debug("Skipping bridge start in reloader parent process")
-    app.run(host=host, port=port, debug=debug)
+
+    try:
+        app.run(host=host, port=port, debug=debug)
+    finally:
+        stop_bridge()
+        stop_dispatcher()
 
 
 def main() -> None:
