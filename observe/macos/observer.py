@@ -41,7 +41,6 @@ CHUNK_DURATION = 5  # seconds
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 SAMPLE_RATE = 48000  # Standard audio sample rate
-STALL_THRESHOLD_CHUNKS = 6  # Exit after this many chunks with no file growth
 
 
 class MacOSObserver:
@@ -68,7 +67,6 @@ class MacOSObserver:
         # Multi-display tracking (similar to Linux observer)
         self.current_displays: list[DisplayInfo] = []
         self.current_audio: AudioInfo | None = None
-        self.last_video_sizes: dict[str, int] = {}
 
         # Draft folder for current segment (HHMMSS_draft/)
         self.draft_dir: str | None = None
@@ -82,12 +80,6 @@ class MacOSObserver:
 
         # Mute state at segment start
         self.segment_is_muted = False
-
-        # Health tracking
-        self.files_growing = False
-        self.stalled_chunks = (
-            0  # Consecutive chunks with no file growth while capturing
-        )
 
     async def setup(self):
         """Initialize ScreenCaptureKit and Callosum connection."""
@@ -281,8 +273,6 @@ class MacOSObserver:
             # Clear state
             self.current_displays = []
             self.current_audio = None
-            self.last_video_sizes = {}
-            self.stalled_chunks = 0
 
         # Rename draft folder to final segment name (atomic handoff)
         if self.draft_dir and saved_files:
@@ -377,8 +367,6 @@ class MacOSObserver:
         self.current_displays = displays
         self.current_audio = audio
         self.capture_running = True
-        self.last_video_sizes = {d.file_path: 0 for d in displays}
-        self.stalled_chunks = 0
 
         logger.info(f"Started capture with {len(displays)} display(s)")
         for display in displays:
@@ -434,10 +422,9 @@ class MacOSObserver:
                 "recording": True,
                 "streams": streams_info,
                 "window_elapsed_seconds": elapsed,
-                "files_growing": self.files_growing,
             }
         else:
-            screencast_info = {"recording": False, "files_growing": False}
+            screencast_info = {"recording": False}
 
         # Tmux info (not supported on macOS)
         tmux_info = {"capturing": False}
@@ -521,33 +508,6 @@ class MacOSObserver:
                     f"mute_change={mute_transition}"
                 )
                 self.handle_boundary(is_active)
-
-            # Check if capture files are actively growing (health indicator)
-            if self.capture_running and self.current_displays:
-                any_growing = False
-                for display in self.current_displays:
-                    if os.path.exists(display.file_path):
-                        current_size = os.path.getsize(display.file_path)
-                        last_size = self.last_video_sizes.get(display.file_path, 0)
-                        if current_size > last_size:
-                            any_growing = True
-                            self.last_video_sizes[display.file_path] = current_size
-                self.files_growing = any_growing
-
-                # Fail-fast: exit if capture stalled (files not growing)
-                if any_growing:
-                    self.stalled_chunks = 0
-                else:
-                    self.stalled_chunks += 1
-                    if self.stalled_chunks >= STALL_THRESHOLD_CHUNKS:
-                        logger.error(
-                            f"Capture stalled for {self.stalled_chunks} chunks "
-                            f"({self.stalled_chunks * CHUNK_DURATION}s), exiting"
-                        )
-                        self.running = False
-            else:
-                self.files_growing = False
-                self.stalled_chunks = 0
 
             # Emit status event
             self.emit_status()

@@ -87,7 +87,7 @@ Staleness threshold: 60 seconds (configurable via `--threshold`).
 
 Services emit periodic status to Callosum (every 5 seconds when active):
 
-- `observe.status` - Capture state (screencast, audio, activity, files_growing)
+- `observe.status` - Capture state (screencast, audio, activity)
 - `cortex.status` - Running agents list
 - `supervisor.status` - Service health, stale heartbeats
 

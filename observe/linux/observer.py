@@ -49,7 +49,6 @@ IDLE_THRESHOLD_MS = 5 * 60 * 1000  # 5 minutes
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 CHUNK_DURATION = 5  # seconds
-STALL_THRESHOLD_CHUNKS = 6  # Exit after this many chunks with no file growth
 
 
 # Capture modes
@@ -86,7 +85,6 @@ class Observer:
 
         # Multi-file screencast tracking
         self.current_streams: list[StreamInfo] = []
-        self.last_screencast_sizes: dict[str, int] = {}
 
         # Tmux capture tracking
         self.tmux_captures: list[dict] = []
@@ -103,12 +101,6 @@ class Observer:
 
         # Mute state at segment start (determines save format)
         self.segment_is_muted = False
-
-        # Health tracking - whether screencast files are actively growing
-        self.files_growing = False
-        self.stalled_chunks = (
-            0  # Consecutive chunks with no file growth in screencast mode
-        )
 
     async def setup(self):
         """Initialize audio devices and DBus connection."""
@@ -293,8 +285,6 @@ class Observer:
             logger.info("Stopping previous screencast")
             stopped_streams = await self.screencaster.stop()
             self.current_streams = []
-            self.last_screencast_sizes = {}
-            self.stalled_chunks = 0
 
             # Collect screen filenames (files are already in draft dir with final names)
             screen_files = [stream.filename for stream in stopped_streams]
@@ -454,8 +444,6 @@ class Observer:
             raise RuntimeError("No streams available")
 
         self.current_streams = streams
-        self.last_screencast_sizes = {s.file_path: 0 for s in streams}
-        self.stalled_chunks = 0
 
         logger.info(f"Started screencast with {len(streams)} stream(s)")
         for stream in streams:
@@ -517,10 +505,9 @@ class Observer:
                 "recording": True,
                 "streams": streams_info,
                 "window_elapsed_seconds": elapsed,
-                "files_growing": self.files_growing,
             }
         else:
-            screencast_info = {"recording": False, "files_growing": False}
+            screencast_info = {"recording": False}
 
         # Calculate tmux info
         if self.current_mode == MODE_TMUX:
@@ -615,8 +602,6 @@ class Observer:
 
                 # Files are already in draft folder, will be finalized at next boundary
                 self.current_streams = []
-                self.last_screencast_sizes = {}
-                self.stalled_chunks = 0
                 # Force recalculate mode without screencast
                 self.current_mode = MODE_IDLE
 
@@ -673,33 +658,6 @@ class Observer:
                     f"hits={self.threshold_hits}/{MIN_HITS_FOR_SAVE}"
                 )
                 await self.handle_boundary(new_mode)
-
-            # Check if screencast files are actively growing (for health reporting)
-            if self.current_mode == MODE_SCREENCAST and self.current_streams:
-                any_growing = False
-                for stream in self.current_streams:
-                    if os.path.exists(stream.file_path):
-                        current_size = os.path.getsize(stream.file_path)
-                        last_size = self.last_screencast_sizes.get(stream.file_path, 0)
-                        if current_size > last_size:
-                            any_growing = True
-                            self.last_screencast_sizes[stream.file_path] = current_size
-                self.files_growing = any_growing
-
-                # Fail-fast: exit if screencast stalled (files not growing)
-                if any_growing:
-                    self.stalled_chunks = 0
-                else:
-                    self.stalled_chunks += 1
-                    if self.stalled_chunks >= STALL_THRESHOLD_CHUNKS:
-                        logger.error(
-                            f"Screencast stalled for {self.stalled_chunks} chunks "
-                            f"({self.stalled_chunks * CHUNK_DURATION}s), exiting"
-                        )
-                        self.running = False
-            else:
-                self.files_growing = False
-                self.stalled_chunks = 0
 
             # Emit status event
             self.emit_status()
