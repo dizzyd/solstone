@@ -4,8 +4,6 @@
 """Tests for the app event handling framework."""
 
 import threading
-import time
-from unittest.mock import patch
 
 import pytest
 
@@ -225,22 +223,6 @@ class TestDispatch:
         # Second handler should still run despite first failing
         assert success_called.wait(timeout=2.0)
 
-    def test_dispatch_with_journal_root(self):
-        """Dispatch passes journal root from environment."""
-        received_root = {}
-
-        @on_event("test", "event")
-        def handler(ctx):
-            received_root["value"] = ctx.journal_root
-
-        start_dispatcher(workers=1)
-
-        with patch.dict("os.environ", {"JOURNAL_PATH": "/test/journal"}):
-            dispatch({"tract": "test", "event": "event"})
-            time.sleep(0.1)
-
-        assert received_root["value"] == "/test/journal"
-
 
 class TestDiscovery:
     """Tests for handler discovery."""
@@ -264,14 +246,12 @@ class TestEventContext:
             app="test_app",
             tract="test",
             event="event",
-            journal_root="/path/to/journal",
         )
 
         assert ctx.msg["data"] == "value"
         assert ctx.app == "test_app"
         assert ctx.tract == "test"
         assert ctx.event == "event"
-        assert ctx.journal_root == "/path/to/journal"
 
 
 class TestDispatcherLifecycle:

@@ -21,8 +21,7 @@ def remote_journal(tmp_path, monkeypatch):
     journal = tmp_path / "journal"
     journal.mkdir()
 
-    # Set JOURNAL_PATH env var and convey state
-    monkeypatch.setenv("JOURNAL_PATH", str(journal))
+    # Set convey state (used by apps.utils for storage paths)
     monkeypatch.setattr(state, "journal_root", str(journal))
 
     # Create remotes directory
@@ -71,7 +70,6 @@ class TestHandleObserved:
             app="remote",
             tract="observe",
             event="observed",
-            journal_root=str(remote_journal.journal),
         )
 
         handle_observed(ctx)
@@ -106,7 +104,6 @@ class TestHandleObserved:
                 app="remote",
                 tract="observe",
                 event="observed",
-                journal_root=str(remote_journal.journal),
             )
             handle_observed(ctx)
 
@@ -137,7 +134,6 @@ class TestHandleObserved:
             app="remote",
             tract="observe",
             event="observed",
-            journal_root=str(remote_journal.journal),
         )
 
         handle_observed(ctx)
@@ -159,7 +155,6 @@ class TestHandleObserved:
             app="remote",
             tract="observe",
             event="observed",
-            journal_root=str(remote_journal.journal),
         )
 
         handle_observed(ctx)
@@ -180,7 +175,6 @@ class TestHandleObserved:
             app="remote",
             tract="observe",
             event="observed",
-            journal_root=str(remote_journal.journal),
         )
 
         # Should not raise
@@ -202,7 +196,6 @@ class TestHandleObserved:
             app="remote",
             tract="observe",
             event="observed",
-            journal_root=str(remote_journal.journal),
         )
 
         # Should not raise

@@ -329,10 +329,20 @@ Define server-side handlers that react to Callosum events. Handlers run in Conve
 
 **Key Points:**
 - Create `events.py` with functions decorated with `@on_event(tract, event)`
-- Handlers receive an `EventContext` with message data and app context
+- Handlers receive an `EventContext` with `msg`, `app`, `tract`, `event` fields
 - Discovered at Convey startup; events processed serially with 30s timeout per handler
 - Errors are logged but don't affect other handlers or the web server
 - Wildcards supported: `@on_event("*", "*")` matches all events
+
+**Available imports** (same as route handlers):
+- `from convey import state` - Access `state.journal_root`
+- `from convey import emit` - Emit events back to Callosum
+- `from apps.utils import get_app_storage_path, log_app_action` - App storage
+- `from convey.utils import load_json, save_json, spawn_agent` - Utilities
+
+**Not available** (no Flask request context):
+- `request`, `session`, `current_app`
+- `error_response()`, `success_response()`, `parse_pagination_params()`
 
 **Reference implementations:**
 - Framework: `apps/events.py` - `EventContext` dataclass, decorator, discovery

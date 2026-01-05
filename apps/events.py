@@ -29,14 +29,14 @@ Handlers receive an EventContext with:
     - ctx.app: The app name that owns this handler
     - ctx.tract: Event tract (e.g., "observe")
     - ctx.event: Event type (e.g., "observed")
-    - ctx.journal_root: Path to the journal directory
+
+Handlers can access journal path via `from convey import state` then `state.journal_root`.
 """
 
 from __future__ import annotations
 
 import importlib
 import logging
-import os
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,7 +59,6 @@ class EventContext:
     app: str
     tract: str
     event: str
-    journal_root: str
 
 
 # Handler registry: (tract, event) -> [(app_name, handler_fn), ...]
@@ -270,7 +269,6 @@ def dispatch(msg: Dict[str, Any], timeout: float = DEFAULT_TIMEOUT) -> int:
 
     tract = msg.get("tract", "")
     event = msg.get("event", "")
-    journal_root = os.environ.get("JOURNAL_PATH", "")
 
     futures: List[Tuple[str, str, Future]] = []
 
@@ -280,7 +278,6 @@ def dispatch(msg: Dict[str, Any], timeout: float = DEFAULT_TIMEOUT) -> int:
             app=app_name,
             tract=tract,
             event=event,
-            journal_root=journal_root,
         )
         future = _executor.submit(_run_handler, app_name, handler, ctx)
         futures.append((app_name, handler.__name__, future))
