@@ -41,7 +41,7 @@ CHUNK_DURATION = 5  # seconds
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 SAMPLE_RATE = 48000  # Standard audio sample rate
-STALL_THRESHOLD_CHUNKS = 3  # Exit after this many chunks with no file growth
+STALL_THRESHOLD_CHUNKS = 6  # Exit after this many chunks with no file growth
 
 
 class MacOSObserver:

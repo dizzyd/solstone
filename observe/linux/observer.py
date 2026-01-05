@@ -49,7 +49,7 @@ IDLE_THRESHOLD_MS = 5 * 60 * 1000  # 5 minutes
 RMS_THRESHOLD = 0.01
 MIN_HITS_FOR_SAVE = 3
 CHUNK_DURATION = 5  # seconds
-STALL_THRESHOLD_CHUNKS = 3  # Exit after this many chunks with no file growth
+STALL_THRESHOLD_CHUNKS = 6  # Exit after this many chunks with no file growth
 
 
 # Capture modes
