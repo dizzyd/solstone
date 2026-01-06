@@ -152,15 +152,16 @@ def test_cortex_request_unique_agent_ids(callosum_server):
     assert len(set(agent_ids)) == 3
 
 
-def test_cortex_request_no_journal_path(callosum_server):
-    """Test cortex_request fails without JOURNAL_PATH."""
+def test_cortex_request_uses_default_path_when_journal_path_unset(callosum_server):
+    """Test cortex_request uses platform default when JOURNAL_PATH unset."""
     _ = callosum_server  # Needed for side effects only
     old_path = os.environ.pop("JOURNAL_PATH", None)
     try:
-        with pytest.raises(
-            ValueError, match="JOURNAL_PATH environment variable not set"
-        ):
-            cortex_request("test", "default", "openai")
+        # Should work (uses platform default) but no listener will respond
+        agent_id = cortex_request("test", "default", "openai")
+        # Returns an agent_id since the request is queued
+        assert agent_id is not None
+        assert len(agent_id) > 0
     finally:
         if old_path:
             os.environ["JOURNAL_PATH"] = old_path
@@ -291,14 +292,16 @@ def test_cortex_agents_pagination(tmp_path, monkeypatch):
     assert result["pagination"]["has_more"] is True
 
 
-def test_cortex_agents_no_journal_path():
-    """Test cortex_agents fails without JOURNAL_PATH."""
+def test_cortex_agents_uses_default_path_when_journal_path_unset():
+    """Test cortex_agents uses platform default when JOURNAL_PATH unset."""
     old_path = os.environ.pop("JOURNAL_PATH", None)
     try:
-        with pytest.raises(
-            ValueError, match="JOURNAL_PATH environment variable not set"
-        ):
-            cortex_agents()
+        # Should work (uses platform default) - doesn't raise due to missing path
+        result = cortex_agents()
+        # Just verify it returns the expected structure
+        assert "agents" in result
+        assert "pagination" in result
+        assert isinstance(result["agents"], list)
     finally:
         if old_path:
             os.environ["JOURNAL_PATH"] = old_path

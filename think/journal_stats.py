@@ -13,7 +13,7 @@ from typing import Dict
 from observe.sense import scan_day as sense_scan_day
 from observe.utils import VIDEO_EXTENSIONS, load_analysis_frames
 from think.insight import scan_day as insight_scan_day
-from think.utils import day_dirs, setup_cli
+from think.utils import day_dirs, get_journal, setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -489,7 +489,7 @@ def main() -> None:
         help="Disable per-day caching (force re-scan all days)",
     )
     args = setup_cli(parser)
-    journal = os.getenv("JOURNAL_PATH")
+    journal = get_journal()
 
     js = JournalStats()
     js.scan(journal, verbose=args.verbose, use_cache=not args.no_cache)

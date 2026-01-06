@@ -8,11 +8,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from fastmcp import Context
 
 from muse.mcp import HINTS, register_tool
 from think.facets import _get_actor_info
+from think.utils import get_journal
 
 # Declare pack membership - add send_message to journal pack
 TOOL_PACKS = {
@@ -53,13 +53,7 @@ def send_message(
         - send_message("Reminder: Review the pending PRs", facet="opensource")
     """
     try:
-        load_dotenv()
-        journal_path = os.getenv("JOURNAL_PATH")
-        if not journal_path:
-            return {
-                "error": "JOURNAL_PATH not set",
-                "suggestion": "ensure JOURNAL_PATH environment variable is configured",
-            }
+        journal_path = get_journal()
 
         # Create a synthetic agent (just the agent JSONL file)
         from muse.cortex_client import create_synthetic_agent

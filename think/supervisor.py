@@ -22,7 +22,7 @@ from muse.cortex_client import cortex_request
 from think.callosum import CallosumConnection, CallosumServer
 from think.facets import get_active_facets, get_facets
 from think.runner import ManagedProcess as RunnerManagedProcess
-from think.utils import day_input_summary, get_agents, setup_cli
+from think.utils import day_input_summary, get_agents, get_journal, setup_cli
 
 DEFAULT_THRESHOLD = 60
 CHECK_INTERVAL = 30
@@ -124,10 +124,7 @@ _daily_state = {
 
 
 def _get_journal_path() -> Path:
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-    return Path(journal)
+    return Path(get_journal())
 
 
 class RestartPolicy:

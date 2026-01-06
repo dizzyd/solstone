@@ -116,9 +116,6 @@ def parse_args() -> argparse.ArgumentParser:
 def main() -> None:
     parser = parse_args()
     args = setup_cli(parser)
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        parser.error("JOURNAL_PATH not set")
 
     day = args.day
     if day is None:

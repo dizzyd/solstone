@@ -119,13 +119,16 @@ def test_get_config_fills_missing_fields(tmp_path, monkeypatch):
     assert config["identity"]["bio"] == ""
 
 
-def test_get_config_no_journal_path(monkeypatch, tmp_path):
-    """Test get_config raises error when JOURNAL_PATH not set."""
-    # Set to empty string, which should be treated as not set
+def test_get_config_uses_default_when_journal_path_empty(monkeypatch, tmp_path):
+    """Test get_config uses platform default when JOURNAL_PATH is empty."""
+    # Set to empty string - should fall back to platform default
     monkeypatch.setenv("JOURNAL_PATH", "")
 
-    with pytest.raises(RuntimeError, match="JOURNAL_PATH not set"):
-        get_config()
+    # get_config should work (will use platform default journal path)
+    config = get_config()
+    # Returns default structure with empty identity
+    assert "identity" in config
+    assert config["identity"]["name"] == ""
 
 
 def test_get_config_handles_invalid_json(tmp_path, monkeypatch):

@@ -74,12 +74,13 @@ def test_facet_summary_nonexistent(monkeypatch):
         facet_summary("nonexistent")
 
 
-def test_facet_summary_no_journal_path(monkeypatch):
-    """Test facet_summary without JOURNAL_PATH set."""
-    # Set to empty string to override any .env file
+def test_facet_summary_uses_default_path_when_journal_path_empty(monkeypatch):
+    """Test facet_summary uses platform default when JOURNAL_PATH is empty."""
+    # Set to empty string - uses platform default (facet won't exist there)
     monkeypatch.setenv("JOURNAL_PATH", "")
 
-    with pytest.raises(RuntimeError, match="JOURNAL_PATH not set"):
+    # Should raise FileNotFoundError because facet doesn't exist in default path
+    with pytest.raises(FileNotFoundError, match="not found"):
         facet_summary("any-facet")
 
 
@@ -192,12 +193,13 @@ def test_facet_summaries_no_facets(monkeypatch, tmp_path):
     assert summary == "No facets found."
 
 
-def test_facet_summaries_no_journal_path(monkeypatch):
-    """Test facet_summaries() without JOURNAL_PATH set."""
+def test_facet_summaries_uses_default_path_when_journal_path_empty(monkeypatch):
+    """Test facet_summaries() uses platform default when JOURNAL_PATH is empty."""
     monkeypatch.setenv("JOURNAL_PATH", "")
 
-    with pytest.raises(RuntimeError, match="JOURNAL_PATH not set"):
-        facet_summaries()
+    # Should return "No facets found" since default path has no facets
+    summary = facet_summaries()
+    assert summary == "No facets found."
 
 
 def test_facet_summaries_mixed_entities(monkeypatch):
@@ -291,12 +293,13 @@ def test_get_active_facets_no_facets(monkeypatch, tmp_path):
     assert active == set()
 
 
-def test_get_active_facets_no_journal_path(monkeypatch):
-    """Test get_active_facets() without JOURNAL_PATH set."""
+def test_get_active_facets_uses_default_path_when_journal_path_empty(monkeypatch):
+    """Test get_active_facets() uses platform default when JOURNAL_PATH is empty."""
     monkeypatch.setenv("JOURNAL_PATH", "")
 
-    with pytest.raises(RuntimeError, match="JOURNAL_PATH not set"):
-        get_active_facets("20240115")
+    # Should return empty set since default path has no facets with events
+    active = get_active_facets("20240115")
+    assert active == set()
 
 
 def test_get_active_facets_default_occurred(monkeypatch, tmp_path):

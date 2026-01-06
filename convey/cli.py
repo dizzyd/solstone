@@ -63,16 +63,14 @@ def run_service(
 
 def main() -> None:
     """Main CLI entry point for convey command."""
-    from think.utils import setup_cli
+    from think.utils import get_journal, setup_cli
 
     from . import create_app
 
     parser = argparse.ArgumentParser(description="Convey web interface")
     parser.add_argument("--port", type=int, default=8000, help="Port to serve on")
     args = setup_cli(parser)
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise SystemExit("JOURNAL_PATH not set")
+    journal = get_journal()
 
     app = create_app(journal)
     password = _resolve_config_password()

@@ -18,6 +18,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from think.utils import get_journal
+
 
 def format_events(
     entries: list[dict],
@@ -188,12 +190,7 @@ def get_month_event_counts(month: str) -> dict[str, dict[str, int]]:
         Dict mapping day (YYYYMMDD) to facet counts dict.
         Example: {"20250115": {"work": 3, "personal": 1}, ...}
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        return {}
-
-    facets_dir = Path(journal) / "facets"
+    facets_dir = Path(get_journal()) / "facets"
     if not facets_dir.is_dir():
         return {}
 

@@ -6,7 +6,7 @@
 import argparse
 from typing import Any
 
-from think.utils import journal_log, setup_cli
+from think.utils import get_journal, journal_log, setup_cli
 
 from .journal import (
     reset_journal_index,
@@ -144,10 +144,7 @@ def main() -> None:
     )
 
     args = setup_cli(parser)
-
-    import os
-
-    journal = os.getenv("JOURNAL_PATH")
+    journal = get_journal()
 
     if (
         not args.rescan

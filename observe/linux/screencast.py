@@ -28,6 +28,7 @@ from dbus_next.aio import MessageBus
 from dbus_next.constants import BusType
 
 from observe.gnome.activity import get_monitor_geometries
+from think.utils import get_journal
 
 # Workaround for dbus-next issue #122: portal has properties with hyphens
 # (e.g., "power-saver-enabled") which violate strict D-Bus naming validation.
@@ -63,15 +64,8 @@ class StreamInfo:
 
 
 def _get_restore_token_path() -> Path:
-    """Get path for restore token storage."""
-    journal = os.getenv("JOURNAL_PATH")
-    if journal:
-        return Path(journal) / "health" / "screencast_restore_token"
-    # Fallback to XDG state
-    state_home = os.environ.get("XDG_STATE_HOME")
-    if not state_home:
-        state_home = os.path.join(os.path.expanduser("~"), ".local", "state")
-    return Path(state_home) / "solstone" / "screencast_restore_token"
+    """Get path for restore token storage within the journal health directory."""
+    return Path(get_journal()) / "health" / "screencast_restore_token"
 
 
 def _load_restore_token() -> str | None:

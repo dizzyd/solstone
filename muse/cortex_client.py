@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from think.callosum import callosum_send
+from think.utils import get_journal
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,8 @@ def cortex_request(
     Returns:
         Agent ID (timestamp-based string)
     """
-    # Get journal path from environment (for agent_id uniqueness check)
-    journal_path = os.environ.get("JOURNAL_PATH")
-    if not journal_path:
-        raise ValueError("JOURNAL_PATH environment variable not set")
+    # Get journal path (for agent_id uniqueness check)
+    journal_path = get_journal()
 
     # Create agents directory if it doesn't exist
     agents_dir = Path(journal_path) / "agents"
@@ -106,9 +105,7 @@ def create_synthetic_agent(result: str) -> str:
     Returns:
         Agent ID (timestamp-based string)
     """
-    journal_path = os.environ.get("JOURNAL_PATH")
-    if not journal_path:
-        raise ValueError("JOURNAL_PATH environment variable not set")
+    journal_path = get_journal()
 
     # Create agents directory if it doesn't exist
     agents_dir = Path(journal_path) / "agents"
@@ -147,11 +144,7 @@ def get_agent_status(agent_id: str) -> str:
         "running" - Agent still active (*_active.jsonl exists)
         "not_found" - No agent file exists
     """
-    journal_path = os.environ.get("JOURNAL_PATH")
-    if not journal_path:
-        raise ValueError("JOURNAL_PATH environment variable not set")
-
-    agents_dir = Path(journal_path) / "agents"
+    agents_dir = Path(get_journal()) / "agents"
 
     if (agents_dir / f"{agent_id}.jsonl").exists():
         return "completed"
@@ -205,11 +198,7 @@ def read_agent_events(agent_id: str) -> list[Dict[str, Any]]:
     Raises:
         FileNotFoundError: If agent log doesn't exist
     """
-    journal_path = os.environ.get("JOURNAL_PATH")
-    if not journal_path:
-        raise ValueError("JOURNAL_PATH environment variable not set")
-
-    agents_dir = Path(journal_path) / "agents"
+    agents_dir = Path(get_journal()) / "agents"
 
     # Check for completed agent first, then active if not found
     agent_file = agents_dir / f"{agent_id}.jsonl"
@@ -317,16 +306,11 @@ def cortex_agents(
     Returns:
         Dictionary with agents list and pagination info
     """
-    # Get journal path from environment
-    journal_path = os.environ.get("JOURNAL_PATH")
-    if not journal_path:
-        raise ValueError("JOURNAL_PATH environment variable not set")
-
     # Validate parameters
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
 
-    agents_dir = Path(journal_path) / "agents"
+    agents_dir = Path(get_journal()) / "agents"
     if not agents_dir.exists():
         return {
             "agents": [],

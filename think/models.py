@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from think.utils import get_journal
+
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_LITE = "gemini-2.5-flash-lite"
@@ -175,9 +177,7 @@ def log_token_usage(
         If None, auto-detects from call stack.
     """
     try:
-        journal = os.getenv("JOURNAL_PATH")
-        if not journal:
-            return
+        journal = get_journal()
 
         # Extract from Gemini response object if needed
         if hasattr(usage, "usage_metadata"):

@@ -24,6 +24,7 @@ from pathlib import Path
 import requests
 
 from think.callosum import CallosumConnection
+from think.utils import get_journal
 
 logger = logging.getLogger(__name__)
 
@@ -265,31 +266,12 @@ class ObserverBackend:
     def staging_path(self) -> Path:
         """Get the staging path for segment files.
 
-        In local mode: uses JOURNAL_PATH (must be set).
-        In remote mode: uses JOURNAL_PATH if set, otherwise creates temp directory.
-
-        The temp directory persists after crashes for diagnostics.
+        Uses get_journal() which auto-creates a platform-default path if needed.
         """
         if self._staging_path is not None:
             return self._staging_path
 
-        journal = os.getenv("JOURNAL_PATH")
-
-        if journal and os.path.exists(journal):
-            self._staging_path = Path(journal)
-        elif self.is_remote:
-            # Remote mode without JOURNAL_PATH - create temp staging directory
-            # Use fixed subdirectory name so it persists and is findable
-            staging = Path(tempfile.gettempdir()) / "solstone-observer"
-            staging.mkdir(parents=True, exist_ok=True)
-            self._staging_path = staging
-            logger.info(f"Using temp staging directory: {staging}")
-        else:
-            raise RuntimeError(
-                "JOURNAL_PATH not set (required for local mode). "
-                "Set JOURNAL_PATH or use --remote for remote mode."
-            )
-
+        self._staging_path = Path(get_journal())
         return self._staging_path
 
     def start(self) -> None:

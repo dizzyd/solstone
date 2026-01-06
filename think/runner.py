@@ -28,16 +28,14 @@ from datetime import datetime
 from pathlib import Path
 
 from think.callosum import CallosumConnection
+from think.utils import get_journal
 
 logger = logging.getLogger(__name__)
 
 
 def _get_journal_path() -> Path:
     """Get JOURNAL_PATH from environment."""
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-    return Path(journal)
+    return Path(get_journal())
 
 
 def _current_day() -> str:

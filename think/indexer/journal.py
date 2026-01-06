@@ -28,6 +28,7 @@ from think.formatters import (
     format_file,
     load_jsonl,
 )
+from think.utils import get_journal
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +70,7 @@ def get_journal_index(journal: str | None = None) -> tuple[sqlite3.Connection, s
     Returns:
         Tuple of (connection, db_path)
     """
-    journal = journal or os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
+    journal = journal or get_journal()
 
     db_dir = os.path.join(journal, INDEX_DIR)
     os.makedirs(db_dir, exist_ok=True)
@@ -448,12 +447,8 @@ def get_events(
     Returns:
         List of event dicts with full structured data
     """
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
     events = []
-    facets_dir = Path(journal) / "facets"
+    facets_dir = Path(get_journal()) / "facets"
 
     if not facets_dir.is_dir():
         return events

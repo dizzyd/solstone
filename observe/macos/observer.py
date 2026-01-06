@@ -608,13 +608,6 @@ def main():
     )
     args = setup_cli(parser)
 
-    # Verify journal path exists (only required for local mode)
-    journal = os.getenv("JOURNAL_PATH")
-    if not args.remote and (not journal or not os.path.exists(journal)):
-        logger.error(f"JOURNAL_PATH not set or does not exist: {journal}")
-        logger.error("Set JOURNAL_PATH or use --remote for remote mode")
-        sys.exit(1)
-
     # Log remote mode if enabled
     if args.remote:
         logger.info(f"Remote mode enabled: {args.remote[:50]}...")

@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from think.utils import get_journal
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,10 +27,7 @@ class CallosumServer:
 
     def __init__(self, socket_path: Optional[Path] = None):
         if socket_path is None:
-            journal = os.getenv("JOURNAL_PATH")
-            if not journal:
-                raise ValueError("JOURNAL_PATH not set")
-            socket_path = Path(journal) / "health" / "callosum.sock"
+            socket_path = Path(get_journal()) / "health" / "callosum.sock"
 
         self.socket_path = Path(socket_path)
         self.clients: List[socket.socket] = []
@@ -170,10 +169,7 @@ class CallosumConnection:
             socket_path: Path to Unix socket (defaults to $JOURNAL_PATH/health/callosum.sock)
         """
         if socket_path is None:
-            journal = os.getenv("JOURNAL_PATH")
-            if not journal:
-                raise ValueError("JOURNAL_PATH not set")
-            socket_path = Path(journal) / "health" / "callosum.sock"
+            socket_path = Path(get_journal()) / "health" / "callosum.sock"
 
         self.socket_path = Path(socket_path)
         self.send_queue: queue.Queue = queue.Queue(maxsize=1000)
@@ -353,11 +349,7 @@ def callosum_send(
         True if sent successfully, False if connection/send failed
     """
     if socket_path is None:
-        journal = os.getenv("JOURNAL_PATH")
-        if not journal:
-            logger.warning("JOURNAL_PATH not set, cannot send message")
-            return False
-        socket_path = Path(journal) / "health" / "callosum.sock"
+        socket_path = Path(get_journal()) / "health" / "callosum.sock"
 
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

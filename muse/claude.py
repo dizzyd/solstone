@@ -34,6 +34,7 @@ from claude_agent_sdk import (
 from dotenv import load_dotenv
 
 from think.models import CLAUDE_SONNET_4
+from think.utils import get_journal
 
 from .agents import JSONEventCallback, ThinkingEvent
 
@@ -99,14 +100,7 @@ async def run_agent(
 
     try:
         # Get journal path for file permissions
-        load_dotenv()
-        journal_path = os.getenv("JOURNAL_PATH")
-        if not journal_path:
-            raise RuntimeError("JOURNAL_PATH not set")
-
-        # Ensure journal path exists
-        if not os.path.isdir(journal_path):
-            raise ValueError(f"Journal directory does not exist: {journal_path}")
+        journal_path = get_journal()
 
         # Extract instruction from config
         system_instruction = config.get("instruction", "")
