@@ -28,7 +28,7 @@ from typing import List, Optional
 import av
 from PIL import Image, ImageChops, ImageStat
 
-from observe.aruco import detect_convey_region, mask_convey_region, polygon_area
+from observe.aruco import detect_markers, mask_convey_region, polygon_area
 from observe.utils import get_segment_key
 from think.callosum import callosum_send
 from think.utils import setup_cli
@@ -211,11 +211,13 @@ class VideoProcessor:
                     pil_img = Image.fromarray(arr_rgb)
                     del arr_rgb
 
-                    # Detect and mask Convey UI region (fiducial corner tags)
-                    convey_polygon = detect_convey_region(pil_img)
-                    if convey_polygon is not None:
-                        # Check if Convey covers most of the frame
-                        mask_area = polygon_area(convey_polygon)
+                    # Detect ArUco markers (fiducial corner tags)
+                    aruco_result = detect_markers(pil_img)
+                    aruco_masked = False
+                    if aruco_result is not None and aruco_result["polygon"] is not None:
+                        # All 4 corner tags detected - check coverage
+                        polygon = [tuple(pt) for pt in aruco_result["polygon"]]
+                        mask_area = polygon_area(polygon)
                         frame_area = pil_img.width * pil_img.height
                         if mask_area / frame_area > self.MASK_SKIP_THRESHOLD:
                             # Skip frame entirely - Convey UI dominates
@@ -226,23 +228,30 @@ class VideoProcessor:
                             )
                             continue
                         # Mask the Convey region with black
-                        mask_convey_region(pil_img, convey_polygon)
+                        mask_convey_region(pil_img, polygon)
+                        aruco_masked = True
 
                     # Downsample for comparison
                     current_small = self._downsample(pil_img)
 
+                    # Build frame data dict
+                    frame_data: dict = {
+                        "frame_id": frame_count,
+                        "timestamp": timestamp,
+                    }
+                    # Include aruco detection result if markers were found
+                    if aruco_result is not None:
+                        frame_data["aruco"] = {
+                            "markers": aruco_result["markers"],
+                            "masked": aruco_masked,
+                        }
+
                     # First frame: always qualify (RMS vs nothing = 100% different)
                     if last_qualified_small is None:
-                        frame_bytes = self._frame_to_bytes(pil_img)
+                        frame_data["frame_bytes"] = self._frame_to_bytes(pil_img)
                         pil_img.close()
 
-                        self.qualified_frames.append(
-                            {
-                                "frame_id": frame_count,
-                                "timestamp": timestamp,
-                                "frame_bytes": frame_bytes,
-                            }
-                        )
+                        self.qualified_frames.append(frame_data)
 
                         last_qualified_small = current_small
                         logger.debug(f"First frame at {timestamp:.2f}s")
@@ -258,16 +267,10 @@ class VideoProcessor:
                         continue
 
                     # Qualified - convert full frame to bytes
-                    frame_bytes = self._frame_to_bytes(pil_img)
+                    frame_data["frame_bytes"] = self._frame_to_bytes(pil_img)
                     pil_img.close()
 
-                    self.qualified_frames.append(
-                        {
-                            "frame_id": frame_count,
-                            "timestamp": timestamp,
-                            "frame_bytes": frame_bytes,
-                        }
-                    )
+                    self.qualified_frames.append(frame_data)
 
                     # Update cached downsampled frame
                     last_qualified_small.close()
@@ -426,6 +429,7 @@ class VideoProcessor:
             req.timestamp = frame_data["timestamp"]
             req.retry_count = 0
             req.frame_bytes = frame_data["frame_bytes"]  # Store bytes for reuse
+            req.aruco = frame_data.get("aruco")  # ArUco detection result (may be None)
             req.request_type = RequestType.DESCRIBE
             req.json_analysis = None  # Will store the JSON analysis result
             req.category_results = {}  # Will store category-specific results
@@ -563,6 +567,7 @@ class VideoProcessor:
                             follow_req.frame_id = req.frame_id
                             follow_req.timestamp = req.timestamp
                             follow_req.frame_bytes = req.frame_bytes
+                            follow_req.aruco = req.aruco
                             follow_req.json_analysis = req.json_analysis
                             follow_req.category_results = req.category_results
                             follow_req.requests = req.requests
@@ -608,6 +613,8 @@ class VideoProcessor:
                         "analysis": req.json_analysis,
                         "pending": req.pending_follow_ups,
                     }
+                    if req.aruco:
+                        frame_results[req.frame_id]["aruco"] = req.aruco
                     if has_error:
                         frame_results[req.frame_id]["error"] = error_msg
 
@@ -658,6 +665,10 @@ class VideoProcessor:
                 "timestamp": req.timestamp,
                 "requests": req.requests,
             }
+
+            # Add aruco detection result if present
+            if req.aruco:
+                result["aruco"] = req.aruco
 
             # Add error at top level if any request failed
             if has_error:

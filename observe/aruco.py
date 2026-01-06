@@ -41,9 +41,9 @@ def _get_detector() -> cv2.aruco.ArucoDetector:
     return _detector
 
 
-def detect_convey_region(image: Image.Image) -> Optional[list[tuple[float, float]]]:
+def detect_markers(image: Image.Image) -> Optional[dict]:
     """
-    Detect Convey UI region by finding all 4 corner fiducial tags.
+    Detect ArUco markers in an image and return raw detection data.
 
     Parameters
     ----------
@@ -52,9 +52,11 @@ def detect_convey_region(image: Image.Image) -> Optional[list[tuple[float, float
 
     Returns
     -------
-    Optional[list[tuple[float, float]]]
-        Polygon coordinates [(x,y), ...] in order [TL, TR, BR, BL] if all 4
-        corner tags are detected, None otherwise.
+    Optional[dict]
+        Detection result with keys:
+        - markers: list of {id: int, corners: [[x,y], ...]} for each detected marker
+        - polygon: [[x,y], ...] bounding polygon if all 4 corner tags found, else None
+        Returns None if no markers detected.
     """
     # Convert PIL to numpy array
     img_array = np.array(image)
@@ -72,23 +74,28 @@ def detect_convey_region(image: Image.Image) -> Optional[list[tuple[float, float
     if ids is None:
         return None
 
-    # Build map of detected tag ID -> corner points
+    # Build raw markers list
+    markers = []
     id_to_corners = {}
     for tag_id, pts in zip(ids.flatten().tolist(), corners):
         id_to_corners[tag_id] = pts
+        # Convert corners to list of [x, y] pairs
+        corner_list = pts.reshape(4, 2).tolist()
+        markers.append({"id": tag_id, "corners": corner_list})
 
-    # Check if all 4 corner tags are present
-    if not CORNER_TAG_IDS.issubset(id_to_corners.keys()):
-        return None
+    result: dict = {"markers": markers, "polygon": None}
 
-    # Extract outer corners from each tag to form the bounding polygon
-    # ArUco corner order within each marker: [TL, TR, BR, BL]
-    tl = id_to_corners[6].reshape(4, 2)[0]  # TL tag, TL corner
-    tr = id_to_corners[7].reshape(4, 2)[1]  # TR tag, TR corner
-    br = id_to_corners[2].reshape(4, 2)[2]  # BR tag, BR corner
-    bl = id_to_corners[4].reshape(4, 2)[3]  # BL tag, BL corner
+    # Check if all 4 corner tags are present for bounding polygon
+    if CORNER_TAG_IDS.issubset(id_to_corners.keys()):
+        # Extract outer corners from each tag to form the bounding polygon
+        # ArUco corner order within each marker: [TL, TR, BR, BL]
+        tl = id_to_corners[6].reshape(4, 2)[0]  # TL tag, TL corner
+        tr = id_to_corners[7].reshape(4, 2)[1]  # TR tag, TR corner
+        br = id_to_corners[2].reshape(4, 2)[2]  # BR tag, BR corner
+        bl = id_to_corners[4].reshape(4, 2)[3]  # BL tag, BL corner
+        result["polygon"] = [tl.tolist(), tr.tolist(), br.tolist(), bl.tolist()]
 
-    return [tuple(tl), tuple(tr), tuple(br), tuple(bl)]
+    return result
 
 
 def mask_convey_region(image: Image.Image, polygon: list[tuple[float, float]]) -> None:
@@ -102,7 +109,7 @@ def mask_convey_region(image: Image.Image, polygon: list[tuple[float, float]]) -
     image : Image.Image
         PIL Image to mask (modified in place)
     polygon : list[tuple[float, float]]
-        Polygon coordinates from detect_convey_region()
+        Polygon coordinates [(x,y), ...] defining the region to mask
     """
     draw = ImageDraw.Draw(image)
     draw.polygon(polygon, fill=(0, 0, 0))
@@ -136,7 +143,7 @@ def polygon_area(polygon: list[tuple[float, float]]) -> float:
 
 __all__ = [
     "CORNER_TAG_IDS",
-    "detect_convey_region",
+    "detect_markers",
     "mask_convey_region",
     "polygon_area",
 ]

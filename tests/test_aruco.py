@@ -9,7 +9,7 @@ from PIL import Image
 
 from observe.aruco import (
     CORNER_TAG_IDS,
-    detect_convey_region,
+    detect_markers,
     mask_convey_region,
     polygon_area,
 )
@@ -41,19 +41,17 @@ def test_polygon_area_empty():
     assert polygon_area([(0, 0), (1, 1)]) == 0.0
 
 
-def test_detect_convey_region_no_markers():
-    """Test detection returns None when no markers are present."""
-    # Plain white image - no markers
+def test_detect_markers_no_markers():
+    """Test detect_markers returns None when no markers are present."""
     img = Image.new("RGB", (640, 480), color="white")
-    result = detect_convey_region(img)
+    result = detect_markers(img)
     assert result is None
 
 
-def test_detect_convey_region_grayscale():
-    """Test detection works with grayscale input."""
-    # Grayscale image - should handle conversion
+def test_detect_markers_grayscale():
+    """Test detect_markers works with grayscale input."""
     img = Image.new("L", (640, 480), color=128)
-    result = detect_convey_region(img)
+    result = detect_markers(img)
     assert result is None  # No markers, but shouldn't crash
 
 
@@ -89,59 +87,69 @@ def test_mask_convey_region_triangle():
     assert img.getpixel((95, 5)) == (255, 255, 255)
 
 
-def test_detect_convey_region_with_real_markers():
-    """Test detection with actual ArUco markers rendered into image."""
+def test_detect_markers_with_all_corners():
+    """Test detect_markers returns full result with all 4 corner markers."""
     # Create a test image
     img_array = np.ones((480, 640, 3), dtype=np.uint8) * 255
 
     # Generate and place the 4 corner markers
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     marker_size = 50
+    pad = 20
 
-    # Generate markers
-    markers = {}
+    # Generate and place markers
     for tag_id in [6, 7, 4, 2]:
         marker = cv2.aruco.generateImageMarker(dictionary, tag_id, marker_size)
-        # Convert to 3-channel
-        markers[tag_id] = cv2.cvtColor(marker, cv2.COLOR_GRAY2RGB)
+        marker_rgb = cv2.cvtColor(marker, cv2.COLOR_GRAY2RGB)
 
-    # Place markers at corners (with some padding)
-    pad = 20
-    # TL - tag 6
-    img_array[pad : pad + marker_size, pad : pad + marker_size] = markers[6]
-    # TR - tag 7
-    img_array[pad : pad + marker_size, 640 - pad - marker_size : 640 - pad] = markers[7]
-    # BL - tag 4
-    img_array[480 - pad - marker_size : 480 - pad, pad : pad + marker_size] = markers[4]
-    # BR - tag 2
-    img_array[
-        480 - pad - marker_size : 480 - pad, 640 - pad - marker_size : 640 - pad
-    ] = markers[2]
+        if tag_id == 6:  # TL
+            img_array[pad : pad + marker_size, pad : pad + marker_size] = marker_rgb
+        elif tag_id == 7:  # TR
+            img_array[pad : pad + marker_size, 640 - pad - marker_size : 640 - pad] = (
+                marker_rgb
+            )
+        elif tag_id == 4:  # BL
+            img_array[480 - pad - marker_size : 480 - pad, pad : pad + marker_size] = (
+                marker_rgb
+            )
+        elif tag_id == 2:  # BR
+            img_array[
+                480 - pad - marker_size : 480 - pad,
+                640 - pad - marker_size : 640 - pad,
+            ] = marker_rgb
 
-    # Convert to PIL
     pil_img = Image.fromarray(img_array)
 
-    # Detect
-    result = detect_convey_region(pil_img)
+    result = detect_markers(pil_img)
 
-    # Should find all 4 markers and return polygon
+    # Should return dict with markers and polygon
     assert result is not None
-    assert len(result) == 4
+    assert "markers" in result
+    assert "polygon" in result
 
-    # Polygon should roughly bound the marker positions
-    # Each point should be a tuple of numeric values
-    for point in result:
-        assert len(point) == 2
-        assert np.issubdtype(type(point[0]), np.number) or isinstance(
-            point[0], (int, float)
-        )
-        assert np.issubdtype(type(point[1]), np.number) or isinstance(
-            point[1], (int, float)
-        )
+    # Should have 4 markers
+    assert len(result["markers"]) == 4
+
+    # Each marker should have id and corners
+    marker_ids = {m["id"] for m in result["markers"]}
+    assert marker_ids == {2, 4, 6, 7}
+
+    for marker in result["markers"]:
+        assert "id" in marker
+        assert "corners" in marker
+        assert len(marker["corners"]) == 4
+        for corner in marker["corners"]:
+            assert len(corner) == 2
+            assert isinstance(corner[0], (int, float))
+            assert isinstance(corner[1], (int, float))
+
+    # Polygon should be present (all 4 corners detected)
+    assert result["polygon"] is not None
+    assert len(result["polygon"]) == 4
 
 
-def test_detect_convey_region_partial_markers():
-    """Test detection returns None when only some markers present."""
+def test_detect_markers_partial():
+    """Test detect_markers returns markers but no polygon with partial detection."""
     # Create a test image
     img_array = np.ones((480, 640, 3), dtype=np.uint8) * 255
 
@@ -150,7 +158,7 @@ def test_detect_convey_region_partial_markers():
     marker_size = 50
     pad = 20
 
-    # Only place TL and TR markers
+    # Only place TL (6) and TR (7) markers
     for tag_id, pos in [(6, (pad, pad)), (7, (pad, 640 - pad - marker_size))]:
         marker = cv2.aruco.generateImageMarker(dictionary, tag_id, marker_size)
         marker_rgb = cv2.cvtColor(marker, cv2.COLOR_GRAY2RGB)
@@ -159,6 +167,17 @@ def test_detect_convey_region_partial_markers():
 
     pil_img = Image.fromarray(img_array)
 
-    # Should return None - only 2 of 4 markers found
-    result = detect_convey_region(pil_img)
-    assert result is None
+    result = detect_markers(pil_img)
+
+    # Should return dict with markers but no polygon
+    assert result is not None
+    assert "markers" in result
+    assert "polygon" in result
+
+    # Should have 2 markers
+    assert len(result["markers"]) == 2
+    marker_ids = {m["id"] for m in result["markers"]}
+    assert marker_ids == {6, 7}
+
+    # Polygon should be None (only 2 of 4 corners)
+    assert result["polygon"] is None
