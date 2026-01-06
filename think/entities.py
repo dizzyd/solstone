@@ -16,6 +16,8 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from slugify import slugify
 
+from think.utils import get_journal
+
 
 def is_valid_entity_type(etype: str) -> bool:
     """Validate entity type: alphanumeric and spaces only, at least 3 characters."""
@@ -80,19 +82,13 @@ def entity_folder_path(facet: str, name: str) -> Path:
         Path to facets/{facet}/entities/{normalized_name}/
 
     Raises:
-        RuntimeError: If JOURNAL_PATH is not set
         ValueError: If name normalizes to empty string
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
     normalized = normalize_entity_name(name)
     if not normalized:
         raise ValueError(f"Entity name '{name}' normalizes to empty string")
 
-    return Path(journal) / "facets" / facet / "entities" / normalized
+    return Path(get_journal()) / "facets" / facet / "entities" / normalized
 
 
 def ensure_entity_folder(facet: str, name: str) -> Path:
@@ -106,7 +102,6 @@ def ensure_entity_folder(facet: str, name: str) -> Path:
         Path to the created/existing folder
 
     Raises:
-        RuntimeError: If JOURNAL_PATH is not set
         ValueError: If name normalizes to empty string
     """
     folder = entity_folder_path(facet, name)
@@ -129,11 +124,9 @@ def rename_entity_folder(facet: str, old_name: str, new_name: str) -> bool:
         or names normalize to the same value
 
     Raises:
-        RuntimeError: If JOURNAL_PATH is not set
         ValueError: If either name normalizes to empty string
         OSError: If rename fails (e.g., target exists)
     """
-    # Get paths using entity_folder_path (handles validation and JOURNAL_PATH)
     old_folder = entity_folder_path(facet, old_name)
     new_folder = entity_folder_path(facet, new_name)
 
@@ -212,16 +205,8 @@ def entity_file_path(facet: str, day: Optional[str] = None) -> Path:
 
     Returns:
         Path to entities.jsonl (attached) or entities/YYYYMMDD.jsonl (detected)
-
-    Raises:
-        RuntimeError: If JOURNAL_PATH is not set
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    facet_path = Path(journal) / "facets" / facet
+    facet_path = Path(get_journal()) / "facets" / facet
 
     if day is None:
         # Attached entities
@@ -270,9 +255,6 @@ def save_entities(
         entities: List of entity dictionaries (must have type, name, description keys;
                   attached entities may also have attached_at, updated_at timestamps)
         day: Optional day in YYYYMMDD format for detected entities
-
-    Raises:
-        RuntimeError: If JOURNAL_PATH is not set
     """
     path = entity_file_path(facet, day)
 
@@ -328,7 +310,6 @@ def update_entity(
 
     Raises:
         ValueError: If entity not found or guard mismatch
-        RuntimeError: If JOURNAL_PATH is not set
     """
     # Load ALL entities including detached to avoid data loss on save
     # For attached entities (day=None), we need include_detached=True
@@ -374,12 +355,7 @@ def load_all_attached_entities() -> list[dict[str, Any]]:
         Used for agent context loading. Provides deterministic behavior
         despite allowing independent entity descriptions across facets.
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    facets_dir = Path(journal) / "facets"
+    facets_dir = Path(get_journal()) / "facets"
     if not facets_dir.exists():
         return []
 
@@ -448,16 +424,12 @@ def load_entity_names(
         When spoken=True: List of shortened entity names for speech, or None if no entities found.
     """
     # Load entities using existing utilities
-    try:
-        if facet is None:
-            # Load from ALL facets with deduplication
-            entities = load_all_attached_entities()
-        else:
-            # Load from specific facet
-            entities = load_entities(facet)
-    except RuntimeError:
-        # JOURNAL_PATH not set
-        return None
+    if facet is None:
+        # Load from ALL facets with deduplication
+        entities = load_all_attached_entities()
+    else:
+        # Load from specific facet
+        entities = load_entities(facet)
 
     if not entities:
         return None
@@ -545,10 +517,7 @@ def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, 
     """
     from datetime import datetime, timedelta
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
+    journal = get_journal()
 
     # Load attached entities (excluding detached) and build exclusion set
     # Detached entities should appear in detected list again

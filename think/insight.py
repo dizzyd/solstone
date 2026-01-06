@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
@@ -18,6 +17,7 @@ from think.utils import (
     day_path,
     get_insight_topic,
     get_insights,
+    get_journal,
     load_prompt,
     setup_cli,
 )
@@ -47,10 +47,7 @@ def _write_events_jsonl(
     Returns:
         List of paths to written JSONL files.
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
+    journal = get_journal()
 
     # Group events by (facet, event_day)
     grouped: dict[tuple[str, str], list[dict]] = {}
@@ -378,8 +375,6 @@ def main() -> None:
         markdown = input_note + markdown
 
     try:
-
-        load_dotenv()
         if args.verbose:
             print("Verbose mode enabled")
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -500,10 +495,10 @@ def main() -> None:
         # Compute the relative source insight path
         # md_path is absolute, day_dir is the YYYYMMDD directory path
         # source_insight should be like "20240101/insights/meetings.md"
-        journal = os.getenv("JOURNAL_PATH", "")
-        if journal and str(md_path).startswith(journal):
+        journal = get_journal()
+        try:
             source_insight = os.path.relpath(str(md_path), journal)
-        else:
+        except ValueError:
             # Fallback: construct from day and topic
             source_insight = os.path.join(
                 day,

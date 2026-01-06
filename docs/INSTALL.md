@@ -60,17 +60,17 @@ pip install -e .
 cp .env.example .env
 ```
 
-3. Create your journal directory:
-
-```bash
-mkdir -p ~/Documents/journal
-```
-
-4. Edit `.env` and set your journal path:
+3. (Optional) Set a custom journal path in `.env`:
 
 ```
 JOURNAL_PATH=~/Documents/journal
 ```
+
+If not set, solstone automatically uses the platform-specific default:
+- Linux: `~/.local/share/solstone/journal`
+- macOS: `~/Library/Application Support/solstone/journal`
+
+The journal directory is created automatically on first use.
 
 ---
 

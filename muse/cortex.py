@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from think.callosum import CallosumConnection
+from think.utils import get_journal
 
 
 class AgentProcess:
@@ -72,7 +73,7 @@ class CortexService:
     """Callosum-based agent process manager."""
 
     def __init__(self, journal_path: Optional[str] = None):
-        self.journal_path = Path(journal_path or os.getenv("JOURNAL_PATH", "."))
+        self.journal_path = Path(journal_path or get_journal())
         self.agents_dir = self.journal_path / "agents"
         self.agents_dir.mkdir(parents=True, exist_ok=True)
 

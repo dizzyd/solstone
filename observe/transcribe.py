@@ -26,7 +26,7 @@ from observe.utils import get_segment_key
 from think.callosum import callosum_send
 from think.entities import load_entity_names
 from think.models import GEMINI_FLASH
-from think.utils import PromptNotFoundError, load_prompt, setup_cli
+from think.utils import PromptNotFoundError, get_journal, load_prompt, setup_cli
 
 # Constants
 MODEL = GEMINI_FLASH
@@ -513,7 +513,7 @@ class Transcriber:
                 save_speaker_embeddings(embeddings_dir, speaker_embeddings)
 
             # Emit completion event
-            journal_path = Path(os.getenv("JOURNAL_PATH", ""))
+            journal_path = Path(get_journal())
             duration_ms = int((time.time() - start_time) * 1000)
 
             try:
@@ -563,9 +563,7 @@ def main():
 
     faulthandler.enable()
 
-    journal = Path(os.getenv("JOURNAL_PATH", ""))
-    if not journal.is_dir():
-        parser.error("JOURNAL_PATH not set or invalid")
+    journal = Path(get_journal())
 
     audio_path = Path(args.audio_path)
     if not audio_path.exists():

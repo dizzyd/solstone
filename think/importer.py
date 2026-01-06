@@ -26,6 +26,7 @@ from think.models import GEMINI_FLASH, gemini_generate
 from think.utils import (
     PromptNotFoundError,
     day_path,
+    get_journal,
     load_prompt,
     segment_key,
     setup_cli,
@@ -53,10 +54,8 @@ _status_running: bool = False
 
 
 def _get_relative_path(path: str) -> str:
-    """Get path relative to JOURNAL_PATH, or return as-is if not under JOURNAL_PATH."""
-    journal_path = os.getenv("JOURNAL_PATH", "")
-    if not journal_path:
-        return path
+    """Get path relative to journal, or return as-is if not under journal."""
+    journal_path = get_journal()
     try:
         return os.path.relpath(path, journal_path)
     except ValueError:
@@ -675,11 +674,8 @@ _MIME_TYPES = {
 
 
 def _is_in_imports(media_path: str) -> bool:
-    """Check if file path is already under {JOURNAL_PATH}/imports/."""
-    journal = os.getenv("JOURNAL_PATH", "")
-    if not journal:
-        return False
-    imports_dir = os.path.join(journal, "imports")
+    """Check if file path is already under journal/imports/."""
+    imports_dir = os.path.join(get_journal(), "imports")
     abs_media = os.path.abspath(media_path)
     abs_imports = os.path.abspath(imports_dir)
     return abs_media.startswith(abs_imports + os.sep)
@@ -693,11 +689,7 @@ def _setup_import(
     detection_result: dict | None,
 ) -> str:
     """Copy file to imports/ and write metadata. Returns new file path."""
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    journal_root = Path(journal)
+    journal_root = Path(get_journal())
     import_dir = journal_root / "imports" / timestamp
 
     # Check for conflict

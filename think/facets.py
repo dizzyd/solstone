@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 from fastmcp import Context
 from fastmcp.server.dependencies import get_http_headers
 
+from think.utils import get_journal
+
 
 def _get_actor_info(context: Context | None = None) -> tuple[str, str | None]:
     """Extract actor (persona) and agent_id from meta or HTTP headers.
@@ -86,14 +88,8 @@ def _write_action_log(
         actor: For tools: persona name. For apps: app name
         day: Day in YYYYMMDD format (defaults to today)
         agent_id: Optional agent ID (only for tool actions)
-
-    Raises:
-        RuntimeError: If JOURNAL_PATH is not set
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
+    journal = get_journal()
 
     if day is None:
         day = datetime.now().strftime("%Y%m%d")
@@ -152,9 +148,6 @@ def log_tool_action(
         params: Dictionary of action-specific parameters
         context: Optional FastMCP context for extracting persona/agent_id
         day: Day in YYYYMMDD format (defaults to today)
-
-    Raises:
-        RuntimeError: If JOURNAL_PATH is not set
     """
     actor, agent_id = _get_actor_info(context)
     _write_action_log(
@@ -174,12 +167,7 @@ def get_facets() -> dict[str, dict[str, object]]:
     Each key is the facet name. The value contains the facet metadata
     from facet.json including title, description, and the facet path.
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    facets_dir = Path(journal) / "facets"
+    facets_dir = Path(get_journal()) / "facets"
     facets: dict[str, dict[str, object]] = {}
 
     if not facets_dir.exists():
@@ -227,14 +215,8 @@ def facet_summary(facet: str) -> str:
 
     Raises:
         FileNotFoundError: If the facet doesn't exist
-        RuntimeError: If JOURNAL_PATH is not set
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal or journal == "":
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    facet_path = Path(journal) / "facets" / facet
+    facet_path = Path(get_journal()) / "facets" / facet
     if not facet_path.exists():
         raise FileNotFoundError(f"Facet '{facet}' not found at {facet_path}")
 
@@ -324,13 +306,7 @@ def get_facet_news(
         Dictionary with ``days`` (list of news day payloads), ``next_cursor``
         (date string for subsequent requests) and ``has_more`` boolean flag.
     """
-
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    news_dir = Path(journal) / "facets" / facet / "news"
+    news_dir = Path(get_journal()) / "facets" / facet / "news"
     if not news_dir.exists():
         return {"days": [], "next_cursor": None, "has_more": False}
 
@@ -415,16 +391,8 @@ def get_active_facets(day: str) -> set[str]:
 
     Returns:
         Set of facet names that had at least one occurrence event on that day
-
-    Raises:
-        RuntimeError: If JOURNAL_PATH is not set
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    facets_dir = Path(journal) / "facets"
+    facets_dir = Path(get_journal()) / "facets"
     active: set[str] = set()
 
     if not facets_dir.exists():
@@ -472,14 +440,8 @@ def set_facet_muted(facet: str, muted: bool) -> None:
 
     Raises:
         FileNotFoundError: If facet doesn't exist
-        RuntimeError: If JOURNAL_PATH not set
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
-    facet_path = Path(journal) / "facets" / facet
+    facet_path = Path(get_journal()) / "facets" / facet
     if not facet_path.exists():
         raise FileNotFoundError(f"Facet '{facet}' not found at {facet_path}")
 
@@ -550,11 +512,6 @@ def facet_summaries(*, detailed_entities: bool = False) -> str:
     -------
     str
         Formatted markdown string with all facets and their entities
-
-    Raises
-    ------
-    RuntimeError
-        If JOURNAL_PATH is not set
     """
     from think.entities import load_entities, load_entity_names
 

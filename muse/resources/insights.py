@@ -3,19 +3,18 @@
 
 """MCP resource handlers for insights."""
 
-import os
 from pathlib import Path
 
 from fastmcp.resources import TextResource
 
 from muse.mcp import mcp
+from think.utils import get_journal
 
 
 @mcp.resource("journal://insight/{day}/{topic}")
 def get_insight(day: str, topic: str) -> TextResource:
     """Return the markdown insight for a topic."""
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    md_path = Path(journal) / day / "insights" / f"{topic}.md"
+    md_path = Path(get_journal()) / day / "insights" / f"{topic}.md"
 
     if not md_path.is_file():
         text = f"Topic '{topic}' not found for day {day}"

@@ -43,9 +43,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable
 
-from dotenv import load_dotenv
-
-from think.utils import day_dirs, segment_key
+from think.utils import day_dirs, get_journal, segment_key
 
 # Date pattern for path parsing
 _DATE_RE = re.compile(r"^\d{8}$")
@@ -361,11 +359,9 @@ def format_file(
         raise FileNotFoundError(f"File not found: {file_path}")
 
     # Get journal-relative path for pattern matching
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH", "")
-    journal_path = Path(journal).resolve() if journal else None
+    journal_path = Path(get_journal()).resolve()
 
-    if journal_path and file_path.is_relative_to(journal_path):
+    if file_path.is_relative_to(journal_path):
         rel_path = str(file_path.relative_to(journal_path))
     else:
         # Fall back to just the filename parts for matching

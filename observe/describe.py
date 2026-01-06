@@ -31,7 +31,7 @@ from PIL import Image, ImageChops, ImageStat
 from observe.aruco import detect_markers, mask_convey_region, polygon_area
 from observe.utils import get_segment_key
 from think.callosum import callosum_send
-from think.utils import setup_cli
+from think.utils import get_journal, setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -821,7 +821,7 @@ async def async_main():
 
             # Emit completion event
             if output_path and output_path.exists():
-                journal_path = Path(os.getenv("JOURNAL_PATH", ""))
+                journal_path = Path(get_journal())
 
                 try:
                     rel_input = video_path.relative_to(journal_path)

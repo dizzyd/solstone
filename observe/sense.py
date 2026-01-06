@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 from observe.utils import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from think.callosum import CallosumConnection
 from think.runner import ManagedProcess as RunnerManagedProcess
-from think.utils import day_path, setup_cli
+from think.utils import day_path, get_journal, setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -422,7 +422,7 @@ class FileSensor:
             status = {}
 
             # Get journal path for relative paths
-            journal_path = os.getenv("JOURNAL_PATH", "")
+            journal_path = get_journal()
 
             # Collect describe info
             describe_running = None
@@ -431,11 +431,7 @@ class FileSensor:
             if self.current_describe_process is not None:
                 handler_proc = self.current_describe_process
                 try:
-                    rel_file = (
-                        str(handler_proc.file_path.relative_to(journal_path))
-                        if journal_path
-                        else str(handler_proc.file_path)
-                    )
+                    rel_file = str(handler_proc.file_path.relative_to(journal_path))
                 except ValueError:
                     rel_file = str(handler_proc.file_path)
 
@@ -448,11 +444,7 @@ class FileSensor:
             now = time.time()
             for file_path, queued_at in self.describe_queue:
                 try:
-                    rel_file = (
-                        str(file_path.relative_to(journal_path))
-                        if journal_path
-                        else str(file_path)
-                    )
+                    rel_file = str(file_path.relative_to(journal_path))
                 except ValueError:
                     rel_file = str(file_path)
 
@@ -473,11 +465,7 @@ class FileSensor:
             for file_path, handler_proc in self.running.items():
                 if handler_proc is not self.current_describe_process:
                     try:
-                        rel_file = (
-                            str(file_path.relative_to(journal_path))
-                            if journal_path
-                            else str(file_path)
-                        )
+                        rel_file = str(file_path.relative_to(journal_path))
                     except ValueError:
                         rel_file = str(file_path)
 
@@ -817,9 +805,7 @@ def main():
     )
     args = setup_cli(parser)
 
-    journal = Path(os.getenv("JOURNAL_PATH", ""))
-    if not journal.is_dir():
-        parser.error("JOURNAL_PATH not set or invalid")
+    journal = Path(get_journal())
 
     # Validate argument combinations
     if args.reprocess and not args.day:

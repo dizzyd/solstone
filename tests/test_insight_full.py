@@ -55,7 +55,6 @@ def test_ponder_main(tmp_path, monkeypatch):
         ]
 
     monkeypatch.setattr(mod, "send_extraction", fake_send_extraction)
-    monkeypatch.setattr(mod, "load_dotenv", lambda: True)
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
@@ -108,7 +107,6 @@ def test_ponder_extra_instructions(tmp_path, monkeypatch):
         ]
 
     monkeypatch.setattr(mod, "send_extraction", fake_send_extraction)
-    monkeypatch.setattr(mod, "load_dotenv", lambda: True)
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
@@ -159,7 +157,6 @@ def test_ponder_skip_occurrences(tmp_path, monkeypatch):
         return []
 
     monkeypatch.setattr(mod, "send_extraction", fake_send_extraction)
-    monkeypatch.setattr(mod, "load_dotenv", lambda: True)
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
 
     monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))

@@ -14,10 +14,12 @@ from pathlib import Path
 from string import Template
 from typing import Any, NamedTuple, Optional
 
+import platformdirs
 from dotenv import load_dotenv
 from timefhuman import timefhuman
 
 DATE_RE = re.compile(r"\d{8}")
+_journal_path_cache: str | None = None
 
 # Insight colors are now stored in each insight's JSON metadata file
 
@@ -139,8 +141,55 @@ def load_prompt(
     return PromptContent(text=text, path=prompt_path)
 
 
+def get_journal() -> str:
+    """Return the journal path, auto-creating it if it doesn't exist.
+
+    Resolution order:
+    1. JOURNAL_PATH environment variable (from .env or shell) - created if missing
+    2. Cached platform default from previous call
+    3. Platform-specific default: <user_data_dir>/solstone/journal
+
+    When using the platform default, the path is cached and set in os.environ.
+    Environment variable changes are always respected (no caching for explicit config).
+    An INFO log message is emitted when auto-creating the default path.
+
+    Returns
+    -------
+    str
+        Absolute path to the journal directory.
+    """
+    global _journal_path_cache
+
+    # Always check environment first (allows tests to override)
+    load_dotenv()
+    journal = os.getenv("JOURNAL_PATH")
+
+    if journal:
+        # User explicitly configured a path - create it if needed and use it
+        os.makedirs(journal, exist_ok=True)
+        return journal
+
+    # Use cached platform default if available
+    if _journal_path_cache:
+        return _journal_path_cache
+
+    # Create platform-specific default
+    data_dir = platformdirs.user_data_dir("solstone")
+    default_journal = os.path.join(data_dir, "journal")
+
+    # Create directory if needed
+    os.makedirs(default_journal, exist_ok=True)
+
+    # Set environment for this process and children
+    os.environ["JOURNAL_PATH"] = default_journal
+    _journal_path_cache = default_journal
+
+    logging.info("Using default journal path: %s", default_journal)
+    return default_journal
+
+
 def day_path(day: Optional[str] = None) -> Path:
-    """Return absolute path for a day from ``JOURNAL_PATH`` environment variable.
+    """Return absolute path for a day directory within the journal.
 
     Parameters
     ----------
@@ -154,15 +203,10 @@ def day_path(day: Optional[str] = None) -> Path:
 
     Raises
     ------
-    RuntimeError
-        If JOURNAL_PATH is not set.
     ValueError
         If day format is invalid.
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
+    journal = get_journal()
 
     # Handle "today" case
     if day is None:
@@ -178,25 +222,13 @@ def day_path(day: Optional[str] = None) -> Path:
 def day_dirs() -> dict[str, str]:
     """Return mapping of YYYYMMDD day names to absolute paths.
 
-    Uses JOURNAL_PATH from environment (must be set via load_dotenv() or setup_cli()).
-
     Returns
     -------
     dict[str, str]
         Mapping of day folder names to their full paths.
         Example: {"20250101": "/path/to/journal/20250101", ...}
-
-    Raises
-    ------
-    RuntimeError
-        If JOURNAL_PATH environment variable is not set.
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-    if not os.path.isdir(journal):
-        return {}
+    journal = get_journal()
 
     days: dict[str, str] = {}
     for name in os.listdir(journal):
@@ -334,11 +366,6 @@ def get_config() -> dict[str, Any]:
         Journal configuration with at least an 'identity' key containing
         name, preferred, bio, pronouns, aliases, email_addresses, and
         timezone fields. Returns default empty structure if config file doesn't exist.
-
-    Raises
-    ------
-    RuntimeError
-        If JOURNAL_PATH is not set.
     """
     # Default identity structure - defined once
     default_identity = {
@@ -356,11 +383,7 @@ def get_config() -> dict[str, Any]:
         "timezone": "",
     }
 
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal:
-        raise RuntimeError("JOURNAL_PATH not set")
-
+    journal = get_journal()
     config_path = Path(journal) / "config" / "journal.json"
 
     # Return default structure if file doesn't exist
@@ -407,10 +430,7 @@ def day_log(day: str, message: str) -> None:
 
 def journal_log(message: str) -> None:
     """Append ``message`` to the journal's ``task_log.txt``."""
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH")
-    if journal:
-        _append_task_log(journal, message)
+    _append_task_log(get_journal(), message)
 
 
 def day_input_summary(day: str) -> str:
@@ -468,13 +488,12 @@ def day_input_summary(day: str) -> str:
 def setup_cli(parser: argparse.ArgumentParser, *, parse_known: bool = False):
     """Parse command line arguments and configure logging.
 
-    The parser will be extended with ``-v``/``--verbose`` and ``-d``/``--debug`` flags. Environment
-    variables from ``.env`` are loaded and ``JOURNAL_PATH`` is validated. The
-    parsed arguments are returned. If ``parse_known`` is ``True`` a tuple of
-    ``(args, extra)`` is returned using :func:`argparse.ArgumentParser.parse_known_args`.
+    The parser will be extended with ``-v``/``--verbose`` and ``-d``/``--debug`` flags.
+    The journal path is resolved via get_journal() which loads .env and auto-creates
+    a default path if needed. The parsed arguments are returned. If ``parse_known``
+    is ``True`` a tuple of ``(args, extra)`` is returned using
+    :func:`argparse.ArgumentParser.parse_known_args`.
     """
-
-    load_dotenv()
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output"
     )
@@ -496,9 +515,8 @@ def setup_cli(parser: argparse.ArgumentParser, *, parse_known: bool = False):
 
     logging.basicConfig(level=log_level)
 
-    journal = os.getenv("JOURNAL_PATH")
-    if not journal or not os.path.isdir(journal):
-        parser.error("JOURNAL_PATH not set or invalid")
+    # Initialize journal path (may auto-create default)
+    get_journal()
 
     return (args, extra) if parse_known else args
 
@@ -675,24 +693,22 @@ def get_agent(persona: str = "default", facet: str | None = None) -> dict:
     extra_parts = []
 
     # Add facet context - either focused single facet or all facets summary
-    journal = os.getenv("JOURNAL_PATH")
-    if journal:
-        try:
-            if facet:
-                # Focused mode: detailed view of single facet with full entities
-                from think.facets import facet_summary
+    try:
+        if facet:
+            # Focused mode: detailed view of single facet with full entities
+            from think.facets import facet_summary
 
-                detailed = facet_summary(facet)
-                extra_parts.append(f"## Facet Focus\n{detailed}")
-            else:
-                # General mode: summary of all facets
-                from think.facets import facet_summaries
+            detailed = facet_summary(facet)
+            extra_parts.append(f"## Facet Focus\n{detailed}")
+        else:
+            # General mode: summary of all facets
+            from think.facets import facet_summaries
 
-                facets_summary = facet_summaries()
-                if facets_summary and facets_summary != "No facets found.":
-                    extra_parts.append(facets_summary)
-        except Exception:
-            pass  # Ignore if facets can't be loaded
+            facets_summary = facet_summaries()
+            if facets_summary and facets_summary != "No facets found.":
+                extra_parts.append(facets_summary)
+    except Exception:
+        pass  # Ignore if facets can't be loaded
 
     # Add insights to agent instructions
     insights = get_insights()

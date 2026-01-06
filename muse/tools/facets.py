@@ -7,11 +7,11 @@ Note: These functions are registered as MCP tools by muse/mcp.py
 They can also be imported and called directly for testing or internal use.
 """
 
-import os
 from pathlib import Path
 from typing import Any
 
 from think.facets import facet_summary
+from think.utils import get_journal
 
 
 def get_facet(facet: str) -> dict[str, Any]:
@@ -37,9 +37,9 @@ def get_facet(facet: str) -> dict[str, Any]:
         - get_facet("work_projects")
         - get_facet("research")
 
-    Raises:
-        If the facet doesn't exist or JOURNAL_PATH is not set, returns an error dictionary
-        with an error message and suggestion for resolution.
+    Returns:
+        If the facet doesn't exist, returns an error dictionary with an error message
+        and suggestion for resolution.
     """
     try:
         # Get the facet summary markdown
@@ -48,12 +48,7 @@ def get_facet(facet: str) -> dict[str, Any]:
     except FileNotFoundError:
         return {
             "error": f"Facet '{facet}' not found",
-            "suggestion": "verify the facet name exists or check JOURNAL_PATH is set correctly",
-        }
-    except RuntimeError as exc:
-        return {
-            "error": str(exc),
-            "suggestion": "ensure JOURNAL_PATH environment variable is set",
+            "suggestion": "verify the facet name exists in the journal",
         }
     except Exception as exc:
         return {
@@ -87,11 +82,7 @@ def facet_news(facet: str, day: str, markdown: str | None = None) -> dict[str, A
         - facet_news("work", "20250118", "# 2025-01-18 News...")  # Write news
     """
     try:
-        journal = os.getenv("JOURNAL_PATH")
-        if not journal:
-            raise RuntimeError("JOURNAL_PATH not set")
-
-        journal_path = Path(journal)
+        journal_path = Path(get_journal())
         facet_path = journal_path / "facets" / facet
 
         # Check if facet exists

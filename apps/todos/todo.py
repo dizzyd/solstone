@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 from dataclasses import dataclass
@@ -19,9 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-
 from think.facets import get_facets
+from think.utils import get_journal
 
 __all__ = [
     "TodoChecklist",
@@ -388,8 +386,7 @@ def todo_file_path(day: str, facet: str) -> Path:
     Returns:
         Path to the facet-scoped todo file for the specified day.
     """
-    load_dotenv()
-    journal = os.getenv("JOURNAL_PATH", "journal")
+    journal = get_journal()
     return Path(journal) / "facets" / facet / "todos" / f"{day}.jsonl"
 
 
@@ -440,10 +437,7 @@ def upcoming(
     if limit <= 0:
         return "No upcoming todos."
 
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    root = Path(journal)
-    if not root.is_dir():
-        return "No upcoming todos."
+    root = Path(get_journal())
 
     today_str = today if today is not None else datetime.now().strftime("%Y%m%d")
 
@@ -543,9 +537,7 @@ def get_facets_with_todos(day: str) -> list[str]:
         List of facet names that have todo files for the specified day.
         Returns empty list if no facets have todos or if journal path is invalid.
     """
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    root = Path(journal)
-    facets_dir = root / "facets"
+    facets_dir = Path(get_journal()) / "facets"
 
     if not facets_dir.is_dir():
         return []
@@ -578,8 +570,7 @@ def get_todo_days_in_range(facet: str, day_from: str, day_to: str) -> list[str]:
         Sorted list of day strings (YYYYMMDD) that have todo files within the range.
         Returns empty list if no todos exist or journal path is invalid.
     """
-    journal = os.getenv("JOURNAL_PATH", "journal")
-    todos_dir = Path(journal) / "facets" / facet / "todos"
+    todos_dir = Path(get_journal()) / "facets" / facet / "todos"
 
     if not todos_dir.is_dir():
         return []
