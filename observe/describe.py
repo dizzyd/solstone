@@ -28,6 +28,7 @@ from typing import List, Optional
 import av
 from PIL import Image, ImageChops, ImageStat
 
+from observe.aruco import detect_convey_region, mask_convey_region, polygon_area
 from observe.utils import get_segment_key
 from think.callosum import callosum_send
 from think.utils import setup_cli
@@ -161,6 +162,8 @@ class VideoProcessor:
     RMS_THRESHOLD = 0.05
     # Downsample size for RMS comparison
     COMPARE_SIZE = (160, 90)
+    # Skip frame if Convey UI covers more than this fraction of the frame
+    MASK_SKIP_THRESHOLD = 0.8
 
     def __init__(self, video_path: Path):
         self.video_path = video_path
@@ -207,6 +210,23 @@ class VideoProcessor:
                     arr_rgb = frame.to_ndarray(format="rgb24")
                     pil_img = Image.fromarray(arr_rgb)
                     del arr_rgb
+
+                    # Detect and mask Convey UI region (fiducial corner tags)
+                    convey_polygon = detect_convey_region(pil_img)
+                    if convey_polygon is not None:
+                        # Check if Convey covers most of the frame
+                        mask_area = polygon_area(convey_polygon)
+                        frame_area = pil_img.width * pil_img.height
+                        if mask_area / frame_area > self.MASK_SKIP_THRESHOLD:
+                            # Skip frame entirely - Convey UI dominates
+                            pil_img.close()
+                            logger.debug(
+                                f"Skipping frame at {timestamp:.2f}s "
+                                f"(Convey UI covers {mask_area/frame_area:.0%})"
+                            )
+                            continue
+                        # Mask the Convey region with black
+                        mask_convey_region(pil_img, convey_polygon)
 
                     # Downsample for comparison
                     current_small = self._downsample(pil_img)
