@@ -1,25 +1,29 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 sol pbc
 
-"""Remote client for uploading observer data to a remote server.
+"""Remote observer support and unified backend for local/remote modes.
 
-This module provides functionality for:
-- Uploading segment files to a remote server
-- Sending events to the remote Callosum relay
-- Retry logic for failed uploads
+This module provides:
+- ObserverBackend: Unified interface for local (Callosum) and remote (HTTP) modes
+- RemoteClient: HTTP client for uploading segments and relaying events
+- Staging path management for remote observers without JOURNAL_PATH
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import queue
 import socket
+import tempfile
 import threading
 import time
 from pathlib import Path
 
 import requests
+
+from think.callosum import CallosumConnection
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +65,6 @@ class RemoteClient:
         self._stop_event.clear()
         self._event_thread = threading.Thread(target=self._event_loop, daemon=True)
         self._event_thread.start()
-        logger.info(f"Remote client started: {self.remote_url[:50]}...")
 
     def stop(self) -> None:
         """Stop background event sender thread."""
@@ -230,3 +233,173 @@ class RemoteClient:
                     logger.warning(f"Failed to delete {path}: {e}")
             return True
         return False
+
+
+class ObserverBackend:
+    """Unified backend for observer segment completion and status events.
+
+    Transparently handles local (Callosum) vs remote (HTTP upload) modes.
+    Observers interact with this single interface regardless of mode.
+
+    In remote mode without JOURNAL_PATH, creates a temp staging directory
+    that persists after crashes for diagnostics.
+    """
+
+    def __init__(self, remote_url: str | None = None):
+        """Initialize the observer backend.
+
+        Args:
+            remote_url: Remote ingest URL (if None, uses local Callosum)
+        """
+        self.remote_url = remote_url
+        self._remote_client: RemoteClient | None = None
+        self._callosum: CallosumConnection | None = None
+        self._staging_path: Path | None = None
+
+    @property
+    def is_remote(self) -> bool:
+        """True if operating in remote mode."""
+        return self.remote_url is not None
+
+    @property
+    def staging_path(self) -> Path:
+        """Get the staging path for segment files.
+
+        In local mode: uses JOURNAL_PATH (must be set).
+        In remote mode: uses JOURNAL_PATH if set, otherwise creates temp directory.
+
+        The temp directory persists after crashes for diagnostics.
+        """
+        if self._staging_path is not None:
+            return self._staging_path
+
+        journal = os.getenv("JOURNAL_PATH")
+
+        if journal and os.path.exists(journal):
+            self._staging_path = Path(journal)
+        elif self.is_remote:
+            # Remote mode without JOURNAL_PATH - create temp staging directory
+            # Use fixed subdirectory name so it persists and is findable
+            staging = Path(tempfile.gettempdir()) / "solstone-observer"
+            staging.mkdir(parents=True, exist_ok=True)
+            self._staging_path = staging
+            logger.info(f"Using temp staging directory: {staging}")
+        else:
+            raise RuntimeError(
+                "JOURNAL_PATH not set (required for local mode). "
+                "Set JOURNAL_PATH or use --remote for remote mode."
+            )
+
+        return self._staging_path
+
+    def start(self) -> None:
+        """Start the backend (connects to Callosum or starts remote client)."""
+        if self.is_remote:
+            self._remote_client = RemoteClient(self.remote_url)
+            self._remote_client.start()
+            logger.info(f"Remote backend started: {self.remote_url[:50]}...")
+        else:
+            self._callosum = CallosumConnection()
+            self._callosum.start()
+            logger.info("Local backend started (Callosum)")
+
+    def stop(self) -> None:
+        """Stop the backend."""
+        if self._remote_client:
+            self._remote_client.stop()
+            self._remote_client = None
+        if self._callosum:
+            self._callosum.stop()
+            self._callosum = None
+
+    def emit(self, tract: str, event: str, **fields) -> bool:
+        """Emit an event (status, observing, etc).
+
+        Automatically adds host and platform fields.
+
+        Args:
+            tract: Event tract (e.g., "observe")
+            event: Event name (e.g., "status")
+            **fields: Additional event fields
+
+        Returns:
+            True if emitted successfully
+        """
+        # Always include host/platform
+        fields.setdefault("host", HOST)
+        fields.setdefault("platform", PLATFORM)
+
+        if self._remote_client:
+            return self._remote_client.emit(tract, event, **fields)
+        elif self._callosum:
+            self._callosum.emit(tract, event, **fields)
+            return True
+        return False
+
+    def segment_complete(
+        self,
+        day: str,
+        segment: str,
+        file_paths: list[Path],
+    ) -> bool:
+        """Handle segment completion - upload or emit locally.
+
+        In remote mode: uploads files and deletes local copies on success.
+        In local mode: emits observe.observing event.
+
+        Args:
+            day: Day string (YYYYMMDD)
+            segment: Segment key (HHMMSS_LEN)
+            file_paths: List of file paths in the segment
+
+        Returns:
+            True if successful
+        """
+        if not file_paths:
+            return True
+
+        if self._remote_client:
+            success = self._remote_client.upload_and_cleanup(day, segment, file_paths)
+            if success:
+                logger.info(f"Segment uploaded: {segment} ({len(file_paths)} files)")
+                # Try to clean up empty segment directory
+                segment_dir = file_paths[0].parent
+                try:
+                    segment_dir.rmdir()
+                except OSError:
+                    pass  # Directory not empty or other error
+            else:
+                logger.error(f"Segment upload failed: {segment} - files kept locally")
+            return success
+
+        elif self._callosum:
+            # Local mode: emit observe.observing with file names
+            file_names = [f.name for f in file_paths]
+            self._callosum.emit(
+                "observe",
+                "observing",
+                day=day,
+                segment=segment,
+                files=file_names,
+                host=HOST,
+                platform=PLATFORM,
+            )
+            logger.info(f"Segment observing: {segment} ({len(file_names)} files)")
+            return True
+
+        return False
+
+
+def staging_day_path(base: Path, day: str) -> Path:
+    """Create and return day directory under staging base.
+
+    Args:
+        base: Staging base path (from ObserverBackend.staging_path)
+        day: Day string (YYYYMMDD)
+
+    Returns:
+        Path to day directory (created if needed)
+    """
+    day_dir = base / day
+    day_dir.mkdir(parents=True, exist_ok=True)
+    return day_dir

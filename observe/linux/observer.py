@@ -37,10 +37,9 @@ from observe.gnome.activity import (
 from observe.hear import AudioRecorder
 from observe.linux.audio import is_sink_muted
 from observe.linux.screencast import Screencaster, StreamInfo
-from observe.remote import HOST, PLATFORM, RemoteClient
+from observe.remote import ObserverBackend, staging_day_path
 from observe.tmux.capture import TmuxCapture, write_captures_jsonl
-from think.callosum import CallosumConnection
-from think.utils import day_path, setup_cli
+from think.utils import setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +61,14 @@ class Observer:
 
     def __init__(self, interval: int = 300, remote_url: str | None = None):
         self.interval = interval
-        self.remote_url = remote_url
         self.audio_recorder = AudioRecorder()
         self.screencaster = Screencaster()
         self.tmux_capture = TmuxCapture()
         self.bus: MessageBus | None = None
         self.running = True
-        self.callosum: CallosumConnection | None = None
-        self.remote_client: RemoteClient | None = None
+
+        # Unified backend for local/remote modes
+        self.backend = ObserverBackend(remote_url)
 
         # State tracking
         self.start_at = time.time()  # Wall-clock for filenames
@@ -128,15 +127,8 @@ class Observer:
         else:
             logger.info("Tmux not available (will only use screencast)")
 
-        # Start Callosum connection for status events (or remote client)
-        if self.remote_url:
-            self.remote_client = RemoteClient(self.remote_url)
-            self.remote_client.start()
-            logger.info(f"Remote client started: {self.remote_url[:50]}...")
-        else:
-            self.callosum = CallosumConnection()
-            self.callosum.start()
-            logger.info("Callosum connection started")
+        # Start unified backend (handles local/remote modes)
+        self.backend.start()
 
         return True
 
@@ -275,7 +267,7 @@ class Observer:
         # Get timestamp parts for this window and calculate duration
         date_part, time_part = self.get_timestamp_parts(self.start_at)
         duration = int(time.time() - self.start_at)
-        day_dir = day_path(date_part)
+        day_dir = staging_day_path(self.backend.staging_path, date_part)
 
         # Stop screencast first (closes file handles)
         stopped_streams: list[StreamInfo] = []
@@ -371,31 +363,9 @@ class Observer:
 
         # Emit observing event with what we saved this boundary
         if files:
-            if self.remote_client:
-                # Remote mode: upload files to remote server
-                segment_dir = day_dir / segment_key
-                file_paths = [segment_dir / f for f in files]
-                if self.remote_client.upload_and_cleanup(
-                    date_part, segment_key, file_paths
-                ):
-                    logger.info(f"Segment uploaded: {segment_key} ({len(files)} files)")
-                else:
-                    logger.error(
-                        f"Segment upload failed: {segment_key} - files kept locally"
-                    )
-            elif self.callosum:
-                # Local mode: emit to local Callosum
-                # Files are now simple names (e.g., "audio.flac" not "143022_300_audio.flac")
-                self.callosum.emit(
-                    "observe",
-                    "observing",
-                    day=date_part,
-                    segment=segment_key,
-                    files=files,
-                    host=HOST,
-                    platform=PLATFORM,
-                )
-                logger.info(f"Segment observing: {segment_key} ({len(files)} files)")
+            segment_dir = day_dir / segment_key
+            file_paths = [segment_dir / f for f in files]
+            self.backend.segment_complete(date_part, segment_key, file_paths)
 
     def _create_draft_folder(self) -> str:
         """
@@ -405,7 +375,7 @@ class Observer:
             Path to the draft folder (YYYYMMDD/HHMMSS_draft/)
         """
         date_part, time_part = self.get_timestamp_parts(self.start_at)
-        day_dir = day_path(date_part)
+        day_dir = staging_day_path(self.backend.staging_path, date_part)
 
         # Create draft folder: YYYYMMDD/HHMMSS_draft/
         draft_name = f"{time_part}_draft"
@@ -477,7 +447,7 @@ class Observer:
 
     def emit_status(self):
         """Emit observe.status event with current state."""
-        journal_path = os.getenv("JOURNAL_PATH", "")
+        staging_path = str(self.backend.staging_path)
         elapsed = int(time.monotonic() - self.start_at_mono)
 
         # Calculate screencast info
@@ -485,11 +455,7 @@ class Observer:
             streams_info = []
             for stream in self.current_streams:
                 try:
-                    rel_file = (
-                        os.path.relpath(stream.file_path, journal_path)
-                        if journal_path
-                        else stream.file_path
-                    )
+                    rel_file = os.path.relpath(stream.file_path, staging_path)
                 except ValueError:
                     rel_file = stream.file_path
 
@@ -536,31 +502,16 @@ class Observer:
             "tmux_active": self.cached_tmux_active,
         }
 
-        # Emit to remote or local Callosum
-        if self.remote_client:
-            self.remote_client.emit(
-                "observe",
-                "status",
-                mode=self.current_mode,
-                screencast=screencast_info,
-                tmux=tmux_info,
-                audio=audio_info,
-                activity=activity_info,
-                host=HOST,
-                platform=PLATFORM,
-            )
-        elif self.callosum:
-            self.callosum.emit(
-                "observe",
-                "status",
-                mode=self.current_mode,
-                screencast=screencast_info,
-                tmux=tmux_info,
-                audio=audio_info,
-                activity=activity_info,
-                host=HOST,
-                platform=PLATFORM,
-            )
+        # Emit status via unified backend
+        self.backend.emit(
+            "observe",
+            "status",
+            mode=self.current_mode,
+            screencast=screencast_info,
+            tmux=tmux_info,
+            audio=audio_info,
+            activity=activity_info,
+        )
 
     async def main_loop(self):
         """Run the main observer loop."""
@@ -673,7 +624,7 @@ class Observer:
         # Get timestamp parts for final save
         date_part, time_part = self.get_timestamp_parts(self.start_at)
         duration = int(time.time() - self.start_at)
-        day_dir = day_path(date_part)
+        day_dir = staging_day_path(self.backend.staging_path, date_part)
 
         # Stop screencast first (closes file handles)
         stopped_streams: list[StreamInfo] = []
@@ -710,23 +661,10 @@ class Observer:
                 os.rename(self.draft_dir, final_segment_dir)
                 logger.info(f"Final segment: {self.draft_dir} -> {final_segment_dir}")
 
-                # Emit final observing event
-                if self.remote_client:
-                    segment_dir = day_dir / segment_key
-                    file_paths = [segment_dir / f for f in files]
-                    self.remote_client.upload_and_cleanup(
-                        date_part, segment_key, file_paths
-                    )
-                elif self.callosum:
-                    self.callosum.emit(
-                        "observe",
-                        "observing",
-                        day=date_part,
-                        segment=segment_key,
-                        files=files,
-                        host=HOST,
-                        platform=PLATFORM,
-                    )
+                # Emit final observing event via backend
+                segment_dir = day_dir / segment_key
+                file_paths = [segment_dir / f for f in files]
+                self.backend.segment_complete(date_part, segment_key, file_paths)
             except OSError as e:
                 logger.error(f"Failed to rename final draft folder: {e}")
         elif self.draft_dir:
@@ -742,13 +680,9 @@ class Observer:
         self.audio_recorder.stop_recording()
         logger.info("Audio recording stopped")
 
-        # Stop Callosum or remote client
-        if self.remote_client:
-            self.remote_client.stop()
-            logger.info("Remote client stopped")
-        elif self.callosum:
-            self.callosum.stop()
-            logger.info("Callosum connection stopped")
+        # Stop unified backend
+        self.backend.stop()
+        logger.info("Backend stopped")
 
 
 async def async_main(args):
@@ -804,10 +738,11 @@ def main():
     )
     args = setup_cli(parser)
 
-    # Verify journal path exists
+    # Verify journal path exists (only required for local mode)
     journal = os.getenv("JOURNAL_PATH")
-    if not journal or not os.path.exists(journal):
+    if not args.remote and (not journal or not os.path.exists(journal)):
         logger.error(f"JOURNAL_PATH not set or does not exist: {journal}")
+        logger.error("Set JOURNAL_PATH or use --remote for remote mode")
         sys.exit(1)
 
     # Log remote mode if enabled

@@ -30,9 +30,8 @@ from observe.macos.activity import (
     is_screen_locked,
 )
 from observe.macos.screencapture import AudioInfo, DisplayInfo, ScreenCaptureKitManager
-from observe.remote import HOST, PLATFORM
-from think.callosum import CallosumConnection
-from think.utils import day_path, setup_cli
+from observe.remote import ObserverBackend, staging_day_path
+from think.utils import setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +46,26 @@ SAMPLE_RATE = 48000  # Standard audio sample rate
 class MacOSObserver:
     """macOS audio and screencast observer using ScreenCaptureKit."""
 
-    def __init__(self, interval: int = 300, sck_cli_path: str = "sck-cli"):
+    def __init__(
+        self,
+        interval: int = 300,
+        sck_cli_path: str = "sck-cli",
+        remote_url: str | None = None,
+    ):
         """
         Initialize the macOS observer.
 
         Args:
             interval: Window duration in seconds (default: 300 = 5 minutes)
             sck_cli_path: Path to sck-cli executable
+            remote_url: Remote server URL for uploading segments (optional)
         """
         self.interval = interval
         self.screencapture = ScreenCaptureKitManager(sck_cli_path=sck_cli_path)
         self.running = True
-        self.callosum: CallosumConnection | None = None
+
+        # Unified backend for local/remote modes
+        self.backend = ObserverBackend(remote_url)
 
         # State tracking
         self.start_at = time.time()  # Wall-clock for filenames
@@ -83,7 +90,7 @@ class MacOSObserver:
         self.segment_is_muted = False
 
     async def setup(self):
-        """Initialize ScreenCaptureKit and Callosum connection."""
+        """Initialize ScreenCaptureKit and backend connection."""
         # Verify sck-cli is available
         sck_path = shutil.which(self.screencapture.sck_cli_path)
         if not sck_path:
@@ -91,10 +98,8 @@ class MacOSObserver:
             return False
         logger.info(f"Found sck-cli at: {sck_path}")
 
-        # Start Callosum connection for status events
-        self.callosum = CallosumConnection()
-        self.callosum.start()
-        logger.info("Callosum connection started")
+        # Start unified backend (handles local/remote modes)
+        self.backend.start()
 
         return True
 
@@ -226,7 +231,7 @@ class MacOSObserver:
         # Get timestamp parts for this window and calculate duration
         date_part, time_part = self.get_timestamp_parts(self.start_at)
         duration = int(time.time() - self.start_at)
-        day_dir = day_path(date_part)
+        day_dir = staging_day_path(self.backend.staging_path, date_part)
         segment_key = f"{time_part}_{duration}"
 
         saved_files: list[str] = []
@@ -320,18 +325,13 @@ class MacOSObserver:
         if is_active and not self.cached_screen_locked:
             self.initialize_capture()
 
-        # Emit observing event with saved files
-        if saved_files and self.callosum:
-            self.callosum.emit(
-                "observe",
-                "observing",
-                day=date_part,
-                segment=segment_key,
-                files=saved_files,
-                host=HOST,
-                platform=PLATFORM,
+        # Emit observing event with saved files via backend
+        if saved_files:
+            segment_dir = (
+                staging_day_path(self.backend.staging_path, date_part) / segment_key
             )
-            logger.info(f"Segment observing: {segment_key} ({len(saved_files)} files)")
+            file_paths = [segment_dir / f for f in saved_files]
+            self.backend.segment_complete(date_part, segment_key, file_paths)
 
     def _create_draft_folder(self) -> str:
         """
@@ -341,7 +341,7 @@ class MacOSObserver:
             Path to the draft folder (YYYYMMDD/HHMMSS_draft/)
         """
         date_part, time_part = self.get_timestamp_parts(self.start_at)
-        day_dir = day_path(date_part)
+        day_dir = staging_day_path(self.backend.staging_path, date_part)
 
         # Create draft folder: YYYYMMDD/HHMMSS_draft/
         draft_name = f"{time_part}_draft"
@@ -401,10 +401,7 @@ class MacOSObserver:
         - audio: always empty (macOS checks threshold at boundary, not real-time)
         - activity: system activity status
         """
-        if not self.callosum:
-            return
-
-        journal_path = os.getenv("JOURNAL_PATH", "")
+        staging_path = str(self.backend.staging_path)
 
         # Determine mode (macOS is binary: screencast or idle)
         mode = "screencast" if self.capture_running else "idle"
@@ -415,11 +412,7 @@ class MacOSObserver:
             streams_info = []
             for display in self.current_displays:
                 try:
-                    rel_file = (
-                        os.path.relpath(display.file_path, journal_path)
-                        if journal_path
-                        else display.file_path
-                    )
+                    rel_file = os.path.relpath(display.file_path, staging_path)
                 except ValueError:
                     rel_file = display.file_path
 
@@ -457,7 +450,8 @@ class MacOSObserver:
             "sink_muted": self.cached_is_muted,
         }
 
-        self.callosum.emit(
+        # Emit status via unified backend
+        self.backend.emit(
             "observe",
             "status",
             mode=mode,
@@ -465,8 +459,6 @@ class MacOSObserver:
             tmux=tmux_info,
             audio=audio_info,
             activity=activity_info,
-            host=HOST,
-            platform=PLATFORM,
         )
 
     async def main_loop(self):
@@ -544,22 +536,17 @@ class MacOSObserver:
             # Finalize segment (rename files and folder)
             date_part, segment_key, saved_files = self._finalize_segment()
 
-            # Emit observing event for final segment
-            if saved_files and self.callosum:
-                self.callosum.emit(
-                    "observe",
-                    "observing",
-                    day=date_part,
-                    segment=segment_key,
-                    files=saved_files,
-                    host=HOST,
-                    platform=PLATFORM,
+            # Emit observing event for final segment via backend
+            if saved_files:
+                segment_dir = (
+                    staging_day_path(self.backend.staging_path, date_part) / segment_key
                 )
+                file_paths = [segment_dir / f for f in saved_files]
+                self.backend.segment_complete(date_part, segment_key, file_paths)
 
-        # Stop Callosum connection
-        if self.callosum:
-            self.callosum.stop()
-            logger.info("Callosum connection stopped")
+        # Stop backend
+        self.backend.stop()
+        logger.info("Backend stopped")
 
         logger.info("Shutdown complete")
 
@@ -569,6 +556,7 @@ async def async_main(args):
     observer = MacOSObserver(
         interval=args.interval,
         sck_cli_path=args.sck_cli_path,
+        remote_url=getattr(args, "remote", None),
     )
 
     # Setup signal handlers
@@ -613,13 +601,23 @@ def main():
         default="sck-cli",
         help="Path to sck-cli executable (default: sck-cli from PATH).",
     )
+    parser.add_argument(
+        "--remote",
+        type=str,
+        help="Remote server URL for uploading segments (e.g., https://server:5000/app/remote/ingest/KEY)",
+    )
     args = setup_cli(parser)
 
-    # Verify journal path exists
+    # Verify journal path exists (only required for local mode)
     journal = os.getenv("JOURNAL_PATH")
-    if not journal or not os.path.exists(journal):
+    if not args.remote and (not journal or not os.path.exists(journal)):
         logger.error(f"JOURNAL_PATH not set or does not exist: {journal}")
+        logger.error("Set JOURNAL_PATH or use --remote for remote mode")
         sys.exit(1)
+
+    # Log remote mode if enabled
+    if args.remote:
+        logger.info(f"Remote mode enabled: {args.remote[:50]}...")
 
     # Run async main
     try:
