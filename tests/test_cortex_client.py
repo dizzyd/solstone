@@ -16,6 +16,7 @@ import pytest
 from muse.cortex_client import (
     cortex_agents,
     cortex_request,
+    get_agent_end_state,
     get_agent_status,
     get_agent_thread,
 )
@@ -347,6 +348,58 @@ def test_get_agent_status_prefers_completed(tmp_path, monkeypatch):
     (agents_dir / f"{agent_id}_active.jsonl").write_text('{"event": "start"}\n')
 
     assert get_agent_status(agent_id) == "completed"
+
+
+def test_get_agent_end_state_finish(tmp_path, monkeypatch):
+    """Test get_agent_end_state returns 'finish' for successful agents."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+
+    agent_id = "1234567890123"
+    (agents_dir / f"{agent_id}.jsonl").write_text(
+        '{"event": "request", "prompt": "hello"}\n'
+        '{"event": "finish", "result": "done"}\n'
+    )
+
+    assert get_agent_end_state(agent_id) == "finish"
+
+
+def test_get_agent_end_state_error(tmp_path, monkeypatch):
+    """Test get_agent_end_state returns 'error' for failed agents."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+
+    agent_id = "1234567890123"
+    (agents_dir / f"{agent_id}.jsonl").write_text(
+        '{"event": "request", "prompt": "hello"}\n'
+        '{"event": "error", "error": "something went wrong"}\n'
+    )
+
+    assert get_agent_end_state(agent_id) == "error"
+
+
+def test_get_agent_end_state_running(tmp_path, monkeypatch):
+    """Test get_agent_end_state returns 'running' for active agents."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+
+    agent_id = "1234567890123"
+    (agents_dir / f"{agent_id}_active.jsonl").write_text(
+        '{"event": "request", "prompt": "hello"}\n'
+    )
+
+    assert get_agent_end_state(agent_id) == "running"
+
+
+def test_get_agent_end_state_unknown(tmp_path, monkeypatch):
+    """Test get_agent_end_state returns 'unknown' for missing agents."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    (tmp_path / "agents").mkdir()
+
+    assert get_agent_end_state("nonexistent") == "unknown"
 
 
 def test_get_agent_thread_single_agent(tmp_path, monkeypatch):

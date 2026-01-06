@@ -206,6 +206,39 @@
 .activity-indicator span:nth-child(1) { animation-delay: -0.32s; }
 .activity-indicator span:nth-child(2) { animation-delay: -0.16s; }
 
+/* Retry button for failed chats */
+.retry-container {
+  align-self: flex-start;
+  margin-bottom: 0.75em;
+  animation: fadeInUp 0.3s ease-out;
+}
+.retry-button {
+  background: #fff3e0;
+  border: 1px solid #ff9800;
+  border-radius: 6px;
+  padding: 0.5em 1em;
+  font-size: 0.9em;
+  cursor: pointer;
+  color: #e65100;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.retry-button:hover {
+  background: #ffe0b2;
+  border-color: #f57c00;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.retry-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.retry-icon {
+  font-size: 1.1em;
+}
+
 /* Recent chats panel */
 .recent-chats-panel {
   display: flex;
@@ -445,15 +478,15 @@ window.addEventListener('facet.switch', () => {
 });
 
 // Simple error display - adds error message to chat
-function showError(message) {
+function showError(message, enableInput = true) {
   const div = document.createElement('div');
   div.className = 'message from-bot';
   div.innerHTML = `<strong style="color:#c62828">Error:</strong> ${message}`;
   messagesDiv.appendChild(div);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-  // Re-enable input so user can retry
-  if (input) {
+  // Re-enable input so user can retry (unless caller wants to handle it)
+  if (enableInput && input) {
     input.disabled = false;
     input.placeholder = 'Send a message...';
     input.focus();
@@ -594,6 +627,7 @@ function enrichEvent(event) {
 let currentChatId = null;   // The chat being viewed (stable across continuations)
 let currentThread = [];     // Agent IDs in the current thread (for WebSocket filtering)
 let isComplete = false;
+let canContinue = false;    // Whether the chat can be continued (false if ended in error)
 let currentBookmarked = null;  // Bookmark timestamp or null
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -689,7 +723,9 @@ async function loadChat(chatId) {
   currentChatId = chatId;
   currentThread = [];
   isComplete = false;
+  canContinue = false;
   resetEventTracking();
+  hideRetryButton();
 
   // Notify background service
   if (window.AppServices?.services?.chat) {
@@ -712,6 +748,7 @@ async function loadChat(chatId) {
     const events = data.events || [];
     currentThread = data.thread || [chatId];
     isComplete = data.is_complete || false;
+    canContinue = data.can_continue || false;
 
     // Update backend toggle to match last used backend in this chat
     if (data.last_backend) {
@@ -729,10 +766,14 @@ async function loadChat(chatId) {
       }
     }
 
-    // Update UI based on completion
+    // Update UI based on completion state
     if (isComplete) {
       forceHideActivityIndicator();
-      enableContinuation(chatId);
+      if (canContinue) {
+        enableContinuation(chatId);
+      } else if (data.end_state === 'error') {
+        showRetryButton(chatId);
+      }
     }
 
     // Mark as read and update badges
@@ -751,10 +792,84 @@ async function loadChat(chatId) {
  * @param {string} chatId - The chat ID to continue
  */
 function enableContinuation(chatId) {
+  hideRetryButton();
   if (input) {
     input.disabled = false;
     input.placeholder = 'Continue conversation...';
     input.dataset.continueChat = chatId;
+  }
+}
+
+/**
+ * Show retry button after an error. Adds button inline after the last message.
+ * @param {string} chatId - The chat ID to retry
+ */
+function showRetryButton(chatId) {
+  // Remove any existing retry button
+  hideRetryButton();
+
+  // Create retry button container
+  const retryDiv = document.createElement('div');
+  retryDiv.id = 'retry-container';
+  retryDiv.className = 'retry-container';
+  retryDiv.innerHTML = `
+    <button class="retry-button" onclick="retryChat('${chatId}')">
+      <span class="retry-icon">↻</span> Retry
+    </button>
+  `;
+  messagesDiv.appendChild(retryDiv);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+  // Keep input disabled
+  if (input) {
+    input.disabled = true;
+    input.placeholder = 'Retry failed message...';
+    delete input.dataset.continueChat;
+  }
+}
+
+/**
+ * Hide and remove the retry button.
+ */
+function hideRetryButton() {
+  const existing = document.getElementById('retry-container');
+  if (existing) {
+    existing.remove();
+  }
+}
+
+/**
+ * Retry the last failed message in the current chat.
+ * @param {string} chatId - The chat ID to retry
+ */
+async function retryChat(chatId) {
+  hideRetryButton();
+  showActivityIndicator();
+  canContinue = false;
+
+  try {
+    const response = await fetch(`/app/chat/api/chat/${chatId}/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: currentBackend })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Retry failed');
+    }
+
+    const data = await response.json();
+    // Add new agent to thread for WebSocket event filtering
+    currentThread.push(data.agent_id);
+    isComplete = false;
+    // Events will arrive via WebSocket
+
+  } catch (error) {
+    forceHideActivityIndicator();
+    showError(`Retry failed: ${error.message}`, false);
+    // Re-show retry button on failure (this will disable input)
+    showRetryButton(chatId);
   }
 }
 
@@ -790,7 +905,9 @@ function resetToListView() {
   currentChatId = null;
   currentThread = [];
   isComplete = false;
+  canContinue = false;
   clearMessages();
+  hideRetryButton();
   updateStarButton(null);
 
   if (input) {
@@ -1197,6 +1314,7 @@ function reuseMessage(messageDiv) {
   currentChatId = null;
   currentThread = [];
   isComplete = false;
+  canContinue = false;
   forceHideActivityIndicator();
   resetEventTracking();
 
@@ -1256,6 +1374,7 @@ function setupFormHandlers() {
         // Don't reload - that clears UI and causes race conditions with WebSocket events
         currentThread.push(d.agent_id);
         isComplete = false;
+        canContinue = false;
         showActivityIndicator();
       } else {
         // New chat: navigate to it
@@ -1300,13 +1419,12 @@ function processEvent(event) {
       }
 
       isComplete = true;
+      canContinue = true;
       forceHideActivityIndicator();
 
       // Re-enable input and enable continuation using current chat ID
-      if(input && currentChatId){
-        input.disabled = false;
-        input.placeholder = 'Continue conversation...';
-        input.dataset.continueChat = currentChatId;
+      if(currentChatId){
+        enableContinuation(currentChatId);
       }
       break;
 
@@ -1317,12 +1435,12 @@ function processEvent(event) {
       }
 
       isComplete = true;
+      canContinue = false;
       forceHideActivityIndicator();
 
-      // Re-enable input so user can retry
-      if(input){
-        input.disabled = false;
-        input.placeholder = 'Send a message...';
+      // Show retry button instead of enabling input
+      if(currentChatId){
+        showRetryButton(currentChatId);
       }
       break;
   }

@@ -160,6 +160,39 @@ def get_agent_status(agent_id: str) -> str:
     return "not_found"
 
 
+def get_agent_end_state(agent_id: str) -> str:
+    """Get how a completed agent ended (finish or error).
+
+    Args:
+        agent_id: The agent ID (timestamp)
+
+    Returns:
+        "finish" - Agent completed successfully
+        "error" - Agent ended with an error
+        "running" - Agent is still active
+        "unknown" - Agent file exists but no terminal event found
+    """
+    status = get_agent_status(agent_id)
+    if status == "running":
+        return "running"
+    if status == "not_found":
+        return "unknown"
+
+    # Read events to find terminal state
+    try:
+        events = read_agent_events(agent_id)
+        # Find last finish or error event
+        for event in reversed(events):
+            event_type = event.get("event")
+            if event_type == "finish":
+                return "finish"
+            if event_type == "error":
+                return "error"
+        return "unknown"
+    except FileNotFoundError:
+        return "unknown"
+
+
 def read_agent_events(agent_id: str) -> list[Dict[str, Any]]:
     """Read all events from an agent's JSONL log file.
 

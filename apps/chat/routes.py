@@ -100,6 +100,39 @@ TITLE_SYSTEM_INSTRUCTION = (
 )
 
 
+def _get_backend_api_key(backend: str) -> str | None:
+    """Get the API key name for a backend and check if it's set.
+
+    Args:
+        backend: The backend name (openai, anthropic, google)
+
+    Returns:
+        The API key value if set, None otherwise
+    """
+    key_names = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+    }
+    key_name = key_names.get(backend, "GOOGLE_API_KEY")
+    return os.getenv(key_name)
+
+
+def _get_backend_key_name(backend: str) -> str:
+    """Get the environment variable name for a backend's API key.
+
+    Args:
+        backend: The backend name (openai, anthropic, google)
+
+    Returns:
+        The environment variable name
+    """
+    key_names = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+    }
+    return key_names.get(backend, "GOOGLE_API_KEY")
+
+
 def generate_chat_title(message: str) -> str:
     """Generate a short title for a chat message using Gemini Flash Lite."""
     try:
@@ -144,14 +177,8 @@ def send_message() -> Any:
         except FileNotFoundError:
             pass  # Chat exists but agent file missing - treat as new
 
-    if backend == "openai":
-        key_name = "OPENAI_API_KEY"
-    elif backend == "anthropic":
-        key_name = "ANTHROPIC_API_KEY"
-    else:
-        key_name = "GOOGLE_API_KEY"
-
-    if not os.getenv(key_name):
+    if not _get_backend_api_key(backend):
+        key_name = _get_backend_key_name(backend)
         resp = jsonify({"error": f"{key_name} not set"})
         resp.status_code = 500
         return resp
@@ -227,7 +254,12 @@ def chat_events(chat_id: str) -> Any:
     Derives thread from agent files, then hydrates events from all agents.
     For active chats, client should subscribe to WebSocket for real-time updates.
     """
-    from muse.cortex_client import get_agent_status, get_agent_thread, read_agent_events
+    from muse.cortex_client import (
+        get_agent_end_state,
+        get_agent_status,
+        get_agent_thread,
+        read_agent_events,
+    )
 
     chat = _load_chat(chat_id)
     if not chat:
@@ -251,10 +283,15 @@ def chat_events(chat_id: str) -> Any:
             # Agent file might not exist yet for very new agents
             pass
 
-    # Check if the last agent in the thread is complete
+    # Check if the last agent in the thread is complete and how it ended
     is_complete = False
+    end_state = None
+    can_continue = False
     if thread:
         is_complete = get_agent_status(thread[-1]) == "completed"
+        if is_complete:
+            end_state = get_agent_end_state(thread[-1])
+            can_continue = end_state == "finish"
 
     # Find the backend used by the last agent in the thread
     last_backend = None
@@ -270,6 +307,8 @@ def chat_events(chat_id: str) -> Any:
         chat=chat,
         thread=thread,
         is_complete=is_complete,
+        end_state=end_state,
+        can_continue=can_continue,
         last_backend=last_backend,
     )
 
@@ -352,6 +391,119 @@ def mark_chat_read(chat_id: str) -> Any:
             save_json(chat_file, chat_data)
 
         return jsonify({"success": True})
+
+    except Exception as e:
+        resp = jsonify({"error": str(e)})
+        resp.status_code = 500
+        return resp
+
+
+@chat_bp.route("/api/chat/<chat_id>/retry", methods=["POST"])
+def retry_chat(chat_id: str) -> Any:
+    """Retry the last failed message in a chat.
+
+    Reads the last agent's prompt and spawns a new agent with the same prompt,
+    continuing from the errored agent. Uses the backend specified in the request.
+
+    Args:
+        chat_id: The chat ID
+
+    Returns:
+        JSON with agent_id of the new retry attempt
+    """
+    from muse.cortex_client import (
+        get_agent_end_state,
+        get_agent_thread,
+        read_agent_events,
+    )
+
+    payload = request.get_json(force=True) if request.data else {}
+    backend = payload.get("backend")
+
+    if not backend:
+        resp = jsonify({"error": "backend is required"})
+        resp.status_code = 400
+        return resp
+
+    # Validate chat exists
+    chats_dir = get_app_storage_path("chat", "chats", ensure_exists=False)
+    if not (chats_dir / f"{chat_id}.json").exists():
+        resp = jsonify({"error": f"Chat not found: {chat_id}"})
+        resp.status_code = 404
+        return resp
+
+    # Get thread and verify last agent ended in error
+    try:
+        thread = get_agent_thread(chat_id)
+    except FileNotFoundError:
+        resp = jsonify({"error": "Chat thread not found"})
+        resp.status_code = 404
+        return resp
+
+    if not thread:
+        resp = jsonify({"error": "Chat thread is empty"})
+        resp.status_code = 404
+        return resp
+
+    last_agent_id = thread[-1]
+    end_state = get_agent_end_state(last_agent_id)
+
+    if end_state != "error":
+        resp = jsonify({"error": f"Cannot retry: last agent ended with '{end_state}'"})
+        resp.status_code = 400
+        return resp
+
+    # Extract prompt from last agent's start event
+    try:
+        events = read_agent_events(last_agent_id)
+    except FileNotFoundError:
+        resp = jsonify({"error": "Could not read agent events"})
+        resp.status_code = 500
+        return resp
+
+    prompt = None
+    for event in events:
+        if event.get("event") == "start":
+            prompt = event.get("prompt")
+            break
+
+    if not prompt:
+        resp = jsonify({"error": "Could not find original prompt to retry"})
+        resp.status_code = 500
+        return resp
+
+    # Validate API key
+    if not _get_backend_api_key(backend):
+        key_name = _get_backend_key_name(backend)
+        resp = jsonify({"error": f"{key_name} not set"})
+        resp.status_code = 500
+        return resp
+
+    try:
+        from convey.utils import spawn_agent
+
+        # Get facet from chat metadata for context
+        chat_data = load_json(chats_dir / f"{chat_id}.json")
+        facet = chat_data.get("facet") if chat_data else None
+
+        config: dict[str, Any] = {"continue_from": last_agent_id}
+        if facet:
+            config["facet"] = facet
+
+        # Spawn retry agent
+        agent_id = spawn_agent(
+            prompt=prompt,
+            persona="default",
+            backend=backend,
+            config=config,
+        )
+
+        # Update chat timestamp
+        if chat_data:
+            chat_data["updated_ts"] = int(time.time() * 1000)
+            save_json(chats_dir / f"{chat_id}.json", chat_data)
+
+        return jsonify(agent_id=agent_id)
 
     except Exception as e:
         resp = jsonify({"error": str(e)})
