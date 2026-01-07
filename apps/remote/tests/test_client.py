@@ -14,7 +14,7 @@ import pytest
 @pytest.fixture
 def mock_session():
     """Create a mock requests session."""
-    with patch("observe.remote.requests.Session") as mock:
+    with patch("observe.sync.requests.Session") as mock:
         session = MagicMock()
         mock.return_value = session
         yield session
@@ -22,48 +22,16 @@ def mock_session():
 
 def test_remote_client_init():
     """Test RemoteClient initialization."""
-    from observe.remote import RemoteClient
+    from observe.sync import RemoteClient
 
     client = RemoteClient("https://server:5000/app/remote/ingest/abc123")
 
     assert client.remote_url == "https://server:5000/app/remote/ingest/abc123"
-    assert client.event_url == "https://server:5000/app/remote/ingest/abc123/event"
-
-
-def test_remote_client_emit_queues_event():
-    """Test that emit queues events."""
-    from observe.remote import RemoteClient
-
-    client = RemoteClient("https://server/ingest/key")
-
-    # Emit without starting (queue only, no sending)
-    result = client.emit("observe", "status", mode="screencast")
-    assert result is True
-
-    # Check queue has the event
-    event = client._event_queue.get_nowait()
-    assert event["tract"] == "observe"
-    assert event["event"] == "status"
-    assert event["mode"] == "screencast"
-
-
-def test_remote_client_emit_queue_full():
-    """Test that emit returns False when queue is full."""
-    from observe.remote import RemoteClient
-
-    client = RemoteClient("https://server/ingest/key")
-    # Queue is maxsize=100, fill it up
-    for i in range(100):
-        client.emit("test", f"event_{i}")
-
-    # Next emit should fail
-    result = client.emit("test", "overflow")
-    assert result is False
 
 
 def test_upload_segment_success(mock_session, tmp_path):
     """Test successful file upload."""
-    from observe.remote import RemoteClient
+    from observe.sync import RemoteClient
 
     # Create test files
     file1 = tmp_path / "audio.flac"
@@ -99,7 +67,7 @@ def test_upload_segment_success(mock_session, tmp_path):
 
 def test_upload_segment_retry_on_failure(mock_session, tmp_path):
     """Test that upload retries on failure."""
-    from observe.remote import RETRY_BACKOFF, RemoteClient
+    from observe.sync import RETRY_BACKOFF, RemoteClient
 
     # Create test file
     file1 = tmp_path / "audio.flac"
@@ -117,7 +85,7 @@ def test_upload_segment_retry_on_failure(mock_session, tmp_path):
     mock_session.post.side_effect = [mock_failure, mock_success]
 
     # Patch sleep to avoid delays
-    with patch("observe.remote.time.sleep"):
+    with patch("observe.sync.time.sleep"):
         client = RemoteClient("https://server/ingest/key")
         result = client.upload_segment("20250103", "120000_300", [file1])
 
@@ -127,7 +95,7 @@ def test_upload_segment_retry_on_failure(mock_session, tmp_path):
 
 def test_upload_segment_all_retries_fail(mock_session, tmp_path):
     """Test that upload returns False after all retries fail."""
-    from observe.remote import RETRY_BACKOFF, RemoteClient
+    from observe.sync import RETRY_BACKOFF, RemoteClient
 
     # Create test file
     file1 = tmp_path / "audio.flac"
@@ -140,7 +108,7 @@ def test_upload_segment_all_retries_fail(mock_session, tmp_path):
     mock_session.post.return_value = mock_failure
 
     # Patch sleep to avoid delays
-    with patch("observe.remote.time.sleep"):
+    with patch("observe.sync.time.sleep"):
         client = RemoteClient("https://server/ingest/key")
         result = client.upload_segment("20250103", "120000_300", [file1])
 
@@ -150,7 +118,7 @@ def test_upload_segment_all_retries_fail(mock_session, tmp_path):
 
 def test_upload_segment_skips_missing_files(mock_session, tmp_path):
     """Test that upload skips missing files."""
-    from observe.remote import RemoteClient
+    from observe.sync import RemoteClient
 
     # Create one existing file
     file1 = tmp_path / "exists.flac"
@@ -173,7 +141,7 @@ def test_upload_segment_skips_missing_files(mock_session, tmp_path):
 
 def test_upload_segment_fails_if_all_missing(mock_session, tmp_path):
     """Test that upload fails if all files are missing."""
-    from observe.remote import RemoteClient
+    from observe.sync import RemoteClient
 
     # Reference missing files
     file1 = tmp_path / "missing1.flac"
@@ -188,55 +156,10 @@ def test_upload_segment_fails_if_all_missing(mock_session, tmp_path):
 
 def test_upload_segment_empty_list(mock_session):
     """Test that upload fails with empty file list."""
-    from observe.remote import RemoteClient
+    from observe.sync import RemoteClient
 
     client = RemoteClient("https://server/ingest/key")
     result = client.upload_segment("20250103", "120000_300", [])
 
     assert result is False
     mock_session.post.assert_not_called()
-
-
-def test_upload_and_cleanup_deletes_on_success(mock_session, tmp_path):
-    """Test that upload_and_cleanup deletes files on success."""
-    from observe.remote import RemoteClient
-
-    # Create test file
-    file1 = tmp_path / "audio.flac"
-    file1.write_bytes(b"audio data")
-    assert file1.exists()
-
-    # Mock successful response
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"files": ["audio.flac"], "bytes": 10}
-    mock_session.post.return_value = mock_response
-
-    client = RemoteClient("https://server/ingest/key")
-    result = client.upload_and_cleanup("20250103", "120000_300", [file1])
-
-    assert result is True
-    assert not file1.exists()  # File should be deleted
-
-
-def test_upload_and_cleanup_keeps_on_failure(mock_session, tmp_path):
-    """Test that upload_and_cleanup keeps files on failure."""
-    from observe.remote import RemoteClient
-
-    # Create test file
-    file1 = tmp_path / "audio.flac"
-    file1.write_bytes(b"audio data")
-    assert file1.exists()
-
-    # Mock all failures
-    mock_failure = MagicMock()
-    mock_failure.status_code = 500
-    mock_failure.text = "Error"
-    mock_session.post.return_value = mock_failure
-
-    with patch("observe.remote.time.sleep"):
-        client = RemoteClient("https://server/ingest/key")
-        result = client.upload_and_cleanup("20250103", "120000_300", [file1])
-
-    assert result is False
-    assert file1.exists()  # File should still exist

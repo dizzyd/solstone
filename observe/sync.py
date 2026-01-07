@@ -15,18 +15,126 @@ import argparse
 import hashlib
 import json
 import logging
+import platform
 import queue
+import socket
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from observe.remote import HOST, PLATFORM, RemoteClient
+import requests
+
 from think.callosum import CallosumConnection
 from think.utils import day_path, setup_cli
 
 logger = logging.getLogger(__name__)
+
+# Host identification
+HOST = socket.gethostname()
+PLATFORM = platform.system().lower()
+
+# Retry configuration for RemoteClient
+MAX_RETRIES = 3
+RETRY_BACKOFF = [1, 5, 15]  # seconds
+UPLOAD_TIMEOUT = 300  # 5 minutes for large files
+
+
+class RemoteClient:
+    """Client for uploading segment files to a remote server."""
+
+    def __init__(self, remote_url: str):
+        """Initialize remote client.
+
+        Args:
+            remote_url: Full URL to remote ingest endpoint (including key)
+                       e.g., "https://server:5000/app/remote/ingest/abc123..."
+        """
+        self.remote_url = remote_url.rstrip("/")
+        self.session = requests.Session()
+
+    def upload_segment(
+        self,
+        day: str,
+        segment: str,
+        files: list[Path],
+    ) -> bool:
+        """Upload segment files to remote server.
+
+        Args:
+            day: Day string (YYYYMMDD)
+            segment: Segment key (HHMMSS_LEN)
+            files: List of file paths to upload
+
+        Returns:
+            True if upload succeeded, False otherwise
+        """
+        if not files:
+            logger.warning("No files to upload")
+            return False
+
+        for attempt, delay in enumerate(RETRY_BACKOFF):
+            # Open file handles and ensure they're closed
+            file_handles = []
+            files_data = []
+            try:
+                # Build files list for requests
+                for path in files:
+                    if not path.exists():
+                        logger.warning(f"File not found, skipping: {path}")
+                        continue
+                    fh = open(path, "rb")
+                    file_handles.append(fh)
+                    files_data.append(
+                        ("files", (path.name, fh, "application/octet-stream"))
+                    )
+
+                if not files_data:
+                    logger.error("No valid files to upload")
+                    return False
+
+                # Send request with host/platform for event emission
+                response = self.session.post(
+                    self.remote_url,
+                    data={
+                        "day": day,
+                        "segment": segment,
+                        "host": HOST,
+                        "platform": PLATFORM,
+                    },
+                    files=files_data,
+                    timeout=UPLOAD_TIMEOUT,
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    logger.info(
+                        f"Uploaded {len(result.get('files', []))} files "
+                        f"({result.get('bytes', 0)} bytes) for {day}/{segment}"
+                    )
+                    return True
+
+                logger.warning(f"Upload failed: {response.status_code} {response.text}")
+
+            except requests.RequestException as e:
+                logger.warning(f"Upload attempt {attempt + 1} failed: {e}")
+
+            finally:
+                # Always close file handles
+                for fh in file_handles:
+                    try:
+                        fh.close()
+                    except Exception:
+                        pass
+
+            if attempt < len(RETRY_BACKOFF) - 1:
+                logger.info(f"Retrying upload in {delay}s...")
+                time.sleep(delay)
+
+        logger.error(f"Upload failed after {MAX_RETRIES} attempts: {day}/{segment}")
+        return False
+
 
 # Confirmation polling configuration
 CONFIRM_POLL_INTERVAL = 5  # seconds between confirmation checks
@@ -173,9 +281,6 @@ class SyncService:
 
     def start(self) -> None:
         """Start the sync service."""
-        # Start remote client
-        self._client.start()
-
         # Start Callosum connection
         self._callosum = CallosumConnection()
         self._callosum.start(callback=self._handle_message)
@@ -205,7 +310,6 @@ class SyncService:
             self._callosum.stop()
             self._callosum = None
 
-        self._client.stop()
         logger.info("Sync service stopped")
 
     def _handle_message(self, message: dict[str, Any]) -> None:
@@ -401,9 +505,7 @@ class SyncService:
 
         return False
 
-    def _cleanup_segment(
-        self, day: str, segment: str, file_paths: list[Path]
-    ) -> None:
+    def _cleanup_segment(self, day: str, segment: str, file_paths: list[Path]) -> None:
         """Delete local segment files after confirmation."""
         for path in file_paths:
             try:
@@ -434,7 +536,9 @@ class SyncService:
             }
 
             if self._current_segment:
-                status["segment"] = f"{self._current_segment.day}/{self._current_segment.segment}"
+                status["segment"] = (
+                    f"{self._current_segment.day}/{self._current_segment.segment}"
+                )
                 status["state"] = self._current_state
                 if self._current_state == "confirming":
                     status["confirm_attempt"] = self._confirm_attempt

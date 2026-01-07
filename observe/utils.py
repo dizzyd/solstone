@@ -1,12 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 sol pbc
 
-"""Utilities for working with media files (audio and video)."""
+"""Utilities for working with media files (audio and video) and shared observer helpers."""
 
+import datetime
 import json
 import logging
+import os
 import re
+import time
 from pathlib import Path
+
+from think.utils import day_path
 
 logger = logging.getLogger(__name__)
 
@@ -289,3 +294,45 @@ def load_analysis_frames(jsonl_path: Path) -> list[dict]:
     if header:
         return [header] + frames
     return frames
+
+
+# -----------------------------------------------------------------------------
+# Observer utilities (shared between Linux and macOS observers)
+# -----------------------------------------------------------------------------
+
+
+def get_timestamp_parts(timestamp: float | None = None) -> tuple[str, str]:
+    """Get date and time parts from timestamp.
+
+    Args:
+        timestamp: Unix timestamp (default: current time)
+
+    Returns:
+        Tuple of (date_part, time_part) like ("20250101", "143022")
+    """
+    if timestamp is None:
+        timestamp = time.time()
+    dt = datetime.datetime.fromtimestamp(timestamp)
+    date_part = dt.strftime("%Y%m%d")
+    time_part = dt.strftime("%H%M%S")
+    return date_part, time_part
+
+
+def create_draft_folder(start_at: float) -> str:
+    """Create a draft folder for the current segment.
+
+    Args:
+        start_at: Segment start timestamp (wall-clock time)
+
+    Returns:
+        Path to the draft folder (YYYYMMDD/HHMMSS_draft/)
+    """
+    date_part, time_part = get_timestamp_parts(start_at)
+    day_dir = day_path(date_part)
+
+    # Create draft folder: YYYYMMDD/HHMMSS_draft/
+    draft_name = f"{time_part}_draft"
+    draft_path = str(day_dir / draft_name)
+    os.makedirs(draft_path, exist_ok=True)
+
+    return draft_path

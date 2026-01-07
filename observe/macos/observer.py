@@ -11,11 +11,12 @@ Creates 5-minute windows, saving both video and audio when voice activity is det
 
 import argparse
 import asyncio
-import datetime
 import logging
 import os
+import platform
 import shutil
 import signal
+import socket
 import sys
 import time
 from pathlib import Path
@@ -30,10 +31,15 @@ from observe.macos.activity import (
     is_screen_locked,
 )
 from observe.macos.screencapture import AudioInfo, DisplayInfo, ScreenCaptureKitManager
-from observe.remote import ObserverBackend, staging_day_path
-from think.utils import setup_cli
+from observe.utils import create_draft_folder, get_timestamp_parts
+from think.callosum import CallosumConnection
+from think.utils import day_path, get_journal, setup_cli
 
 logger = logging.getLogger(__name__)
+
+# Host identification
+HOST = socket.gethostname()
+PLATFORM = platform.system().lower()
 
 # Constants
 IDLE_THRESHOLD_MS = 5 * 60 * 1000  # 5 minutes
@@ -62,8 +68,9 @@ class MacOSObserver:
         self.screencapture = ScreenCaptureKitManager(sck_cli_path=sck_cli_path)
         self.running = True
 
-        # Backend for local Callosum events
-        self.backend = ObserverBackend()
+        # Callosum connection for events
+        self._callosum: CallosumConnection | None = None
+        self._journal_path: Path | None = None
 
         # State tracking
         self.start_at = time.time()  # Wall-clock for filenames
@@ -88,7 +95,7 @@ class MacOSObserver:
         self.segment_is_muted = False
 
     async def setup(self):
-        """Initialize ScreenCaptureKit and backend connection."""
+        """Initialize ScreenCaptureKit and Callosum connection."""
         # Verify sck-cli is available
         sck_path = shutil.which(self.screencapture.sck_cli_path)
         if not sck_path:
@@ -96,8 +103,11 @@ class MacOSObserver:
             return False
         logger.info(f"Found sck-cli at: {sck_path}")
 
-        # Start unified backend (handles local/remote modes)
-        self.backend.start()
+        # Start Callosum connection for events
+        self._callosum = CallosumConnection()
+        self._callosum.start()
+        self._journal_path = Path(get_journal())
+        logger.info("Callosum connection started")
 
         return True
 
@@ -126,23 +136,6 @@ class MacOSObserver:
         self.cached_is_active = is_active
 
         return is_active
-
-    def get_timestamp_parts(self, timestamp: float | None = None) -> tuple[str, str]:
-        """
-        Get date and time parts from timestamp.
-
-        Args:
-            timestamp: Unix timestamp (default: current time)
-
-        Returns:
-            Tuple of (date_part, time_part) like ("20250101", "143022")
-        """
-        if timestamp is None:
-            timestamp = time.time()
-        dt = datetime.datetime.fromtimestamp(timestamp)
-        date_part = dt.strftime("%Y%m%d")
-        time_part = dt.strftime("%H%M%S")
-        return date_part, time_part
 
     def _check_audio_threshold(self, audio_path: str) -> bool:
         """
@@ -227,9 +220,9 @@ class MacOSObserver:
             Tuple of (date_part, segment_key, saved_files)
         """
         # Get timestamp parts for this window and calculate duration
-        date_part, time_part = self.get_timestamp_parts(self.start_at)
+        date_part, time_part = get_timestamp_parts(self.start_at)
         duration = int(time.time() - self.start_at)
-        day_dir = staging_day_path(self.backend.staging_path, date_part)
+        day_dir = day_path(date_part)
         segment_key = f"{time_part}_{duration}"
 
         saved_files: list[str] = []
@@ -323,32 +316,24 @@ class MacOSObserver:
         if is_active and not self.cached_screen_locked:
             self.initialize_capture()
 
-        # Emit observing event with saved files via backend
-        if saved_files:
-            segment_dir = (
-                staging_day_path(self.backend.staging_path, date_part) / segment_key
+        # Emit observing event with saved files
+        if saved_files and self._callosum:
+            self._callosum.emit(
+                "observe",
+                "observing",
+                day=date_part,
+                segment=segment_key,
+                files=saved_files,
+                host=HOST,
+                platform=PLATFORM,
             )
-            file_paths = [segment_dir / f for f in saved_files]
-            self.backend.segment_complete(date_part, segment_key, file_paths)
+            logger.info(f"Segment observing: {segment_key} ({len(saved_files)} files)")
 
     def _create_draft_folder(self) -> str:
-        """
-        Create a draft folder for the current segment.
-
-        Returns:
-            Path to the draft folder (YYYYMMDD/HHMMSS_draft/)
-        """
-        date_part, time_part = self.get_timestamp_parts(self.start_at)
-        day_dir = staging_day_path(self.backend.staging_path, date_part)
-
-        # Create draft folder: YYYYMMDD/HHMMSS_draft/
-        draft_name = f"{time_part}_draft"
-        draft_path = str(day_dir / draft_name)
-        os.makedirs(draft_path, exist_ok=True)
-
-        self.draft_dir = draft_path
-        logger.debug(f"Created draft folder: {draft_path}")
-        return draft_path
+        """Create a draft folder for the current segment."""
+        self.draft_dir = create_draft_folder(self.start_at)
+        logger.debug(f"Created draft folder: {self.draft_dir}")
+        return self.draft_dir
 
     def initialize_capture(self) -> bool:
         """
@@ -399,7 +384,10 @@ class MacOSObserver:
         - audio: always empty (macOS checks threshold at boundary, not real-time)
         - activity: system activity status
         """
-        staging_path = str(self.backend.staging_path)
+        if not self._callosum:
+            return
+
+        journal_path = str(self._journal_path) if self._journal_path else ""
 
         # Determine mode (macOS is binary: screencast or idle)
         mode = "screencast" if self.capture_running else "idle"
@@ -410,7 +398,7 @@ class MacOSObserver:
             streams_info = []
             for display in self.current_displays:
                 try:
-                    rel_file = os.path.relpath(display.file_path, staging_path)
+                    rel_file = os.path.relpath(display.file_path, journal_path)
                 except ValueError:
                     rel_file = display.file_path
 
@@ -448,8 +436,8 @@ class MacOSObserver:
             "sink_muted": self.cached_is_muted,
         }
 
-        # Emit status via unified backend
-        self.backend.emit(
+        # Emit status
+        self._callosum.emit(
             "observe",
             "status",
             mode=mode,
@@ -457,6 +445,8 @@ class MacOSObserver:
             tmux=tmux_info,
             audio=audio_info,
             activity=activity_info,
+            host=HOST,
+            platform=PLATFORM,
         )
 
     async def main_loop(self):
@@ -534,17 +524,26 @@ class MacOSObserver:
             # Finalize segment (rename files and folder)
             date_part, segment_key, saved_files = self._finalize_segment()
 
-            # Emit observing event for final segment via backend
-            if saved_files:
-                segment_dir = (
-                    staging_day_path(self.backend.staging_path, date_part) / segment_key
+            # Emit observing event for final segment
+            if saved_files and self._callosum:
+                self._callosum.emit(
+                    "observe",
+                    "observing",
+                    day=date_part,
+                    segment=segment_key,
+                    files=saved_files,
+                    host=HOST,
+                    platform=PLATFORM,
                 )
-                file_paths = [segment_dir / f for f in saved_files]
-                self.backend.segment_complete(date_part, segment_key, file_paths)
+                logger.info(
+                    f"Segment observing: {segment_key} ({len(saved_files)} files)"
+                )
 
-        # Stop backend
-        self.backend.stop()
-        logger.info("Backend stopped")
+        # Stop Callosum connection
+        if self._callosum:
+            self._callosum.stop()
+            self._callosum = None
+        logger.info("Callosum connection stopped")
 
         logger.info("Shutdown complete")
 
