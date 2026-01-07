@@ -28,6 +28,60 @@ from think.utils import day_path, get_journal, setup_cli
 logger = logging.getLogger(__name__)
 
 
+class QueuedItem:
+    """Item in a handler queue with context for deferred processing."""
+
+    __slots__ = ("file_path", "queued_at", "remote")
+
+    def __init__(self, file_path: Path, remote: Optional[str] = None):
+        self.file_path = file_path
+        self.queued_at = time.time()
+        self.remote = remote
+
+
+class HandlerQueue:
+    """Queue for serializing handler execution (one at a time).
+
+    Ensures only one handler process runs at a time for resource-intensive
+    operations like describe (GPU) or transcribe (memory/API constraints).
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+        self.queue: List[QueuedItem] = []
+        self.current_process: Optional["HandlerProcess"] = None
+
+    def can_start(self) -> bool:
+        """Returns True if no handler is currently running."""
+        return self.current_process is None
+
+    def enqueue(self, file_path: Path, remote: Optional[str] = None) -> bool:
+        """Add file to queue if not already present. Returns True if queued."""
+        queued_paths = [item.file_path for item in self.queue]
+        if file_path not in queued_paths:
+            self.queue.append(QueuedItem(file_path, remote))
+            return True
+        return False
+
+    def set_current(self, proc: "HandlerProcess") -> None:
+        """Set the currently running handler process."""
+        self.current_process = proc
+
+    def clear_current(self) -> None:
+        """Clear the current process reference."""
+        self.current_process = None
+
+    def pop_next(self) -> Optional[QueuedItem]:
+        """Pop and return next queued item, or None if empty."""
+        if self.queue:
+            return self.queue.pop(0)
+        return None
+
+    def queue_size(self) -> int:
+        """Return number of items in queue."""
+        return len(self.queue)
+
+
 class HandlerProcess:
     """Manages a running handler subprocess with RunnerManagedProcess."""
 
@@ -58,10 +112,11 @@ class FileSensor:
         self.running: Dict[Path, HandlerProcess] = {}
         self.lock = threading.RLock()
 
-        # Queue for describe requests (only one describe runs at a time)
-        # Each entry is (file_path, queued_at_timestamp)
-        self.describe_queue: List[tuple[Path, float]] = []
-        self.current_describe_process: Optional[HandlerProcess] = None
+        # Serialized handler queues (only one process at a time per handler type)
+        self.handler_queues: Dict[str, HandlerQueue] = {
+            "describe": HandlerQueue("describe"),
+            "transcribe": HandlerQueue("transcribe"),
+        }
 
         self.running_flag = True
 
@@ -167,17 +222,15 @@ class FileSensor:
                         self.segment_batch[segment] = True
                 self.segment_files[segment].add(file_path)
 
-            # Queue describe requests to ensure only one runs at a time
-            if handler_name == "describe":
-                if self.current_describe_process is not None:
-                    # Check if file already queued (compare just paths)
-                    queued_paths = [p for p, _ in self.describe_queue]
-                    if file_path not in queued_paths:
-                        self.describe_queue.append((file_path, time.time()))
-                        logger.info(
-                            f"Queueing {file_path.name} for describe (queue size: {len(self.describe_queue)})"
-                        )
-                    return
+            # Check if this handler uses serialized execution
+            handler_queue = self.handler_queues.get(handler_name)
+            if handler_queue and not handler_queue.can_start():
+                if handler_queue.enqueue(file_path, remote=remote):
+                    logger.info(
+                        f"Queueing {file_path.name} for {handler_name} "
+                        f"(queue size: {handler_queue.queue_size()})"
+                    )
+                return
 
         # Generate correlation ID for this handler run
         ref = str(int(time.time() * 1000))
@@ -225,18 +278,21 @@ class FileSensor:
             )
         except RuntimeError as exc:
             logger.error(str(exc))
-            # Release describe lock if this was a describe handler
-            if handler_name == "describe":
+            # Release handler queue lock if this handler uses serialized execution
+            handler_queue = self.handler_queues.get(handler_name)
+            if handler_queue:
                 with self.lock:
-                    self.current_describe_process = None
+                    handler_queue.clear_current()
             return
 
         handler_proc = HandlerProcess(file_path, managed, handler_name)
 
         with self.lock:
             self.running[file_path] = handler_proc
-            if handler_name == "describe":
-                self.current_describe_process = handler_proc
+            # Track as current process if using serialized execution
+            handler_queue = self.handler_queues.get(handler_name)
+            if handler_queue:
+                handler_queue.set_current(handler_proc)
 
         # Monitor process completion in background
         threading.Thread(
@@ -275,23 +331,27 @@ class FileSensor:
                 exc_info=True,
             )
         finally:
-            # Always process next queued describe if this was a describe handler
-            if handler_proc is self.current_describe_process:
-                self._process_next_describe()
+            # Process next queued item if this handler uses serialized execution
+            handler_queue = self.handler_queues.get(handler_proc.handler_name)
+            if handler_queue and handler_proc is handler_queue.current_process:
+                self._process_next_queued(handler_queue)
 
-    def _process_next_describe(self):
-        """Process next queued describe task."""
+    def _process_next_queued(self, handler_queue: HandlerQueue):
+        """Process next queued task for a serialized handler."""
         with self.lock:
-            self.current_describe_process = None
-            if self.describe_queue:
-                next_file, queued_at = self.describe_queue.pop(0)
+            handler_queue.clear_current()
+            item = handler_queue.pop_next()
+            if item:
                 logger.info(
-                    f"Starting queued describe for {next_file.name} ({len(self.describe_queue)} remaining)"
+                    f"Starting queued {handler_queue.name} for {item.file_path.name} "
+                    f"({handler_queue.queue_size()} remaining)"
                 )
-                handler_info = self._match_pattern(next_file)
+                handler_info = self._match_pattern(item.file_path)
                 if handler_info:
                     handler_name, command = handler_info
-                    self._spawn_handler(next_file, handler_name, command)
+                    self._spawn_handler(
+                        item.file_path, handler_name, command, remote=item.remote
+                    )
 
     def _check_segment_observed(self, file_path: Path):
         """Check if all files for this segment have completed processing."""
@@ -415,7 +475,8 @@ class FileSensor:
 
         with self.lock:
             # Check if there's any activity to report
-            if not self.running and not self.describe_queue:
+            has_queued = any(q.queue_size() > 0 for q in self.handler_queues.values())
+            if not self.running and not has_queued:
                 return  # Nothing active, don't emit
 
             # Build status object
@@ -423,59 +484,42 @@ class FileSensor:
 
             # Get journal path for relative paths
             journal_path = get_journal()
-
-            # Collect describe info
-            describe_running = None
-            describe_queued = []
-
-            if self.current_describe_process is not None:
-                handler_proc = self.current_describe_process
-                try:
-                    rel_file = str(handler_proc.file_path.relative_to(journal_path))
-                except ValueError:
-                    rel_file = str(handler_proc.file_path)
-
-                describe_running = {
-                    "file": rel_file,
-                    "ref": handler_proc.managed.ref,
-                }
-
-            # Get queued describes with age
             now = time.time()
-            for file_path, queued_at in self.describe_queue:
-                try:
-                    rel_file = str(file_path.relative_to(journal_path))
-                except ValueError:
-                    rel_file = str(file_path)
 
-                describe_queued.append(
-                    {"file": rel_file, "age_seconds": int(now - queued_at)}
-                )
+            # Build status for each serialized handler queue
+            for handler_name, handler_queue in self.handler_queues.items():
+                handler_status = {}
 
-            # Add describe section if any activity
-            if describe_running or describe_queued:
-                status["describe"] = {}
-                if describe_running:
-                    status["describe"]["running"] = describe_running
-                if describe_queued:
-                    status["describe"]["queued"] = describe_queued
-
-            # Collect transcribe info (any running handler that's not describe)
-            transcribe_running = []
-            for file_path, handler_proc in self.running.items():
-                if handler_proc is not self.current_describe_process:
+                # Current running process
+                if handler_queue.current_process is not None:
+                    handler_proc = handler_queue.current_process
                     try:
-                        rel_file = str(file_path.relative_to(journal_path))
+                        rel_file = str(handler_proc.file_path.relative_to(journal_path))
                     except ValueError:
-                        rel_file = str(file_path)
+                        rel_file = str(handler_proc.file_path)
 
-                    transcribe_running.append(
-                        {"file": rel_file, "ref": handler_proc.managed.ref}
-                    )
+                    handler_status["running"] = {
+                        "file": rel_file,
+                        "ref": handler_proc.managed.ref,
+                    }
 
-            # Add transcribe section if any activity
-            if transcribe_running:
-                status["transcribe"] = {"running": transcribe_running}
+                # Queued items with age
+                if handler_queue.queue_size() > 0:
+                    queued_list = []
+                    for item in handler_queue.queue:
+                        try:
+                            rel_file = str(item.file_path.relative_to(journal_path))
+                        except ValueError:
+                            rel_file = str(item.file_path)
+
+                        queued_list.append(
+                            {"file": rel_file, "age_seconds": int(now - item.queued_at)}
+                        )
+                    handler_status["queued"] = queued_list
+
+                # Add section if any activity for this handler
+                if handler_status:
+                    status[handler_name] = handler_status
 
             # Only emit if we have something to report
             if status:

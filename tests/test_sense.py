@@ -12,9 +12,136 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from observe.sense import FileSensor, HandlerProcess
+from observe.sense import FileSensor, HandlerProcess, HandlerQueue, QueuedItem
 from think.runner import DailyLogWriter as ProcessLogWriter
 from think.runner import _format_log_line
+
+
+# --- QueuedItem Tests ---
+
+
+def test_queued_item_basic():
+    """Test QueuedItem stores file_path and queued_at."""
+    path = Path("/tmp/test.flac")
+    item = QueuedItem(path)
+
+    assert item.file_path == path
+    assert item.queued_at > 0
+    assert item.remote is None
+
+
+def test_queued_item_with_remote():
+    """Test QueuedItem stores remote context."""
+    path = Path("/tmp/test.flac")
+    item = QueuedItem(path, remote="my-remote")
+
+    assert item.file_path == path
+    assert item.remote == "my-remote"
+
+
+# --- HandlerQueue Tests ---
+
+
+def test_handler_queue_can_start_empty():
+    """Test can_start returns True when no process running."""
+    queue = HandlerQueue("test")
+    assert queue.can_start() is True
+
+
+def test_handler_queue_can_start_with_current():
+    """Test can_start returns False when process is running."""
+    queue = HandlerQueue("test")
+    queue.current_process = MagicMock()  # Simulate running process
+    assert queue.can_start() is False
+
+
+def test_handler_queue_enqueue():
+    """Test enqueue adds items to queue."""
+    queue = HandlerQueue("test")
+    path1 = Path("/tmp/test1.flac")
+    path2 = Path("/tmp/test2.flac")
+
+    assert queue.enqueue(path1) is True
+    assert queue.enqueue(path2) is True
+    assert queue.queue_size() == 2
+
+
+def test_handler_queue_enqueue_duplicate():
+    """Test enqueue rejects duplicate paths."""
+    queue = HandlerQueue("test")
+    path = Path("/tmp/test.flac")
+
+    assert queue.enqueue(path) is True
+    assert queue.enqueue(path) is False  # Duplicate
+    assert queue.queue_size() == 1
+
+
+def test_handler_queue_enqueue_with_remote():
+    """Test enqueue preserves remote context."""
+    queue = HandlerQueue("test")
+    path = Path("/tmp/test.flac")
+
+    queue.enqueue(path, remote="my-remote")
+
+    assert queue.queue_size() == 1
+    item = queue.pop_next()
+    assert item.remote == "my-remote"
+
+
+def test_handler_queue_pop_next():
+    """Test pop_next returns items in FIFO order."""
+    queue = HandlerQueue("test")
+    path1 = Path("/tmp/test1.flac")
+    path2 = Path("/tmp/test2.flac")
+
+    queue.enqueue(path1)
+    queue.enqueue(path2)
+
+    item1 = queue.pop_next()
+    assert item1.file_path == path1
+
+    item2 = queue.pop_next()
+    assert item2.file_path == path2
+
+    assert queue.pop_next() is None  # Empty
+
+
+def test_handler_queue_pop_next_empty():
+    """Test pop_next returns None on empty queue."""
+    queue = HandlerQueue("test")
+    assert queue.pop_next() is None
+
+
+def test_handler_queue_set_clear_current():
+    """Test set_current and clear_current."""
+    queue = HandlerQueue("test")
+    mock_proc = MagicMock()
+
+    queue.set_current(mock_proc)
+    assert queue.current_process is mock_proc
+    assert queue.can_start() is False
+
+    queue.clear_current()
+    assert queue.current_process is None
+    assert queue.can_start() is True
+
+
+def test_handler_queue_queue_size():
+    """Test queue_size reports correct count."""
+    queue = HandlerQueue("test")
+    assert queue.queue_size() == 0
+
+    queue.enqueue(Path("/tmp/test1.flac"))
+    assert queue.queue_size() == 1
+
+    queue.enqueue(Path("/tmp/test2.flac"))
+    assert queue.queue_size() == 2
+
+    queue.pop_next()
+    assert queue.queue_size() == 1
+
+
+# --- Existing Tests ---
 
 
 def test_format_log_line():
