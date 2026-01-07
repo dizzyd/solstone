@@ -742,6 +742,17 @@ def start_sense() -> ManagedProcess:
     return _launch_process("sense", ["observe-sense", "-v"], restart=True)
 
 
+def start_sync(remote_url: str) -> ManagedProcess:
+    """Launch observe-sync with output logging.
+
+    Args:
+        remote_url: Remote ingest URL for sync service
+    """
+    return _launch_process(
+        "sync", ["observe-sync", "-v", "--remote", remote_url], restart=True
+    )
+
+
 def start_callosum_in_process() -> CallosumServer:
     """Start Callosum message bus server in-process.
 
@@ -1212,6 +1223,11 @@ def parse_args() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not start the Convey web application",
     )
+    parser.add_argument(
+        "--remote",
+        type=str,
+        help="Remote mode: sync to server URL instead of local processing",
+    )
     return parser
 
 
@@ -1255,7 +1271,10 @@ def main() -> None:
 
     global _managed_procs, _supervisor_callosum, _observer_enabled
     procs: list[ManagedProcess] = []
-    _observer_enabled = not args.no_observers
+
+    # Remote mode: run sync instead of local sense/observer
+    is_remote_mode = bool(args.remote)
+    _observer_enabled = not args.no_observers and not is_remote_mode
 
     # Start Callosum in-process first - it's the message bus that other services depend on
     try:
@@ -1274,11 +1293,19 @@ def main() -> None:
         logging.warning(f"Failed to start Callosum connection: {e}")
 
     # Now start other services (their startup events will be captured)
-    # Sense always runs (handles remote uploads and imports)
-    procs.append(start_sense())
-    # Observer only runs if not disabled (local capture)
-    if not args.no_observers:
-        procs.append(start_observer())
+    if is_remote_mode:
+        # Remote mode: sync service handles upload/confirm instead of sense
+        logging.info(f"Remote mode enabled: {args.remote[:50]}...")
+        procs.append(start_sync(args.remote))
+        # Observer runs unless disabled
+        if not args.no_observers:
+            procs.append(start_observer())
+    else:
+        # Local mode: sense handles file processing
+        procs.append(start_sense())
+        # Observer only runs if not disabled (local capture)
+        if not args.no_observers:
+            procs.append(start_observer())
     if not args.no_cortex:
         procs.append(start_cortex_server())
     if not args.no_convey:

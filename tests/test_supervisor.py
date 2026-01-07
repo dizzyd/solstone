@@ -190,6 +190,72 @@ def test_start_observer_and_sense(tmp_path, mock_callosum, monkeypatch):
         assert stderr == subprocess.PIPE
 
 
+def test_start_sync(tmp_path, mock_callosum, monkeypatch):
+    """Test that start_sync() launches observe-sync with remote URL."""
+    mod = importlib.import_module("think.supervisor")
+
+    started = []
+
+    class DummyProc:
+        def __init__(self):
+            self.stdout = io.StringIO()
+            self.stderr = io.StringIO()
+            self.pid = 12345
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            pass
+
+    def fake_popen(
+        cmd,
+        stdout=None,
+        stderr=None,
+        text=False,
+        bufsize=-1,
+        start_new_session=False,
+        env=None,
+    ):
+        proc = DummyProc()
+        started.append((cmd, stdout, stderr))
+        return proc
+
+    monkeypatch.setattr(mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+
+    # Test start_sync()
+    remote_url = "https://server:5000/app/remote/ingest/abc123"
+    sync_proc = mod.start_sync(remote_url)
+    assert sync_proc is not None
+
+    # Verify the command includes --remote with the URL
+    sync_cmds = [cmd for cmd, _, _ in started if "observe-sync" in cmd]
+    assert len(sync_cmds) == 1
+    cmd = sync_cmds[0]
+    assert cmd == ["observe-sync", "-v", "--remote", remote_url]
+
+
+def test_parse_args_remote_flag():
+    """Test that parse_args includes --remote flag."""
+    mod = importlib.import_module("think.supervisor")
+
+    parser = mod.parse_args()
+    args = parser.parse_args(["--remote", "https://server/ingest/key"])
+
+    assert args.remote == "https://server/ingest/key"
+
+
+def test_parse_args_remote_flag_optional():
+    """Test that --remote is optional."""
+    mod = importlib.import_module("think.supervisor")
+
+    parser = mod.parse_args()
+    args = parser.parse_args([])
+
+    assert args.remote is None
+
+
 @pytest.mark.asyncio
 async def test_supervise_logs_recovery(mock_callosum, monkeypatch, caplog):
     mod = importlib.reload(importlib.import_module("think.supervisor"))

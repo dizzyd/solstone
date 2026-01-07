@@ -50,7 +50,6 @@ class MacOSObserver:
         self,
         interval: int = 300,
         sck_cli_path: str = "sck-cli",
-        remote_url: str | None = None,
     ):
         """
         Initialize the macOS observer.
@@ -58,14 +57,13 @@ class MacOSObserver:
         Args:
             interval: Window duration in seconds (default: 300 = 5 minutes)
             sck_cli_path: Path to sck-cli executable
-            remote_url: Remote server URL for uploading segments (optional)
         """
         self.interval = interval
         self.screencapture = ScreenCaptureKitManager(sck_cli_path=sck_cli_path)
         self.running = True
 
-        # Unified backend for local/remote modes
-        self.backend = ObserverBackend(remote_url)
+        # Backend for local Callosum events
+        self.backend = ObserverBackend()
 
         # State tracking
         self.start_at = time.time()  # Wall-clock for filenames
@@ -556,7 +554,6 @@ async def async_main(args):
     observer = MacOSObserver(
         interval=args.interval,
         sck_cli_path=args.sck_cli_path,
-        remote_url=getattr(args, "remote", None),
     )
 
     # Setup signal handlers
@@ -601,16 +598,7 @@ def main():
         default="sck-cli",
         help="Path to sck-cli executable (default: sck-cli from PATH).",
     )
-    parser.add_argument(
-        "--remote",
-        type=str,
-        help="Remote server URL for uploading segments (e.g., https://server:5000/app/remote/ingest/KEY)",
-    )
     args = setup_cli(parser)
-
-    # Log remote mode if enabled
-    if args.remote:
-        logger.info(f"Remote mode enabled: {args.remote[:50]}...")
 
     # Run async main
     try:

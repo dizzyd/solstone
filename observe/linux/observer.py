@@ -59,7 +59,7 @@ MODE_TMUX = "tmux"
 class Observer:
     """Unified audio and screencast/tmux observer."""
 
-    def __init__(self, interval: int = 300, remote_url: str | None = None):
+    def __init__(self, interval: int = 300):
         self.interval = interval
         self.audio_recorder = AudioRecorder()
         self.screencaster = Screencaster()
@@ -67,8 +67,8 @@ class Observer:
         self.bus: MessageBus | None = None
         self.running = True
 
-        # Unified backend for local/remote modes
-        self.backend = ObserverBackend(remote_url)
+        # Backend for local Callosum events
+        self.backend = ObserverBackend()
 
         # State tracking
         self.start_at = time.time()  # Wall-clock for filenames
@@ -689,7 +689,6 @@ async def async_main(args):
     """Async entry point."""
     observer = Observer(
         interval=args.interval,
-        remote_url=getattr(args, "remote", None),
     )
 
     # Setup signal handlers
@@ -731,16 +730,7 @@ def main():
         default=300,
         help="Duration per screencast window in seconds (default: 300 = 5 minutes).",
     )
-    parser.add_argument(
-        "--remote",
-        type=str,
-        help="Remote server URL for uploading segments (e.g., https://server:5000/app/remote/ingest/KEY)",
-    )
     args = setup_cli(parser)
-
-    # Log remote mode if enabled
-    if args.remote:
-        logger.info(f"Remote mode enabled: {args.remote[:50]}...")
 
     # Run async main
     try:
