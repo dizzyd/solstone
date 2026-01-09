@@ -121,24 +121,45 @@ def _seconds_to_timestamp(seconds: float) -> str:
 class Transcriber:
     """Transcribes audio using faster-whisper and generates sentence embeddings."""
 
-    def __init__(self, model_size: str = DEFAULT_MODEL):
+    def __init__(self, model_size: str = DEFAULT_MODEL, force_cpu: bool = False):
         """Initialize transcriber with models.
 
         Args:
             model_size: faster-whisper model size (e.g., "medium.en", "small.en")
+            force_cpu: If True, force CPU mode (for benchmarking). Otherwise auto-detect.
         """
         from faster_whisper import WhisperModel
         from resemblyzer import VoiceEncoder
 
+        # Device selection: auto-detect GPU unless forced to CPU
+        if force_cpu:
+            whisper_device = "cpu"
+            whisper_compute = "int8"
+            encoder_device = "cpu"
+        else:
+            whisper_device = "auto"
+            whisper_compute = "default"
+            encoder_device = None  # VoiceEncoder auto-detects when None
+
         logging.info(f"Loading faster-whisper model ({model_size})...")
         t0 = time.perf_counter()
-        self.whisper_model = WhisperModel(model_size, device="cpu", compute_type="int8")
-        logging.info(f"  Whisper loaded in {time.perf_counter() - t0:.2f}s")
+        self.whisper_model = WhisperModel(
+            model_size, device=whisper_device, compute_type=whisper_compute
+        )
+        whisper_actual_device = self.whisper_model.model.device
+        whisper_actual_compute = self.whisper_model.model.compute_type
+        logging.info(
+            f"  Whisper loaded in {time.perf_counter() - t0:.2f}s "
+            f"(device={whisper_actual_device}, compute={whisper_actual_compute})"
+        )
 
         logging.info("Loading resemblyzer VoiceEncoder...")
         t0 = time.perf_counter()
-        self.voice_encoder = VoiceEncoder(device="cpu")
-        logging.info(f"  VoiceEncoder loaded in {time.perf_counter() - t0:.2f}s")
+        self.voice_encoder = VoiceEncoder(device=encoder_device)
+        logging.info(
+            f"  VoiceEncoder loaded in {time.perf_counter() - t0:.2f}s "
+            f"(device={self.voice_encoder.device})"
+        )
 
         self.model_size = model_size
 
@@ -476,6 +497,11 @@ def main():
         action="store_true",
         help="Reprocess file, overwriting existing outputs",
     )
+    parser.add_argument(
+        "--cpu",
+        action="store_true",
+        help="Force CPU mode (for benchmarking, disables GPU auto-detection)",
+    )
     args = setup_cli(parser)
 
     audio_path = Path(args.audio_path)
@@ -499,7 +525,7 @@ def main():
 
     logging.info(f"Processing audio: {audio_path}")
 
-    transcriber = Transcriber()
+    transcriber = Transcriber(force_cpu=args.cpu)
     transcriber._handle_raw(audio_path, redo=args.redo)
 
 

@@ -86,12 +86,19 @@ class HandlerProcess:
     """Manages a running handler subprocess with RunnerManagedProcess."""
 
     def __init__(
-        self, file_path: Path, managed: RunnerManagedProcess, handler_name: str
+        self,
+        file_path: Path,
+        managed: RunnerManagedProcess,
+        handler_name: str,
+        cpu_fallback: bool = False,
     ):
         self.file_path = file_path
         self.managed = managed
         self.process = managed.process
         self.handler_name = handler_name
+        self.cpu_fallback = (
+            cpu_fallback  # True if this is a CPU retry after GPU failure
+        )
 
     def cleanup(self):
         self.managed.cleanup()
@@ -179,6 +186,7 @@ class FileSensor:
         batch: bool = False,
         segment: Optional[str] = None,
         remote: Optional[str] = None,
+        cpu_fallback: bool = False,
     ):
         """Spawn a handler process for the file.
 
@@ -192,6 +200,8 @@ class FileSensor:
             batch: Whether this is from batch processing mode
             segment: Segment key, extracted from path if not provided
             remote: Remote name for REMOTE_NAME env var
+            cpu_fallback: If True, this is a retry after GPU failure (adds --cpu,
+                          skips tracking/events since already done on first attempt)
         """
         # Extract day and segment from path: journal_dir/YYYYMMDD/HHMMSS_LEN/file.ext
         try:
@@ -204,39 +214,41 @@ class FileSensor:
         except ValueError:
             pass
 
-        with self.lock:
-            # Skip if already processing this file
-            if file_path in self.running:
-                logger.debug(f"File {file_path.name} already being processed")
-                return
+        # Skip tracking/queueing for CPU fallback (already done on first attempt)
+        if not cpu_fallback:
+            with self.lock:
+                # Skip if already processing this file
+                if file_path in self.running:
+                    logger.debug(f"File {file_path.name} already being processed")
+                    return
 
-            # Register file for segment tracking (segment already extracted above)
-            if segment:
-                if segment not in self.segment_files:
-                    self.segment_files[segment] = set()
-                    self.segment_start_time[segment] = time.time()
-                    if day:
-                        self.segment_day[segment] = day
-                    # Track batch origin for observed event
-                    if batch:
-                        self.segment_batch[segment] = True
-                self.segment_files[segment].add(file_path)
+                # Register file for segment tracking (segment already extracted above)
+                if segment:
+                    if segment not in self.segment_files:
+                        self.segment_files[segment] = set()
+                        self.segment_start_time[segment] = time.time()
+                        if day:
+                            self.segment_day[segment] = day
+                        # Track batch origin for observed event
+                        if batch:
+                            self.segment_batch[segment] = True
+                    self.segment_files[segment].add(file_path)
 
-            # Check if this handler uses serialized execution
-            handler_queue = self.handler_queues.get(handler_name)
-            if handler_queue and not handler_queue.can_start():
-                if handler_queue.enqueue(file_path, remote=remote):
-                    logger.info(
-                        f"Queueing {file_path.name} for {handler_name} "
-                        f"(queue size: {handler_queue.queue_size()})"
-                    )
-                return
+                # Check if this handler uses serialized execution
+                handler_queue = self.handler_queues.get(handler_name)
+                if handler_queue and not handler_queue.can_start():
+                    if handler_queue.enqueue(file_path, remote=remote):
+                        logger.info(
+                            f"Queueing {file_path.name} for {handler_name} "
+                            f"(queue size: {handler_queue.queue_size()})"
+                        )
+                    return
 
         # Generate correlation ID for this handler run
         ref = str(int(time.time() * 1000))
 
-        # Emit detected event with file and ref
-        if self.callosum:
+        # Emit detected event with file and ref (skip for CPU fallback)
+        if self.callosum and not cpu_fallback:
             try:
                 rel_file = file_path.relative_to(self.journal_dir)
             except ValueError:
@@ -258,6 +270,10 @@ class FileSensor:
         # Replace {file} placeholder with actual file path
         cmd = [str(file_path) if arg == "{file}" else arg for arg in command]
 
+        # Add --cpu flag for CPU fallback retry
+        if cpu_fallback:
+            cmd.append("--cpu")
+
         # Add verbose/debug flags if set
         if self.debug:
             cmd.append("-d")
@@ -265,7 +281,10 @@ class FileSensor:
             cmd.append("-v")
 
         # Use unified runner to spawn process with automatic logging
-        logger.info(f"Spawning {handler_name} for {file_path.name}: {' '.join(cmd)}")
+        fallback_note = " (CPU fallback)" if cpu_fallback else ""
+        logger.info(
+            f"Spawning {handler_name}{fallback_note} for {file_path.name}: {' '.join(cmd)}"
+        )
 
         # Build environment with remote context for handlers
         env = os.environ.copy()
@@ -285,7 +304,9 @@ class FileSensor:
                     handler_queue.clear_current()
             return
 
-        handler_proc = HandlerProcess(file_path, managed, handler_name)
+        handler_proc = HandlerProcess(
+            file_path, managed, handler_name, cpu_fallback=cpu_fallback
+        )
 
         with self.lock:
             self.running[file_path] = handler_proc
@@ -313,6 +334,29 @@ class FileSensor:
 
                 # Check if segment is fully observed
                 self._check_segment_observed(handler_proc.file_path)
+            elif (
+                exit_code == 134
+                and handler_proc.handler_name == "transcribe"
+                and not handler_proc.cpu_fallback
+            ):
+                # Exit 134 = SIGABRT, often from cuDNN/CUDA failure
+                # Retry transcribe with --cpu flag
+                logger.warning(
+                    f"Transcribe crashed (exit 134, likely GPU/cuDNN issue) for "
+                    f"{handler_proc.file_path.name}, retrying with --cpu"
+                )
+                handler_proc.cleanup()
+                with self.lock:
+                    if handler_proc.file_path in self.running:
+                        del self.running[handler_proc.file_path]
+                # Respawn with CPU fallback
+                self._spawn_handler(
+                    handler_proc.file_path,
+                    "transcribe",
+                    ["observe-transcribe", "{file}"],
+                    cpu_fallback=True,
+                )
+                return  # Skip normal cleanup, we're retrying
             else:
                 logger.error(
                     f"{handler_proc.handler_name} failed for {handler_proc.file_path.name} "
