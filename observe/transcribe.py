@@ -162,7 +162,10 @@ class Transcriber:
             f"(device={self.voice_encoder.device})"
         )
 
+        # Store configuration for metadata
         self.model_size = model_size
+        self.device = str(whisper_actual_device)
+        self.compute_type = str(whisper_actual_compute)
 
     def _get_jsonl_path(self, audio_path: Path) -> Path:
         """Generate the corresponding JSONL path.
@@ -365,8 +368,13 @@ class Transcriber:
         Returns:
             List of JSON strings (metadata line first, then entries)
         """
-        # Build metadata line
-        metadata = {"raw": raw_filename}
+        # Build metadata line with transcription config
+        metadata = {
+            "raw": raw_filename,
+            "model": self.model_size,
+            "device": self.device,
+            "compute_type": self.compute_type,
+        }
         if remote:
             metadata["remote"] = remote
 

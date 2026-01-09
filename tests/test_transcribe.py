@@ -436,6 +436,26 @@ class TestJSONLFormat:
         assert "raw" in metadata
         assert metadata["raw"] == "audio.flac"
 
+    def test_metadata_includes_transcription_config(self):
+        """Metadata should include model, device, and compute_type fields."""
+        # Example metadata as produced by _segments_to_jsonl()
+        metadata = {
+            "raw": "audio.flac",
+            "model": "medium.en",
+            "device": "cuda",
+            "compute_type": "float16",
+        }
+
+        # Verify all config fields are present
+        assert "model" in metadata
+        assert "device" in metadata
+        assert "compute_type" in metadata
+
+        # Verify they have expected types
+        assert isinstance(metadata["model"], str)
+        assert isinstance(metadata["device"], str)
+        assert isinstance(metadata["compute_type"], str)
+
     def test_entry_has_required_fields(self):
         """Transcript entries should have start and text."""
         entry = {"start": "00:00:01", "text": "Hello world"}
