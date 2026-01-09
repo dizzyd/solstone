@@ -1,4 +1,4 @@
-{# Speaker voiceprint management #}
+{# Speaker voiceprint management - sentence-based view #}
 
 <style>
 /* Speakers app styles - all classes prefixed with .spk- */
@@ -65,14 +65,14 @@
   margin-top: 4px;
 }
 
-.spk-segment-speakers {
+.spk-segment-sources {
   display: flex;
   gap: 6px;
   margin-top: 6px;
   flex-wrap: wrap;
 }
 
-.spk-speaker-badge {
+.spk-source-badge {
   display: inline-block;
   padding: 2px 8px;
   background: #e5e7eb;
@@ -109,68 +109,109 @@
   color: #1f2937;
 }
 
+/* Source tabs */
+.spk-source-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+}
+
+.spk-source-tab {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fff;
+  color: #374151;
+  transition: all 0.15s;
+}
+
+.spk-source-tab:hover {
+  background: #f9fafb;
+}
+
+.spk-source-tab.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+/* Audio player */
 .spk-audio-player {
   margin-bottom: 20px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
 }
 
 .spk-audio-player audio {
   width: 100%;
 }
 
-/* Match table */
-.spk-matches {
+/* Sentence list */
+.spk-sentences {
   margin-top: 16px;
 }
 
-.spk-matches-title {
+.spk-sentences-title {
   font-size: 14px;
   font-weight: 600;
   color: #374151;
   margin-bottom: 12px;
 }
 
-.spk-match-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.spk-sentence {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  align-items: start;
 }
 
-.spk-match-table th,
-.spk-match-table td {
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+.spk-sentence:hover {
+  background: #fafafa;
 }
 
-.spk-match-table th {
-  background: #f9fafb;
-  font-weight: 500;
+.spk-sentence-time {
+  font-family: monospace;
+  font-size: 12px;
   color: #6b7280;
+  padding-top: 2px;
 }
 
-.spk-match-table td:first-child {
-  font-weight: 500;
+.spk-sentence-text {
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.5;
 }
 
-.spk-score {
+.spk-sentence-match {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.spk-match-label {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.spk-score-high {
+.spk-match-high {
   background: #dcfce7;
   color: #166534;
 }
 
-.spk-score-med {
+.spk-match-med {
   background: #fef9c3;
   color: #854d0e;
 }
 
-.spk-score-low {
+.spk-match-low {
   background: #f3f4f6;
   color: #6b7280;
 }
@@ -178,31 +219,33 @@
 .spk-no-match {
   color: #9ca3af;
   font-style: italic;
+  font-size: 11px;
 }
 
-/* Actions */
-.spk-actions {
+/* Sentence actions */
+.spk-sentence-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
-.spk-select {
-  padding: 6px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
-  background: #fff;
-  min-width: 150px;
-}
-
 .spk-btn {
-  padding: 6px 14px;
+  padding: 4px 10px;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
   cursor: pointer;
   transition: background 0.15s;
+}
+
+.spk-btn-icon {
+  padding: 4px 8px;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.spk-btn-icon:hover {
+  background: #e5e7eb;
 }
 
 .spk-btn-primary {
@@ -219,57 +262,62 @@
   cursor: not-allowed;
 }
 
-.spk-btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
+.spk-select-small {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+  min-width: 120px;
 }
 
-.spk-btn-secondary:hover {
-  background: #e5e7eb;
-}
-
-/* Create entity form */
-.spk-create-form {
-  margin-top: 16px;
-  padding: 16px;
+/* Create entity inline form */
+.spk-inline-form {
+  display: none;
+  margin-top: 8px;
+  padding: 12px;
   background: #f9fafb;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid #e5e7eb;
 }
 
+.spk-inline-form.visible {
+  display: block;
+}
+
 .spk-form-row {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .spk-form-row label {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #6b7280;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .spk-form-row input,
 .spk-form-row select {
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .spk-form-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 /* Status messages */
 .spk-status {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  margin-top: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 8px;
 }
 
 .spk-status-success {
@@ -299,7 +347,7 @@
     <!-- Segment list -->
     <div class="spk-segments">
       <div class="spk-segments-header">
-        Segments with Speakers
+        Segments
       </div>
       <div class="spk-segments-list" id="spkSegmentList">
         <div class="spk-empty">Loading...</div>
@@ -309,7 +357,7 @@
     <!-- Detail panel -->
     <div class="spk-detail" id="spkDetail">
       <div class="spk-empty">
-        Select a segment to view speaker matches
+        Select a segment to view sentences
       </div>
     </div>
   </div>
@@ -323,14 +371,22 @@
 
   let segments = [];
   let selectedSegment = null;
+  let selectedSource = null;
+  let audioPlayer = null;
 
   // Load segments on page load
   loadSegments();
 
+  // Listen for hash changes
+  window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.slice(1);
+    if (hash) selectSegmentByKey(hash);
+  });
+
   // Listen for facet changes
   window.addEventListener('facet.switch', () => {
-    if (selectedSegment) {
-      loadSegmentDetail(selectedSegment);
+    if (selectedSegment && selectedSource) {
+      loadSentences(selectedSegment, selectedSource);
     }
   });
 
@@ -340,6 +396,11 @@
       .then(data => {
         segments = data.segments || [];
         renderSegmentList();
+
+        // Auto-select from hash after loading
+        if (window.location.hash) {
+          selectSegmentByKey(window.location.hash.slice(1));
+        }
       })
       .catch(() => {
         segmentList.innerHTML = '<div class="spk-empty">Failed to load segments</div>';
@@ -348,7 +409,7 @@
 
   function renderSegmentList() {
     if (segments.length === 0) {
-      segmentList.innerHTML = '<div class="spk-empty">No segments with speaker embeddings found for this day</div>';
+      segmentList.innerHTML = '<div class="spk-empty">No segments with embeddings found for this day</div>';
       return;
     }
 
@@ -356,8 +417,8 @@
       <div class="spk-segment${selectedSegment?.key === seg.key ? ' active' : ''}" data-key="${seg.key}">
         <div class="spk-segment-time">${seg.start} - ${seg.end}</div>
         <div class="spk-segment-meta">${formatDuration(seg.duration)}</div>
-        <div class="spk-segment-speakers">
-          ${seg.speakers.map(s => `<span class="spk-speaker-badge">${escapeHtml(s)}</span>`).join('')}
+        <div class="spk-segment-sources">
+          ${seg.sources.map(s => `<span class="spk-source-badge">${formatSource(s)}</span>`).join('')}
         </div>
       </div>
     `).join('');
@@ -366,233 +427,254 @@
     segmentList.querySelectorAll('.spk-segment').forEach(el => {
       el.addEventListener('click', () => {
         const seg = segments.find(s => s.key === el.dataset.key);
-        if (seg) selectSegment(seg);
+        if (seg) {
+          window.location.hash = seg.key;
+          selectSegment(seg);
+        }
       });
     });
+  }
+
+  function selectSegmentByKey(key) {
+    const seg = segments.find(s => s.key === key);
+    if (seg) selectSegment(seg);
   }
 
   function selectSegment(seg) {
     selectedSegment = seg;
+    selectedSource = seg.sources[0] || null;
     renderSegmentList();
-    loadSegmentDetail(seg);
+    renderDetail(seg);
   }
 
-  function loadSegmentDetail(seg) {
-    detailPanel.innerHTML = '<div class="spk-empty">Loading...</div>';
-
-    fetch(`/app/speakers/api/segment/${day}/${seg.key}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) {
-          detailPanel.innerHTML = `<div class="spk-empty">${escapeHtml(data.error)}</div>`;
-          return;
-        }
-        renderSegmentDetail(seg, data);
-      })
-      .catch(() => {
-        detailPanel.innerHTML = '<div class="spk-empty">Failed to load segment details</div>';
-      });
-  }
-
-  function renderSegmentDetail(seg, data) {
-    const { speakers, all_entities, audio_file, facet } = data;
+  function renderDetail(seg) {
+    if (!seg.sources.length) {
+      detailPanel.innerHTML = '<div class="spk-empty">No audio sources found</div>';
+      return;
+    }
 
     let html = `
       <div class="spk-detail-header">
         <div class="spk-detail-title">${seg.start} - ${seg.end}</div>
-        <span class="spk-facet-badge">${escapeHtml(facet)}</span>
+        <span class="spk-facet-badge" id="spkFacetBadge"></span>
       </div>
     `;
 
-    // Audio player
-    if (audio_file) {
+    // Source tabs (if multiple sources)
+    if (seg.sources.length > 1) {
       html += `
-        <div class="spk-audio-player">
-          <audio controls preload="metadata">
-            <source src="${audio_file}" type="audio/flac">
-          </audio>
+        <div class="spk-source-tabs">
+          ${seg.sources.map(s => `
+            <button class="spk-source-tab${s === selectedSource ? ' active' : ''}" data-source="${s}">
+              ${formatSource(s)}
+            </button>
+          `).join('')}
         </div>
       `;
     }
 
-    // Speakers and matches
-    if (speakers.length === 0) {
-      html += '<div class="spk-empty">No speaker embeddings found</div>';
-    } else {
-      html += '<div class="spk-matches">';
-      html += '<div class="spk-matches-title">Speaker Matches</div>';
+    // Audio player placeholder
+    html += '<div class="spk-audio-player" id="spkAudioContainer"></div>';
 
-      speakers.forEach((speaker, idx) => {
-        html += renderSpeakerCard(speaker, all_entities, facet, seg, idx);
-      });
-
-      html += '</div>';
-    }
+    // Sentences placeholder
+    html += '<div class="spk-sentences" id="spkSentences"><div class="spk-empty">Loading...</div></div>';
 
     detailPanel.innerHTML = html;
 
-    // Add event handlers
-    setupEventHandlers(seg, facet);
+    // Setup tab handlers
+    detailPanel.querySelectorAll('.spk-source-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        selectedSource = tab.dataset.source;
+        detailPanel.querySelectorAll('.spk-source-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        loadSentences(seg, selectedSource);
+      });
+    });
+
+    // Load sentences for first source
+    loadSentences(seg, selectedSource);
   }
 
-  function renderSpeakerCard(speaker, allEntities, facet, seg, idx) {
-    const matches = Object.entries(speaker.matches || {})
-      .sort((a, b) => b[1] - a[1]);
+  function loadSentences(seg, source) {
+    const container = document.getElementById('spkSentences');
+    container.innerHTML = '<div class="spk-empty">Loading...</div>';
 
-    let html = `
-      <div class="spk-speaker-card" data-speaker="${escapeHtml(speaker.label)}" data-idx="${idx}">
-        <table class="spk-match-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(speaker.label)}</th>
-              <th>Match Score</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-    `;
-
-    if (matches.length === 0) {
-      html += `
-        <tr>
-          <td colspan="2"><span class="spk-no-match">No matches above threshold</span></td>
-          <td>
-            <div class="spk-actions">
-              <select class="spk-select spk-entity-select">
-                <option value="">Assign to entity...</option>
-                ${allEntities.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('')}
-                <option value="__new__">+ Create new entity</option>
-              </select>
-              <button class="spk-btn spk-btn-primary spk-assign-btn" disabled>Assign</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    } else {
-      matches.forEach((match, i) => {
-        const [entityName, score] = match;
-        const scoreClass = score >= 0.7 ? 'high' : score >= 0.5 ? 'med' : 'low';
-        const scorePct = Math.round(score * 100);
-
-        html += `
-          <tr>
-            <td>${escapeHtml(entityName)}</td>
-            <td><span class="spk-score spk-score-${scoreClass}">${scorePct}%</span></td>
-            <td>
-              ${i === 0 ? `
-                <div class="spk-actions">
-                  <select class="spk-select spk-entity-select">
-                    <option value="">Assign to entity...</option>
-                    ${allEntities.map(e => `<option value="${escapeHtml(e)}"${e === entityName ? ' selected' : ''}>${escapeHtml(e)}</option>`).join('')}
-                    <option value="__new__">+ Create new entity</option>
-                  </select>
-                  <button class="spk-btn spk-btn-primary spk-assign-btn" disabled>Assign</button>
-                </div>
-              ` : ''}
-            </td>
-          </tr>
-        `;
+    fetch(`/app/speakers/api/sentences/${day}/${seg.key}/${source}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          container.innerHTML = `<div class="spk-empty">${escapeHtml(data.error)}</div>`;
+          return;
+        }
+        renderSentences(data);
+      })
+      .catch(() => {
+        container.innerHTML = '<div class="spk-empty">Failed to load sentences</div>';
       });
+  }
+
+  function renderSentences(data) {
+    const { sentences, all_entities, audio_file, facet, source } = data;
+
+    // Update facet badge
+    const badge = document.getElementById('spkFacetBadge');
+    if (badge) badge.textContent = facet;
+
+    // Setup audio player
+    const audioContainer = document.getElementById('spkAudioContainer');
+    if (audio_file) {
+      audioContainer.innerHTML = `
+        <audio id="spkAudio" controls preload="metadata">
+          <source src="${audio_file}" type="audio/flac">
+        </audio>
+      `;
+      audioPlayer = document.getElementById('spkAudio');
+    } else {
+      audioContainer.innerHTML = '<div class="spk-empty">No audio file available</div>';
+      audioPlayer = null;
     }
 
-    html += `
-          </tbody>
-        </table>
-        <div class="spk-create-form-container" style="display: none;"></div>
-        <div class="spk-status-container"></div>
-      </div>
+    // Render sentences
+    const container = document.getElementById('spkSentences');
+
+    if (sentences.length === 0) {
+      container.innerHTML = '<div class="spk-empty">No sentences with embeddings found</div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="spk-sentences-title">Sentences (${sentences.length})</div>
+      ${sentences.map(s => renderSentence(s, all_entities)).join('')}
     `;
 
-    return html;
+    // Setup event handlers
+    setupSentenceHandlers(facet, source);
   }
 
-  function setupEventHandlers(seg, facet) {
-    // Entity select change
-    detailPanel.querySelectorAll('.spk-entity-select').forEach(select => {
-      select.addEventListener('change', () => {
-        const card = select.closest('.spk-speaker-card');
-        const assignBtn = card.querySelector('.spk-assign-btn');
-        const formContainer = card.querySelector('.spk-create-form-container');
+  function renderSentence(sentence, allEntities) {
+    const timeStr = formatOffset(sentence.offset);
+    const match = sentence.match;
+    let matchHtml = '<span class="spk-no-match">No match</span>';
 
-        if (select.value === '__new__') {
-          assignBtn.disabled = true;
-          formContainer.style.display = 'block';
-          formContainer.innerHTML = renderCreateForm();
-          setupCreateFormHandlers(card, seg, facet);
-        } else {
-          formContainer.style.display = 'none';
-          formContainer.innerHTML = '';
-          assignBtn.disabled = !select.value;
+    if (match) {
+      const scorePct = Math.round(match.score * 100);
+      const scoreClass = match.score >= 0.7 ? 'high' : match.score >= 0.5 ? 'med' : 'low';
+      matchHtml = `<span class="spk-match-label spk-match-${scoreClass}">${escapeHtml(match.entity)} ${scorePct}%</span>`;
+    }
+
+    return `
+      <div class="spk-sentence" data-id="${sentence.id}" data-offset="${sentence.offset}">
+        <div class="spk-sentence-time">${timeStr}</div>
+        <div class="spk-sentence-content">
+          <div class="spk-sentence-text">${escapeHtml(sentence.text)}</div>
+          <div class="spk-sentence-match">${matchHtml}</div>
+          <div class="spk-inline-form" id="form-${sentence.id}">
+            <div class="spk-form-row">
+              <label>Name</label>
+              <input type="text" class="spk-new-name" placeholder="e.g., John Smith">
+            </div>
+            <div class="spk-form-row">
+              <label>Type</label>
+              <select class="spk-new-type">
+                <option value="Person">Person</option>
+                <option value="Contact">Contact</option>
+              </select>
+            </div>
+            <div class="spk-form-actions">
+              <button class="spk-btn spk-btn-icon spk-cancel-create">Cancel</button>
+              <button class="spk-btn spk-btn-primary spk-confirm-create">Create</button>
+            </div>
+          </div>
+          <div class="spk-status-container" id="status-${sentence.id}"></div>
+        </div>
+        <div class="spk-sentence-actions">
+          <button class="spk-btn spk-btn-icon spk-play-btn" title="Play from here">&#9654;</button>
+          <select class="spk-select-small spk-entity-select">
+            <option value="">Save to...</option>
+            ${allEntities.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('')}
+            <option value="__new__">+ New entity</option>
+          </select>
+          <button class="spk-btn spk-btn-primary spk-save-btn" disabled>Save</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function setupSentenceHandlers(facet, source) {
+    // Play button
+    detailPanel.querySelectorAll('.spk-play-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.spk-sentence');
+        const offset = parseFloat(row.dataset.offset);
+        if (audioPlayer) {
+          // Offset is relative to segment start, not absolute
+          // The segment's base time is already accounted for in the audio file
+          audioPlayer.currentTime = offset;
+          audioPlayer.play();
         }
       });
     });
 
-    // Assign button click
-    detailPanel.querySelectorAll('.spk-assign-btn').forEach(btn => {
+    // Entity select
+    detailPanel.querySelectorAll('.spk-entity-select').forEach(select => {
+      select.addEventListener('change', () => {
+        const row = select.closest('.spk-sentence');
+        const saveBtn = row.querySelector('.spk-save-btn');
+        const form = row.querySelector('.spk-inline-form');
+
+        if (select.value === '__new__') {
+          form.classList.add('visible');
+          saveBtn.disabled = true;
+        } else {
+          form.classList.remove('visible');
+          saveBtn.disabled = !select.value;
+        }
+      });
+    });
+
+    // Save button
+    detailPanel.querySelectorAll('.spk-save-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const card = btn.closest('.spk-speaker-card');
-        const speakerLabel = card.dataset.speaker;
-        const entityName = card.querySelector('.spk-entity-select').value;
+        const row = btn.closest('.spk-sentence');
+        const sentenceId = parseInt(row.dataset.id);
+        const entityName = row.querySelector('.spk-entity-select').value;
 
         if (!entityName || entityName === '__new__') return;
 
-        saveVoiceprint(facet, entityName, seg.key, speakerLabel, card);
+        saveVoiceprint(facet, entityName, source, sentenceId, row);
+      });
+    });
+
+    // Create form handlers
+    detailPanel.querySelectorAll('.spk-cancel-create').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.spk-sentence');
+        const form = row.querySelector('.spk-inline-form');
+        const select = row.querySelector('.spk-entity-select');
+        form.classList.remove('visible');
+        select.value = '';
+      });
+    });
+
+    detailPanel.querySelectorAll('.spk-confirm-create').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.spk-sentence');
+        const sentenceId = parseInt(row.dataset.id);
+        const form = row.querySelector('.spk-inline-form');
+        const name = form.querySelector('.spk-new-name').value.trim();
+        const type = form.querySelector('.spk-new-type').value;
+
+        if (!name) {
+          showStatus(row, 'Please enter a name', 'error');
+          return;
+        }
+
+        createEntityWithVoiceprint(facet, type, name, source, sentenceId, row);
       });
     });
   }
 
-  function renderCreateForm() {
-    return `
-      <div class="spk-create-form">
-        <div class="spk-form-row">
-          <label>Entity Name</label>
-          <input type="text" class="spk-new-name" placeholder="e.g., John Smith">
-        </div>
-        <div class="spk-form-row">
-          <label>Type</label>
-          <select class="spk-new-type">
-            <option value="Person">Person</option>
-            <option value="Contact">Contact</option>
-          </select>
-        </div>
-        <div class="spk-form-row">
-          <label>Description (optional)</label>
-          <input type="text" class="spk-new-desc" placeholder="e.g., Colleague from work">
-        </div>
-        <div class="spk-form-actions">
-          <button class="spk-btn spk-btn-secondary spk-cancel-create">Cancel</button>
-          <button class="spk-btn spk-btn-primary spk-confirm-create">Create & Save Voiceprint</button>
-        </div>
-      </div>
-    `;
-  }
-
-  function setupCreateFormHandlers(card, seg, facet) {
-    const formContainer = card.querySelector('.spk-create-form-container');
-    const select = card.querySelector('.spk-entity-select');
-    const speakerLabel = card.dataset.speaker;
-
-    formContainer.querySelector('.spk-cancel-create').addEventListener('click', () => {
-      formContainer.style.display = 'none';
-      formContainer.innerHTML = '';
-      select.value = '';
-    });
-
-    formContainer.querySelector('.spk-confirm-create').addEventListener('click', () => {
-      const name = formContainer.querySelector('.spk-new-name').value.trim();
-      const type = formContainer.querySelector('.spk-new-type').value;
-      const desc = formContainer.querySelector('.spk-new-desc').value.trim();
-
-      if (!name) {
-        showStatus(card, 'Please enter an entity name', 'error');
-        return;
-      }
-
-      createEntityWithVoiceprint(facet, type, name, desc, seg.key, speakerLabel, card);
-    });
-  }
-
-  function saveVoiceprint(facet, entityName, segmentKey, speakerLabel, card) {
+  function saveVoiceprint(facet, entityName, source, sentenceId, row) {
     fetch('/app/speakers/api/save-voiceprint', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -600,26 +682,27 @@
         facet,
         entity_name: entityName,
         day,
-        segment_key: segmentKey,
-        speaker_label: speakerLabel,
+        segment_key: selectedSegment.key,
+        source,
+        sentence_id: sentenceId,
       }),
     })
       .then(r => r.json())
       .then(data => {
         if (data.error) {
-          showStatus(card, data.error, 'error');
+          showStatus(row, data.error, 'error');
         } else {
-          showStatus(card, `Voiceprint saved to ${entityName}`, 'success');
+          showStatus(row, `Saved to ${entityName}`, 'success');
           // Reload to refresh matches
-          setTimeout(() => loadSegmentDetail(selectedSegment), 1500);
+          setTimeout(() => loadSentences(selectedSegment, selectedSource), 1500);
         }
       })
       .catch(() => {
-        showStatus(card, 'Failed to save voiceprint', 'error');
+        showStatus(row, 'Failed to save', 'error');
       });
   }
 
-  function createEntityWithVoiceprint(facet, type, name, description, segmentKey, speakerLabel, card) {
+  function createEntityWithVoiceprint(facet, type, name, source, sentenceId, row) {
     fetch('/app/speakers/api/create-entity-voiceprint', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -627,32 +710,32 @@
         facet,
         type,
         name,
-        description,
+        description: '',
         day,
-        segment_key: segmentKey,
-        speaker_label: speakerLabel,
+        segment_key: selectedSegment.key,
+        source,
+        sentence_id: sentenceId,
       }),
     })
       .then(r => r.json())
       .then(data => {
         if (data.error) {
-          showStatus(card, data.error, 'error');
+          showStatus(row, data.error, 'error');
         } else {
-          showStatus(card, `Created entity "${name}" with voiceprint`, 'success');
-          // Hide form and reload
-          const formContainer = card.querySelector('.spk-create-form-container');
-          formContainer.style.display = 'none';
-          formContainer.innerHTML = '';
-          setTimeout(() => loadSegmentDetail(selectedSegment), 1500);
+          showStatus(row, `Created ${name}`, 'success');
+          const form = row.querySelector('.spk-inline-form');
+          form.classList.remove('visible');
+          // Reload to refresh matches and entity list
+          setTimeout(() => loadSentences(selectedSegment, selectedSource), 1500);
         }
       })
       .catch(() => {
-        showStatus(card, 'Failed to create entity', 'error');
+        showStatus(row, 'Failed to create', 'error');
       });
   }
 
-  function showStatus(card, message, type) {
-    const container = card.querySelector('.spk-status-container');
+  function showStatus(row, message, type) {
+    const container = row.querySelector('.spk-status-container');
     container.innerHTML = `<div class="spk-status spk-status-${type}">${escapeHtml(message)}</div>`;
     setTimeout(() => { container.innerHTML = ''; }, 3000);
   }
@@ -662,6 +745,19 @@
     const secs = seconds % 60;
     if (mins === 0) return `${secs}s`;
     return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  }
+
+  function formatOffset(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function formatSource(source) {
+    // mic_audio -> Mic, sys_audio -> System
+    if (source === 'mic_audio') return 'Mic';
+    if (source === 'sys_audio') return 'System';
+    return source.replace('_audio', '');
   }
 
   function escapeHtml(str) {

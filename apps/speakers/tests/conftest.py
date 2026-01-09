@@ -1,11 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 sol pbc
 
-"""Self-contained fixtures for speakers app tests.
-
-These fixtures are fully standalone and only depend on pytest builtins.
-No shared dependencies from the root conftest.py are required.
-"""
+"""Self-contained fixtures for speakers app tests."""
 
 from __future__ import annotations
 
@@ -23,13 +19,13 @@ def speakers_env(tmp_path, monkeypatch):
     """Create a temporary journal environment for speaker tests.
 
     Provides helpers to create:
-    - Day directories with segment speaker embeddings
+    - Day directories with sentence embeddings
     - Facets with entities and voiceprints
 
     Usage:
         def test_example(speakers_env):
             env = speakers_env()
-            env.create_segment("20240101", "143022_300", ["Speaker 1", "Speaker 2"])
+            env.create_segment("20240101", "143022_300", ["mic_audio"])
             env.create_entity("test", "Alice Test")
             # Now JOURNAL_PATH is set and data exists
     """
@@ -40,18 +36,55 @@ def speakers_env(tmp_path, monkeypatch):
             monkeypatch.setenv("JOURNAL_PATH", str(journal_path))
 
         def create_segment(
-            self, day: str, segment_key: str, speakers: list[str]
+            self, day: str, segment_key: str, sources: list[str], num_sentences: int = 5
         ) -> Path:
-            """Create a segment with speaker embedding files."""
-            audio_dir = self.journal / day / segment_key / "audio"
-            audio_dir.mkdir(parents=True, exist_ok=True)
+            """Create a segment with sentence embeddings.
 
-            for speaker in speakers:
-                emb = np.random.randn(256).astype(np.float32)
-                emb = emb / np.linalg.norm(emb)
-                np.savez_compressed(audio_dir / f"{speaker}.npz", embedding=emb)
+            Creates both JSONL transcripts and NPZ embedding files.
 
-            return audio_dir
+            Args:
+                day: Day string (YYYYMMDD)
+                segment_key: Segment key (HHMMSS_LEN)
+                sources: List of audio sources (e.g., ["mic_audio", "sys_audio"])
+                num_sentences: Number of sentences to create
+            """
+            segment_dir = self.journal / day / segment_key
+            segment_dir.mkdir(parents=True, exist_ok=True)
+
+            for source in sources:
+                # Create JSONL transcript
+                jsonl_path = segment_dir / f"{source}.jsonl"
+                lines = [json.dumps({"raw": f"{source}.flac", "model": "medium.en"})]
+
+                for i in range(num_sentences):
+                    offset = i * 5  # 5 seconds per sentence
+                    h, m, s = 0, offset // 60, offset % 60
+                    lines.append(
+                        json.dumps(
+                            {
+                                "start": f"{h:02d}:{m:02d}:{s:02d}",
+                                "text": f"This is sentence {i + 1}.",
+                            }
+                        )
+                    )
+                jsonl_path.write_text("\n".join(lines) + "\n")
+
+                # Create NPZ embeddings
+                npz_path = segment_dir / f"{source}.npz"
+                embeddings = np.random.randn(num_sentences, 256).astype(np.float32)
+                # Normalize each embedding
+                norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+                embeddings = embeddings / norms
+                segment_ids = np.arange(1, num_sentences + 1, dtype=np.int32)
+                np.savez_compressed(
+                    npz_path, embeddings=embeddings, segment_ids=segment_ids
+                )
+
+                # Create dummy audio file
+                audio_path = segment_dir / f"{source}.flac"
+                audio_path.write_bytes(b"")  # Empty placeholder
+
+            return segment_dir
 
         def create_embedding(self, vector: list[float] | None = None) -> np.ndarray:
             """Create a normalized 256-dim embedding."""
@@ -65,14 +98,15 @@ def speakers_env(tmp_path, monkeypatch):
             self,
             facet: str,
             name: str,
-            voiceprints: list[tuple[str, str]] | None = None,
+            voiceprints: list[tuple[str, str, str, int]] | None = None,
         ) -> Path:
             """Create an entity with optional voiceprint files.
 
             Args:
                 facet: Facet name
                 name: Entity name
-                voiceprints: Optional list of (day, segment_key) tuples for voiceprints
+                voiceprints: Optional list of (day, segment_key, source, sentence_id)
+                            tuples for voiceprints
             """
             facet_dir = self.journal / "facets" / facet
             facet_dir.mkdir(parents=True, exist_ok=True)
@@ -88,10 +122,12 @@ def speakers_env(tmp_path, monkeypatch):
                 entity_dir = facet_dir / "entities" / normalize_entity_name(name)
                 entity_dir.mkdir(parents=True, exist_ok=True)
 
-                for day, segment_key in voiceprints:
+                for day, segment_key, source, sentence_id in voiceprints:
                     emb = self.create_embedding()
                     np.savez_compressed(
-                        entity_dir / f"{day}_{segment_key}.npz", embedding=emb
+                        entity_dir / f"{day}_{segment_key}_{source}_{sentence_id}.npz",
+                        embeddings=emb.reshape(1, -1),
+                        segment_ids=np.array([sentence_id], dtype=np.int32),
                     )
 
             return facet_dir

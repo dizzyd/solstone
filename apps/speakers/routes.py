@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 sol pbc
 
-"""Speaker voiceprint management app."""
+"""Speaker voiceprint management app - sentence-based embeddings."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -55,15 +56,50 @@ def _normalize_embedding(emb: np.ndarray) -> np.ndarray | None:
     return None
 
 
+def _parse_time_to_seconds(time_str: str) -> int:
+    """Parse HH:MM:SS time string to seconds."""
+    parts = time_str.split(":")
+    return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+
+
+def _time_to_seconds(t) -> int:
+    """Convert datetime.time to seconds since midnight."""
+    return t.hour * 3600 + t.minute * 60 + t.second
+
+
+def _load_embeddings_file(npz_path: Path) -> tuple[np.ndarray, np.ndarray] | None:
+    """Load embeddings and segment_ids from NPZ file.
+
+    Returns tuple of (embeddings, segment_ids) or None if file is invalid.
+    """
+    if not npz_path.exists():
+        return None
+
+    try:
+        data = np.load(npz_path)
+        embeddings = data.get("embeddings")
+        segment_ids = data.get("segment_ids")
+
+        if embeddings is None or segment_ids is None:
+            return None
+
+        return embeddings, segment_ids
+    except Exception as e:
+        logger.warning("Failed to load embeddings %s: %s", npz_path, e)
+        return None
+
+
 def _scan_segment_embeddings(day: str) -> list[dict]:
-    """Scan a day for segments with speaker embeddings.
+    """Scan a day for segments with sentence embeddings.
+
+    Looks for *.npz files in segment root (new format from observe/transcribe.py).
 
     Returns list of segment info dicts with keys:
         - key: segment directory name (HHMMSS_LEN)
         - start: formatted start time (HH:MM)
         - end: formatted end time (HH:MM)
         - duration: duration in seconds
-        - speakers: list of speaker labels
+        - sources: list of audio sources (e.g., ["mic_audio", "sys_audio"])
     """
     day_dir = day_path(day)
     if not day_dir.is_dir():
@@ -82,24 +118,18 @@ def _scan_segment_embeddings(day: str) -> list[dict]:
 
         start_time, end_time = parsed
 
-        # Check for audio embeddings subdir
-        audio_dir = item_path / "audio"
-        if not audio_dir.is_dir():
-            continue
-
-        # Find speaker embedding files
-        npz_files = list(audio_dir.glob("*.npz"))
+        # Find embedding files at segment root (new format: <stem>.npz)
+        npz_files = list(item_path.glob("*.npz"))
         if not npz_files:
             continue
 
-        speakers = [f.stem for f in npz_files]
+        # Filter to audio sources (exclude other npz files if any)
+        sources = [f.stem for f in npz_files if f.stem.endswith("_audio")]
+        if not sources:
+            continue
 
         # Calculate duration from start and end times
-        start_seconds = (
-            start_time.hour * 3600 + start_time.minute * 60 + start_time.second
-        )
-        end_seconds = end_time.hour * 3600 + end_time.minute * 60 + end_time.second
-        duration = end_seconds - start_seconds
+        duration = _time_to_seconds(end_time) - _time_to_seconds(start_time)
 
         segments.append(
             {
@@ -107,30 +137,98 @@ def _scan_segment_embeddings(day: str) -> list[dict]:
                 "start": f"{start_time.hour:02d}:{start_time.minute:02d}",
                 "end": f"{end_time.hour:02d}:{end_time.minute:02d}",
                 "duration": duration,
-                "speakers": speakers,
+                "sources": sorted(sources),
             }
         )
 
     return segments
 
 
-def _load_segment_speaker_embedding(
-    day: str, segment_key: str, speaker: str
+def _load_sentences(
+    day: str, segment_key: str, source: str
+) -> tuple[list[dict], tuple[np.ndarray, np.ndarray] | None]:
+    """Load transcript sentences and their embeddings for an audio source.
+
+    Args:
+        day: Day string (YYYYMMDD)
+        segment_key: Segment directory name (HHMMSS_LEN)
+        source: Audio source stem (e.g., "mic_audio")
+
+    Returns:
+        Tuple of (sentences, emb_data):
+        - sentences: List of dicts with id, offset, text, has_embedding
+        - emb_data: Tuple of (embeddings, segment_ids) or None if no embeddings
+    """
+    segment_dir = day_path(day) / segment_key
+
+    # Load JSONL transcript
+    jsonl_path = segment_dir / f"{source}.jsonl"
+    if not jsonl_path.exists():
+        return [], None
+
+    sentences = []
+    with open(jsonl_path) as f:
+        lines = f.readlines()
+
+    if not lines:
+        return [], None
+
+    # First line is metadata, skip it
+    # Remaining lines are sentences indexed by line number (1-based segment ID)
+    for i, line in enumerate(lines[1:], start=1):
+        try:
+            entry = json.loads(line)
+            offset = _parse_time_to_seconds(entry.get("start", "00:00:00"))
+            sentences.append(
+                {
+                    "id": i,
+                    "offset": offset,
+                    "text": entry.get("text", ""),
+                }
+            )
+        except (json.JSONDecodeError, ValueError, IndexError):
+            continue
+
+    # Load embeddings
+    npz_path = segment_dir / f"{source}.npz"
+    emb_data = _load_embeddings_file(npz_path)
+
+    if emb_data is not None:
+        embeddings, segment_ids = emb_data
+        emb_map = {int(sid): True for sid in segment_ids}
+
+        # Mark which sentences have embeddings
+        for sentence in sentences:
+            sentence["has_embedding"] = sentence["id"] in emb_map
+
+    return sentences, emb_data
+
+
+def _get_sentence_embedding(
+    day: str, segment_key: str, source: str, sentence_id: int
 ) -> np.ndarray | None:
-    """Load a speaker's embedding from a segment."""
-    emb_path = day_path(day) / segment_key / "audio" / f"{speaker}.npz"
-    if not emb_path.exists():
+    """Get a specific sentence's embedding, normalized."""
+    segment_dir = day_path(day) / segment_key
+    npz_path = segment_dir / f"{source}.npz"
+
+    emb_data = _load_embeddings_file(npz_path)
+    if emb_data is None:
         return None
 
-    data = np.load(emb_path)
-    return _normalize_embedding(data["embedding"])
+    embeddings, segment_ids = emb_data
+
+    # Find the embedding for this sentence
+    for i, sid in enumerate(segment_ids):
+        if int(sid) == sentence_id:
+            return _normalize_embedding(embeddings[i])
+
+    return None
 
 
 def _scan_entity_voiceprints(facet: str) -> dict[str, np.ndarray]:
     """Scan entities in a facet for voiceprints.
 
     Returns dict mapping entity name to averaged embedding.
-    Each entity may have multiple voiceprint files (day_segment.npz).
     """
     try:
         entities = load_entities(facet)
@@ -151,57 +249,78 @@ def _scan_entity_voiceprints(facet: str) -> dict[str, np.ndarray]:
         if not folder.is_dir():
             continue
 
-        # Find all voiceprint files (pattern: YYYYMMDD_HHMMSS_LEN.npz)
-        npz_files = list(folder.glob("*_*.npz"))
+        # Find all voiceprint files
+        npz_files = list(folder.glob("*.npz"))
         if not npz_files:
             continue
 
         # Load and average all voiceprints
-        embeddings = []
+        all_embeddings = []
         for npz_path in npz_files:
-            try:
-                data = np.load(npz_path)
-                emb = _normalize_embedding(data["embedding"])
-                if emb is not None:
-                    embeddings.append(emb)
-            except Exception as e:
-                logger.warning("Failed to load voiceprint %s: %s", npz_path, e)
-                continue
+            emb_data = _load_embeddings_file(npz_path)
+            if emb_data is not None:
+                embeddings, _ = emb_data
+                for emb in embeddings:
+                    normalized = _normalize_embedding(emb)
+                    if normalized is not None:
+                        all_embeddings.append(normalized)
 
-        if embeddings:
+        if all_embeddings:
             # Average all embeddings and re-normalize
-            avg_emb = _normalize_embedding(np.mean(embeddings, axis=0))
+            avg_emb = _normalize_embedding(np.mean(all_embeddings, axis=0))
             if avg_emb is not None:
                 voiceprints[name] = avg_emb
 
     return voiceprints
 
 
-def _compute_matches(
-    segment_emb: np.ndarray, known_embs: dict[str, np.ndarray]
-) -> dict[str, float]:
-    """Compute cosine similarity between segment embedding and known voiceprints."""
+def _compute_best_match(
+    emb: np.ndarray, known_embs: dict[str, np.ndarray], threshold: float = 0.4
+) -> dict | None:
+    """Find the best matching voiceprint for an embedding.
+
+    Returns dict with 'entity' and 'score', or None if no match above threshold.
+    """
     if not known_embs:
-        return {}
+        return None
 
-    matches = {}
+    best_entity = None
+    best_score = threshold
+
     for name, known_emb in known_embs.items():
-        # Cosine similarity via dot product (both are L2-normalized)
-        score = float(np.dot(segment_emb, known_emb))
-        if score >= 0.4:  # Only include matches above threshold
-            matches[name] = round(score, 4)
+        score = float(np.dot(emb, known_emb))
+        if score > best_score:
+            best_score = score
+            best_entity = name
 
-    return matches
+    if best_entity:
+        return {"entity": best_entity, "score": round(best_score, 4)}
+    return None
 
 
 def _save_voiceprint_to_entity(
-    facet: str, entity_name: str, day: str, segment_key: str, embedding: np.ndarray
+    facet: str,
+    entity_name: str,
+    day: str,
+    segment_key: str,
+    source: str,
+    embedding: np.ndarray,
+    sentence_id: int,
 ) -> Path:
-    """Save a voiceprint embedding to an entity's folder."""
+    """Save a voiceprint embedding to an entity's folder.
+
+    Uses new multi-embedding format with embeddings array and segment_ids.
+    """
     folder = ensure_entity_folder(facet, entity_name)
-    filename = f"{day}_{segment_key}.npz"
+    filename = f"{day}_{segment_key}_{source}_{sentence_id}.npz"
     emb_path = folder / filename
-    np.savez_compressed(emb_path, embedding=embedding)
+
+    # Save in new format (single embedding stored as 1-element array)
+    np.savez_compressed(
+        emb_path,
+        embeddings=embedding.reshape(1, -1),
+        segment_ids=np.array([sentence_id], dtype=np.int32),
+    )
     return emb_path
 
 
@@ -246,7 +365,7 @@ def api_stats(month: str) -> Any:
 
 @speakers_bp.route("/api/segments/<day>")
 def api_segments(day: str) -> Any:
-    """Return segments with speaker embeddings for a day."""
+    """Return segments with embeddings for a day."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return error_response("Invalid day format", 400)
 
@@ -254,9 +373,9 @@ def api_segments(day: str) -> Any:
     return jsonify({"segments": segments})
 
 
-@speakers_bp.route("/api/segment/<day>/<segment_key>")
-def api_segment_detail(day: str, segment_key: str) -> Any:
-    """Return segment detail with speaker match results."""
+@speakers_bp.route("/api/sentences/<day>/<segment_key>/<source>")
+def api_sentences(day: str, segment_key: str, source: str) -> Any:
+    """Return sentences with embeddings and matches for an audio source."""
     if not re.fullmatch(DATE_RE.pattern, day):
         return error_response("Invalid day format", 400)
 
@@ -268,6 +387,32 @@ def api_segment_detail(day: str, segment_key: str) -> Any:
     if not selected_facet:
         return error_response("No facet selected", 400)
 
+    # Load sentences and embeddings
+    sentences, emb_data = _load_sentences(day, segment_key, source)
+    if not sentences:
+        return error_response("No transcript found", 404)
+
+    # Load known voiceprints for matching
+    known_voiceprints = _scan_entity_voiceprints(selected_facet)
+
+    # Compute best match for each sentence with embedding
+    if emb_data is not None:
+        embeddings, segment_ids = emb_data
+        emb_map = {int(sid): emb for sid, emb in zip(segment_ids, embeddings)}
+
+        for sentence in sentences:
+            if sentence.get("has_embedding"):
+                emb = emb_map.get(sentence["id"])
+                if emb is not None:
+                    normalized = _normalize_embedding(emb)
+                    if normalized is not None:
+                        match = _compute_best_match(normalized, known_voiceprints)
+                        if match:
+                            sentence["match"] = match
+
+    # Filter to only sentences with embeddings
+    sentences = [s for s in sentences if s.get("has_embedding")]
+
     # Load ALL entities in the facet for dropdown
     try:
         all_entities = load_entities(selected_facet)
@@ -275,42 +420,35 @@ def api_segment_detail(day: str, segment_key: str) -> Any:
     except RuntimeError:
         all_entity_names = []
 
-    # Load known voiceprints for matching
-    known_voiceprints = _scan_entity_voiceprints(selected_facet)
-
-    # Load segment speaker embeddings
-    audio_dir = day_path(day) / segment_key / "audio"
-    if not audio_dir.is_dir():
-        return error_response("Segment has no speaker embeddings", 404)
-
-    speakers = []
-    for npz_path in sorted(audio_dir.glob("*.npz")):
-        speaker_label = npz_path.stem
-        emb = _load_segment_speaker_embedding(day, segment_key, speaker_label)
-        if emb is None:
-            continue
-
-        matches = _compute_matches(emb, known_voiceprints)
-        speakers.append(
-            {
-                "label": speaker_label,
-                "matches": matches,
-            }
-        )
-
-    # Get audio file URL if available
-    audio_file = None
+    # Get audio file URL
     segment_dir = day_path(day) / segment_key
-    audio_files = list(segment_dir.glob("*audio.flac"))
-    if audio_files:
-        rel_path = f"{segment_key}/{audio_files[0].name}"
+    audio_file = None
+    audio_path = segment_dir / f"{source}.flac"
+    if audio_path.exists():
+        rel_path = f"{segment_key}/{source}.flac"
         audio_file = (
             f"/app/speakers/api/serve_audio/{day}/{rel_path.replace('/', '__')}"
         )
 
+    # Get segment times
+    parsed = segment_parse(segment_key)
+    start_time, end_time = parsed if parsed[0] else (None, None)
+
     return jsonify(
         {
-            "speakers": speakers,
+            "segment": {
+                "key": segment_key,
+                "start": (
+                    f"{start_time.hour:02d}:{start_time.minute:02d}"
+                    if start_time
+                    else ""
+                ),
+                "end": (
+                    f"{end_time.hour:02d}:{end_time.minute:02d}" if end_time else ""
+                ),
+            },
+            "source": source,
+            "sentences": sentences,
             "all_entities": all_entity_names,
             "audio_file": audio_file,
             "facet": selected_facet,
@@ -344,7 +482,7 @@ def serve_audio(day: str, encoded_path: str) -> Any:
 
 @speakers_bp.route("/api/save-voiceprint", methods=["POST"])
 def api_save_voiceprint() -> Any:
-    """Save a voiceprint from a segment speaker to an existing entity."""
+    """Save a sentence voiceprint to an existing entity."""
     data = request.get_json()
     if not data:
         return error_response("No data provided", 400)
@@ -353,12 +491,13 @@ def api_save_voiceprint() -> Any:
     entity_name = data.get("entity_name")
     day = data.get("day")
     segment_key = data.get("segment_key")
-    speaker_label = data.get("speaker_label")
+    source = data.get("source")
+    sentence_id = data.get("sentence_id")
 
-    if not all([facet, entity_name, day, segment_key, speaker_label]):
+    if not all([facet, entity_name, day, segment_key, source, sentence_id]):
         return error_response("Missing required fields", 400)
 
-    # Validate day and segment_key formats
+    # Validate formats
     if not re.fullmatch(DATE_RE.pattern, day):
         return error_response("Invalid day format", 400)
     if not validate_segment_key(segment_key):
@@ -372,16 +511,17 @@ def api_save_voiceprint() -> Any:
             f"Entity '{entity_name}' not found in facet '{facet}'", 404
         )
 
-    # Load speaker embedding
-    emb = _load_segment_speaker_embedding(day, segment_key, speaker_label)
+    # Load sentence embedding
+    emb = _get_sentence_embedding(day, segment_key, source, sentence_id)
     if emb is None:
-        return error_response("Speaker embedding not found", 404)
+        return error_response("Sentence embedding not found", 404)
 
     # Save voiceprint
     try:
-        emb_path = _save_voiceprint_to_entity(facet, entity_name, day, segment_key, emb)
+        emb_path = _save_voiceprint_to_entity(
+            facet, entity_name, day, segment_key, source, emb, sentence_id
+        )
 
-        # Log action (facet-scoped since voiceprints are tied to entities)
         log_app_action(
             app="speakers",
             facet=facet,
@@ -390,7 +530,8 @@ def api_save_voiceprint() -> Any:
                 "entity_name": entity_name,
                 "day": day,
                 "segment_key": segment_key,
-                "speaker_label": speaker_label,
+                "source": source,
+                "sentence_id": sentence_id,
             },
         )
 
@@ -413,12 +554,13 @@ def api_create_entity_voiceprint() -> Any:
     entity_description = data.get("description", "")
     day = data.get("day")
     segment_key = data.get("segment_key")
-    speaker_label = data.get("speaker_label")
+    source = data.get("source")
+    sentence_id = data.get("sentence_id")
 
-    if not all([facet, entity_name, day, segment_key, speaker_label]):
+    if not all([facet, entity_name, day, segment_key, source, sentence_id]):
         return error_response("Missing required fields", 400)
 
-    # Validate day and segment_key formats
+    # Validate formats
     if not re.fullmatch(DATE_RE.pattern, day):
         return error_response("Invalid day format", 400)
     if not validate_segment_key(segment_key):
@@ -432,10 +574,10 @@ def api_create_entity_voiceprint() -> Any:
             f"Entity '{entity_name}' already exists in facet '{facet}'", 409
         )
 
-    # Load speaker embedding
-    emb = _load_segment_speaker_embedding(day, segment_key, speaker_label)
+    # Load sentence embedding
+    emb = _get_sentence_embedding(day, segment_key, source, sentence_id)
     if emb is None:
-        return error_response("Speaker embedding not found", 404)
+        return error_response("Sentence embedding not found", 404)
 
     # Create new entity
     new_entity = {
@@ -449,9 +591,10 @@ def api_create_entity_voiceprint() -> Any:
 
     # Save voiceprint
     try:
-        emb_path = _save_voiceprint_to_entity(facet, entity_name, day, segment_key, emb)
+        emb_path = _save_voiceprint_to_entity(
+            facet, entity_name, day, segment_key, source, emb, sentence_id
+        )
 
-        # Log action (facet-scoped since entities are facet-scoped)
         log_app_action(
             app="speakers",
             facet=facet,
@@ -461,7 +604,8 @@ def api_create_entity_voiceprint() -> Any:
                 "entity_type": entity_type,
                 "day": day,
                 "segment_key": segment_key,
-                "speaker_label": speaker_label,
+                "source": source,
+                "sentence_id": sentence_id,
             },
         )
 
