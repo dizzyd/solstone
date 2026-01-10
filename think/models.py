@@ -410,6 +410,7 @@ def gemini_generate(
     cached_content: Optional[str] = None,
     client: Optional[genai.Client] = None,
     timeout_s: Optional[float] = None,
+    context: Optional[str] = None,
 ) -> str:
     """
     Simplified wrapper for genai.models.generate_content with common defaults.
@@ -442,6 +443,9 @@ def gemini_generate(
         Existing client to reuse. If not provided, creates a new one.
     timeout_s : float, optional
         Request timeout in seconds.
+    context : str, optional
+        Context string for token usage logging (e.g., "insight.decisions.markdown").
+        If not provided, auto-detects from call stack.
 
     Returns
     -------
@@ -467,7 +471,7 @@ def gemini_generate(
     )
 
     text = _validate_response(response, max_output_tokens, thinking_budget)
-    log_token_usage(model=model, usage=response)
+    log_token_usage(model=model, usage=response, context=context)
     return text
 
 
@@ -482,6 +486,7 @@ async def gemini_agenerate(
     cached_content: Optional[str] = None,
     client: Optional[genai.Client] = None,
     timeout_s: Optional[float] = None,
+    context: Optional[str] = None,
 ) -> str:
     """
     Async wrapper for genai.aio.models.generate_content with common defaults.
@@ -514,6 +519,9 @@ async def gemini_agenerate(
         Existing client to reuse. If not provided, creates a new one.
     timeout_s : float, optional
         Request timeout in seconds.
+    context : str, optional
+        Context string for token usage logging (e.g., "insight.decisions.markdown").
+        If not provided, auto-detects from call stack.
 
     Returns
     -------
@@ -539,7 +547,7 @@ async def gemini_agenerate(
     )
 
     text = _validate_response(response, max_output_tokens, thinking_budget)
-    log_token_usage(model=model, usage=response)
+    log_token_usage(model=model, usage=response, context=context)
     return text
 
 

@@ -195,7 +195,11 @@ def send_markdown(
     api_key: str,
     model: str,
     cache_display_name: str | None = None,
+    insight_key: str | None = None,
 ) -> str:
+    # Build context for token logging
+    context = f"insight.{insight_key}.markdown" if insight_key else None
+
     # Try to use cache if display name provided
     client = None
     cache_name = None
@@ -213,6 +217,7 @@ def send_markdown(
             thinking_budget=8192 * 3,
             cached_content=cache_name,
             client=client,
+            context=context,
         )
     else:
         # No cache: send markdown + prompt with system instruction
@@ -223,6 +228,7 @@ def send_markdown(
             max_output_tokens=8192 * 6,
             thinking_budget=8192 * 3,
             system_instruction=COMMON_SYSTEM_INSTRUCTION,
+            context=context,
         )
 
 
@@ -249,9 +255,9 @@ def _should_skip_extraction(result: str) -> bool:
 def send_extraction(
     markdown: str,
     prompt: str,
-    api_key: str,
     model: str,
     extra_instructions: str | None = None,
+    insight_key: str | None = None,
 ) -> list:
     """Extract structured JSON events from markdown summary.
 
@@ -263,18 +269,21 @@ def send_extraction(
         Markdown summary to extract events from.
     prompt:
         System instruction guiding the extraction.
-    api_key:
-        Google API key for authentication.
     model:
         Gemini model name.
     extra_instructions:
         Optional additional instructions prepended to ``markdown``.
+    insight_key:
+        Insight key for token usage context (e.g., "decisions").
 
     Returns
     -------
     list
         Array of extracted event objects.
     """
+    # Build context for token logging
+    context = f"insight.{insight_key}.extraction" if insight_key else None
+
     contents = [markdown]
     if extra_instructions:
         contents.insert(0, extra_instructions)
@@ -287,6 +296,7 @@ def send_extraction(
         thinking_budget=8192 * 3,
         system_instruction=prompt,
         json_output=True,
+        context=context,
     )
 
     try:
@@ -448,6 +458,7 @@ def main() -> None:
                 api_key,
                 model,
                 cache_display_name=cache_display_name,
+                insight_key=insight_key,
             )
         else:
             result = send_markdown(
@@ -456,6 +467,7 @@ def main() -> None:
                 api_key,
                 model,
                 cache_display_name=cache_display_name,
+                insight_key=insight_key,
             )
 
         # Check if we got a valid response
@@ -514,9 +526,9 @@ def main() -> None:
             events = send_extraction(
                 result,
                 extraction_prompt,
-                api_key,
                 model,
                 extra_instructions=combined_instructions,
+                insight_key=insight_key,
             )
         except ValueError as e:
             print(f"Error: {e}")

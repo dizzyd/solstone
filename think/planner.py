@@ -77,6 +77,7 @@ def generate_plan(
         max_output_tokens=4096,
         thinking_budget=4096,
         system_instruction=_load_prompt(),
+        context="planner.generate",
     )
 
 

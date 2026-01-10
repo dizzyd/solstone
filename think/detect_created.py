@@ -105,6 +105,7 @@ def detect_created(
         thinking_budget=4096,
         system_instruction=_load_system_prompt(),
         json_output=True,
+        context="detect.created",
     )
 
     try:

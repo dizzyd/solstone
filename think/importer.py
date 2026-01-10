@@ -623,7 +623,7 @@ def create_transcript_summary(
 
     try:
         logger.info(
-            f"Creating summary with Gemini Pro for {len(all_transcripts)} transcript segments"
+            f"Creating summary with Gemini for {len(all_transcripts)} transcript segments"
         )
 
         # Generate summary using Gemini
@@ -633,6 +633,7 @@ def create_transcript_summary(
             temperature=0.3,
             max_output_tokens=8192 * 4,
             system_instruction=importer_prompt,
+            context="import.summary",
         )
 
         # Save the summary

@@ -422,6 +422,7 @@ class VideoProcessor:
                 temperature=0.7,
                 max_output_tokens=1024,
                 thinking_budget=1024,
+                context="describe.frame",
             )
 
             # Attach metadata for tracking (store bytes, not PIL images)
@@ -592,6 +593,7 @@ class VideoProcessor:
                             json_output=is_json,
                             max_output_tokens=10240 if is_json else 8192,
                             thinking_budget=6144 if is_json else 4096,
+                            context=f"describe.{category}",
                         )
 
                     logger.info(

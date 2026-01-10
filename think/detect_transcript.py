@@ -157,6 +157,7 @@ def detect_transcript_segment(
         thinking_budget=8192,
         system_instruction=_load_segment_prompt(),
         json_output=True,
+        context="detect.segment",
     )
 
     logging.info(f"Received response from Gemini: {response_text}")
@@ -200,6 +201,7 @@ def detect_transcript_json(
         thinking_budget=8192,
         system_instruction=_load_json_prompt(),
         json_output=True,
+        context="detect.json",
     )
 
     logging.info(f"Received response from Gemini: {response_text[:100]}")

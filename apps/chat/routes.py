@@ -142,6 +142,7 @@ def generate_chat_title(message: str) -> str:
             system_instruction=TITLE_SYSTEM_INSTRUCTION,
             max_output_tokens=50,
             timeout_s=10,
+            context="app.chat.title",
         ).strip()
         return title if title else message.split("\n")[0][:30]
     except Exception:

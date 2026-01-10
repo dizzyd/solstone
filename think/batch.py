@@ -52,6 +52,7 @@ class GeminiRequest:
         thinking_budget: Optional[int] = None,
         cached_content: Optional[str] = None,
         timeout_s: Optional[float] = None,
+        context: Optional[str] = None,
     ):
         self.contents = contents
         self.model = model
@@ -62,6 +63,7 @@ class GeminiRequest:
         self.thinking_budget = thinking_budget
         self.cached_content = cached_content
         self.timeout_s = timeout_s
+        self.context = context
 
         # Populated after execution
         self.response: Optional[str] = None
@@ -122,6 +124,7 @@ class GeminiBatch:
         thinking_budget: Optional[int] = None,
         cached_content: Optional[str] = None,
         timeout_s: Optional[float] = None,
+        context: Optional[str] = None,
     ) -> GeminiRequest:
         """
         Create a new GeminiRequest.
@@ -144,6 +147,7 @@ class GeminiBatch:
             thinking_budget=thinking_budget,
             cached_content=cached_content,
             timeout_s=timeout_s,
+            context=context,
         )
 
     def add(self, request: GeminiRequest) -> None:
@@ -246,6 +250,7 @@ class GeminiBatch:
                     cached_content=request.cached_content,
                     client=self.client,
                     timeout_s=request.timeout_s,
+                    context=request.context,
                 )
                 request.duration = time.time() - start_time
                 request.response = response
