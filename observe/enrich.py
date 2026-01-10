@@ -112,7 +112,8 @@ def enrich_transcript(
             contents=contents,
             model=GEMINI_LITE,
             temperature=0.3,
-            max_output_tokens=4096,
+            max_output_tokens=2048,
+            thinking_budget=2048,
             json_output=True,
         )
 

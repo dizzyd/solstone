@@ -20,7 +20,7 @@ Respond with JSON only:
 ```json
 {
   "descriptions": ["<description for segment 1>", "<description for segment 2>", ...],
-  "topics": ["<topic1>", "<topic2>"],
+  "topics": "<topic1>, <topic2>, <topic3>",
   "setting": "<workplace|personal|educational|podcast|interview|meeting|lecture|news|other>"
 }
 ```
@@ -30,16 +30,15 @@ IMPORTANT: The descriptions array MUST have the same length as the number of inp
 ## Guidelines
 
 ### Descriptions
-- Keep descriptions brief (3-10 words)
-- Focus on tone: "friendly", "frustrated", "enthusiastic", "calm", "rushed"
-- Note delivery: "speaking quickly", "deliberate pause", "trailing off"
-- Include vocalizations: "[laughs]", "[sighs]", "[clears throat]"
-- Note emphasis: "stressing the word 'never'", "raised voice"
-- Use "neutral tone" if nothing notable
+These help hearing-impaired users understand the full context beyond just words.
+- Brief (2-6 words): "friendly tone", "hesitant, trailing off", "laughing", "matter-of-fact"
+- Note tone, pace, or vocalizations - most speech has something worth noting
+- Examples: "calm, inquisitive", "frustrated voice", "speaking quickly", "sighs, apologetic"
+- Ignore background noise - focus on the speaker's voice
 
 ### Topics
-- Extract 2-5 main topics discussed
-- Use concise noun phrases: "project deadline", "weekend plans", "API design"
+- Extract 2-5 main topics as a comma-separated string
+- Use concise noun phrases: "project deadline, weekend plans, API design"
 - Order by prominence in the conversation
 
 ### Setting

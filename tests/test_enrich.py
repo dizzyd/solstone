@@ -94,7 +94,7 @@ class TestEnrichTranscript:
         mock_response = json.dumps(
             {
                 "descriptions": ["calm tone", "excited voice"],
-                "topics": ["testing", "software"],
+                "topics": "testing, software",
                 "setting": "workplace",
             }
         )
@@ -113,7 +113,7 @@ class TestEnrichTranscript:
         assert "setting" in result
         assert len(result["descriptions"]) == 2
         assert result["descriptions"] == ["calm tone", "excited voice"]
-        assert result["topics"] == ["testing", "software"]
+        assert result["topics"] == "testing, software"
         assert result["setting"] == "workplace"
 
     @patch("observe.enrich.gemini_generate")
@@ -168,7 +168,7 @@ class TestEnrichTranscript:
         mock_response = json.dumps(
             {
                 "descriptions": ["neutral"],
-                "topics": ["test"],
+                "topics": "test",
                 "setting": "other",
             }
         )
@@ -256,7 +256,7 @@ class TestTranscriberIntegration:
             # Enrichment now uses descriptions array (positional)
             enrichment = {
                 "descriptions": ["friendly tone", "excited"],
-                "topics": ["greetings", "testing"],
+                "topics": "greetings, testing",
                 "setting": "personal",
             }
 
@@ -268,7 +268,7 @@ class TestTranscriberIntegration:
 
             # Check metadata has topics and setting
             metadata = json.loads(lines[0])
-            assert metadata["topics"] == ["greetings", "testing"]
+            assert metadata["topics"] == "greetings, testing"
             assert metadata["setting"] == "personal"
 
             # Check entries have descriptions (matched by position)
@@ -299,7 +299,7 @@ class TestTranscriberIntegration:
             # Enrichment only has description for first segment (fewer than segments)
             enrichment = {
                 "descriptions": ["friendly tone"],  # Only one description
-                "topics": ["test"],
+                "topics": "test",
                 "setting": "other",
             }
 
