@@ -31,7 +31,7 @@ from PIL import Image, ImageChops, ImageStat
 from observe.aruco import detect_markers, mask_convey_region, polygon_area
 from observe.utils import get_segment_key
 from think.callosum import callosum_send
-from think.utils import get_journal, setup_cli
+from think.utils import get_journal, load_prompt, setup_cli
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ def _discover_categories() -> dict[str, dict]:
                         f"Category {category} has followup=true but no {category}.txt"
                     )
                     continue
-                metadata["prompt"] = txt_path.read_text()
+                metadata["prompt"] = load_prompt(category, base_dir=categories_dir).text
 
             categories[category] = metadata
             logger.debug(
@@ -131,12 +131,6 @@ def _build_categorization_prompt() -> str:
     str
         Complete prompt with category list substituted
     """
-    template_path = Path(__file__).parent / "describe.txt"
-    if not template_path.exists():
-        raise FileNotFoundError(f"Prompt template not found: {template_path}")
-
-    template = template_path.read_text()
-
     # Build category list (alphabetical order)
     category_lines = []
     for name in sorted(CATEGORIES.keys()):
@@ -145,7 +139,9 @@ def _build_categorization_prompt() -> str:
 
     category_list = "\n".join(category_lines)
 
-    return template.replace("${CATEGORIES}", category_list)
+    return load_prompt(
+        "describe", base_dir=Path(__file__).parent, context={"categories": category_list}
+    ).text
 
 
 # Discover categories at module level

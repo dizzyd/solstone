@@ -15,4 +15,4 @@ Rules:
 - Only set a category for secondary if it is very visible and occupies more than 30% of the screen.
 
 Categories (choose one):
-${CATEGORIES}
+$categories
