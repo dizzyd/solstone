@@ -37,7 +37,7 @@ def get_facet_entities_data(facet_name: str) -> dict:
     Returns:
         dict with keys:
             - attached: list of entity dicts with type, name, description,
-                        and optional attached_at, updated_at timestamps
+                        and optional attached_at, updated_at, last_seen timestamps
             - detected: list of {"type": str, "name": str, "description": str, "count": int, "last_seen": str}
     """
     # Load attached entities (already returns list of dicts)

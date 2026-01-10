@@ -11,12 +11,16 @@ from think.entities import (
     ensure_entity_folder,
     entity_file_path,
     entity_folder_path,
+    find_matching_attached_entity,
     load_all_attached_entities,
     load_detected_entities_recent,
     load_entities,
     normalize_entity_name,
+    parse_knowledge_graph_entities,
     rename_entity_folder,
     save_entities,
+    touch_entities_from_activity,
+    touch_entity,
 )
 
 
@@ -847,3 +851,458 @@ def test_rename_entity_folder_target_exists(fixture_journal, tmp_path):
     # Try to rename Alice to Bob
     with pytest.raises(OSError, match="already exists"):
         rename_entity_folder("work", "Alice", "Bob")
+
+
+# Tests for find_matching_attached_entity
+
+
+def test_find_matching_attached_entity_exact_name():
+    """Test exact name matching."""
+    attached = [
+        {"name": "Alice Johnson", "type": "Person"},
+        {"name": "Bob Smith", "type": "Person"},
+    ]
+    result = find_matching_attached_entity("Alice Johnson", attached)
+    assert result is not None
+    assert result["name"] == "Alice Johnson"
+
+
+def test_find_matching_attached_entity_exact_aka():
+    """Test exact aka matching."""
+    attached = [
+        {"name": "Robert Johnson", "type": "Person", "aka": ["Bob", "Bobby"]},
+    ]
+    result = find_matching_attached_entity("Bob", attached)
+    assert result is not None
+    assert result["name"] == "Robert Johnson"
+
+
+def test_find_matching_attached_entity_case_insensitive():
+    """Test case-insensitive matching."""
+    attached = [
+        {"name": "Alice Johnson", "type": "Person"},
+    ]
+    result = find_matching_attached_entity("alice johnson", attached)
+    assert result is not None
+    assert result["name"] == "Alice Johnson"
+
+
+def test_find_matching_attached_entity_case_insensitive_aka():
+    """Test case-insensitive aka matching."""
+    attached = [
+        {"name": "Robert Johnson", "type": "Person", "aka": ["Bob"]},
+    ]
+    result = find_matching_attached_entity("bob", attached)
+    assert result is not None
+    assert result["name"] == "Robert Johnson"
+
+
+def test_find_matching_attached_entity_normalized():
+    """Test normalized (slugified) matching."""
+    attached = [
+        {"name": "José García", "type": "Person"},
+    ]
+    # "Jose Garcia" should match via normalization
+    result = find_matching_attached_entity("Jose Garcia", attached)
+    assert result is not None
+    assert result["name"] == "José García"
+
+
+def test_find_matching_attached_entity_first_word_unambiguous():
+    """Test first-word matching when unambiguous."""
+    attached = [
+        {"name": "Sarah Chen", "type": "Person"},
+        {"name": "Bob Smith", "type": "Person"},
+    ]
+    # "Sarah" should match "Sarah Chen" (only one Sarah)
+    result = find_matching_attached_entity("Sarah", attached)
+    assert result is not None
+    assert result["name"] == "Sarah Chen"
+
+
+def test_find_matching_attached_entity_first_word_ambiguous():
+    """Test first-word matching skipped when ambiguous."""
+    attached = [
+        {"name": "John Smith", "type": "Person"},
+        {"name": "John Doe", "type": "Person"},
+    ]
+    # "John" matches multiple entities - should not match
+    result = find_matching_attached_entity("John", attached)
+    assert result is None
+
+
+def test_find_matching_attached_entity_first_word_too_short():
+    """Test first-word matching requires minimum 3 characters."""
+    attached = [
+        {"name": "Al Smith", "type": "Person"},
+    ]
+    # "Al" is too short (< 3 chars)
+    result = find_matching_attached_entity("Al", attached)
+    assert result is None
+
+
+def test_find_matching_attached_entity_fuzzy():
+    """Test fuzzy matching catches typos."""
+    attached = [
+        {"name": "Robert Johnson", "type": "Person"},
+    ]
+    # Typo: "Robet Johnson" should match "Robert Johnson"
+    result = find_matching_attached_entity("Robet Johnson", attached)
+    assert result is not None
+    assert result["name"] == "Robert Johnson"
+
+
+def test_find_matching_attached_entity_fuzzy_word_order():
+    """Test fuzzy matching handles word order differences."""
+    attached = [
+        {"name": "Sarah Chen", "type": "Person"},
+    ]
+    # Different word order
+    result = find_matching_attached_entity("Chen Sarah", attached)
+    assert result is not None
+    assert result["name"] == "Sarah Chen"
+
+
+def test_find_matching_attached_entity_no_match():
+    """Test no match returns None."""
+    attached = [
+        {"name": "Alice Johnson", "type": "Person"},
+    ]
+    result = find_matching_attached_entity("Charlie Brown", attached)
+    assert result is None
+
+
+def test_find_matching_attached_entity_empty_inputs():
+    """Test empty inputs return None."""
+    assert find_matching_attached_entity("", []) is None
+    assert find_matching_attached_entity("Alice", []) is None
+    assert find_matching_attached_entity("", [{"name": "Alice"}]) is None
+
+
+# Tests for touch_entity
+
+
+def test_touch_entity_updates_last_seen(fixture_journal, tmp_path):
+    """Test touch_entity updates last_seen on attached entity."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity without last_seen
+    entities = [
+        {"type": "Person", "name": "Alice Johnson", "description": "Test"},
+    ]
+    save_entities("test_facet", entities)
+
+    # Touch the entity
+    result = touch_entity("test_facet", "Alice Johnson", "20250115")
+    assert result is True
+
+    # Verify last_seen was set
+    loaded = load_entities("test_facet")
+    alice = next(e for e in loaded if e["name"] == "Alice Johnson")
+    assert alice["last_seen"] == "20250115"
+
+
+def test_touch_entity_updates_only_if_more_recent(fixture_journal, tmp_path):
+    """Test touch_entity only updates if day is more recent."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity with existing last_seen
+    entities = [
+        {
+            "type": "Person",
+            "name": "Alice Johnson",
+            "description": "Test",
+            "last_seen": "20250115",
+        },
+    ]
+    save_entities("test_facet", entities)
+
+    # Try to touch with older day
+    result = touch_entity("test_facet", "Alice Johnson", "20250110")
+    assert result is True  # Entity found
+
+    # Verify last_seen was NOT updated (still 20250115)
+    loaded = load_entities("test_facet")
+    alice = next(e for e in loaded if e["name"] == "Alice Johnson")
+    assert alice["last_seen"] == "20250115"
+
+    # Touch with newer day
+    result = touch_entity("test_facet", "Alice Johnson", "20250120")
+    assert result is True
+
+    # Verify last_seen was updated
+    loaded = load_entities("test_facet")
+    alice = next(e for e in loaded if e["name"] == "Alice Johnson")
+    assert alice["last_seen"] == "20250120"
+
+
+def test_touch_entity_not_found(fixture_journal, tmp_path):
+    """Test touch_entity returns False when entity not found."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity
+    entities = [
+        {"type": "Person", "name": "Alice Johnson", "description": "Test"},
+    ]
+    save_entities("test_facet", entities)
+
+    # Try to touch non-existent entity
+    result = touch_entity("test_facet", "Charlie Brown", "20250115")
+    assert result is False
+
+
+def test_touch_entity_skips_detached(fixture_journal, tmp_path):
+    """Test touch_entity skips detached entities."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create detached entity
+    entities = [
+        {
+            "type": "Person",
+            "name": "Alice Johnson",
+            "description": "Test",
+            "detached": True,
+        },
+    ]
+    save_entities("test_facet", entities)
+
+    # Try to touch detached entity
+    result = touch_entity("test_facet", "Alice Johnson", "20250115")
+    assert result is False
+
+
+# Tests for fuzzy exclusion in load_detected_entities_recent
+
+
+def test_load_detected_entities_recent_fuzzy_exclusion(fixture_journal, tmp_path):
+    """Test that fuzzy matching excludes detected entities matching attached."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity
+    attached = [
+        {
+            "type": "Person",
+            "name": "Robert Johnson",
+            "description": "Attached",
+            "aka": ["Bob"],
+        },
+    ]
+    save_entities("test_facet", attached)
+
+    # Create detected entities including variations
+    detected_entities = [
+        {"type": "Person", "name": "Robert Johnson", "description": "Exact match"},
+        {"type": "Person", "name": "Bob", "description": "Aka match"},
+        {"type": "Person", "name": "robert johnson", "description": "Case insensitive"},
+        {
+            "type": "Person",
+            "name": "Charlie Brown",
+            "description": "Should be included",
+        },
+    ]
+    save_entities("test_facet", detected_entities, "20250101")
+
+    # Load detected - only Charlie Brown should be included
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    names = [e["name"] for e in detected]
+
+    assert "Robert Johnson" not in names  # Exact match excluded
+    assert "Bob" not in names  # Aka excluded
+    assert "robert johnson" not in names  # Case insensitive excluded
+    assert "Charlie Brown" in names  # Not matched, included
+
+
+def test_load_detected_entities_recent_first_word_exclusion(fixture_journal, tmp_path):
+    """Test that first-word matching excludes detected entities."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    entities_dir = facet_path / "entities"
+    entities_dir.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entity
+    attached = [
+        {"type": "Person", "name": "Sarah Chen", "description": "Attached"},
+    ]
+    save_entities("test_facet", attached)
+
+    # Create detected entities
+    detected_entities = [
+        {"type": "Person", "name": "Sarah", "description": "First word match"},
+        {
+            "type": "Person",
+            "name": "Charlie Brown",
+            "description": "Should be included",
+        },
+    ]
+    save_entities("test_facet", detected_entities, "20250101")
+
+    # Load detected - Sarah should be excluded (first word of Sarah Chen)
+    detected = load_detected_entities_recent("test_facet", days=36500)
+    names = [e["name"] for e in detected]
+
+    assert "Sarah" not in names  # First word excluded
+    assert "Charlie Brown" in names  # Not matched, included
+
+
+# Tests for parse_knowledge_graph_entities
+
+
+def test_parse_knowledge_graph_entities(tmp_path):
+    """Test parsing entity names from knowledge graph markdown."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create a knowledge graph file
+    day_dir = tmp_path / "20260108" / "insights"
+    day_dir.mkdir(parents=True)
+
+    kg_content = """# Knowledge Graph Report
+
+## 1. Entity Extraction
+
+### People
+| Entity Name | Type | First Appearance |
+| :--- | :--- | :--- |
+| **Alice Johnson** | Person | 09:00 |
+| **Bob Smith** | Person | 10:00 |
+
+### Projects
+| Entity Name | Type | First Appearance |
+| :--- | :--- | :--- |
+| **Project Alpha** | Project | 11:00 |
+
+## 2. Relationship Mapping
+
+| Source Name | Target Name | Relationship Type |
+| :--- | :--- | :--- |
+| **Alice Johnson** | **Project Alpha** | `works-on` |
+| **Bob Smith** | **Alice Johnson** | `collaborates-with` |
+"""
+    (day_dir / "knowledge_graph.md").write_text(kg_content)
+
+    # Parse entities
+    entities = parse_knowledge_graph_entities("20260108")
+
+    assert "Alice Johnson" in entities
+    assert "Bob Smith" in entities
+    assert "Project Alpha" in entities
+    assert len(entities) == 3  # Unique names only
+
+
+def test_parse_knowledge_graph_entities_missing_file(tmp_path):
+    """Test parsing returns empty list when KG doesn't exist."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    entities = parse_knowledge_graph_entities("20260108")
+    assert entities == []
+
+
+def test_parse_knowledge_graph_entities_empty_file(tmp_path):
+    """Test parsing returns empty list for empty KG."""
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    day_dir = tmp_path / "20260108" / "insights"
+    day_dir.mkdir(parents=True)
+    (day_dir / "knowledge_graph.md").write_text("")
+
+    entities = parse_knowledge_graph_entities("20260108")
+    assert entities == []
+
+
+# Tests for touch_entities_from_activity
+
+
+def test_touch_entities_from_activity_basic(tmp_path):
+    """Test updating last_seen from activity names."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    # Create attached entities
+    attached = [
+        {"type": "Person", "name": "Alice Johnson", "description": "Test"},
+        {"type": "Person", "name": "Robert Smith", "description": "Test", "aka": ["Bob"]},
+    ]
+    save_entities("test_facet", attached)
+
+    # Touch from activity names
+    result = touch_entities_from_activity(
+        "test_facet", ["Alice Johnson", "Bob", "Unknown Person"], "20260108"
+    )
+
+    # Alice matched exactly, Bob matched via aka
+    assert len(result["matched"]) == 2
+    assert ("Alice Johnson", "Alice Johnson") in result["matched"]
+    assert ("Bob", "Robert Smith") in result["matched"]
+
+    # Both should be updated
+    assert "Alice Johnson" in result["updated"]
+    assert "Robert Smith" in result["updated"]
+
+    # Verify last_seen was set
+    entities = load_entities("test_facet")
+    alice = next(e for e in entities if e["name"] == "Alice Johnson")
+    bob = next(e for e in entities if e["name"] == "Robert Smith")
+    assert alice["last_seen"] == "20260108"
+    assert bob["last_seen"] == "20260108"
+
+
+def test_touch_entities_from_activity_empty_names(tmp_path):
+    """Test with empty names list."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    attached = [{"type": "Person", "name": "Alice", "description": "Test"}]
+    save_entities("test_facet", attached)
+
+    result = touch_entities_from_activity("test_facet", [], "20260108")
+
+    assert result["matched"] == []
+    assert result["updated"] == []
+    assert result["skipped"] == []
+
+
+def test_touch_entities_from_activity_no_attached(tmp_path):
+    """Test with no attached entities."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    result = touch_entities_from_activity("test_facet", ["Alice"], "20260108")
+
+    assert result["matched"] == []
+    assert result["updated"] == []
+    assert result["skipped"] == []
+
+
+def test_touch_entities_from_activity_deduplicates(tmp_path):
+    """Test that same entity matched multiple times is only updated once."""
+    facet_path = tmp_path / "facets" / "test_facet"
+    facet_path.mkdir(parents=True)
+    os.environ["JOURNAL_PATH"] = str(tmp_path)
+
+    attached = [
+        {"type": "Person", "name": "Robert Smith", "description": "Test", "aka": ["Bob"]},
+    ]
+    save_entities("test_facet", attached)
+
+    # Both names map to same entity
+    result = touch_entities_from_activity(
+        "test_facet", ["Robert Smith", "Bob"], "20260108"
+    )
+
+    # Two matches but only one unique entity updated
+    assert len(result["matched"]) == 2
+    assert len(result["updated"]) == 1
+    assert "Robert Smith" in result["updated"]

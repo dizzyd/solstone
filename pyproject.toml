@@ -64,6 +64,7 @@ dependencies = [
     "psutil",
     "tzlocal",
     "python-slugify",
+    "rapidfuzz",
     "platformdirs",
 
     # Audio processing

@@ -239,6 +239,7 @@ Each entity is a JSON object with required fields (`type`, `name`, `description`
 - `detached` (boolean) – When `true`, marks the entity as soft-deleted. Detached entities remain in the file but are hidden from UI and excluded from agent context. This preserves entity history and allows re-attachment without data loss.
 - `attached_at` (integer) – Unix timestamp in milliseconds when entity was first attached.
 - `updated_at` (integer) – Unix timestamp in milliseconds of last modification.
+- `last_seen` (string) – Day in YYYYMMDD format when entity was last mentioned in journal content. Automatically updated after daily processing by parsing the knowledge graph and matching entity names via fuzzy matching.
 
 #### Detected Entities
 

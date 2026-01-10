@@ -489,11 +489,298 @@ def load_entity_names(
         return spoken_names if spoken_names else None
 
 
+def find_matching_attached_entity(
+    detected_name: str,
+    attached_entities: list[dict[str, Any]],
+    fuzzy_threshold: int = 90,
+) -> dict[str, Any] | None:
+    """Find an attached entity matching a detected name.
+
+    Uses tiered matching strategy (in order of precedence):
+    1. Exact name or aka match
+    2. Case-insensitive name or aka match
+    3. Normalized (slugified) name match
+    4. First-word match (unambiguous only, min 3 chars)
+    5. Fuzzy match using rapidfuzz (score >= threshold)
+
+    Args:
+        detected_name: Name of detected entity to match
+        attached_entities: List of attached entity dicts to search
+        fuzzy_threshold: Minimum score (0-100) for fuzzy matching (default: 90)
+
+    Returns:
+        Matched entity dict, or None if no match found
+
+    Example:
+        >>> attached = [{"name": "Robert Johnson", "aka": ["Bob", "Bobby"]}]
+        >>> find_matching_attached_entity("Bob", attached)
+        {"name": "Robert Johnson", "aka": ["Bob", "Bobby"]}
+    """
+    if not detected_name or not attached_entities:
+        return None
+
+    detected_lower = detected_name.lower()
+    detected_normalized = normalize_entity_name(detected_name)
+
+    # Build lookup structures for efficient matching
+    # Maps lowercase name/aka -> entity
+    exact_map: dict[str, dict[str, Any]] = {}
+    # Maps normalized name -> entity
+    normalized_map: dict[str, dict[str, Any]] = {}
+    # Maps lowercase first word -> list of entities (for ambiguity detection)
+    first_word_map: dict[str, list[dict[str, Any]]] = {}
+    # All candidate strings for fuzzy matching -> entity
+    fuzzy_candidates: dict[str, dict[str, Any]] = {}
+
+    for entity in attached_entities:
+        name = entity.get("name", "")
+        if not name:
+            continue
+
+        name_lower = name.lower()
+        name_normalized = normalize_entity_name(name)
+
+        # Tier 1 & 2: Exact and case-insensitive
+        exact_map[name] = entity
+        exact_map[name_lower] = entity
+
+        # Also add akas
+        aka_list = entity.get("aka", [])
+        if isinstance(aka_list, list):
+            for aka in aka_list:
+                if aka:
+                    exact_map[aka] = entity
+                    exact_map[aka.lower()] = entity
+
+        # Tier 3: Normalized
+        if name_normalized:
+            normalized_map[name_normalized] = entity
+
+        # Tier 4: First word
+        first_word = name.split()[0].lower() if name else ""
+        if first_word and len(first_word) >= 3:
+            if first_word not in first_word_map:
+                first_word_map[first_word] = []
+            first_word_map[first_word].append(entity)
+
+        # Tier 5: Fuzzy candidates (name and akas)
+        fuzzy_candidates[name] = entity
+        if isinstance(aka_list, list):
+            for aka in aka_list:
+                if aka:
+                    fuzzy_candidates[aka] = entity
+
+    # Tier 1: Exact match
+    if detected_name in exact_map:
+        return exact_map[detected_name]
+
+    # Tier 2: Case-insensitive match
+    if detected_lower in exact_map:
+        return exact_map[detected_lower]
+
+    # Tier 3: Normalized match
+    if detected_normalized and detected_normalized in normalized_map:
+        return normalized_map[detected_normalized]
+
+    # Tier 4: First-word match (only if unambiguous)
+    if len(detected_name) >= 3:
+        matches = first_word_map.get(detected_lower, [])
+        if len(matches) == 1:
+            return matches[0]
+
+    # Tier 5: Fuzzy match
+    if len(detected_name) >= 4 and fuzzy_candidates:
+        try:
+            from rapidfuzz import fuzz, process
+
+            result = process.extractOne(
+                detected_name,
+                fuzzy_candidates.keys(),
+                scorer=fuzz.token_sort_ratio,
+                score_cutoff=fuzzy_threshold,
+            )
+            if result:
+                matched_str, _score, _index = result
+                return fuzzy_candidates[matched_str]
+        except ImportError:
+            # rapidfuzz not available, skip fuzzy matching
+            pass
+
+    return None
+
+
+def touch_entity(facet: str, name: str, day: str) -> bool:
+    """Update last_seen timestamp on an attached entity.
+
+    Sets the last_seen field to the provided day if the entity exists
+    and either has no last_seen or the new day is more recent.
+
+    Args:
+        facet: Facet name
+        name: Exact name of the attached entity to touch
+        day: Day string in YYYYMMDD format
+
+    Returns:
+        True if entity was found and updated, False otherwise
+
+    Example:
+        >>> touch_entity("work", "Alice Johnson", "20250115")
+        True
+    """
+    # Load ALL attached entities including detached to avoid data loss on save
+    entities = load_entities(facet, day=None, include_detached=True)
+
+    for entity in entities:
+        # Skip detached entities
+        if entity.get("detached"):
+            continue
+        if entity.get("name") == name:
+            current_last_seen = entity.get("last_seen", "")
+            # Only update if new day is more recent (or no existing last_seen)
+            if not current_last_seen or day > current_last_seen:
+                entity["last_seen"] = day
+                save_entities(facet, entities, day=None)
+                return True
+            # Entity found but day is not more recent
+            return True
+
+    return False
+
+
+def parse_knowledge_graph_entities(day: str) -> list[str]:
+    """Parse entity names from a day's knowledge graph.
+
+    Extracts entity names from markdown tables in the knowledge graph insight.
+    Entity names appear in bold (**Name**) in the first column of tables.
+
+    Args:
+        day: Day string in YYYYMMDD format
+
+    Returns:
+        List of unique entity names found in the knowledge graph.
+        Returns empty list if KG doesn't exist or can't be parsed.
+
+    Example:
+        >>> parse_knowledge_graph_entities("20260108")
+        ["Jeremie Miller (Jer)", "Neal Satterfield", "Flightline", ...]
+    """
+    journal = get_journal()
+    kg_path = Path(journal) / day / "insights" / "knowledge_graph.md"
+
+    if not kg_path.exists():
+        return []
+
+    try:
+        content = kg_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+
+    # Extract bold names from first column of markdown tables
+    # Pattern matches: | **Name** | ... (first column of table rows)
+    # Also matches relationship mapping tables: | **Name** | **Target** | ...
+    entity_names: set[str] = set()
+
+    # Match table rows with bold text in first or second column
+    # Format: | **Entity Name** | Type | ... or | **Source** | **Target** | ...
+    table_row_pattern = re.compile(r"^\|\s*\*\*(.+?)\*\*\s*\|", re.MULTILINE)
+
+    for match in table_row_pattern.finditer(content):
+        name = match.group(1).strip()
+        if name:
+            entity_names.add(name)
+
+    # Also extract targets from relationship mapping (second column)
+    # Format: | **Source** | **Target** | Relationship | ...
+    relationship_pattern = re.compile(
+        r"^\|\s*\*\*.+?\*\*\s*\|\s*\*\*(.+?)\*\*\s*\|", re.MULTILINE
+    )
+
+    for match in relationship_pattern.finditer(content):
+        name = match.group(1).strip()
+        if name:
+            entity_names.add(name)
+
+    return list(entity_names)
+
+
+def touch_entities_from_activity(
+    facet: str, names: list[str], day: str
+) -> dict[str, Any]:
+    """Update last_seen for attached entities matching activity names.
+
+    For each name in the activity list, attempts to find a matching
+    attached entity using fuzzy matching and updates its last_seen field.
+
+    Args:
+        facet: Facet name
+        names: List of entity names from activity (e.g., knowledge graph)
+        day: Day string in YYYYMMDD format
+
+    Returns:
+        Summary dict with:
+        - matched: List of (activity_name, attached_name) tuples for matches found
+        - updated: List of attached entity names that were updated
+        - skipped: List of attached entity names already up-to-date
+
+    Example:
+        >>> touch_entities_from_activity("work", ["Bob", "FAA"], "20260108")
+        {"matched": [("Bob", "Robert Johnson"), ("FAA", "Federal Aviation Administration")],
+         "updated": ["Robert Johnson", "Federal Aviation Administration"],
+         "skipped": []}
+    """
+    if not names:
+        return {"matched": [], "updated": [], "skipped": []}
+
+    # Load attached entities (excluding detached)
+    attached = load_entities(facet, day=None, include_detached=False)
+    if not attached:
+        return {"matched": [], "updated": [], "skipped": []}
+
+    # Track matches and which entities need updating
+    matched: list[tuple[str, str]] = []
+    needs_update: dict[str, str] = {}  # attached_name -> most_recent_day
+
+    for activity_name in names:
+        entity = find_matching_attached_entity(activity_name, attached)
+        if entity:
+            attached_name = entity.get("name", "")
+            if attached_name:
+                matched.append((activity_name, attached_name))
+                # Track the day for this entity (may be touched multiple times)
+                current = needs_update.get(attached_name, "")
+                if not current or day > current:
+                    needs_update[attached_name] = day
+
+    # Now batch the updates
+    updated: list[str] = []
+    skipped: list[str] = []
+
+    for attached_name, update_day in needs_update.items():
+        if touch_entity(facet, attached_name, update_day):
+            # Check if it was actually updated or already current
+            # Re-load to check (touch_entity returns True if found)
+            entities = load_entities(facet, day=None, include_detached=False)
+            for e in entities:
+                if e.get("name") == attached_name:
+                    if e.get("last_seen") == update_day:
+                        updated.append(attached_name)
+                    else:
+                        skipped.append(attached_name)
+                    break
+        else:
+            skipped.append(attached_name)
+
+    return {"matched": matched, "updated": updated, "skipped": skipped}
+
+
 def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, Any]]:
-    """Load detected entities from last N days, excluding attached entity names/akas.
+    """Load detected entities from last N days, excluding those matching attached entities.
 
     Scans detected entity files in reverse chronological order (newest first),
     aggregating by (type, name) to provide count and last_seen tracking.
+
+    Uses fuzzy matching to exclude detected entities that match attached entities
+    by name, aka, normalized form, first word, or fuzzy similarity.
 
     Args:
         facet: Facet name
@@ -507,7 +794,7 @@ def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, 
         - count: Number of days entity was detected
         - last_seen: Most recent day (YYYYMMDD) entity was detected
 
-        Entities are excluded if their name matches an attached entity name or aka.
+        Entities are excluded if they match an attached entity via fuzzy matching.
 
     Example:
         >>> load_detected_entities_recent("personal", days=30)
@@ -518,18 +805,22 @@ def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, 
 
     journal = get_journal()
 
-    # Load attached entities (excluding detached) and build exclusion set
+    # Load attached entities (excluding detached) for fuzzy matching
     # Detached entities should appear in detected list again
     attached = load_entities(facet, include_detached=False)
-    excluded_names: set[str] = set()
-    for entity in attached:
-        name = entity.get("name", "")
-        if name:
-            excluded_names.add(name)
-        # Also exclude aka values
-        aka_list = entity.get("aka", [])
-        if isinstance(aka_list, list):
-            excluded_names.update(aka_list)
+
+    # Cache for already-checked names to avoid repeated fuzzy matching
+    # Maps detected name -> True (excluded) or False (not excluded)
+    exclusion_cache: dict[str, bool] = {}
+
+    def is_excluded(name: str) -> bool:
+        """Check if a detected name matches any attached entity."""
+        if name in exclusion_cache:
+            return exclusion_cache[name]
+        match = find_matching_attached_entity(name, attached)
+        excluded = match is not None
+        exclusion_cache[name] = excluded
+        return excluded
 
     # Calculate date range cutoff
     cutoff_date = datetime.now() - timedelta(days=days)
@@ -561,8 +852,8 @@ def load_detected_entities_recent(facet: str, days: int = 30) -> list[dict[str, 
             etype = entity.get("type", "")
             name = entity.get("name", "")
 
-            # Skip if matches attached/aka
-            if name in excluded_names:
+            # Skip if matches attached entity (using fuzzy matching)
+            if is_excluded(name):
                 continue
 
             key = (etype, name)
@@ -693,6 +984,7 @@ def format_entities(
             "description",
             "updated_at",
             "attached_at",
+            "last_seen",
             "detached",
         }
 
