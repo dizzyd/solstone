@@ -60,14 +60,11 @@ def _discover_categories() -> dict[str, dict]:
     dict[str, dict]
         Mapping of category name to metadata (including 'prompt' if followup=true)
     """
-    from think.models import GEMINI_FLASH, GEMINI_LITE, GEMINI_PRO
+    from think.models import GEMINI_MODEL_NAMES
+    from think.utils import get_model_for
 
-    # Map iq values to model constants
-    iq_to_model = {
-        "lite": GEMINI_LITE,
-        "flash": GEMINI_FLASH,
-        "pro": GEMINI_PRO,
-    }
+    # Get configured default for observations
+    default_model = get_model_for("observations")
 
     categories_dir = Path(__file__).parent / "categories"
     if not categories_dir.exists():
@@ -90,16 +87,19 @@ def _discover_categories() -> dict[str, dict]:
             # Apply defaults
             metadata.setdefault("followup", False)
             metadata.setdefault("output", "markdown")
-            metadata.setdefault("iq", "lite")
 
-            # Map iq to model constant
-            iq = metadata["iq"]
-            if iq not in iq_to_model:
-                logger.warning(
-                    f"Category {category} has invalid iq '{iq}', using 'lite'"
-                )
-                iq = "lite"
-            metadata["model"] = iq_to_model[iq]
+            # Map iq to model constant, using configured default when not specified
+            if "iq" in metadata:
+                iq = metadata["iq"]
+                if iq not in GEMINI_MODEL_NAMES:
+                    logger.warning(
+                        f"Category {category} has invalid iq '{iq}', using config default"
+                    )
+                    metadata["model"] = default_model
+                else:
+                    metadata["model"] = GEMINI_MODEL_NAMES[iq]
+            else:
+                metadata["model"] = default_model
 
             # Load prompt if followup is enabled
             if metadata["followup"]:

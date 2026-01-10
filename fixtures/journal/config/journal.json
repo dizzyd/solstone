@@ -14,5 +14,10 @@
   },
   "convey": {
     "password": "test123"
+  },
+  "models": {
+    "insights": "flash",
+    "observations": "flash",
+    "agents": "flash"
   }
 }

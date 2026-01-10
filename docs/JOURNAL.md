@@ -171,6 +171,29 @@ Fields:
 
 These settings can be overridden via CLI flags: `--cpu` forces CPU mode with int8, `--model MODEL` overrides the model.
 
+### Models configuration
+
+The `models` block configures the default Gemini model for different processing groupings:
+
+```json
+{
+  "models": {
+    "insights": "flash",
+    "observations": "flash",
+    "agents": "flash"
+  }
+}
+```
+
+Fields:
+- `insights` (string) – Model for insight generation (`think-insight`). Default: `"flash"`.
+- `observations` (string) – Model for screen analysis (`observe-describe`) and audio import summaries. Default: `"flash"`.
+- `agents` (string) – Model for AI agents (`muse-agents`). Default: `"flash"`.
+
+Valid values: `"lite"`, `"flash"`, `"pro"`. These map to the current Gemini model tiers.
+
+CLI flags and request-level model parameters override these defaults. For example, `think-insight --pro` uses the Pro model regardless of configuration.
+
 ## Facet folders
 
 The `facets/` directory provides a way to organize journal content by scope or focus area. Each facet represents a cohesive grouping of related activities, projects, or areas of interest.

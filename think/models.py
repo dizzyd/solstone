@@ -18,6 +18,13 @@ GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_LITE = "gemini-2.5-flash-lite"
 
+# Mapping from config string names to model constants
+GEMINI_MODEL_NAMES = {
+    "lite": GEMINI_LITE,
+    "flash": GEMINI_FLASH,
+    "pro": GEMINI_PRO,
+}
+
 GPT_5 = "gpt-5.2"
 GPT_5_MINI = "gpt-5-mini"
 GPT_5_NANO = "gpt-5-nano"
@@ -255,7 +262,9 @@ def log_token_usage(
             if usage.get("cached_tokens"):
                 normalized_usage["cached_tokens"] = usage["cached_tokens"]
             if usage.get("cache_creation_tokens"):
-                normalized_usage["cache_creation_tokens"] = usage["cache_creation_tokens"]
+                normalized_usage["cache_creation_tokens"] = usage[
+                    "cache_creation_tokens"
+                ]
 
         # Handle Gemini format
         elif "prompt_token_count" in usage or "candidates_token_count" in usage:
@@ -565,6 +574,7 @@ __all__ = [
     "GEMINI_PRO",
     "GEMINI_FLASH",
     "GEMINI_LITE",
+    "GEMINI_MODEL_NAMES",
     "GPT_5",
     "GPT_5_MINI",
     "GPT_5_NANO",

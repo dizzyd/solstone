@@ -18,14 +18,16 @@ from typing import Any, Callable, Dict, Optional
 from google import genai
 from google.genai import types
 
-from think.models import GEMINI_FLASH
-from think.utils import create_mcp_client
+from think.utils import create_mcp_client, get_model_for
 
 from .agents import JSONEventCallback, ThinkingEvent
 
-# Default values are now handled internally
-_DEFAULT_MODEL = GEMINI_FLASH
 _DEFAULT_MAX_TOKENS = 8192
+
+
+def _get_default_model() -> str:
+    """Return the configured default model for agents."""
+    return get_model_for("agents")
 
 
 class ToolLoggingHooks:
@@ -127,7 +129,7 @@ async def run_agent(
     if not prompt:
         raise ValueError("Missing 'prompt' in config")
 
-    model = config.get("model", _DEFAULT_MODEL)
+    model = config.get("model") or _get_default_model()
     max_tokens = config.get("max_tokens", _DEFAULT_MAX_TOKENS)
     disable_mcp = config.get("disable_mcp", False)
     persona = config.get("persona", "default")
@@ -292,12 +294,14 @@ async def run_agent(
             if reasoning:
                 usage_dict["reasoning_tokens"] = reasoning
 
-        callback.emit({
-            "event": "finish",
-            "result": text,
-            "usage": usage_dict,
-            "ts": int(time.time() * 1000),
-        })
+        callback.emit(
+            {
+                "event": "finish",
+                "result": text,
+                "usage": usage_dict,
+                "ts": int(time.time() * 1000),
+            }
+        )
         return text
     except Exception as exc:
         callback.emit(

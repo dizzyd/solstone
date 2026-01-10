@@ -412,6 +412,32 @@ def get_config() -> dict[str, Any]:
         return {"identity": default_identity.copy()}
 
 
+def get_model_for(grouping: str) -> str:
+    """Return the configured Gemini model for a grouping.
+
+    Reads the 'models' section from journal config and returns the
+    appropriate model constant. Falls back to GEMINI_FLASH if the
+    grouping is not configured or has an invalid value.
+
+    Parameters
+    ----------
+    grouping
+        One of "insights", "observations", or "agents".
+
+    Returns
+    -------
+    str
+        Model identifier string (e.g., "gemini-3-flash-preview").
+    """
+    from think.models import GEMINI_FLASH, GEMINI_MODEL_NAMES
+
+    config = get_config()
+    models_config = config.get("models", {})
+    model_name = models_config.get(grouping, "flash")
+
+    return GEMINI_MODEL_NAMES.get(model_name, GEMINI_FLASH)
+
+
 def _append_task_log(dir_path: str | Path, message: str) -> None:
     """Append ``message`` to ``task_log.txt`` inside ``dir_path``."""
     path = Path(dir_path) / "task_log.txt"

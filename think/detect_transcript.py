@@ -13,8 +13,8 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 
-from .models import GEMINI_FLASH, gemini_generate
-from .utils import load_prompt
+from .models import gemini_generate
+from .utils import get_model_for, load_prompt
 
 
 def _load_json_prompt() -> str:
@@ -151,7 +151,7 @@ def detect_transcript_segment(
 
     response_text = gemini_generate(
         contents=contents,
-        model=GEMINI_FLASH,
+        model=get_model_for("observations"),
         temperature=0.3,
         max_output_tokens=4096,
         thinking_budget=8192,
@@ -195,7 +195,7 @@ def detect_transcript_json(
 
     response_text = gemini_generate(
         contents=contents,
-        model=GEMINI_FLASH,
+        model=get_model_for("observations"),
         temperature=0.3,
         max_output_tokens=8192,
         thinking_budget=8192,
