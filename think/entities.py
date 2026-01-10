@@ -536,23 +536,21 @@ def load_entity_names(
         return spoken_names if spoken_names else None
 
 
-def load_recent_entity_names(*, limit: int = 20) -> str | None:
-    """Load recently active entity names for Whisper transcription prompt.
+def load_recent_entity_names(*, limit: int = 20) -> list[str] | None:
+    """Load recently active entity names for transcription context.
 
     Returns spoken-form names from the most recently seen entities across all
-    facets, formatted for use as an initial prompt to Whisper. Names are grouped
-    with commas every 5 words to avoid biasing Whisper toward excessive comma use.
+    facets. Caller is responsible for formatting the list as needed.
 
     Args:
         limit: Maximum number of entities to include (default 20)
 
     Returns:
-        Formatted string like "Alice Bob R2 Acme FAA, Charlie David Eve Frank
-        George, ..." with a period at the end, or None if no entities found.
+        List of spoken-form entity names, or None if no entities found.
 
     Example:
-        >>> load_recent_entity_names(limit=10)
-        "Alice Bob R2 Acme FAA, Charlie David Eve Frank George."
+        >>> load_recent_entity_names(limit=5)
+        ["Alice", "Bob", "R2", "Acme", "FAA"]
     """
     # Get most recently seen entities
     entities = load_all_attached_entities(sort_by="last_seen", limit=limit)
@@ -564,13 +562,7 @@ def load_recent_entity_names(*, limit: int = 20) -> str | None:
     if not spoken_names:
         return None
 
-    # Format: 5 words then comma, period at end
-    groups = []
-    for i in range(0, len(spoken_names), 5):
-        group = spoken_names[i : i + 5]
-        groups.append(" ".join(group))
-
-    return ", ".join(groups) + "."
+    return spoken_names
 
 
 def find_matching_attached_entity(

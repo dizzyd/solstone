@@ -321,20 +321,20 @@ def test_load_recent_entity_names_basic(fixture_journal, tmp_path):
 
     result = load_recent_entity_names()
 
-    # Should contain spoken forms with period at end
+    # Should return list of spoken forms
     assert result is not None
-    assert result.endswith(".")
+    assert isinstance(result, list)
     assert "Alice" in result
     assert "Acme" in result
 
 
-def test_load_recent_entity_names_formatting(fixture_journal, tmp_path):
-    """Test that names are grouped with commas every 5 words."""
+def test_load_recent_entity_names_returns_list(fixture_journal, tmp_path):
+    """Test that result is a list of names."""
     facet_path = tmp_path / "facets" / "test_facet"
     facet_path.mkdir(parents=True)
     os.environ["JOURNAL_PATH"] = str(tmp_path)
 
-    # Create 10 entities to get multiple groups
+    # Create 10 entities
     entities = [
         {"type": "Person", "name": f"Name{i}", "last_seen": f"202601{i:02d}"}
         for i in range(10, 0, -1)  # Descending so we get predictable order
@@ -343,11 +343,9 @@ def test_load_recent_entity_names_formatting(fixture_journal, tmp_path):
 
     result = load_recent_entity_names(limit=10)
 
-    # Should have comma separation and period at end
     assert result is not None
-    assert result.endswith(".")
-    # With 10 single-word names, should have exactly 1 comma (5 + 5)
-    assert result.count(",") == 1
+    assert isinstance(result, list)
+    assert len(result) == 10
 
 
 def test_load_recent_entity_names_empty(fixture_journal, tmp_path):
@@ -379,6 +377,7 @@ def test_load_recent_entity_names_with_aka(fixture_journal, tmp_path):
     result = load_recent_entity_names()
 
     assert result is not None
+    assert isinstance(result, list)
     assert "Robert" in result
     assert "Bob" in result
     assert "Bobby" in result
@@ -401,6 +400,7 @@ def test_load_recent_entity_names_respects_limit(fixture_journal, tmp_path):
     result = load_recent_entity_names(limit=5)
 
     assert result is not None
+    assert isinstance(result, list)
     # Most recent 5 should be included (Person30, Person29, Person28, Person27, Person26)
     assert "Person30" in result
     assert "Person26" in result

@@ -4,6 +4,7 @@
 """Enrich audio transcripts with contextual information using Gemini Lite.
 
 Takes Whisper transcript segments paired with audio clips and extracts:
+- Per-segment corrected text (fixing transcription errors)
 - Per-segment audio descriptions (tone, delivery, vocalizations)
 - Overall topics discussed
 - Setting classification (workplace, personal, etc.)
@@ -23,15 +24,26 @@ import soundfile as sf
 from google.genai import types
 
 from observe.utils import SAMPLE_RATE
+from think.entities import load_recent_entity_names
 from think.models import GEMINI_LITE, gemini_generate
+from think.utils import load_prompt
 
 logger = logging.getLogger(__name__)
 
+# Number of recent entity names to include in enrichment prompt
+ENTITY_NAMES_LIMIT = 40
 
-def _load_prompt() -> str:
-    """Load the enrichment prompt template."""
-    prompt_path = Path(__file__).parent / "enrich.txt"
-    return prompt_path.read_text()
+
+def _load_entity_names() -> str | None:
+    """Load recent entity names for enrichment prompt context.
+
+    Returns:
+        Comma-separated entity names string or None if no entities found
+    """
+    names = load_recent_entity_names(limit=ENTITY_NAMES_LIMIT)
+    if not names:
+        return None
+    return ", ".join(names)
 
 
 def _segment_to_flac_bytes(
@@ -67,7 +79,7 @@ def enrich_transcript(
     """Enrich transcript segments with audio context using Gemini Lite.
 
     Sends numbered segments with text and audio clips to Gemini to extract
-    per-segment descriptions and overall topics/setting.
+    corrected text, per-segment descriptions, and overall topics/setting.
 
     Args:
         audio_path: Path to audio file (FLAC)
@@ -75,8 +87,8 @@ def enrich_transcript(
 
     Returns:
         Dict with enrichment data or None on error:
-        - descriptions: List of description strings (same order as input segments)
-        - topics: List of topic strings
+        - segments: List of dicts with 'corrected' and 'description' keys
+        - topics: Comma-separated topic string
         - setting: Setting classification string
     """
     if not segments:
@@ -89,9 +101,14 @@ def enrich_transcript(
         wav, sr = librosa.load(str(audio_path), sr=SAMPLE_RATE)
         logger.info(f"  Audio loaded in {time.perf_counter() - t0:.2f}s")
 
+        # Load entity names for context
+        entity_names = _load_entity_names()
+
         # Build interleaved content: numbered text label + audio clip for each segment
-        prompt_text = _load_prompt()
-        contents: list = [prompt_text]
+        prompt_content = load_prompt(
+            "enrich", base_dir=Path(__file__).parent, context={"entity_names": entity_names}
+        )
+        contents: list = [prompt_content.text]
 
         for i, seg in enumerate(segments, start=1):
             # Add numbered text label
@@ -112,8 +129,8 @@ def enrich_transcript(
             contents=contents,
             model=GEMINI_LITE,
             temperature=0.3,
-            max_output_tokens=2048,
-            thinking_budget=2048,
+            max_output_tokens=8192,
+            thinking_budget=4096,
             json_output=True,
         )
 
@@ -125,20 +142,20 @@ def enrich_transcript(
             logger.warning(f"Enrichment returned non-dict: {type(result)}")
             return None
 
-        if "descriptions" not in result or "topics" not in result:
+        if "segments" not in result or "topics" not in result:
             logger.warning(f"Enrichment missing required fields: {result.keys()}")
             return None
 
-        # Validate descriptions length matches segments
-        descriptions = result["descriptions"]
-        if not isinstance(descriptions, list):
-            logger.warning("Enrichment 'descriptions' is not a list")
+        # Validate segments array
+        enriched_segments = result["segments"]
+        if not isinstance(enriched_segments, list):
+            logger.warning("Enrichment 'segments' is not a list")
             return None
 
-        if len(descriptions) != len(segments):
+        if len(enriched_segments) != len(segments):
             logger.warning(
-                f"Enrichment returned {len(descriptions)} descriptions "
-                f"for {len(segments)} segments"
+                f"Enrichment returned {len(enriched_segments)} segments "
+                f"for {len(segments)} input segments"
             )
             # Still usable - we'll align what we can
 

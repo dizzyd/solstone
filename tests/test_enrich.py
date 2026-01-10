@@ -11,20 +11,7 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 
-from observe.enrich import _load_prompt, _segment_to_flac_bytes
-
-
-class TestLoadPrompt:
-    """Test prompt loading."""
-
-    def test_loads_prompt_from_file(self):
-        """Should load the enrich.txt prompt."""
-        prompt = _load_prompt()
-        assert isinstance(prompt, str)
-        assert len(prompt) > 100
-        assert "topics" in prompt.lower()
-        assert "setting" in prompt.lower()
-        assert "description" in prompt.lower()
+from observe.enrich import _segment_to_flac_bytes
 
 
 class TestSegmentToFlacBytes:
@@ -79,9 +66,10 @@ class TestSegmentToFlacBytes:
 class TestEnrichTranscript:
     """Test the main enrichment function."""
 
+    @patch("observe.enrich._load_entity_names")
     @patch("observe.enrich.gemini_generate")
     @patch("observe.enrich.librosa.load")
-    def test_returns_enrichment_data(self, mock_load, mock_generate):
+    def test_returns_enrichment_data(self, mock_load, mock_generate, mock_entities):
         """Should return enrichment dict on success."""
         from observe.enrich import enrich_transcript
 
@@ -89,11 +77,15 @@ class TestEnrichTranscript:
         sample_rate = 16000
         wav = np.zeros(sample_rate, dtype=np.float32)
         mock_load.return_value = (wav, sample_rate)
+        mock_entities.return_value = "Alice, Bob"
 
-        # Mock Gemini response - now uses descriptions array
+        # Mock Gemini response with segments array
         mock_response = json.dumps(
             {
-                "descriptions": ["calm tone", "excited voice"],
+                "segments": [
+                    {"corrected": "Hello world.", "description": "calm tone"},
+                    {"corrected": "This is a test.", "description": "excited voice"},
+                ],
                 "topics": "testing, software",
                 "setting": "workplace",
             }
@@ -108,22 +100,25 @@ class TestEnrichTranscript:
         result = enrich_transcript(Path("/fake/audio.flac"), segments)
 
         assert result is not None
-        assert "descriptions" in result
+        assert "segments" in result
         assert "topics" in result
         assert "setting" in result
-        assert len(result["descriptions"]) == 2
-        assert result["descriptions"] == ["calm tone", "excited voice"]
+        assert len(result["segments"]) == 2
+        assert result["segments"][0]["corrected"] == "Hello world."
+        assert result["segments"][0]["description"] == "calm tone"
         assert result["topics"] == "testing, software"
         assert result["setting"] == "workplace"
 
+    @patch("observe.enrich._load_entity_names")
     @patch("observe.enrich.gemini_generate")
     @patch("observe.enrich.librosa.load")
-    def test_returns_none_on_api_error(self, mock_load, mock_generate):
+    def test_returns_none_on_api_error(self, mock_load, mock_generate, mock_entities):
         """Should return None if Gemini call fails."""
         from observe.enrich import enrich_transcript
 
         mock_load.return_value = (np.zeros(16000, dtype=np.float32), 16000)
         mock_generate.side_effect = Exception("API error")
+        mock_entities.return_value = None
 
         segments = [{"id": 1, "start": 0.0, "end": 2.0, "text": "Hello."}]
 
@@ -131,15 +126,19 @@ class TestEnrichTranscript:
 
         assert result is None
 
+    @patch("observe.enrich._load_entity_names")
     @patch("observe.enrich.gemini_generate")
     @patch("observe.enrich.librosa.load")
-    def test_returns_none_on_invalid_response(self, mock_load, mock_generate):
+    def test_returns_none_on_invalid_response(
+        self, mock_load, mock_generate, mock_entities
+    ):
         """Should return None if response missing required fields."""
         from observe.enrich import enrich_transcript
 
         mock_load.return_value = (np.zeros(16000, dtype=np.float32), 16000)
-        # Missing 'descriptions' field
-        mock_generate.return_value = json.dumps({"topics": ["test"]})
+        # Missing 'segments' field
+        mock_generate.return_value = json.dumps({"topics": "test"})
+        mock_entities.return_value = None
 
         segments = [{"id": 1, "start": 0.0, "end": 2.0, "text": "Hello."}]
 
@@ -155,19 +154,21 @@ class TestEnrichTranscript:
 
         assert result is None
 
+    @patch("observe.enrich._load_entity_names")
     @patch("observe.enrich.gemini_generate")
     @patch("observe.enrich.librosa.load")
-    def test_builds_interleaved_content(self, mock_load, mock_generate):
+    def test_builds_interleaved_content(self, mock_load, mock_generate, mock_entities):
         """Should send numbered text labels and audio clips interleaved."""
         from observe.enrich import enrich_transcript
 
         sample_rate = 16000
         wav = np.zeros(sample_rate * 10, dtype=np.float32)  # 10 seconds
         mock_load.return_value = (wav, sample_rate)
+        mock_entities.return_value = "Alice, Bob"
 
         mock_response = json.dumps(
             {
-                "descriptions": ["neutral"],
+                "segments": [{"corrected": "Hello world.", "description": "neutral"}],
                 "topics": "test",
                 "setting": "other",
             }
@@ -191,7 +192,8 @@ class TestEnrichTranscript:
 
         # First should be prompt text
         assert isinstance(contents[0], str)
-        assert "descriptions" in contents[0].lower()
+        assert "corrected" in contents[0].lower()
+        assert "Alice, Bob" in contents[0]  # Entity names should be in prompt
 
         # Second should be numbered text label
         assert "Segment 1:" in contents[1]
@@ -234,6 +236,7 @@ class TestTranscriberIntegration:
             assert entry["start"] == "14:30:00"
             assert entry["text"] == "Hello."
             assert "description" not in entry
+            assert "corrected" not in entry
 
     def test_segments_to_jsonl_with_enrichment(self):
         """_segments_to_jsonl should include enrichment data."""
@@ -253,9 +256,12 @@ class TestTranscriberIntegration:
             ]
             base_dt = datetime.datetime(2026, 1, 10, 14, 30, 0)
 
-            # Enrichment now uses descriptions array (positional)
+            # Enrichment with segments array (corrected + description)
             enrichment = {
-                "descriptions": ["friendly tone", "excited"],
+                "segments": [
+                    {"corrected": "Hello!", "description": "friendly tone"},
+                    {"corrected": "World.", "description": "excited"},
+                ],
                 "topics": "greetings, testing",
                 "setting": "personal",
             }
@@ -271,12 +277,46 @@ class TestTranscriberIntegration:
             assert metadata["topics"] == "greetings, testing"
             assert metadata["setting"] == "personal"
 
-            # Check entries have descriptions (matched by position)
+            # Check entries have corrected text and descriptions
             entry1 = json.loads(lines[1])
             assert entry1["description"] == "friendly tone"
+            assert entry1["corrected"] == "Hello!"  # Different from original
+            assert entry1["text"] == "Hello."  # Original preserved
 
             entry2 = json.loads(lines[2])
             assert entry2["description"] == "excited"
+            assert "corrected" not in entry2  # Same as original, not included
+
+    def test_segments_to_jsonl_corrected_same_as_original(self):
+        """_segments_to_jsonl should not include corrected if same as original."""
+        import datetime
+
+        from observe.transcribe import Transcriber
+
+        with patch.object(Transcriber, "__init__", lambda self: None):
+            t = Transcriber()
+            t.model_size = "medium.en"
+            t.device = "cpu"
+            t.compute_type = "int8"
+
+            segments = [{"id": 1, "start": 0.0, "end": 2.0, "text": "Hello."}]
+            base_dt = datetime.datetime(2026, 1, 10, 14, 30, 0)
+
+            # Corrected text same as original
+            enrichment = {
+                "segments": [{"corrected": "Hello.", "description": "calm"}],
+                "topics": "test",
+                "setting": "other",
+            }
+
+            lines = t._segments_to_jsonl(
+                segments, "audio.flac", base_dt, enrichment=enrichment
+            )
+
+            entry = json.loads(lines[1])
+            assert entry["text"] == "Hello."
+            assert "corrected" not in entry  # Not included since same as original
+            assert entry["description"] == "calm"
 
     def test_segments_to_jsonl_partial_enrichment(self):
         """_segments_to_jsonl should handle partial enrichment."""
@@ -296,9 +336,9 @@ class TestTranscriberIntegration:
             ]
             base_dt = datetime.datetime(2026, 1, 10, 14, 30, 0)
 
-            # Enrichment only has description for first segment (fewer than segments)
+            # Enrichment only has one segment (fewer than input segments)
             enrichment = {
-                "descriptions": ["friendly tone"],  # Only one description
+                "segments": [{"corrected": "Hello!", "description": "friendly tone"}],
                 "topics": "test",
                 "setting": "other",
             }
@@ -310,6 +350,50 @@ class TestTranscriberIntegration:
             entry1 = json.loads(lines[1])
             assert "description" in entry1
             assert entry1["description"] == "friendly tone"
+            assert entry1["corrected"] == "Hello!"
 
             entry2 = json.loads(lines[2])
             assert "description" not in entry2
+            assert "corrected" not in entry2
+
+
+class TestFormatAudioCorrectedText:
+    """Test that format_audio prefers corrected text."""
+
+    def test_prefers_corrected_over_text(self):
+        """format_audio should display corrected text when available."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"raw": "audio.flac"},
+            {
+                "start": "10:00:00",
+                "text": "Hello wrold.",
+                "corrected": "Hello world.",
+                "description": "calm",
+            },
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        assert len(chunks) == 1
+        # Should use corrected text, not original
+        assert "Hello world." in chunks[0]["markdown"]
+        assert "Hello wrold." not in chunks[0]["markdown"]
+        # Description should still be appended
+        assert "(calm)" in chunks[0]["markdown"]
+
+    def test_falls_back_to_text_without_corrected(self):
+        """format_audio should use text when corrected is not present."""
+        from observe.hear import format_audio
+
+        entries = [
+            {"raw": "audio.flac"},
+            {"start": "10:00:00", "text": "Hello world.", "description": "calm"},
+        ]
+
+        chunks, meta = format_audio(entries)
+
+        assert len(chunks) == 1
+        assert "Hello world." in chunks[0]["markdown"]
+        assert "(calm)" in chunks[0]["markdown"]

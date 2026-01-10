@@ -37,7 +37,6 @@ from observe.utils import (
     prepare_audio_file,
 )
 from think.callosum import callosum_send
-from think.entities import load_recent_entity_names
 from think.utils import get_config, get_journal, setup_cli
 
 # Default transcription settings
@@ -366,7 +365,7 @@ class Transcriber:
             source: Optional source label (e.g., "mic", "sys")
             remote: Optional remote name for metadata
             enrichment: Optional enrichment data with topics, setting, and
-                per-segment descriptions
+                per-segment corrected text and descriptions
 
         Returns:
             List of JSON strings (metadata line first, then entries)
@@ -390,10 +389,10 @@ class Transcriber:
 
         lines = [json.dumps(metadata)]
 
-        # Get descriptions list from enrichment (positional matching)
-        descriptions = []
-        if enrichment and "descriptions" in enrichment:
-            descriptions = enrichment["descriptions"]
+        # Get enriched segments list (positional matching)
+        enriched_segments = []
+        if enrichment and "segments" in enrichment:
+            enriched_segments = enrichment["segments"]
 
         # Build entry lines
         for i, seg in enumerate(segments):
@@ -408,9 +407,18 @@ class Transcriber:
             if source:
                 entry["source"] = source
 
-            # Add description from enrichment by position
-            if i < len(descriptions) and descriptions[i]:
-                entry["description"] = descriptions[i]
+            # Add corrected text and description from enrichment by position
+            if i < len(enriched_segments):
+                enriched = enriched_segments[i]
+                if isinstance(enriched, dict):
+                    # Add corrected text only if different from original
+                    corrected = enriched.get("corrected", "")
+                    if corrected and corrected != seg["text"]:
+                        entry["corrected"] = corrected
+                    # Add description
+                    description = enriched.get("description", "")
+                    if description:
+                        entry["description"] = description
 
             lines.append(json.dumps(entry))
 
@@ -442,15 +450,8 @@ class Transcriber:
         remote = os.getenv("REMOTE_NAME")
 
         try:
-            # Build prompt with recent entity names for context
-            recent_names = load_recent_entity_names()
-            if recent_names:
-                prompt = f"{recent_names} {STYLE_PROMPT}"
-            else:
-                prompt = STYLE_PROMPT
-
             # Transcribe with faster-whisper
-            segments = self._transcribe(audio_path, prompt)
+            segments = self._transcribe(audio_path, STYLE_PROMPT)
 
             # Skip if no speech detected - safe to delete since _transcribe() already
             # validated that VAD also detected minimal speech (raises RuntimeError otherwise)
