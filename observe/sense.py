@@ -286,8 +286,10 @@ class FileSensor:
             f"Spawning {handler_name}{fallback_note} for {file_path.name}: {' '.join(cmd)}"
         )
 
-        # Build environment with remote context for handlers
+        # Build environment with segment and remote context for handlers
         env = os.environ.copy()
+        if segment:
+            env["SEGMENT_KEY"] = segment
         if remote:
             env["REMOTE_NAME"] = remote
 

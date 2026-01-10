@@ -155,6 +155,7 @@ def log_token_usage(
     model: str,
     usage: Union[Dict[str, Any], Any],
     context: Optional[str] = None,
+    segment: Optional[str] = None,
 ) -> None:
     """Log token usage to journal with unified schema.
 
@@ -175,6 +176,9 @@ def log_token_usage(
     context : str, optional
         Context string (e.g., "module.function:123" or "agent.persona.id").
         If None, auto-detects from call stack.
+    segment : str, optional
+        Segment key (e.g., "143022_300") for attribution.
+        If None, falls back to SEGMENT_KEY environment variable.
     """
     try:
         journal = get_journal()
@@ -247,6 +251,12 @@ def log_token_usage(
             if "requests" in usage and usage["requests"] is not None:
                 normalized_usage["requests"] = usage["requests"]
 
+            # Pass through Anthropic cache fields if present
+            if usage.get("cached_tokens"):
+                normalized_usage["cached_tokens"] = usage["cached_tokens"]
+            if usage.get("cache_creation_tokens"):
+                normalized_usage["cache_creation_tokens"] = usage["cache_creation_tokens"]
+
         # Handle Gemini format
         elif "prompt_token_count" in usage or "candidates_token_count" in usage:
             normalized_usage["input_tokens"] = usage.get("prompt_token_count", 0)
@@ -270,10 +280,10 @@ def log_token_usage(
             "usage": normalized_usage,
         }
 
-        # Add segment from env if available (set by observe/transcribe, observe/describe, think/insight)
-        segment = os.getenv("SEGMENT_KEY")
-        if segment:
-            token_data["segment"] = segment
+        # Add segment: prefer parameter, fallback to env (set by think/insight, observe handlers)
+        segment_key = segment or os.getenv("SEGMENT_KEY")
+        if segment_key:
+            token_data["segment"] = segment_key
 
         # Save to journal/tokens/<YYYYMMDD>.jsonl (one file per day)
         tokens_dir = Path(journal) / "tokens"

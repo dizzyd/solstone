@@ -274,7 +274,30 @@ async def run_agent(
         text = response.text
         if not text:
             raise RuntimeError("Model returned empty response")
-        callback.emit({"event": "finish", "result": text})
+
+        # Extract usage from response
+        usage_dict = None
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            metadata = response.usage_metadata
+            usage_dict = {
+                "input_tokens": getattr(metadata, "prompt_token_count", 0),
+                "output_tokens": getattr(metadata, "candidates_token_count", 0),
+                "total_tokens": getattr(metadata, "total_token_count", 0),
+            }
+            # Only include optional fields if non-zero
+            cached = getattr(metadata, "cached_content_token_count", 0)
+            if cached:
+                usage_dict["cached_tokens"] = cached
+            reasoning = getattr(metadata, "thoughts_token_count", 0)
+            if reasoning:
+                usage_dict["reasoning_tokens"] = reasoning
+
+        callback.emit({
+            "event": "finish",
+            "result": text,
+            "usage": usage_dict,
+            "ts": int(time.time() * 1000),
+        })
         return text
     except Exception as exc:
         callback.emit(

@@ -518,10 +518,16 @@ class CortexService:
                                     persona = original_request.get("persona", "unknown")
                                     context = f"agent.{persona}.{agent.agent_id}"
 
+                                    # Extract segment from config env if set
+                                    config = original_request.get("config", {})
+                                    env_config = config.get("env", {})
+                                    segment = env_config.get("SEGMENT_KEY")
+
                                     log_token_usage(
                                         model=model,
                                         usage=usage_data,
                                         context=context,
+                                        segment=segment,
                                     )
                                 except Exception as e:
                                     self.logger.warning(

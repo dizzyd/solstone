@@ -441,6 +441,7 @@ Each line in a token log file is a JSON object with the following structure:
   "timestamp": 1736812345,
   "model": "gemini-2.5-flash",
   "context": "agent.default.20250113_143022",
+  "segment": "143022_300",
   "usage": {
     "input_tokens": 1500,
     "output_tokens": 500,
@@ -456,6 +457,9 @@ Required fields:
 - `model` – Model identifier (e.g., "gemini-2.5-flash", "gpt-5", "claude-sonnet-4-5")
 - `context` – Calling context (e.g., "agent.persona.agent_id" or "module.function:line")
 - `usage` – Token counts dictionary with normalized field names
+
+Optional fields:
+- `segment` – Recording segment key (e.g., "143022_300") when token usage is attributable to a specific observation window
 
 Usage fields (all optional depending on model capabilities):
 - `input_tokens` – Tokens in the prompt/input

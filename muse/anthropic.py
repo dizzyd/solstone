@@ -347,7 +347,31 @@ async def run_agent(
                     }
                     callback.emit(thinking_event)
 
-            callback.emit({"event": "finish", "result": final_text})
+            # Extract usage from response
+            usage_dict = None
+            if hasattr(response, "usage") and response.usage:
+                usage = response.usage
+                input_tokens = getattr(usage, "input_tokens", 0)
+                output_tokens = getattr(usage, "output_tokens", 0)
+                usage_dict = {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens,
+                }
+                # Add cache tokens if available and non-zero
+                cache_creation = getattr(usage, "cache_creation_input_tokens", None)
+                if cache_creation:
+                    usage_dict["cache_creation_tokens"] = cache_creation
+                cache_read = getattr(usage, "cache_read_input_tokens", None)
+                if cache_read:
+                    usage_dict["cached_tokens"] = cache_read
+
+            callback.emit({
+                "event": "finish",
+                "result": final_text,
+                "usage": usage_dict,
+                "ts": int(time.time() * 1000),
+            })
             return final_text
     except Exception as exc:
         callback.emit(
