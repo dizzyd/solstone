@@ -3,11 +3,15 @@
 
 import argparse
 import logging
-import os
+import time
 from datetime import datetime, timedelta
 
+from think.callosum import CallosumConnection
 from think.runner import run_task
 from think.utils import day_log, day_path, get_insights, setup_cli
+
+# Module-level callosum connection for event emission
+_callosum: CallosumConnection | None = None
 
 
 def run_command(cmd: list[str], day: str) -> bool:
@@ -113,7 +117,15 @@ def parse_args() -> argparse.ArgumentParser:
     return parser
 
 
+def emit(event: str, **fields) -> None:
+    """Emit a daily tract event if callosum is connected."""
+    if _callosum:
+        _callosum.emit("daily", event, **fields)
+
+
 def main() -> None:
+    global _callosum
+
     parser = parse_args()
     args = setup_cli(parser)
 
@@ -125,26 +137,69 @@ def main() -> None:
     if not day_dir.is_dir():
         parser.error(f"Day folder not found: {day_dir}")
 
-    commands = build_commands(
-        day, args.force, verbose=args.verbose, segment=args.segment
-    )
-    success_count = 0
-    fail_count = 0
-    for cmd in commands:
-        # Log every command attempt
-        day_log(day, f"starting: {' '.join(cmd)}")
+    # Start callosum connection for event emission
+    _callosum = CallosumConnection()
+    _callosum.start()
 
-        if run_command(cmd, day):
-            success_count += 1
-        else:
-            fail_count += 1
+    try:
+        commands = build_commands(
+            day, args.force, verbose=args.verbose, segment=args.segment
+        )
 
-    msg = f"think-dream {success_count}"
-    if fail_count:
-        msg += f" failed {fail_count}"
-    if args.force:
-        msg += " --force"
-    day_log(day, msg)
+        # Build command names list for the started event
+        command_names = [cmd[0] for cmd in commands]
+
+        # Emit dream_started event
+        start_time = time.time()
+        emit(
+            "dream_started",
+            day=day,
+            segment=args.segment,
+            commands=command_names,
+            total=len(commands),
+        )
+
+        success_count = 0
+        fail_count = 0
+        for index, cmd in enumerate(commands):
+            # Log every command attempt
+            day_log(day, f"starting: {' '.join(cmd)}")
+
+            # Emit dream_command event
+            emit(
+                "dream_command",
+                day=day,
+                segment=args.segment,
+                command=cmd[0],
+                index=index,
+                total=len(commands),
+            )
+
+            if run_command(cmd, day):
+                success_count += 1
+            else:
+                fail_count += 1
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        # Emit dream_completed event
+        emit(
+            "dream_completed",
+            day=day,
+            segment=args.segment,
+            success=success_count,
+            failed=fail_count,
+            duration_ms=duration_ms,
+        )
+
+        msg = f"think-dream {success_count}"
+        if fail_count:
+            msg += f" failed {fail_count}"
+        if args.force:
+            msg += " --force"
+        day_log(day, msg)
+    finally:
+        _callosum.stop()
 
 
 if __name__ == "__main__":

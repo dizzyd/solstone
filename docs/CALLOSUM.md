@@ -85,6 +85,13 @@ Callosum is a JSON-per-line message bus for real-time event distribution across 
 **Purpose:** Track media file import and transcription progress from start to completion
 **Correlation:** `import_id` correlates all events for a single import operation
 
+### `daily` - Daily processing lifecycle
+**Source:** `think/dream.py`, `think/supervisor.py`
+**Events:** `started`, `dream_started`, `dream_command`, `dream_completed`, `agents_started`, `group_started`, `agent_spawned`, `group_completed`, `agents_completed`, `indexing_started`, `indexing_completed`, `completed`
+**Fields:** `day`, `segment`, `command`, `persona`, `agent_id`, `priority`, `success`, `failed`, `duration_ms`
+**Purpose:** Track daily processing from dream through scheduled agents to final indexing
+**Correlation:** `day` (YYYYMMDD) correlates all events for a single day's processing
+
 ---
 
 ## Key Concepts

@@ -79,6 +79,9 @@ _scheduled_state = {
     "pending_groups": [],  # List of (priority, [(persona_id, config, day)])
     "active_files": [],  # List of Path objects for current priority group
     "start_time": 0,  # When current group started
+    "day": "",  # Day being processed (YYYYMMDD format)
+    "agents_start_time": 0,  # When agents phase started
+    "current_priority": 0,  # Current priority group being processed
 }
 
 # State for task execution
@@ -119,11 +122,18 @@ _daily_state = {
     "dream_running": False,  # True while dream subprocess is active
     "dream_completed": False,  # True after dream finishes (reset each day)
     "last_day": None,  # Track which day we last processed
+    "start_time": 0,  # When daily processing started (for duration tracking)
 }
 
 
 def _get_journal_path() -> Path:
     return Path(get_journal())
+
+
+def _emit_daily(event: str, **fields) -> None:
+    """Emit a daily tract event if supervisor callosum is connected."""
+    if _supervisor_callosum:
+        _supervisor_callosum.emit("daily", event, **fields)
 
 
 class RestartPolicy:
@@ -339,13 +349,25 @@ def spawn_scheduled_agents(day: str) -> None:
         ]
         _scheduled_state["active_files"] = []
         _scheduled_state["start_time"] = 0
+        _scheduled_state["day"] = day
+        _scheduled_state["agents_start_time"] = time.time()
 
         total_agents = sum(
             len(agents_list) for _, agents_list in _scheduled_state["pending_groups"]
         )
+        num_groups = len(_scheduled_state["pending_groups"])
+
         logging.info(
             f"Spawning {total_agents} scheduled agents for {day} "
-            f"in {len(_scheduled_state['pending_groups'])} priority groups"
+            f"in {num_groups} priority groups"
+        )
+
+        # Emit agents_started event
+        _emit_daily(
+            "agents_started",
+            day=day,
+            count=total_agents,
+            groups=num_groups,
         )
     except Exception as e:
         logging.error(f"Failed to prepare scheduled agents for {day}: {e}")
@@ -355,17 +377,27 @@ def _run_full_rescan() -> None:
     """Run full index rescan in background thread."""
     from think.runner import run_task
 
+    day = _scheduled_state.get("day", "")
+
     logging.info("Starting full index rescan after daily tasks completed")
+    _emit_daily("indexing_started", day=day)
+
     start = time.time()
     success, exit_code = run_task(
         ["think-indexer", "--rescan-full"], callosum=_supervisor_callosum
     )
-    duration = int(time.time() - start)
+    duration_ms = int((time.time() - start) * 1000)
+
+    _emit_daily("indexing_completed", day=day, success=success, duration_ms=duration_ms)
 
     if success:
-        logging.info(f"Full index rescan completed in {duration} seconds")
+        logging.info(f"Full index rescan completed in {duration_ms // 1000} seconds")
     else:
         logging.error(f"Full index rescan failed with exit code {exit_code}")
+
+    # Emit daily completed event (all tasks done)
+    daily_duration_ms = int((time.time() - _daily_state.get("start_time", 0)) * 1000)
+    _emit_daily("completed", day=day, success=success, duration_ms=daily_duration_ms)
 
 
 async def check_scheduled_agents() -> None:
@@ -380,6 +412,8 @@ async def check_scheduled_agents() -> None:
     # Nothing to do if no pending groups and no active agents
     if not state["pending_groups"] and not state["active_files"]:
         return
+
+    day = state.get("day", "")
 
     # Check if current priority group is done
     if state["active_files"]:
@@ -406,9 +440,25 @@ async def check_scheduled_agents() -> None:
             return  # Still running, check again next iteration
 
         # Group finished (either completed or timed out)
+        _emit_daily(
+            "group_completed",
+            day=day,
+            priority=state.get("current_priority", 0),
+            count=len(state["active_files"]),
+            timed_out=timed_out or None,
+        )
         state["active_files"] = []
+
         if not state["pending_groups"]:
-            # All daily tasks complete - run full rescan
+            # All agents complete - emit agents_completed and run full rescan
+            agents_duration_ms = int(
+                (time.time() - state.get("agents_start_time", 0)) * 1000
+            )
+            _emit_daily(
+                "agents_completed",
+                day=day,
+                duration_ms=agents_duration_ms,
+            )
             threading.Thread(target=_run_full_rescan, daemon=True).start()
 
     # Check for shutdown before starting next group
@@ -420,22 +470,31 @@ async def check_scheduled_agents() -> None:
     # Spawn next priority group
     if state["pending_groups"]:
         priority, agents_list = state["pending_groups"].pop(0)
+        state["current_priority"] = priority
         logging.info(f"Starting priority {priority} agents ({len(agents_list)} agents)")
+
+        # Emit group_started event
+        _emit_daily(
+            "group_started",
+            day=day,
+            priority=priority,
+            count=len(agents_list),
+        )
 
         # Get agents directory for tracking active files
         agents_dir = _get_journal_path() / "agents"
 
         # Pre-compute shared data for multi-facet agents (same for all agents in group)
         # day is the same for all agents in the group (YYYY-MM-DD format)
-        day = agents_list[0][2] if agents_list else ""
-        day_yyyymmdd = day.replace("-", "")
+        day_formatted = agents_list[0][2] if agents_list else ""
+        day_yyyymmdd = day_formatted.replace("-", "")
         input_summary = day_input_summary(day_yyyymmdd)
         facets = get_facets()
         enabled_facets = {k: v for k, v in facets.items() if not v.get("muted", False)}
         active_facets = get_active_facets(day_yyyymmdd)
 
         active_files = []
-        for persona_id, config, day in agents_list:
+        for persona_id, config, day_fmt in agents_list:
             try:
                 # Check if this is a multi-facet agent
                 if config.get("multi_facet"):
@@ -456,26 +515,41 @@ async def check_scheduled_agents() -> None:
                         if not always_run and facet_name not in active_facets:
                             logging.info(
                                 f"Skipping {persona_id} for {facet_name}: "
-                                f"no activity on {day}"
+                                f"no activity on {day_fmt}"
                             )
                             continue
 
                         logging.info(f"Spawning {persona_id} for facet: {facet_name}")
                         agent_id = cortex_request(
-                            prompt=f"Processing facet '{facet_name}' for {day}: {input_summary}. Use get_facet('{facet_name}') to load context.",
+                            prompt=f"Processing facet '{facet_name}' for {day_fmt}: {input_summary}. Use get_facet('{facet_name}') to load context.",
                             persona=persona_id,
                         )
                         active_files.append(agents_dir / f"{agent_id}_active.jsonl")
+                        _emit_daily(
+                            "agent_spawned",
+                            day=day,
+                            agent_id=agent_id,
+                            persona=persona_id,
+                            facet=facet_name,
+                            priority=priority,
+                        )
                         logging.info(
                             f"Started {persona_id} for {facet_name} (ID: {agent_id})"
                         )
                 else:
                     # Regular single-instance agent
                     agent_id = cortex_request(
-                        prompt=f"Running daily scheduled task for {day}: {input_summary}.",
+                        prompt=f"Running daily scheduled task for {day_fmt}: {input_summary}.",
                         persona=persona_id,
                     )
                     active_files.append(agents_dir / f"{agent_id}_active.jsonl")
+                    _emit_daily(
+                        "agent_spawned",
+                        day=day,
+                        agent_id=agent_id,
+                        persona=persona_id,
+                        priority=priority,
+                    )
                     logging.info(f"Started {persona_id} agent (ID: {agent_id})")
             except Exception as e:
                 logging.error(f"Failed to spawn {persona_id}: {e}")
@@ -1036,6 +1110,8 @@ def handle_daily_tasks() -> None:
 
         # Spawn dream in background thread with target day
         _daily_state["dream_running"] = True
+        _daily_state["start_time"] = time.time()
+        _emit_daily("started", day=prev_day_str)
         threading.Thread(
             target=_run_daily_dream, args=(prev_day_str,), daemon=True
         ).start()
