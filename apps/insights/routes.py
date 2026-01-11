@@ -13,7 +13,6 @@ from typing import Any
 import markdown
 from flask import Blueprint, jsonify, redirect, render_template, url_for
 
-from convey import state
 from convey.utils import DATE_RE, format_date
 from think.utils import day_dirs, day_path, get_insight_topic, get_insights
 
@@ -38,6 +37,28 @@ def _build_topic_map() -> dict[str, dict]:
     return topic_map
 
 
+def _parse_insight_filename(filename: str) -> tuple[str, str | None]:
+    """Parse insight filename to extract topic and optional variant.
+
+    Examples:
+        "activity.md" -> ("activity", None)
+        "activity@digitalocean.md" -> ("activity", "digitalocean")
+        "_chat_sentiment.md" -> ("_chat_sentiment", None)
+        "_chat_sentiment@openai.md" -> ("_chat_sentiment", "openai")
+
+    Returns:
+        (topic, variant) tuple where variant is None for base files.
+    """
+    base, ext = os.path.splitext(filename)
+    if ext != ".md":
+        return ("", None)
+
+    if "@" in base:
+        topic, variant = base.rsplit("@", 1)
+        return (topic, variant)
+    return (base, None)
+
+
 def _format_label(key: str) -> str:
     """Format insight key as display label.
 
@@ -57,6 +78,19 @@ def index() -> Any:
     return redirect(url_for("app:insights.insights_day", day=today))
 
 
+def _read_insight_html(filepath: str) -> str | None:
+    """Read insight file and convert to HTML.
+
+    Returns None if file cannot be read.
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            text = f.read()
+        return markdown.markdown(text, extensions=["extra"])
+    except Exception:
+        return None
+
+
 @insights_bp.route("/<day>")
 def insights_day(day: str) -> str:
     """Render insights viewer for a specific day."""
@@ -64,35 +98,58 @@ def insights_day(day: str) -> str:
         return "", 404
 
     topic_map = _build_topic_map()
-    files = []
     insights_dir = os.path.join(str(day_path(day)), "insights")
+
+    # Group insights by topic, collecting base file and variants
+    topic_groups: dict[str, dict] = {}
 
     if os.path.isdir(insights_dir):
         for name in sorted(os.listdir(insights_dir)):
-            base, ext = os.path.splitext(name)
-            if ext != ".md" or base not in topic_map:
-                continue
-            path = os.path.join(insights_dir, name)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    text = f.read()
-                html = markdown.markdown(text, extensions=["extra"])
-            except Exception:
+            topic, variant = _parse_insight_filename(name)
+            if not topic or topic not in topic_map:
                 continue
 
-            info = topic_map[base]
-            key = info["key"]
-            meta = info["meta"]
-            files.append(
-                {
-                    "label": _format_label(key),
-                    "html": html,
-                    "topic": base,
-                    "key": key,
-                    "source": meta.get("source", "system"),
-                    "color": meta.get("color", "#6c757d"),
+            path = os.path.join(insights_dir, name)
+            html = _read_insight_html(path)
+            if html is None:
+                continue
+
+            # Initialize topic group if not exists
+            if topic not in topic_groups:
+                info = topic_map[topic]
+                topic_groups[topic] = {
+                    "label": _format_label(info["key"]),
+                    "topic": topic,
+                    "key": info["key"],
+                    "source": info["meta"].get("source", "system"),
+                    "color": info["meta"].get("color", "#6c757d"),
+                    "base": None,
+                    "variants": [],
                 }
-            )
+
+            # Add as base or variant
+            if variant is None:
+                topic_groups[topic]["base"] = {
+                    "name": "default",
+                    "html": html,
+                }
+            else:
+                topic_groups[topic]["variants"].append(
+                    {
+                        "name": variant,
+                        "html": html,
+                    }
+                )
+
+    # Build files list, including only topics with at least a base
+    files = []
+    for topic in sorted(topic_groups.keys()):
+        group = topic_groups[topic]
+        # Include if has base (variants alone don't show without base)
+        if group["base"]:
+            # For backward compat, set html to base content
+            group["html"] = group["base"]["html"]
+            files.append(group)
 
     title = format_date(day)
 

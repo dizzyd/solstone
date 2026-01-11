@@ -537,7 +537,7 @@ def load_day_entries(
 
 
 def group_entries_by_hour(
-    entries: List[Dict[str, Any]]
+    entries: List[Dict[str, Any]],
 ) -> List[Tuple[int, List[Dict[str, Any]]]]:
     """Group entries by hour for semantic chunking.
 

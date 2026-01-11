@@ -49,6 +49,11 @@ class OpenAIProvider(LLMProvider):
         self._sync_client = None
         self._async_client = None
 
+    @property
+    def default_model(self) -> str:
+        """Return the default model for OpenAI."""
+        return "gpt-5-mini"
+
     def _get_sync_client(self):
         """Get or create sync OpenAI client."""
         if self._sync_client is None:

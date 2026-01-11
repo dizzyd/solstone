@@ -1,4 +1,4 @@
-{# Insights day view - tabbed markdown viewer #}
+{# Insights day view - tabbed markdown viewer with variant comparison #}
 
 <style>
 .insights-tabs {
@@ -38,6 +38,47 @@
   font-weight: bold;
 }
 
+/* Variant tabs for A/B comparison */
+.variant-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.variant-tab {
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s;
+}
+
+.variant-tab:hover {
+  background: #e0e0e0;
+}
+
+.variant-tab.active {
+  background: #4a90d9;
+  color: white;
+  border-color: #4a90d9;
+}
+
+.variant-tab .variant-name {
+  font-weight: 500;
+}
+
+.variant-content {
+  display: none;
+}
+
+.variant-content.active {
+  display: block;
+}
+
 .insights-content {
   padding: 1em;
 }
@@ -64,7 +105,34 @@
 
   {% for file in files %}
   <div class="insights-content" id="{{ file.topic }}"{% if not loop.first %} style="display:none"{% endif %}>
+    {% if file.variants %}
+    {# Show variant tabs when alternatives exist #}
+    <div class="variant-tabs">
+      <button class="variant-tab active" data-variant="default">
+        <span class="variant-name">Default</span>
+      </button>
+      {% for variant in file.variants %}
+      <button class="variant-tab" data-variant="{{ variant.name }}">
+        <span class="variant-name">{{ variant.name }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    {# Base content #}
+    <div class="variant-content active" data-variant-content="default">
+      <div class="markdown">{{ file.base.html|safe }}</div>
+    </div>
+
+    {# Variant contents #}
+    {% for variant in file.variants %}
+    <div class="variant-content" data-variant-content="{{ variant.name }}">
+      <div class="markdown">{{ variant.html|safe }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    {# No variants - show base content directly #}
     <div class="markdown">{{ file.html|safe }}</div>
+    {% endif %}
   </div>
   {% endfor %}
   {% else %}
@@ -108,6 +176,31 @@
     e.preventDefault();
     showTab(t.dataset.target);
   }));
+
+  // Variant tab switching
+  document.querySelectorAll('.variant-tabs').forEach(tabGroup => {
+    const variantTabs = tabGroup.querySelectorAll('.variant-tab');
+    const contentContainer = tabGroup.parentElement;
+    const variantContents = contentContainer.querySelectorAll('.variant-content');
+
+    variantTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const variant = tab.dataset.variant;
+
+        // Update tab states
+        variantTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Show corresponding content
+        variantContents.forEach(c => {
+          c.classList.remove('active');
+          if (c.dataset.variantContent === variant) {
+            c.classList.add('active');
+          }
+        });
+      });
+    });
+  });
 
   // Handle initial hash or show first tab
   const hash = location.hash.slice(1);

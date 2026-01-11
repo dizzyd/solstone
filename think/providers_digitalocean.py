@@ -30,17 +30,18 @@ logger = logging.getLogger(__name__)
 # DigitalOcean Gradient Serverless Inference endpoint
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 
-# Context windows for DigitalOcean models (from DO docs)
+# Context windows for DigitalOcean models
+# Note: API enforces 96K limit for gpt-oss models despite docs claiming higher
 DO_CONTEXT_WINDOWS = {
-    "openai-gpt-oss-120b": 131072,
-    "openai-gpt-oss-20b": 131072,
-    "llama3.3-70b-instruct": 128000,
-    "llama3-8b-instruct": 128000,
-    "mistral-nemo-instruct-2407": 128000,
-    "deepseek-r1-distill-llama-70b": 128000,
-    "alibaba-qwen3-32b": 128000,
+    "openai-gpt-oss-120b": 96000,
+    "openai-gpt-oss-20b": 96000,
+    "llama3.3-70b-instruct": 96000,
+    "llama3-8b-instruct": 96000,
+    "mistral-nemo-instruct-2407": 96000,
+    "deepseek-r1-distill-llama-70b": 96000,
+    "alibaba-qwen3-32b": 96000,
 }
-DO_DEFAULT_CONTEXT_WINDOW = 128000
+DO_DEFAULT_CONTEXT_WINDOW = 96000
 
 
 class DigitalOceanProvider(LLMProvider):
@@ -52,6 +53,11 @@ class DigitalOceanProvider(LLMProvider):
         self._api_key = os.getenv("DO_API_KEY")
         self._sync_client = None
         self._async_client = None
+
+    @property
+    def default_model(self) -> str:
+        """Return the default model for DigitalOcean."""
+        return "openai-gpt-oss-120b"
 
     def _get_sync_client(self):
         """Get or create sync OpenAI-compatible client for DigitalOcean."""

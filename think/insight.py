@@ -114,7 +114,10 @@ def _insight_keys() -> list[str]:
 
 
 def _output_path(
-    day_dir: os.PathLike[str], key: str, segment: str | None = None
+    day_dir: os.PathLike[str],
+    key: str,
+    segment: str | None = None,
+    variant: str | None = None,
 ) -> Path:
     """Return markdown output path for insight ``key`` in ``day_dir``.
 
@@ -122,21 +125,27 @@ def _output_path(
         day_dir: Day directory path (YYYYMMDD)
         key: Insight key (e.g., "activity" or "chat:sentiment")
         segment: Optional segment key (HHMMSS_LEN)
+        variant: Optional variant identifier (e.g., "digitalocean") for A/B comparison
 
     Returns:
         Path to markdown file:
         - Daily: YYYYMMDD/insights/{topic}.md (where topic = get_insight_topic(key))
+        - Daily variant: YYYYMMDD/insights/{topic}@{variant}.md
         - Segment: YYYYMMDD/{segment}/{topic}.md
+        - Segment variant: YYYYMMDD/{segment}/{topic}@{variant}.md
     """
     day = Path(day_dir)
     topic = get_insight_topic(key)
 
+    # Add variant suffix if specified
+    filename = f"{topic}@{variant}.md" if variant else f"{topic}.md"
+
     if segment:
         # Segment insights go directly in segment directory
-        return day / segment / f"{topic}.md"
+        return day / segment / filename
     else:
         # Daily insights go in insights/ subdirectory
-        return day / "insights" / f"{topic}.md"
+        return day / "insights" / filename
 
 
 def scan_day(day: str) -> dict[str, list[str]]:
@@ -248,6 +257,7 @@ def send_markdown_with_chunking(
     cache_display_name: str | None = None,
     insight_key: str | None = None,
     segment: str | None = None,
+    provider_override: str | None = None,
 ) -> tuple[str, int]:
     """Generate insight with dynamic window chunking for large days.
 
@@ -271,6 +281,9 @@ def send_markdown_with_chunking(
         Insight key for token usage logging.
     segment:
         Optional segment key for segment-only insights.
+    provider_override:
+        Optional provider name to use instead of configured default.
+        When specified, uses the provider's default model.
 
     Returns
     -------
@@ -280,7 +293,20 @@ def send_markdown_with_chunking(
     # Resolve provider for this insight context
     context = f"insight.{insight_key}" if insight_key else "insight"
     config = resolve_provider(context)
-    provider = get_provider(config.provider)
+
+    # Apply provider override if specified
+    if provider_override:
+        provider = get_provider(provider_override)
+        # Use the provider's default model
+        effective_model = provider.default_model
+        logging.info(
+            "Using provider override: %s with model %s",
+            provider_override,
+            effective_model,
+        )
+    else:
+        provider = get_provider(config.provider)
+        effective_model = config.model
 
     # Load entries and generate full markdown
     if segment:
@@ -294,8 +320,35 @@ def send_markdown_with_chunking(
     # Check if content fits in context window
     # Reserve 50K tokens for prompt + output
     fits, estimated, available = provider.check_content_fits(
-        markdown, config.model, buffer=50000
+        markdown, effective_model, buffer=50000
     )
+
+    # Helper function to generate with the appropriate provider
+    def do_generate(
+        content: str, user_prompt: str, chunk_cache_name: str | None = None
+    ) -> str:
+        gen_context = f"insight.{insight_key}.markdown" if insight_key else None
+        if provider_override:
+            # Use provider abstraction directly (no caching for non-Google)
+            return provider.generate(
+                contents=[content, user_prompt],
+                model=effective_model,
+                temperature=0.3,
+                max_output_tokens=8192 * 6,
+                thinking_budget=8192 * 3 if provider.supports_thinking() else None,
+                system_instruction=COMMON_SYSTEM_INSTRUCTION,
+                context=gen_context,
+            )
+        else:
+            # Use send_markdown for Google with caching support
+            return send_markdown(
+                content,
+                user_prompt,
+                api_key,
+                model,
+                cache_display_name=chunk_cache_name,
+                insight_key=insight_key,
+            )
 
     if fits:
         # Content fits - use standard path
@@ -304,14 +357,7 @@ def send_markdown_with_chunking(
             estimated,
             available,
         )
-        result = send_markdown(
-            markdown,
-            prompt,
-            api_key,
-            model,
-            cache_display_name=cache_display_name,
-            insight_key=insight_key,
-        )
+        result = do_generate(markdown, prompt, cache_display_name)
         return result, file_count
 
     # Content too large - use dynamic window chunking
@@ -328,70 +374,80 @@ def send_markdown_with_chunking(
     if not hourly_groups:
         return "No entries found for chunking.", 0
 
-    # Pack as many consecutive hours as possible into each batch
+    # Helper to process a batch
+    def process_batch(batch_entries: list) -> str:
+        nonlocal chunk_count
+        chunk_count += 1
+        batch_markdown = entries_to_markdown(batch_entries)
+        logging.info(
+            "Processing chunk %d with %d entries (%d chars)",
+            chunk_count,
+            len(batch_entries),
+            len(batch_markdown),
+        )
+        chunk_cache = (
+            f"{cache_display_name}_chunk{chunk_count}" if cache_display_name else None
+        )
+        return do_generate(batch_markdown, prompt, chunk_cache)
+
+    # Pack entries into batches that fit in context window
     accumulated_results = []
     current_batch_entries = []
     chunk_count = 0
 
     for hour, hour_entries in hourly_groups:
-        # Test if adding this hour would exceed limit
-        test_entries = current_batch_entries + hour_entries
-        test_markdown = entries_to_markdown(test_entries)
-        test_fits, _, _ = provider.check_content_fits(
-            test_markdown, config.model, buffer=50000
+        # First, check if hour entries alone fit
+        hour_markdown = entries_to_markdown(hour_entries)
+        hour_fits, _, _ = provider.check_content_fits(
+            hour_markdown, effective_model, buffer=50000
         )
 
-        if not test_fits and current_batch_entries:
-            # Current batch is full - process it
-            chunk_count += 1
-            batch_markdown = entries_to_markdown(current_batch_entries)
+        if not hour_fits:
+            # Hour is too large - need to split it into smaller pieces
             logging.info(
-                "Processing chunk %d with %d entries (%d chars)",
-                chunk_count,
-                len(current_batch_entries),
-                len(batch_markdown),
+                "Hour %02d has %d entries that exceed limit, splitting",
+                hour,
+                len(hour_entries),
             )
 
-            chunk_result = send_markdown(
-                batch_markdown,
-                prompt,
-                api_key,
-                model,
-                cache_display_name=f"{cache_display_name}_chunk{chunk_count}"
-                if cache_display_name
-                else None,
-                insight_key=insight_key,
-            )
-            accumulated_results.append(chunk_result)
+            # First, flush current batch if any
+            if current_batch_entries:
+                accumulated_results.append(process_batch(current_batch_entries))
+                current_batch_entries = []
 
-            # Start new batch with current hour
-            current_batch_entries = hour_entries
+            # Split hour entries into smaller batches
+            for entry in hour_entries:
+                test_entries = current_batch_entries + [entry]
+                test_markdown = entries_to_markdown(test_entries)
+                test_fits, _, _ = provider.check_content_fits(
+                    test_markdown, effective_model, buffer=50000
+                )
+
+                if not test_fits and current_batch_entries:
+                    # Batch full, process it
+                    accumulated_results.append(process_batch(current_batch_entries))
+                    current_batch_entries = [entry]
+                else:
+                    current_batch_entries.append(entry)
         else:
-            # Add hour to current batch
-            current_batch_entries.extend(hour_entries)
+            # Hour fits - try to add to current batch
+            test_entries = current_batch_entries + hour_entries
+            test_markdown = entries_to_markdown(test_entries)
+            test_fits, _, _ = provider.check_content_fits(
+                test_markdown, effective_model, buffer=50000
+            )
+
+            if not test_fits and current_batch_entries:
+                # Current batch is full - process it
+                accumulated_results.append(process_batch(current_batch_entries))
+                current_batch_entries = hour_entries
+            else:
+                # Add hour to current batch
+                current_batch_entries.extend(hour_entries)
 
     # Process final batch
     if current_batch_entries:
-        chunk_count += 1
-        batch_markdown = entries_to_markdown(current_batch_entries)
-        logging.info(
-            "Processing final chunk %d with %d entries (%d chars)",
-            chunk_count,
-            len(current_batch_entries),
-            len(batch_markdown),
-        )
-
-        chunk_result = send_markdown(
-            batch_markdown,
-            prompt,
-            api_key,
-            model,
-            cache_display_name=f"{cache_display_name}_chunk{chunk_count}"
-            if cache_display_name
-            else None,
-            insight_key=insight_key,
-        )
-        accumulated_results.append(chunk_result)
+        accumulated_results.append(process_batch(current_batch_entries))
 
     # Merge results if we had multiple chunks
     if len(accumulated_results) > 1:
@@ -403,15 +459,29 @@ def send_markdown_with_chunking(
             + "\n\n---\n\n".join(accumulated_results)
         )
 
-        final_result = gemini_generate(
-            contents=[merge_prompt],
-            model=model,
-            temperature=0.3,
-            max_output_tokens=8192 * 6,
-            thinking_budget=8192 * 3,
-            system_instruction=COMMON_SYSTEM_INSTRUCTION,
-            context=f"insight.{insight_key}.merge" if insight_key else None,
-        )
+        merge_context = f"insight.{insight_key}.merge" if insight_key else None
+        if provider_override:
+            # Use provider abstraction for merge
+            final_result = provider.generate(
+                contents=[merge_prompt],
+                model=effective_model,
+                temperature=0.3,
+                max_output_tokens=8192 * 6,
+                thinking_budget=8192 * 3 if provider.supports_thinking() else None,
+                system_instruction=COMMON_SYSTEM_INSTRUCTION,
+                context=merge_context,
+            )
+        else:
+            # Use gemini_generate for merge
+            final_result = gemini_generate(
+                contents=[merge_prompt],
+                model=model,
+                temperature=0.3,
+                max_output_tokens=8192 * 6,
+                thinking_budget=8192 * 3,
+                system_instruction=COMMON_SYSTEM_INSTRUCTION,
+                context=merge_context,
+            )
         return final_result, file_count
 
     return accumulated_results[0] if accumulated_results else "", file_count
@@ -532,6 +602,10 @@ def main() -> None:
         "--segment",
         help="Segment key in HHMMSS_LEN format (processes only this segment within the day)",
     )
+    parser.add_argument(
+        "--provider",
+        help="Provider to use (e.g., 'digitalocean', 'openai'). Creates variant output for A/B comparison.",
+    )
     args = setup_cli(parser)
 
     # Set segment key for token usage logging
@@ -596,8 +670,25 @@ def main() -> None:
     try:
         if args.verbose:
             print("Verbose mode enabled")
+        # Determine variant name from provider override
+        variant = args.provider if args.provider else None
+
+        # Check for appropriate API key based on provider
+        if args.provider:
+            if args.provider == "digitalocean":
+                if not os.getenv("DO_API_KEY"):
+                    parser.error("DO_API_KEY not found in environment")
+            elif args.provider == "openai":
+                if not os.getenv("OPENAI_API_KEY"):
+                    parser.error("OPENAI_API_KEY not found in environment")
+            elif args.provider == "google":
+                if not os.getenv("GOOGLE_API_KEY"):
+                    parser.error("GOOGLE_API_KEY not found in environment")
+            else:
+                parser.error(f"Unknown provider: {args.provider}")
+
         api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
+        if not api_key and not args.provider:
             parser.error("GOOGLE_API_KEY not found in environment")
 
         try:
@@ -609,19 +700,27 @@ def main() -> None:
 
         prompt = insight_prompt.text
 
+        # Determine model - for provider override, show provider's default model
+        if args.provider:
+            provider_instance = get_provider(args.provider)
+            display_model = provider_instance.default_model
+        else:
+            display_model = GEMINI_PRO if args.pro else get_model_for("insights")
         model = GEMINI_PRO if args.pro else get_model_for("insights")
         day = args.day
         size_kb = len(markdown.encode("utf-8")) / 1024
 
         print(
-            f"Topic: {insight_key} | Model: {model} | Day: {day} | Files: {file_count} | Size: {size_kb:.1f}KB"
+            f"Topic: {insight_key} | Provider: {args.provider or 'google'} | Model: {display_model} | Day: {day} | Files: {file_count} | Size: {size_kb:.1f}KB"
         )
 
         if args.count:
             count_tokens(markdown, prompt, api_key, model)
             return
 
-        md_path = _output_path(day_dir, insight_key, segment=args.segment)
+        md_path = _output_path(
+            day_dir, insight_key, segment=args.segment, variant=variant
+        )
         # Use cache key scoped to day or segment
         if args.segment:
             cache_display_name = f"{day}_{args.segment}"
@@ -646,6 +745,7 @@ def main() -> None:
                 cache_display_name=cache_display_name,
                 insight_key=insight_key,
                 segment=args.segment,
+                provider_override=args.provider,
             )
         else:
             # Use chunking for large days (checks context window internally)
@@ -657,6 +757,7 @@ def main() -> None:
                 cache_display_name=cache_display_name,
                 insight_key=insight_key,
                 segment=args.segment,
+                provider_override=args.provider,
             )
 
         # Check if we got a valid response
@@ -670,6 +771,12 @@ def main() -> None:
             with open(md_path, "w") as f:
                 f.write(result)
             print(f"Results saved to: {md_path}")
+
+        # Skip event extraction for variants (they're just for comparison)
+        if variant:
+            print(f"Variant '{variant}' complete. Skipping event extraction.")
+            success = True
+            return
 
         if skip_occ and not do_anticipations:
             print('"occurrences" set to false; skipping event extraction')

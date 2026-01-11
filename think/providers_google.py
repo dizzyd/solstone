@@ -36,6 +36,11 @@ class GoogleProvider(LLMProvider):
         """Initialize Google provider."""
         pass
 
+    @property
+    def default_model(self) -> str:
+        """Return the default model for Google Gemini."""
+        return "gemini-3-flash-preview"
+
     async def agenerate(
         self,
         contents: Union[str, List[Any]],

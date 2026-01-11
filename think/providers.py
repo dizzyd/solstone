@@ -56,6 +56,12 @@ class ProviderConfig:
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
+    @property
+    @abstractmethod
+    def default_model(self) -> str:
+        """Return the default model for this provider."""
+        pass
+
     @abstractmethod
     async def agenerate(
         self,

@@ -104,20 +104,24 @@ class TestSendMarkdownWithChunking:
             segment = day_dir / f"{hour:02d}0000_300"
             segment.mkdir()
             (segment / "audio.jsonl").write_text(
-                f'{{"raw": "audio.flac"}}\n{{"text": "content at {hour}"}}\n'
+                f'{{"raw": "audio.flac", "start": "00:00:00"}}\n'
+                f'{{"text": "content at {hour}", "start": "00:00:01"}}\n'
             )
 
         from think.insight import send_markdown_with_chunking
 
         mock_provider = MagicMock()
-        # First check: full content doesn't fit
-        # Subsequent checks: individual hours fit
+        # New checking pattern:
+        # 1. Full content check
+        # 2. For each hour: check if hour alone fits, then check if hour + batch fits
         mock_provider.check_content_fits.side_effect = [
             (False, 200000, 100000),  # Full content too large
-            (True, 30000, 100000),  # Hour 9 fits
-            (True, 60000, 100000),  # Hour 9+10 fits
-            (False, 150000, 100000),  # Hour 9+10+14 doesn't fit
+            (True, 30000, 100000),  # Hour 9 alone fits
+            (True, 30000, 100000),  # Hour 9 + empty batch fits
+            (True, 30000, 100000),  # Hour 10 alone fits
+            (True, 60000, 100000),  # Hour 10 + hour 9 fits
             (True, 30000, 100000),  # Hour 14 alone fits
+            (False, 150000, 100000),  # Hour 14 + hours 9+10 doesn't fit
         ]
 
         with patch("think.insight.resolve_provider") as mock_resolve:
@@ -151,16 +155,19 @@ class TestSendMarkdownWithChunking:
         # Create a single segment
         (day_dir / "100000_300").mkdir()
         (day_dir / "100000_300" / "audio.jsonl").write_text(
-            '{"raw": "audio.flac"}\n{"text": "content"}\n'
+            '{"raw": "audio.flac", "start": "00:00:00"}\n'
+            '{"text": "content", "start": "00:00:01"}\n'
         )
 
         from think.insight import send_markdown_with_chunking
 
         mock_provider = MagicMock()
         # Content doesn't fit initially but single hour does
+        # Pattern: full check, hour alone check, hour + batch check
         mock_provider.check_content_fits.side_effect = [
             (False, 200000, 100000),  # Full content too large
-            (True, 30000, 100000),  # Single hour fits
+            (True, 30000, 100000),  # Single hour alone fits
+            (True, 30000, 100000),  # Single hour + empty batch fits
         ]
 
         with patch("think.insight.resolve_provider") as mock_resolve:
@@ -198,18 +205,22 @@ class TestDynamicWindowPacking:
             segment = day_dir / f"{hour:02d}0000_300"
             segment.mkdir()
             (segment / "audio.jsonl").write_text(
-                f'{{"raw": "audio.flac"}}\n{{"text": "hour {hour}"}}\n'
+                f'{{"raw": "audio.flac", "start": "00:00:00"}}\n'
+                f'{{"text": "hour {hour}", "start": "00:00:01"}}\n'
             )
 
         from think.insight import send_markdown_with_chunking
 
         mock_provider = MagicMock()
-        # All hours fit together
+        # New pattern: for each hour, check alone first, then check with batch
         mock_provider.check_content_fits.side_effect = [
             (False, 200000, 100000),  # Full markdown doesn't fit (triggers chunking)
-            (True, 20000, 100000),  # Hour 9 fits
-            (True, 40000, 100000),  # Hour 9+10 fits
-            (True, 60000, 100000),  # Hour 9+10+11 fits
+            (True, 20000, 100000),  # Hour 9 alone fits
+            (True, 20000, 100000),  # Hour 9 + empty batch fits
+            (True, 20000, 100000),  # Hour 10 alone fits
+            (True, 40000, 100000),  # Hour 10 + hour 9 fits
+            (True, 20000, 100000),  # Hour 11 alone fits
+            (True, 60000, 100000),  # Hour 11 + hours 9+10 fits
         ]
 
         with patch("think.insight.resolve_provider") as mock_resolve:

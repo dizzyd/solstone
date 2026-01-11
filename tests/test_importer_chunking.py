@@ -3,7 +3,6 @@
 
 """Tests for importer.py progressive summarization functionality."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -104,9 +103,7 @@ class TestCreateTranscriptSummary:
         summary_path = tmp_path / "summary.md"
         assert summary_path.exists()
 
-    def test_uses_progressive_summarization_when_too_large(
-        self, tmp_path, monkeypatch
-    ):
+    def test_uses_progressive_summarization_when_too_large(self, tmp_path, monkeypatch):
         """Should use progressive summarization when content exceeds limit."""
         monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
 
