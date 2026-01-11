@@ -149,6 +149,28 @@
   color: #666;
   font-size: 0.85em;
   line-height: 1.4;
+  transition: opacity 0.3s ease;
+}
+
+/* Inline save status - replaces helper text temporarily */
+.settings-field small.status-saved {
+  color: #166534;
+}
+
+.settings-field small.status-saved::before {
+  content: '✓ ';
+}
+
+.settings-field small.status-error {
+  color: #991b1b;
+}
+
+.settings-field small.status-error::before {
+  content: '✕ ';
+}
+
+.settings-field small.status-fade {
+  opacity: 0;
 }
 
 /* Password field with toggle */
@@ -1059,7 +1081,7 @@ async function loadConfig() {
     checkShowSetup();
   } catch (err) {
     console.error('Error loading config:', err);
-    notify('error', 'Load Failed', 'Error loading configuration');
+    notifyError( 'Load Failed', 'Error loading configuration');
   }
 }
 
@@ -1136,10 +1158,16 @@ function handleFieldChange(el) {
     }
   }
 
-  saveField(section, key, value);
+  // Skip save if value unchanged
+  const currentValue = configData?.[section]?.[key];
+  if (JSON.stringify(currentValue) === JSON.stringify(value)) {
+    return;
+  }
+
+  saveField(el, section, key, value);
 }
 
-function saveField(section, key, value) {
+function saveField(el, section, key, value) {
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
     try {
@@ -1151,15 +1179,64 @@ function saveField(section, key, value) {
       const result = await response.json();
       if (result.success) {
         configData = result.config;
-        notify('success', 'Saved', 'Settings updated');
+        showFieldStatus(el, 'saved');
       } else {
         throw new Error(result.error);
       }
     } catch (err) {
       console.error('Save error:', err);
-      notify('error', 'Save Failed', err.message);
+      showFieldStatus(el, 'error', err.message);
     }
   }, 500);
+}
+
+// Store original helper text and timeout per field
+const fieldHelperText = new Map();
+const fieldStatusTimeouts = new Map();
+
+function showFieldStatus(el, type, message) {
+  // Find the <small> helper text element in the same .settings-field
+  const field = el.closest('.settings-field');
+  if (!field) return;
+
+  const small = field.querySelector('small');
+  if (!small) return;
+
+  // Store original text if not already stored
+  if (!fieldHelperText.has(small)) {
+    fieldHelperText.set(small, small.textContent);
+  }
+
+  // Clear any pending timeout for this field
+  const existingTimeout = fieldStatusTimeouts.get(small);
+  if (existingTimeout) {
+    clearTimeout(existingTimeout);
+  }
+
+  // Remove previous status classes
+  small.classList.remove('status-saved', 'status-error', 'status-fade');
+
+  // Set status text and class
+  if (type === 'saved') {
+    small.textContent = 'Saved';
+    small.classList.add('status-saved');
+  } else {
+    small.textContent = message || 'Error';
+    small.classList.add('status-error');
+  }
+
+  // For saved status, fade back to original after delay
+  if (type === 'saved') {
+    const timeout = setTimeout(() => {
+      small.classList.add('status-fade');
+      setTimeout(() => {
+        small.textContent = fieldHelperText.get(small);
+        small.classList.remove('status-saved', 'status-fade');
+      }, 300); // Match CSS transition duration
+    }, 1500);
+    fieldStatusTimeouts.set(small, timeout);
+  }
+  // Errors persist until value changes and triggers a new save
 }
 
 // ========== FACET CONFIG ==========
@@ -1174,7 +1251,7 @@ async function loadFacetConfig(facetName) {
     setupFacetEditing();
   } catch (err) {
     console.error('Error loading facet config:', err);
-    notify('error', 'Load Failed', 'Error loading facet configuration');
+    notifyError( 'Load Failed', 'Error loading facet configuration');
   }
 }
 
@@ -1230,7 +1307,7 @@ function setupDoubleTapEdit(fieldId, displayId, inputId, configKey) {
       display.textContent = value || (configKey === 'description' ? 'No description set' : facetConfig.title);
       display.style.display = 'flex';
       input.style.display = 'none';
-      saveFacetField(configKey, value);
+      saveFacetField(configKey, value, input);
     } else {
       input.value = display.textContent;
       display.style.display = 'flex';
@@ -1258,7 +1335,7 @@ function setupEmojiPicker() {
     const value = input.value.trim();
     if (value && /\p{Emoji}/u.test(value)) {
       display.textContent = value;
-      saveFacetField('emoji', value);
+      saveFacetField('emoji', value, input);
     }
     input.style.display = 'none';
     input.value = '';
@@ -1312,7 +1389,7 @@ function setupColorPicker() {
     if (/^#[0-9A-Fa-f]{6}$/.test(selectedColor)) {
       document.getElementById('colorPreview').style.backgroundColor = selectedColor;
       document.getElementById('colorHexDisplay').textContent = selectedColor;
-      saveFacetField('color', selectedColor);
+      saveFacetField('color', selectedColor, null);
       modal.style.display = 'none';
     }
   };
@@ -1338,12 +1415,17 @@ function setupMutedToggle() {
   toggle.onchange = () => {
     const muted = toggle.checked;
     document.getElementById('toggleLabel').textContent = muted ? 'Muted' : 'Active';
-    saveFacetField('muted', muted);
+    saveFacetField('muted', muted, null);
   };
 }
 
-async function saveFacetField(field, value) {
+async function saveFacetField(field, value, triggerEl) {
   if (!window.selectedFacet) return;
+
+  // Skip save if value unchanged
+  if (JSON.stringify(facetConfig?.[field]) === JSON.stringify(value)) {
+    return;
+  }
 
   try {
     const response = await fetch(`/app/settings/api/facet/${window.selectedFacet}`, {
@@ -1354,17 +1436,21 @@ async function saveFacetField(field, value) {
     const result = await response.json();
     if (result.success) {
       facetConfig = result.config;
-      notify('success', 'Saved', 'Facet updated');
-      // Reload to update sidebar
+      // Show inline status if we have a trigger element
+      if (triggerEl) {
+        showFieldStatus(triggerEl, 'saved');
+      }
+      // Prompt reload for changes that affect the facet bar
       if (field === 'title' || field === 'emoji' || field === 'color' || field === 'muted') {
-        setTimeout(() => window.location.reload(), 500);
+        promptReload();
       }
     } else {
       throw new Error(result.error);
     }
   } catch (err) {
     console.error('Save error:', err);
-    notify('error', 'Save Failed', err.message);
+    // For errors, use notification since they need attention and page won't reload
+    notifyError( 'Save Failed', err.message);
   }
 }
 
@@ -1458,7 +1544,7 @@ document.getElementById('createPersonalBtn').onclick = async () => {
     console.error('Error creating facet:', err);
     btn.disabled = false;
     btn.textContent = 'Create Personal Facet';
-    notify('error', 'Creation Failed', err.message);
+    notifyError( 'Creation Failed', err.message);
   }
 };
 
@@ -1476,15 +1562,31 @@ document.getElementById('passwordToggle').onclick = () => {
 };
 
 // ========== NOTIFICATIONS ==========
-function notify(type, title, message) {
+function notifyError(title, message) {
   if (window.AppServices?.notifications) {
     window.AppServices.notifications.show({
       app: 'settings',
-      icon: type === 'success' ? '\u2705' : '\u274C',
+      icon: '\u274C',
       title,
       message,
       dismissible: true,
-      autoDismiss: type === 'success' ? 2000 : 5000
+      autoDismiss: 5000
+    });
+  }
+}
+
+let reloadPrompted = false;
+function promptReload() {
+  if (reloadPrompted) return;
+  reloadPrompted = true;
+  if (window.AppServices?.notifications) {
+    window.AppServices.notifications.show({
+      app: 'settings',
+      icon: '\uD83D\uDD04',
+      title: 'Reload to apply',
+      message: 'Click to update facet bar',
+      action: window.location.pathname,
+      dismissible: true
     });
   }
 }
