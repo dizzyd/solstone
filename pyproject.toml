@@ -133,14 +133,23 @@ Documentation = "https://github.com/solpbc/solstone/blob/main/README.md"
 include = ["apps*", "think*", "convey*", "observe*", "muse*"]
 
 [tool.setuptools.package-data]
-apps = ["*/templates/*.html"]
-think = ["*.txt", "insights/*.txt"]
-muse = ["agents/*.txt", "agents/*.json"]
-observe = ["*.txt", "*.json"]
+apps = [
+    "*/workspace.html",
+    "*/app_bar.html",
+    "*/background.html",
+    "*/_*.html",
+    "*/app.json",
+    "*/agents/*.txt",
+    "*/agents/*.json",
+    "*/*.js",
+]
 convey = [
     "templates/*.html",
-    "static/*",
+    "static/**/*",
 ]
+think = ["*.txt", "insights/*.txt", "insights/*.json"]
+muse = ["agents/*.txt", "agents/*.json"]
+observe = ["*.txt", "*.json", "categories/*.json"]
 
 # Development tools configuration
 [tool.black]
