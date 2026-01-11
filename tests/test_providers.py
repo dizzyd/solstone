@@ -211,6 +211,14 @@ class TestGetProvider:
 
         assert isinstance(provider, DigitalOceanProvider)
 
+    def test_returns_bedrock_provider(self):
+        """Should return BedrockProvider for 'bedrock'."""
+        from think.providers_bedrock import BedrockProvider
+
+        provider = get_provider("bedrock")
+
+        assert isinstance(provider, BedrockProvider)
+
     def test_raises_for_unknown(self):
         """Should raise ValueError for unknown provider."""
         with pytest.raises(ValueError, match="Unknown provider"):
@@ -263,6 +271,21 @@ class TestProviderCapabilities:
     def test_digitalocean_no_caching(self):
         """DigitalOcean provider should not support cached_content."""
         provider = get_provider("digitalocean")
+        assert provider.supports_caching() is False
+
+    def test_bedrock_supports_vision(self):
+        """Bedrock provider should support vision (via Claude models)."""
+        provider = get_provider("bedrock")
+        assert provider.supports_vision() is True
+
+    def test_bedrock_supports_thinking(self):
+        """Bedrock provider should support thinking (via Claude 3.5)."""
+        provider = get_provider("bedrock")
+        assert provider.supports_thinking() is True
+
+    def test_bedrock_no_caching(self):
+        """Bedrock provider should not support cached_content."""
+        provider = get_provider("bedrock")
         assert provider.supports_caching() is False
 
 
@@ -332,8 +355,21 @@ class TestContextWindow:
     def test_digitalocean_context_window(self):
         """DigitalOcean provider should return correct context windows."""
         provider = get_provider("digitalocean")
-        assert provider.get_context_window("openai-gpt-oss-120b") == 131072
-        assert provider.get_context_window("llama3.3-70b-instruct") == 128000
+        assert provider.get_context_window("openai-gpt-oss-120b") == 96000
+        assert provider.get_context_window("llama3.3-70b-instruct") == 96000
+        # Unknown model should return default
+        assert provider.get_context_window("unknown-model") == 96000
+
+    def test_bedrock_context_window(self):
+        """Bedrock provider should return correct context windows."""
+        provider = get_provider("bedrock")
+        assert (
+            provider.get_context_window("anthropic.claude-3-5-sonnet-20241022-v2:0")
+            == 200000
+        )
+        assert provider.get_context_window("meta.llama3-1-70b-instruct-v1:0") == 128000
+        assert provider.get_context_window("mistral.mistral-large-2407-v1:0") == 128000
+        assert provider.get_context_window("amazon.titan-text-premier-v1:0") == 32000
         # Unknown model should return default
         assert provider.get_context_window("unknown-model") == 128000
 
@@ -374,11 +410,11 @@ class TestTokenEstimation:
     def test_check_content_fits_false(self):
         """Should return False when content exceeds limit."""
         provider = get_provider("digitalocean")
-        # Create content larger than 128K context window
-        content = "a" * (130000 * 4)  # ~130K tokens
+        # Create content larger than 96K context window
+        content = "a" * (100000 * 4)  # ~100K tokens
         fits, estimated, available = provider.check_content_fits(
             content, "llama3-8b-instruct"
         )
         assert fits is False
-        assert estimated == 130000
-        assert available == 127000  # 128K - 1000 buffer
+        assert estimated == 100000
+        assert available == 95000  # 96K - 1000 buffer

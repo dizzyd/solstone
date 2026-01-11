@@ -300,7 +300,7 @@ def get_provider(provider_name: str) -> LLMProvider:
     Parameters
     ----------
     provider_name : str
-        Provider identifier ("google", "openai", or "digitalocean")
+        Provider identifier ("google", "openai", "digitalocean", or "bedrock")
 
     Returns
     -------
@@ -324,6 +324,10 @@ def get_provider(provider_name: str) -> LLMProvider:
         from think.providers_digitalocean import DigitalOceanProvider
 
         return DigitalOceanProvider()
+    elif provider_name == "bedrock":
+        from think.providers_bedrock import BedrockProvider
+
+        return BedrockProvider()
     else:
         raise ValueError(f"Unknown provider: {provider_name}")
 

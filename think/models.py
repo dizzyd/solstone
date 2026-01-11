@@ -151,8 +151,242 @@ def _register_digitalocean_pricing() -> None:
         pass
 
 
+def _register_bedrock_pricing():
+    """Register Amazon Bedrock model pricing with genai-prices.
+
+    Called once at module load to inject Bedrock pricing into the genai-prices
+    snapshot, enabling cost calculation for Bedrock models.
+    """
+    try:
+        from decimal import Decimal
+
+        from genai_prices.data_snapshot import (
+            DataSnapshot,
+            get_snapshot,
+            set_custom_snapshot,
+        )
+        from genai_prices.types import ClauseEquals, ModelInfo, ModelPrice, Provider
+
+        snapshot = get_snapshot()
+
+        # Check if already registered
+        if any(p.id == "bedrock" for p in snapshot.providers):
+            return
+
+        # Amazon Bedrock pricing (USD per million tokens)
+        # Source: https://aws.amazon.com/bedrock/pricing/
+        bedrock_provider = Provider(
+            id="bedrock",
+            name="Amazon Bedrock",
+            api_pattern=None,
+            pricing_urls=["https://aws.amazon.com/bedrock/pricing/"],
+            description="Amazon Bedrock Serverless Inference",
+            price_comments=None,
+            model_match=None,
+            provider_match=None,
+            extractors=None,
+            models=[
+                # Claude 3.5 models
+                ModelInfo(
+                    id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+                    match=ClauseEquals(
+                        equals="anthropic.claude-3-5-sonnet-20241022-v2:0"
+                    ),
+                    name="Claude 3.5 Sonnet v2",
+                    description="Anthropic Claude 3.5 Sonnet v2",
+                    context_window=200000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("3.00"),
+                        output_mtok=Decimal("15.00"),
+                    ),
+                ),
+                ModelInfo(
+                    id="anthropic.claude-3-5-haiku-20241022-v1:0",
+                    match=ClauseEquals(
+                        equals="anthropic.claude-3-5-haiku-20241022-v1:0"
+                    ),
+                    name="Claude 3.5 Haiku",
+                    description="Anthropic Claude 3.5 Haiku",
+                    context_window=200000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("1.00"),
+                        output_mtok=Decimal("5.00"),
+                    ),
+                ),
+                # Claude 3 models
+                ModelInfo(
+                    id="anthropic.claude-3-opus-20240229-v1:0",
+                    match=ClauseEquals(equals="anthropic.claude-3-opus-20240229-v1:0"),
+                    name="Claude 3 Opus",
+                    description="Anthropic Claude 3 Opus",
+                    context_window=200000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("15.00"),
+                        output_mtok=Decimal("75.00"),
+                    ),
+                ),
+                ModelInfo(
+                    id="anthropic.claude-3-sonnet-20240229-v1:0",
+                    match=ClauseEquals(
+                        equals="anthropic.claude-3-sonnet-20240229-v1:0"
+                    ),
+                    name="Claude 3 Sonnet",
+                    description="Anthropic Claude 3 Sonnet",
+                    context_window=200000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("3.00"),
+                        output_mtok=Decimal("15.00"),
+                    ),
+                ),
+                ModelInfo(
+                    id="anthropic.claude-3-haiku-20240307-v1:0",
+                    match=ClauseEquals(equals="anthropic.claude-3-haiku-20240307-v1:0"),
+                    name="Claude 3 Haiku",
+                    description="Anthropic Claude 3 Haiku",
+                    context_window=200000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.25"),
+                        output_mtok=Decimal("1.25"),
+                    ),
+                ),
+                # Amazon Nova models
+                ModelInfo(
+                    id="amazon.nova-pro-v1:0",
+                    match=ClauseEquals(equals="amazon.nova-pro-v1:0"),
+                    name="Nova Pro",
+                    description="Amazon Nova Pro",
+                    context_window=300000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.80"),
+                        output_mtok=Decimal("3.20"),
+                    ),
+                ),
+                ModelInfo(
+                    id="amazon.nova-lite-v1:0",
+                    match=ClauseEquals(equals="amazon.nova-lite-v1:0"),
+                    name="Nova Lite",
+                    description="Amazon Nova Lite",
+                    context_window=300000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.06"),
+                        output_mtok=Decimal("0.24"),
+                    ),
+                ),
+                ModelInfo(
+                    id="amazon.nova-micro-v1:0",
+                    match=ClauseEquals(equals="amazon.nova-micro-v1:0"),
+                    name="Nova Micro",
+                    description="Amazon Nova Micro (text-only)",
+                    context_window=128000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.035"),
+                        output_mtok=Decimal("0.14"),
+                    ),
+                ),
+                # Amazon Nova 2.0 models
+                ModelInfo(
+                    id="amazon.nova-pro-v2:0",
+                    match=ClauseEquals(equals="amazon.nova-pro-v2:0"),
+                    name="Nova 2.0 Pro",
+                    description="Amazon Nova 2.0 Pro",
+                    context_window=300000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("1.38"),
+                        output_mtok=Decimal("5.50"),
+                    ),
+                ),
+                ModelInfo(
+                    id="amazon.nova-lite-v2:0",
+                    match=ClauseEquals(equals="amazon.nova-lite-v2:0"),
+                    name="Nova 2.0 Lite",
+                    description="Amazon Nova 2.0 Lite",
+                    context_window=300000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.17"),
+                        output_mtok=Decimal("1.38"),
+                    ),
+                ),
+                # Meta Llama models
+                ModelInfo(
+                    id="meta.llama3-1-70b-instruct-v1:0",
+                    match=ClauseEquals(equals="meta.llama3-1-70b-instruct-v1:0"),
+                    name="Llama 3.1 70B Instruct",
+                    description="Meta Llama 3.1 70B",
+                    context_window=128000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.72"),
+                        output_mtok=Decimal("0.36"),
+                    ),
+                ),
+                ModelInfo(
+                    id="meta.llama3-1-8b-instruct-v1:0",
+                    match=ClauseEquals(equals="meta.llama3-1-8b-instruct-v1:0"),
+                    name="Llama 3.1 8B Instruct",
+                    description="Meta Llama 3.1 8B",
+                    context_window=128000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.22"),
+                        output_mtok=Decimal("0.11"),
+                    ),
+                ),
+                # Mistral models
+                ModelInfo(
+                    id="mistral.mistral-large-2407-v1:0",
+                    match=ClauseEquals(equals="mistral.mistral-large-2407-v1:0"),
+                    name="Mistral Large 2407",
+                    description="Mistral Large 2407",
+                    context_window=128000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("4.00"),
+                        output_mtok=Decimal("12.00"),
+                    ),
+                ),
+                ModelInfo(
+                    id="mistral.mistral-large-2501-v1:0",
+                    match=ClauseEquals(equals="mistral.mistral-large-2501-v1:0"),
+                    name="Mistral Large 3",
+                    description="Mistral Large 3 (2501)",
+                    context_window=128000,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.50"),
+                        output_mtok=Decimal("1.50"),
+                    ),
+                ),
+            ],
+        )
+
+        new_providers = list(snapshot.providers) + [bedrock_provider]
+        new_snapshot = DataSnapshot(
+            providers=new_providers,
+            from_auto_update=False,
+            timestamp=snapshot.timestamp,
+        )
+        set_custom_snapshot(new_snapshot)
+
+    except Exception:
+        # Silently fail - pricing is optional
+        pass
+
+
 # Register DO pricing on module load
 _register_digitalocean_pricing()
+
+# Register Bedrock pricing on module load
+_register_bedrock_pricing()
 
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
