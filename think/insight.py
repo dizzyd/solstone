@@ -328,8 +328,8 @@ def send_markdown_with_chunking(
         content: str, user_prompt: str, chunk_cache_name: str | None = None
     ) -> str:
         gen_context = f"insight.{insight_key}.markdown" if insight_key else None
-        if provider_override:
-            # Use provider abstraction directly (no caching for non-Google)
+        if config.provider != "google":
+            # Use provider abstraction for non-Google providers
             return provider.generate(
                 contents=[content, user_prompt],
                 model=effective_model,
@@ -673,23 +673,28 @@ def main() -> None:
         # Determine variant name from provider override
         variant = args.provider if args.provider else None
 
-        # Check for appropriate API key based on provider
-        if args.provider:
-            if args.provider == "digitalocean":
-                if not os.getenv("DO_API_KEY"):
-                    parser.error("DO_API_KEY not found in environment")
-            elif args.provider == "openai":
-                if not os.getenv("OPENAI_API_KEY"):
-                    parser.error("OPENAI_API_KEY not found in environment")
-            elif args.provider == "google":
-                if not os.getenv("GOOGLE_API_KEY"):
-                    parser.error("GOOGLE_API_KEY not found in environment")
-            else:
-                parser.error(f"Unknown provider: {args.provider}")
+        # Resolve provider from config (respecting CLI override)
+        insight_context = f"insight.{insight_key}"
+        resolved_config = resolve_provider(insight_context)
+        effective_provider = args.provider if args.provider else resolved_config.provider
+
+        # Check for appropriate API key based on resolved provider
+        if effective_provider == "digitalocean":
+            if not os.getenv("DO_API_KEY"):
+                parser.error("DO_API_KEY not found in environment")
+        elif effective_provider == "openai":
+            if not os.getenv("OPENAI_API_KEY"):
+                parser.error("OPENAI_API_KEY not found in environment")
+        elif effective_provider == "google":
+            if not os.getenv("GOOGLE_API_KEY"):
+                parser.error("GOOGLE_API_KEY not found in environment")
+        elif effective_provider == "bedrock":
+            # Bedrock uses AWS credentials, no specific env var check
+            pass
+        else:
+            parser.error(f"Unknown provider: {effective_provider}")
 
         api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key and not args.provider:
-            parser.error("GOOGLE_API_KEY not found in environment")
 
         try:
             insight_prompt = load_prompt(
@@ -700,18 +705,18 @@ def main() -> None:
 
         prompt = insight_prompt.text
 
-        # Determine model - for provider override, show provider's default model
+        # Determine model from resolved config or CLI override
         if args.provider:
             provider_instance = get_provider(args.provider)
             display_model = provider_instance.default_model
         else:
-            display_model = GEMINI_PRO if args.pro else get_model_for("insights")
+            display_model = resolved_config.model
         model = GEMINI_PRO if args.pro else get_model_for("insights")
         day = args.day
         size_kb = len(markdown.encode("utf-8")) / 1024
 
         print(
-            f"Topic: {insight_key} | Provider: {args.provider or 'google'} | Model: {display_model} | Day: {day} | Files: {file_count} | Size: {size_kb:.1f}KB"
+            f"Topic: {insight_key} | Provider: {effective_provider} | Model: {display_model} | Day: {day} | Files: {file_count} | Size: {size_kb:.1f}KB"
         )
 
         if args.count:

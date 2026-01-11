@@ -31,6 +31,8 @@ Understanding these core concepts is essential for working with solstone:
 
 * **Indexer**: Builds and maintains SQLite database from journal data, enabling fast search and retrieval.
 
+* **Providers**: LLM provider abstraction layer enabling context-based routing to different backends (Google, OpenAI, DigitalOcean, Bedrock). See [docs/PROVIDER_CONFIG.md](docs/PROVIDER_CONFIG.md).
+
 ---
 
 ## Project Structure
@@ -245,6 +247,7 @@ make clean-install # Clean and reinstall
 * **Live Logs**: Active services have logs available at `$JOURNAL_PATH/health/<service>.log`
 * **Journal Data**: Path from `JOURNAL_PATH` env var (set in `.env`)
 * **Config**: `.env` file in project root
+* **Provider Config**: `$JOURNAL_PATH/config/providers.json` - LLM routing config
 * **Agent Personas**: `muse/agents/*.txt` and `*.json`
 * **Insight Templates**: `think/insights/*.txt` and `*.json`
 * **Scratch Space**: `scratch/` - git-ignored local workspace for temporary scripts, one-off migrations, debug logs, screenshots, etc.
