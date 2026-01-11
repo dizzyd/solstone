@@ -285,3 +285,138 @@ def test_cluster_segments_with_split_screen(tmp_path, monkeypatch):
     assert len(segments) == 1
     assert segments[0]["key"] == "100000_300"
     assert "screen" in segments[0]["types"]
+
+
+def test_load_day_entries(tmp_path, monkeypatch):
+    """Test load_day_entries returns all entries sorted by timestamp."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create two segments at different times
+    (day_dir / "090000_300").mkdir()
+    (day_dir / "090000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"text": "morning"}\n'
+    )
+    (day_dir / "140000_300").mkdir()
+    (day_dir / "140000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"text": "afternoon"}\n'
+    )
+
+    entries = mod.load_day_entries("20240101")
+
+    assert len(entries) == 2
+    # Entries should be sorted by timestamp
+    assert entries[0]["segment_key"] == "090000_300"
+    assert entries[1]["segment_key"] == "140000_300"
+
+
+def test_load_day_entries_empty_day(tmp_path, monkeypatch):
+    """Test load_day_entries returns empty list for nonexistent day."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+
+    mod = importlib.import_module("think.cluster")
+
+    entries = mod.load_day_entries("20240101")
+
+    assert entries == []
+
+
+def test_group_entries_by_hour(tmp_path, monkeypatch):
+    """Test group_entries_by_hour groups entries correctly."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create segments across multiple hours
+    (day_dir / "090000_300").mkdir()
+    (day_dir / "090000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"text": "9am"}\n'
+    )
+    (day_dir / "093000_300").mkdir()
+    (day_dir / "093000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"text": "9:30am"}\n'
+    )
+    (day_dir / "140000_300").mkdir()
+    (day_dir / "140000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"text": "2pm"}\n'
+    )
+
+    entries = mod.load_day_entries("20240101")
+    hourly_groups = mod.group_entries_by_hour(entries)
+
+    # Should have two hour groups: hour 9 (with 2 entries) and hour 14 (with 1 entry)
+    assert len(hourly_groups) == 2
+    assert hourly_groups[0][0] == 9  # First group is hour 9
+    assert len(hourly_groups[0][1]) == 2  # Two entries at 9am
+    assert hourly_groups[1][0] == 14  # Second group is hour 14
+    assert len(hourly_groups[1][1]) == 1  # One entry at 2pm
+
+
+def test_group_entries_by_hour_empty(tmp_path, monkeypatch):
+    """Test group_entries_by_hour handles empty list."""
+    mod = importlib.import_module("think.cluster")
+
+    hourly_groups = mod.group_entries_by_hour([])
+
+    assert hourly_groups == []
+
+
+def test_entries_to_markdown(tmp_path, monkeypatch):
+    """Test entries_to_markdown converts entries to formatted markdown."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create a segment with audio - entries need "start" field to be formatted
+    (day_dir / "100000_300").mkdir()
+    (day_dir / "100000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"start": "00:00:01", "text": "test content"}\n'
+    )
+
+    entries = mod.load_day_entries("20240101")
+    markdown = mod.entries_to_markdown(entries)
+
+    # Should have segment header and audio content
+    assert "## 2024-01-01" in markdown
+    assert "Audio Transcript" in markdown
+    assert "test content" in markdown
+
+
+def test_entries_to_markdown_empty(tmp_path, monkeypatch):
+    """Test entries_to_markdown handles empty list."""
+    mod = importlib.import_module("think.cluster")
+
+    markdown = mod.entries_to_markdown([])
+
+    assert markdown == ""
+
+
+def test_entries_to_markdown_subset(tmp_path, monkeypatch):
+    """Test entries_to_markdown works with a subset of entries."""
+    monkeypatch.setenv("JOURNAL_PATH", str(tmp_path))
+    day_dir = day_path("20240101")
+
+    mod = importlib.import_module("think.cluster")
+
+    # Create multiple segments - entries need "start" field to be formatted
+    (day_dir / "090000_300").mkdir()
+    (day_dir / "090000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"start": "00:00:01", "text": "morning entry"}\n'
+    )
+    (day_dir / "140000_300").mkdir()
+    (day_dir / "140000_300" / "audio.jsonl").write_text(
+        '{"raw": "audio.flac"}\n{"start": "00:00:01", "text": "afternoon entry"}\n'
+    )
+
+    entries = mod.load_day_entries("20240101")
+    # Only use first entry
+    subset = entries[:1]
+    markdown = mod.entries_to_markdown(subset)
+
+    # Should only have the morning entry
+    assert "morning entry" in markdown
+    assert "afternoon entry" not in markdown

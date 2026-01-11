@@ -10,8 +10,15 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-from think.cluster import cluster, cluster_period
+from think.cluster import (
+    cluster,
+    cluster_period,
+    entries_to_markdown,
+    group_entries_by_hour,
+    load_day_entries,
+)
 from think.models import GEMINI_PRO, gemini_generate
+from think.providers import get_provider, resolve_provider
 from think.utils import (
     PromptNotFoundError,
     day_log,
@@ -231,6 +238,183 @@ def send_markdown(
             system_instruction=COMMON_SYSTEM_INSTRUCTION,
             context=context,
         )
+
+
+def send_markdown_with_chunking(
+    day: str,
+    prompt: str,
+    api_key: str,
+    model: str,
+    cache_display_name: str | None = None,
+    insight_key: str | None = None,
+    segment: str | None = None,
+) -> tuple[str, int]:
+    """Generate insight with dynamic window chunking for large days.
+
+    Uses provider context window checking to determine if chunking is needed.
+    When content exceeds limits, groups entries by hour and packs as many
+    consecutive hours as possible into each API call.
+
+    Parameters
+    ----------
+    day:
+        Day in YYYYMMDD format.
+    prompt:
+        Insight prompt text.
+    api_key:
+        Google API key (used for caching).
+    model:
+        Model name (e.g., "gemini-3-flash-preview").
+    cache_display_name:
+        Cache key for content caching.
+    insight_key:
+        Insight key for token usage logging.
+    segment:
+        Optional segment key for segment-only insights.
+
+    Returns
+    -------
+    tuple[str, int]
+        (result_markdown, file_count) tuple.
+    """
+    # Resolve provider for this insight context
+    context = f"insight.{insight_key}" if insight_key else "insight"
+    config = resolve_provider(context)
+    provider = get_provider(config.provider)
+
+    # Load entries and generate full markdown
+    if segment:
+        markdown, file_count = cluster_period(day, segment)
+    else:
+        markdown, file_count = cluster(day)
+
+    if file_count == 0:
+        return markdown, file_count
+
+    # Check if content fits in context window
+    # Reserve 50K tokens for prompt + output
+    fits, estimated, available = provider.check_content_fits(
+        markdown, config.model, buffer=50000
+    )
+
+    if fits:
+        # Content fits - use standard path
+        logging.debug(
+            "Content fits in context window: %d tokens (available: %d)",
+            estimated,
+            available,
+        )
+        result = send_markdown(
+            markdown,
+            prompt,
+            api_key,
+            model,
+            cache_display_name=cache_display_name,
+            insight_key=insight_key,
+        )
+        return result, file_count
+
+    # Content too large - use dynamic window chunking
+    logging.info(
+        "Content exceeds context window (%d > %d tokens), using dynamic chunking",
+        estimated,
+        available,
+    )
+
+    # Load entries and group by hour
+    entries = load_day_entries(day, audio=True, screen=False, insights=True)
+    hourly_groups = group_entries_by_hour(entries)
+
+    if not hourly_groups:
+        return "No entries found for chunking.", 0
+
+    # Pack as many consecutive hours as possible into each batch
+    accumulated_results = []
+    current_batch_entries = []
+    chunk_count = 0
+
+    for hour, hour_entries in hourly_groups:
+        # Test if adding this hour would exceed limit
+        test_entries = current_batch_entries + hour_entries
+        test_markdown = entries_to_markdown(test_entries)
+        test_fits, _, _ = provider.check_content_fits(
+            test_markdown, config.model, buffer=50000
+        )
+
+        if not test_fits and current_batch_entries:
+            # Current batch is full - process it
+            chunk_count += 1
+            batch_markdown = entries_to_markdown(current_batch_entries)
+            logging.info(
+                "Processing chunk %d with %d entries (%d chars)",
+                chunk_count,
+                len(current_batch_entries),
+                len(batch_markdown),
+            )
+
+            chunk_result = send_markdown(
+                batch_markdown,
+                prompt,
+                api_key,
+                model,
+                cache_display_name=f"{cache_display_name}_chunk{chunk_count}"
+                if cache_display_name
+                else None,
+                insight_key=insight_key,
+            )
+            accumulated_results.append(chunk_result)
+
+            # Start new batch with current hour
+            current_batch_entries = hour_entries
+        else:
+            # Add hour to current batch
+            current_batch_entries.extend(hour_entries)
+
+    # Process final batch
+    if current_batch_entries:
+        chunk_count += 1
+        batch_markdown = entries_to_markdown(current_batch_entries)
+        logging.info(
+            "Processing final chunk %d with %d entries (%d chars)",
+            chunk_count,
+            len(current_batch_entries),
+            len(batch_markdown),
+        )
+
+        chunk_result = send_markdown(
+            batch_markdown,
+            prompt,
+            api_key,
+            model,
+            cache_display_name=f"{cache_display_name}_chunk{chunk_count}"
+            if cache_display_name
+            else None,
+            insight_key=insight_key,
+        )
+        accumulated_results.append(chunk_result)
+
+    # Merge results if we had multiple chunks
+    if len(accumulated_results) > 1:
+        logging.info("Merging %d chunk results", len(accumulated_results))
+        merge_prompt = (
+            "You are combining multiple partial analyses of the same day into a "
+            "single coherent result. Merge the following analyses, removing any "
+            "duplicate information and ensuring the final result is well-organized:\n\n"
+            + "\n\n---\n\n".join(accumulated_results)
+        )
+
+        final_result = gemini_generate(
+            contents=[merge_prompt],
+            model=model,
+            temperature=0.3,
+            max_output_tokens=8192 * 6,
+            thinking_budget=8192 * 3,
+            system_instruction=COMMON_SYSTEM_INSTRUCTION,
+            context=f"insight.{insight_key}.merge" if insight_key else None,
+        )
+        return final_result, file_count
+
+    return accumulated_results[0] if accumulated_results else "", file_count
 
 
 # Minimum content length for meaningful event extraction
@@ -453,22 +637,26 @@ def main() -> None:
                 result = f.read()
         elif md_exists and args.force:
             print("Markdown file exists but --force specified. Regenerating.")
-            result = send_markdown(
-                markdown,
-                prompt,
-                api_key,
-                model,
+            # Use chunking for large days (checks context window internally)
+            result, _ = send_markdown_with_chunking(
+                day=day,
+                prompt=prompt,
+                api_key=api_key,
+                model=model,
                 cache_display_name=cache_display_name,
                 insight_key=insight_key,
+                segment=args.segment,
             )
         else:
-            result = send_markdown(
-                markdown,
-                prompt,
-                api_key,
-                model,
+            # Use chunking for large days (checks context window internally)
+            result, _ = send_markdown_with_chunking(
+                day=day,
+                prompt=prompt,
+                api_key=api_key,
+                model=model,
                 cache_display_name=cache_display_name,
                 insight_key=insight_key,
+                segment=args.segment,
             )
 
         # Check if we got a valid response

@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 import time
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -13,6 +14,145 @@ from google import genai
 from google.genai import types
 
 from think.utils import get_journal
+
+
+def _register_digitalocean_pricing() -> None:
+    """Register DigitalOcean Gradient model pricing with genai-prices.
+
+    Called once at module load to inject DO pricing into the genai-prices
+    snapshot, enabling cost calculation for DO models.
+    """
+    try:
+        from genai_prices.data_snapshot import (
+            DataSnapshot,
+            get_snapshot,
+            set_custom_snapshot,
+        )
+        from genai_prices.types import ClauseEquals, ModelInfo, ModelPrice, Provider
+
+        snapshot = get_snapshot()
+
+        # Check if already registered
+        if any(p.id == "digitalocean" for p in snapshot.providers):
+            return
+
+        # DigitalOcean Gradient pricing (USD per million tokens)
+        # Source: https://docs.digitalocean.com/products/gradient-ai-platform/details/pricing/
+        do_provider = Provider(
+            id="digitalocean",
+            name="DigitalOcean Gradient",
+            api_pattern=None,
+            pricing_urls=[
+                "https://docs.digitalocean.com/products/gradient-ai-platform/details/pricing/"
+            ],
+            description="DigitalOcean Gradient Serverless Inference",
+            price_comments=None,
+            model_match=None,
+            provider_match=None,
+            extractors=None,
+            models=[
+                ModelInfo(
+                    id="openai-gpt-oss-120b",
+                    match=ClauseEquals(equals="openai-gpt-oss-120b"),
+                    name="GPT-OSS 120B",
+                    description="Open source 120B parameter model",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.10"),
+                        output_mtok=Decimal("0.70"),
+                    ),
+                ),
+                ModelInfo(
+                    id="openai-gpt-oss-20b",
+                    match=ClauseEquals(equals="openai-gpt-oss-20b"),
+                    name="GPT-OSS 20B",
+                    description="Open source 20B parameter model",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.05"),
+                        output_mtok=Decimal("0.45"),
+                    ),
+                ),
+                ModelInfo(
+                    id="llama3.3-70b-instruct",
+                    match=ClauseEquals(equals="llama3.3-70b-instruct"),
+                    name="Llama 3.3 70B Instruct",
+                    description="Meta Llama 3.3 70B",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.65"),
+                        output_mtok=Decimal("0.65"),
+                    ),
+                ),
+                ModelInfo(
+                    id="llama3-8b-instruct",
+                    match=ClauseEquals(equals="llama3-8b-instruct"),
+                    name="Llama 3.1 8B Instruct",
+                    description="Meta Llama 3.1 8B",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.198"),
+                        output_mtok=Decimal("0.198"),
+                    ),
+                ),
+                ModelInfo(
+                    id="mistral-nemo-instruct-2407",
+                    match=ClauseEquals(equals="mistral-nemo-instruct-2407"),
+                    name="Mistral NeMo",
+                    description="Mistral NeMo 12B",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.30"),
+                        output_mtok=Decimal("0.30"),
+                    ),
+                ),
+                ModelInfo(
+                    id="deepseek-r1-distill-llama-70b",
+                    match=ClauseEquals(equals="deepseek-r1-distill-llama-70b"),
+                    name="DeepSeek R1 Distill Llama 70B",
+                    description="DeepSeek R1 distilled to Llama 70B",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.99"),
+                        output_mtok=Decimal("0.99"),
+                    ),
+                ),
+                ModelInfo(
+                    id="alibaba-qwen3-32b",
+                    match=ClauseEquals(equals="alibaba-qwen3-32b"),
+                    name="Qwen3 32B",
+                    description="Alibaba Qwen3 32B",
+                    context_window=131072,
+                    price_comments=None,
+                    prices=ModelPrice(
+                        input_mtok=Decimal("0.25"),
+                        output_mtok=Decimal("0.55"),
+                    ),
+                ),
+            ],
+        )
+
+        new_providers = list(snapshot.providers) + [do_provider]
+        new_snapshot = DataSnapshot(
+            providers=new_providers,
+            from_auto_update=False,
+            timestamp=snapshot.timestamp,
+        )
+        set_custom_snapshot(new_snapshot)
+
+    except Exception:
+        # Silently fail - pricing is optional
+        pass
+
+
+# Register DO pricing on module load
+_register_digitalocean_pricing()
 
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
@@ -32,6 +172,15 @@ GPT_5_NANO = "gpt-5-nano"
 CLAUDE_OPUS_4 = "claude-opus-4-5"
 CLAUDE_SONNET_4 = "claude-sonnet-4-5"
 CLAUDE_HAIKU_4 = "claude-haiku-4-5"
+
+# DigitalOcean Gradient models
+DO_GPT_OSS_120B = "openai-gpt-oss-120b"
+DO_GPT_OSS_20B = "openai-gpt-oss-20b"
+DO_LLAMA_70B = "llama3.3-70b-instruct"
+DO_LLAMA_8B = "llama3-8b-instruct"
+DO_MISTRAL_NEMO = "mistral-nemo-instruct-2407"
+DO_DEEPSEEK_70B = "deepseek-r1-distill-llama-70b"
+DO_QWEN_32B = "alibaba-qwen3-32b"
 
 
 def get_or_create_client(client: Optional[genai.Client] = None) -> genai.Client:
@@ -321,11 +470,16 @@ def get_model_provider(model: str) -> str:
     Returns
     -------
     str
-        Provider name: "openai", "google", "anthropic", or "unknown"
+        Provider name: "openai", "google", "anthropic", "digitalocean", or "unknown"
     """
     model_lower = model.lower()
 
-    if model_lower.startswith("gpt"):
+    # Check for DigitalOcean models (GPT-OSS, Llama, Mistral, DeepSeek, Alibaba)
+    if model_lower.startswith("openai-gpt-oss"):
+        return "digitalocean"
+    elif model_lower.startswith(("llama", "mistral", "deepseek", "alibaba")):
+        return "digitalocean"
+    elif model_lower.startswith("gpt"):
         return "openai"
     elif model_lower.startswith("gemini"):
         return "google"
@@ -570,6 +724,142 @@ async def gemini_agenerate(
     return text
 
 
+def generate(
+    contents: Union[str, List[Any]],
+    context: str,
+    temperature: float = 0.3,
+    max_output_tokens: int = 8192 * 2,
+    system_instruction: Optional[str] = None,
+    json_output: bool = False,
+    thinking_budget: Optional[int] = None,
+    timeout_s: Optional[float] = None,
+    **kwargs,
+) -> str:
+    """
+    Unified sync generation that routes based on context prefix.
+
+    Routes to the appropriate provider (Google Gemini, OpenAI) based on
+    configuration in JOURNAL_PATH/config/providers.json.
+
+    Parameters
+    ----------
+    contents : str or List
+        The content to send to the model
+    context : str
+        Context prefix (e.g., "describe.frame", "insight.meetings.markdown")
+        Used to determine provider and model from config.
+    temperature : float
+        Temperature for generation (default: 0.3)
+    max_output_tokens : int
+        Maximum tokens for response (default: 8192 * 2)
+    system_instruction : str, optional
+        System instruction for the model
+    json_output : bool
+        Whether to request JSON response format (default: False)
+    thinking_budget : int, optional
+        Token budget for model thinking (only supported by some providers)
+    timeout_s : float, optional
+        Request timeout in seconds
+    **kwargs
+        Additional provider-specific arguments
+
+    Returns
+    -------
+    str
+        Response text from the model
+    """
+    from think.providers import get_provider, resolve_provider
+
+    config = resolve_provider(context)
+    provider = get_provider(config.provider)
+
+    # Only pass thinking_budget if provider supports it
+    effective_thinking_budget = (
+        thinking_budget if provider.supports_thinking() else None
+    )
+
+    return provider.generate(
+        contents=contents,
+        model=config.model,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        system_instruction=system_instruction,
+        json_output=json_output,
+        thinking_budget=effective_thinking_budget,
+        timeout_s=timeout_s,
+        context=context,
+        **kwargs,
+    )
+
+
+async def agenerate(
+    contents: Union[str, List[Any]],
+    context: str,
+    temperature: float = 0.3,
+    max_output_tokens: int = 8192 * 2,
+    system_instruction: Optional[str] = None,
+    json_output: bool = False,
+    thinking_budget: Optional[int] = None,
+    timeout_s: Optional[float] = None,
+    **kwargs,
+) -> str:
+    """
+    Unified async generation that routes based on context prefix.
+
+    Routes to the appropriate provider (Google Gemini, OpenAI) based on
+    configuration in JOURNAL_PATH/config/providers.json.
+
+    Parameters
+    ----------
+    contents : str or List
+        The content to send to the model
+    context : str
+        Context prefix (e.g., "describe.frame", "insight.meetings.markdown")
+        Used to determine provider and model from config.
+    temperature : float
+        Temperature for generation (default: 0.3)
+    max_output_tokens : int
+        Maximum tokens for response (default: 8192 * 2)
+    system_instruction : str, optional
+        System instruction for the model
+    json_output : bool
+        Whether to request JSON response format (default: False)
+    thinking_budget : int, optional
+        Token budget for model thinking (only supported by some providers)
+    timeout_s : float, optional
+        Request timeout in seconds
+    **kwargs
+        Additional provider-specific arguments
+
+    Returns
+    -------
+    str
+        Response text from the model
+    """
+    from think.providers import get_provider, resolve_provider
+
+    config = resolve_provider(context)
+    provider = get_provider(config.provider)
+
+    # Only pass thinking_budget if provider supports it
+    effective_thinking_budget = (
+        thinking_budget if provider.supports_thinking() else None
+    )
+
+    return await provider.agenerate(
+        contents=contents,
+        model=config.model,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        system_instruction=system_instruction,
+        json_output=json_output,
+        thinking_budget=effective_thinking_budget,
+        timeout_s=timeout_s,
+        context=context,
+        **kwargs,
+    )
+
+
 __all__ = [
     "GEMINI_PRO",
     "GEMINI_FLASH",
@@ -581,9 +871,13 @@ __all__ = [
     "CLAUDE_OPUS_4",
     "CLAUDE_SONNET_4",
     "CLAUDE_HAIKU_4",
+    "GPT_OSS_20B",
+    "GPT_OSS_120B",
     "get_or_create_client",
     "gemini_generate",
     "gemini_agenerate",
+    "generate",
+    "agenerate",
     "log_token_usage",
     "get_model_provider",
     "calc_token_cost",

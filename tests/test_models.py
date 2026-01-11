@@ -39,17 +39,38 @@ def test_get_model_provider_claude():
     assert get_model_provider(CLAUDE_HAIKU_4) == "anthropic"
 
 
+def test_get_model_provider_digitalocean():
+    """Test provider detection for DigitalOcean hosted models."""
+    from think.models import (
+        DO_DEEPSEEK_70B,
+        DO_GPT_OSS_20B,
+        DO_GPT_OSS_120B,
+        DO_LLAMA_8B,
+        DO_LLAMA_70B,
+        DO_MISTRAL_NEMO,
+    )
+
+    assert get_model_provider(DO_GPT_OSS_120B) == "digitalocean"
+    assert get_model_provider(DO_GPT_OSS_20B) == "digitalocean"
+    assert get_model_provider(DO_LLAMA_70B) == "digitalocean"
+    assert get_model_provider(DO_LLAMA_8B) == "digitalocean"
+    assert get_model_provider(DO_MISTRAL_NEMO) == "digitalocean"
+    assert get_model_provider(DO_DEEPSEEK_70B) == "digitalocean"
+    assert get_model_provider("openai-gpt-oss-custom") == "digitalocean"
+
+
 def test_get_model_provider_case_insensitive():
     """Test that provider detection is case-insensitive."""
     assert get_model_provider("GPT-5") == "openai"
     assert get_model_provider("Gemini-2.5-Flash") == "google"
     assert get_model_provider("CLAUDE-SONNET-4-5") == "anthropic"
+    assert get_model_provider("LLAMA3.3-70B-INSTRUCT") == "digitalocean"
 
 
 def test_get_model_provider_unknown():
     """Test that unknown models return 'unknown'."""
     assert get_model_provider("random-model-xyz") == "unknown"
-    assert get_model_provider("llama-3") == "unknown"
+    assert get_model_provider("cohere-command") == "unknown"
     assert get_model_provider("") == "unknown"
 
 

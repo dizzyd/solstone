@@ -23,6 +23,7 @@ from think.detect_transcript import detect_transcript_json, detect_transcript_se
 from think.facets import get_facets
 from think.importer_utils import save_import_file, write_import_metadata
 from think.models import gemini_generate
+from think.providers import get_provider, resolve_provider
 from think.utils import (
     PromptNotFoundError,
     day_path,
@@ -612,30 +613,119 @@ def create_transcript_summary(
     importer_prompt = "".join(prompt_parts)
 
     # Format the transcript content for the user message
-    user_message_parts = []
+    def build_user_message(transcripts):
+        """Build user message from transcript list."""
+        parts = []
+        for transcript_info in transcripts:
+            parts.append(f"\n## Transcript Segment: {transcript_info['file']}\n")
+            parts.append(transcript_info["text"])
+        return "\n".join(parts)
 
-    for transcript_info in all_transcripts:
-        user_message_parts.append(
-            f"\n## Transcript Segment: {transcript_info['file']}\n"
-        )
-        user_message_parts.append(transcript_info["text"])
-
-    user_message = "\n".join(user_message_parts)
+    user_message = build_user_message(all_transcripts)
 
     try:
-        logger.info(
-            f"Creating summary with Gemini for {len(all_transcripts)} transcript segments"
+        # Check if content fits in context window
+        config = resolve_provider("import.summary")
+        provider = get_provider(config.provider)
+        fits, estimated, available = provider.check_content_fits(
+            user_message, config.model, buffer=20000
         )
 
-        # Generate summary using Gemini
-        response_text = gemini_generate(
-            contents=user_message,
-            model=get_model_for("observations"),
-            temperature=0.3,
-            max_output_tokens=8192 * 4,
-            system_instruction=importer_prompt,
-            context="import.summary",
-        )
+        model = get_model_for("observations")
+        if fits:
+            # Content fits - use standard path
+            logger.info(
+                f"Creating summary with {config.provider} for {len(all_transcripts)} transcript segments"
+            )
+
+            response_text = gemini_generate(
+                contents=user_message,
+                model=model,
+                temperature=0.3,
+                max_output_tokens=8192 * 4,
+                system_instruction=importer_prompt,
+                context="import.summary",
+            )
+        else:
+            # Content too large - use progressive summarization
+            logger.info(
+                "Content exceeds context window (%d > %d tokens), using progressive summarization",
+                estimated,
+                available,
+            )
+
+            # Chunk transcripts by token size
+            summaries = []
+            current_batch = []
+            current_size = 0
+
+            for transcript in all_transcripts:
+                chunk_size = provider.estimate_tokens(transcript["text"])
+
+                if current_size + chunk_size > available and current_batch:
+                    # Process current batch
+                    batch_message = build_user_message(current_batch)
+                    logger.info(
+                        "Processing batch of %d segments (%d chars)",
+                        len(current_batch),
+                        len(batch_message),
+                    )
+
+                    batch_summary = gemini_generate(
+                        contents=batch_message,
+                        model=model,
+                        temperature=0.3,
+                        max_output_tokens=8192 * 4,
+                        system_instruction=importer_prompt,
+                        context="import.summary.chunk",
+                    )
+                    summaries.append(batch_summary)
+
+                    # Start new batch
+                    current_batch = [transcript]
+                    current_size = chunk_size
+                else:
+                    current_batch.append(transcript)
+                    current_size += chunk_size
+
+            # Process final batch
+            if current_batch:
+                batch_message = build_user_message(current_batch)
+                logger.info(
+                    "Processing final batch of %d segments (%d chars)",
+                    len(current_batch),
+                    len(batch_message),
+                )
+
+                batch_summary = gemini_generate(
+                    contents=batch_message,
+                    model=model,
+                    temperature=0.3,
+                    max_output_tokens=8192 * 4,
+                    system_instruction=importer_prompt,
+                    context="import.summary.chunk",
+                )
+                summaries.append(batch_summary)
+
+            # Merge summaries if multiple chunks
+            if len(summaries) > 1:
+                logger.info("Merging %d chunk summaries", len(summaries))
+                merge_message = (
+                    "Combine the following partial transcript summaries into a single "
+                    "coherent summary. Remove duplicates and organize logically:\n\n"
+                    + "\n\n---\n\n".join(summaries)
+                )
+
+                response_text = gemini_generate(
+                    contents=merge_message,
+                    model=model,
+                    temperature=0.3,
+                    max_output_tokens=8192 * 4,
+                    system_instruction=importer_prompt,
+                    context="import.summary.merge",
+                )
+            else:
+                response_text = summaries[0] if summaries else ""
 
         # Save the summary
         summary_path = import_dir / "summary.md"

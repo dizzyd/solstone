@@ -514,6 +514,70 @@ def get_entries_for_range(
     ]
 
 
+def load_day_entries(
+    day: str, audio: bool = True, screen: bool = False, insights: bool = True
+) -> List[Dict[str, Any]]:
+    """Load all transcript entries for a day.
+
+    Public wrapper around _load_entries for use by insight chunking.
+
+    Args:
+        day: Day in YYYYMMDD format.
+        audio: Whether to include audio transcripts.
+        screen: Whether to include raw screen data.
+        insights: Whether to include insight summaries.
+
+    Returns:
+        List of entry dicts sorted by timestamp.
+    """
+    day_dir = str(day_path(day))
+    if not os.path.isdir(day_dir):
+        return []
+    return _load_entries(day_dir, audio, screen, insights)
+
+
+def group_entries_by_hour(
+    entries: List[Dict[str, Any]]
+) -> List[Tuple[int, List[Dict[str, Any]]]]:
+    """Group entries by hour for semantic chunking.
+
+    Args:
+        entries: List of entry dicts with segment_start datetime.
+
+    Returns:
+        List of (hour, entries_for_hour) tuples sorted by hour.
+        Each tuple contains the hour (0-23) and list of entries in that hour.
+    """
+    hourly: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+
+    for entry in entries:
+        segment_start = entry.get("segment_start")
+        if segment_start:
+            hour = segment_start.hour
+            hourly[hour].append(entry)
+
+    # Sort by hour and return as list of tuples
+    return [(hour, hourly[hour]) for hour in sorted(hourly.keys())]
+
+
+def entries_to_markdown(entries: List[Dict[str, Any]]) -> str:
+    """Convert a subset of entries to markdown.
+
+    Uses the same rendering logic as cluster() but for a subset of entries.
+
+    Args:
+        entries: List of entry dicts to render.
+
+    Returns:
+        Markdown string with segment headers and content.
+    """
+    if not entries:
+        return ""
+
+    groups = _group_entries(entries)
+    return _groups_to_markdown(groups)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate a Markdown report for a day's JSON files grouped by recording segments."
